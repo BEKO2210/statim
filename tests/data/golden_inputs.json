@@ -1,0 +1,150 @@
+{
+ "states": [
+  "I was charged twice for March, please refund the duplicate today or we cancel.",
+  {
+   "from": "user@acme.com",
+   "subject": "Duplicate charge on invoice #4411",
+   "body": "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."
+  },
+  "Mein Konto wurde zweimal belastet. Bitte erstatten Sie den Betrag sofort, sonst kündige ich.",
+  "La aplicación se cierra cada vez que intento subir una foto. Es muy frustrante.",
+  "मुझसे दो बार शुल्क लिया गया, कृपया पैसे वापस करें।",
+  "我们的服务器从昨晚开始宕机，所有客户都无法登录，请立即处理！",
+  "サーバーが落ちています。至急対応をお願いします。",
+  "Спасибо за быструю помощь, всё работает отлично!",
+  "هل يمكنكم إرسال عرض سعر لخمسين ترخيصاً؟",
+  "Can you send me a quote for 50 seats of the enterprise plan?",
+  "The build fails with a segmentation fault in libfoo.so after upgrading to v2.3.",
+  [
+   {
+    "role": "user",
+    "content": "Hi, my package never arrived."
+   },
+   {
+    "role": "assistant",
+    "content": "Sorry to hear that! Can you share the order number?"
+   },
+   {
+    "role": "user",
+    "content": "It's #99812. I want my money back, this is the third time."
+   }
+  ],
+  "Great product, would buy again. Delivery was fast.",
+  "Worst experience ever. The support agent hung up on me twice.",
+  "Please delete my account and all my personal data under GDPR Article 17.",
+  "Merci beaucoup pour votre aide, le problème est résolu.",
+  "Il pagamento non va a buon fine con la carta Visa, errore 402.",
+  "O sistema está lento desde a atualização de ontem.",
+  "Toplantıyı yarın saat 10'a erteleyebilir miyiz?",
+  "Czy mogę zmienić adres dostawy dla zamówienia 5521?",
+  "Refactor this service to use dependency injection and add unit tests.",
+  {
+   "ticket": 7781,
+   "priority": null,
+   "tags": [
+    "login",
+    "sso"
+   ],
+   "text": "SSO login loops forever after the Okta change.",
+   "nested": {
+    "a": 1.5,
+    "b": true
+   }
+  },
+  "Our CEO said the Q3 numbers look great 🚀🔥 and we're hiring 5 engineers!",
+  "Wir brauchen bis Freitag ein Angebot für 200 Lizenzen, sonst gehen wir zur Konkurrenz.",
+  "",
+  "ok",
+  "URGENT!!! Production database is down, all customers affected, revenue loss every minute.",
+  "Could you tell me what your office hours are?",
+  "The invoice total is wrong: 1.299,00 € instead of 1.199,00 €.",
+  "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x "
+ ],
+ "questions": {
+  "department": {
+   "type": "choice",
+   "instructions": "Which department should handle this request?",
+   "criteria": {
+    "billing": "invoices, payments, refunds",
+    "technical": "bugs, outages, system errors",
+    "sales": "pricing, new contracts",
+    "other": "everything else"
+   }
+  },
+  "urgency": {
+   "type": "score",
+   "instructions": "How urgent is this request?",
+   "criteria": [
+    "not urgent",
+    "soon",
+    "critical deadline or blocking issue"
+   ]
+  },
+  "churn_risk": {
+   "type": "noul",
+   "instructions": "Does the user threaten to cancel or leave?"
+  },
+  "sentiment": {
+   "type": "choice",
+   "instructions": "What is the sentiment of the message?",
+   "criteria": [
+    "positive",
+    "neutral",
+    "negative"
+   ]
+  },
+  "refund": {
+   "type": "noul",
+   "instructions": "Does the user explicitly request a refund?",
+   "criteria": {
+    "true": "the user asks for money back",
+    "false": "no refund request"
+   }
+  },
+  "lang_de": {
+   "type": "noul",
+   "instructions": "Ist die Nachricht auf Deutsch geschrieben?",
+   "labels": {
+    "false": "nein",
+    "true": "ja"
+   }
+  },
+  "severity": {
+   "type": "score",
+   "instructions": "Rate the severity from 0 to 4.",
+   "criteria": [
+    "none",
+    "low",
+    "medium",
+    "high",
+    "critical"
+   ]
+  },
+  "intent20": {
+   "type": "choice",
+   "instructions": "What is the user's intent?",
+   "criteria": [
+    "refund",
+    "cancel",
+    "complaint",
+    "praise",
+    "quote",
+    "bug_report",
+    "outage",
+    "account_deletion",
+    "shipping",
+    "payment_failure",
+    "scheduling",
+    "address_change",
+    "feature_request",
+    "question",
+    "hiring",
+    "invoice_error",
+    "login_issue",
+    "performance",
+    "thanks",
+    "other"
+   ]
+  }
+ }
+}

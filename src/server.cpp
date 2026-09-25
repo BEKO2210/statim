@@ -1,0 +1,404 @@
+// Statim HTTP server: Jev/Laya-compatible POST /v1/systemone plus operational endpoints.
+#include "statim/server.h"
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <csignal>
+#include <cstdio>
+#include <deque>
+#include <fstream>
+#include <mutex>
+#include <random>
+#include <sstream>
+
+#include "httplib.h"
+#include "statim/engine.h"
+
+namespace statim {
+
+namespace {
+
+constexpr size_t kMaxQuestions = 64;
+constexpr size_t kMaxStateChars = 50000;
+constexpr size_t kMaxBodyBytes = 2 * 1024 * 1024;
+constexpr size_t kMaxChoiceOptions = 100;
+constexpr size_t kMaxScoreLevels = 32;
+constexpr size_t kMaxTotalOptions = 512;
+constexpr size_t kMaxBatchStates = 256;
+
+struct HttpError {
+    int status;
+    std::string detail;
+};
+
+size_t utf8_codepoints(const std::string& s) {
+    size_t n = 0;
+    for (unsigned char c : s) n += (c & 0xC0) != 0x80;
+    return n;
+}
+
+std::string now_iso8601() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    char buf[40];
+    std::strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%S", std::gmtime(&t));
+    char out[48];
+    std::snprintf(out, sizeof out, "%s.%03lldZ", buf, static_cast<long long>(ms));
+    return out;
+}
+
+std::string new_request_id() {
+    static thread_local std::mt19937_64 rng{std::random_device{}()};
+    char buf[17];
+    std::snprintf(buf, sizeof buf, "%016llx", static_cast<unsigned long long>(rng()));
+    return buf;
+}
+
+// Same guardrails as laya.serve so a client sees identical 400/413 behaviour.
+void check_limits(const ojson& state, const ojson& questions) {
+    if (state.is_null()) throw HttpError{400, "'state' is required"};
+    if (!questions.is_object()) throw HttpError{400, "'questions' must be an object"};
+    if (questions.size() > kMaxQuestions)
+        throw HttpError{413, "too many questions (" + std::to_string(questions.size()) + " > " + std::to_string(kMaxQuestions) + ")"};
+    size_t total = 0;
+    for (auto it = questions.begin(); it != questions.end(); ++it) {
+        const ojson& q = it.value();
+        if (!q.is_object() || !q.contains("criteria") || !q.contains("type") || !q["type"].is_string()) continue;
+        const std::string t = q["type"].get<std::string>();
+        const ojson& c = q["criteria"];
+        if (t == "choice" && c.is_structured()) {
+            total += c.size();
+            if (c.size() > kMaxChoiceOptions)
+                throw HttpError{413, "too many choice options for '" + it.key() + "' (" + std::to_string(c.size()) + " > " +
+                                         std::to_string(kMaxChoiceOptions) + ")"};
+        } else if (t == "score" && c.is_array()) {
+            total += c.size();
+            if (c.size() > kMaxScoreLevels)
+                throw HttpError{413, "too many score levels for '" + it.key() + "' (" + std::to_string(c.size()) + " > " +
+                                         std::to_string(kMaxScoreLevels) + ")"};
+        }
+    }
+    if (total > kMaxTotalOptions)
+        throw HttpError{413, "too many answer options across questions (" + std::to_string(total) + " > " +
+                                 std::to_string(kMaxTotalOptions) + ")"};
+    size_t n = state.is_string() ? utf8_codepoints(state.get<std::string>()) : utf8_codepoints(py_json_dumps(state));
+    if (n > kMaxStateChars)
+        throw HttpError{413, "state too large (" + std::to_string(n) + " > " + std::to_string(kMaxStateChars) + " chars)"};
+}
+
+// Fixed-bucket latency histogram for Prometheus.
+struct Histogram {
+    static constexpr double kBounds[] = {5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
+    std::atomic<uint64_t> buckets[std::size(kBounds) + 1]{};
+    std::atomic<uint64_t> count{0};
+    std::atomic<uint64_t> sum_us{0};
+    void observe(double ms) {
+        size_t i = 0;
+        while (i < std::size(kBounds) && ms > kBounds[i]) ++i;
+        buckets[i]++;
+        count++;
+        sum_us += static_cast<uint64_t>(ms * 1000.0);
+    }
+};
+
+// A fixed set of engines (each owns its compute buffers; weights are shared). Requests borrow
+// one; when all are busy and the wait queue is full the caller gets 503 instead of piling up.
+class EnginePool {
+public:
+    EnginePool(const std::shared_ptr<Model>& model, int workers, int threads_per_worker) {
+        RunOptions ro;
+        ro.n_threads = threads_per_worker;
+        for (int i = 0; i < workers; ++i) free_.push_back(std::make_unique<Engine>(model, ro));
+        size_ = workers;
+    }
+    struct Lease {
+        EnginePool* pool;
+        std::unique_ptr<Engine> engine;
+        ~Lease() {
+            if (engine) pool->release(std::move(engine));
+        }
+    };
+    std::unique_ptr<Lease> acquire() {
+        std::unique_lock<std::mutex> lk(mu_);
+        cv_.wait(lk, [&] { return !free_.empty(); });
+        auto l = std::make_unique<Lease>();
+        l->pool = this;
+        l->engine = std::move(free_.back());
+        free_.pop_back();
+        return l;
+    }
+    int busy() {
+        std::lock_guard<std::mutex> lk(mu_);
+        return size_ - static_cast<int>(free_.size());
+    }
+    int size() const { return size_; }
+
+private:
+    void release(std::unique_ptr<Engine> e) {
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            free_.push_back(std::move(e));
+        }
+        cv_.notify_one();
+    }
+    std::mutex mu_;
+    std::condition_variable cv_;
+    std::vector<std::unique_ptr<Engine>> free_;
+    int size_ = 0;
+};
+
+struct LoadedModel {
+    std::string name;
+    std::shared_ptr<Model> model;
+    std::unique_ptr<EnginePool> pool;
+};
+
+httplib::Server* g_server = nullptr;
+
+void on_signal(int) {
+    if (g_server) g_server->stop();
+}
+
+}  // namespace
+
+int run_server(const ServerConfig& cfg) {
+    std::vector<LoadedModel> models;
+    const int workers = std::max(1, cfg.workers);
+    const int threads = cfg.threads > 0 ? cfg.threads : static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+    const int per_worker = std::max(1, threads / workers);
+    for (const auto& [name, path] : cfg.models) {
+        auto t0 = std::chrono::steady_clock::now();
+        LoadedModel lm;
+        lm.name = name;
+        lm.model = Model::load(path);
+        lm.pool = std::make_unique<EnginePool>(lm.model, workers, per_worker);
+        std::fprintf(stderr,
+                     "{\"ts\":\"%s\",\"level\":\"info\",\"event\":\"model_loaded\",\"model\":\"%s\",\"path\":\"%s\","
+                     "\"weights\":\"%s\",\"bytes\":%zu,\"workers\":%d,\"threads_per_worker\":%d,\"ms\":%.0f}\n",
+                     now_iso8601().c_str(), name.c_str(), path.c_str(), lm.model->hparams().weight_type.c_str(),
+                     lm.model->weight_bytes(), workers, per_worker,
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+        models.push_back(std::move(lm));
+    }
+    if (models.empty()) {
+        std::fprintf(stderr, "statim serve: no model given (-m path.gguf)\n");
+        return 2;
+    }
+
+    std::vector<std::string> api_keys = cfg.api_keys;
+    std::atomic<int> in_flight{0};
+    std::atomic<uint64_t> req_total{0}, req_errors{0}, tokens_total{0}, rejected_busy{0};
+    std::mutex status_mu;
+    std::map<int, uint64_t> status_counts;
+    Histogram latency;
+    const auto started = std::chrono::steady_clock::now();
+
+    httplib::Server srv;
+    g_server = &srv;
+    srv.new_task_queue = [&] { return new httplib::ThreadPool(static_cast<size_t>(std::max(4, cfg.max_concurrent + 4))); };
+    srv.set_payload_max_length(kMaxBodyBytes);
+    srv.set_read_timeout(30, 0);
+    srv.set_write_timeout(30, 0);
+    srv.set_keep_alive_max_count(1000);
+
+    auto send_json = [](httplib::Response& res, int status, const ojson& body) {
+        res.status = status;
+        res.set_content(body.dump(), "application/json");
+    };
+    auto authorized = [&](const httplib::Request& req) {
+        if (api_keys.empty()) return true;
+        std::string auth = req.get_header_value("Authorization");
+        bool ok = false;
+        for (const auto& k : api_keys) {
+            std::string expected = "Bearer " + k;
+            // constant-time compare over the longer length
+            size_t n = std::max(expected.size(), auth.size());
+            unsigned char diff = static_cast<unsigned char>(expected.size() != auth.size());
+            for (size_t i = 0; i < n; ++i)
+                diff |= static_cast<unsigned char>((i < expected.size() ? expected[i] : 0) ^ (i < auth.size() ? auth[i] : 0));
+            ok |= diff == 0;
+        }
+        return ok;
+    };
+    auto find_model = [&](const ojson& body) -> LoadedModel& {
+        if (body.contains("model") && body["model"].is_string()) {
+            const std::string want = body["model"].get<std::string>();
+            for (auto& m : models)
+                if (m.name == want || "convaiinnovations/laya-" + m.name == want) return m;
+            // unknown ids (e.g. a Jev model name) fall back to the default model, like laya.serve
+        }
+        return models.front();
+    };
+
+    auto handle = [&](const httplib::Request& req, httplib::Response& res, bool batch) {
+        const auto t0 = std::chrono::steady_clock::now();
+        const std::string rid = req.has_header("X-Request-Id") ? req.get_header_value("X-Request-Id") : new_request_id();
+        res.set_header("X-Request-Id", rid);
+        std::string model_name = "-";
+        size_t n_tokens = 0;
+        int status = 200;
+        struct InFlight {
+            std::atomic<int>& n;
+            bool held = false;
+            ~InFlight() {
+                if (held) --n;
+            }
+        } guard{in_flight};
+        try {
+            if (!authorized(req)) throw HttpError{401, "invalid or missing bearer token"};
+            if (in_flight.fetch_add(1) >= cfg.max_concurrent) {
+                --in_flight;
+                rejected_busy++;
+                throw HttpError{503, "server busy, try again later"};
+            }
+            guard.held = true;
+            ojson body;
+            try {
+                body = ojson::parse(req.body);
+            } catch (const std::exception&) {
+                throw HttpError{400, "request body must be valid JSON"};
+            }
+            if (!body.is_object() || !body.contains("questions"))
+                throw HttpError{400, "request body must be an object with a 'questions' field"};
+            const ojson& questions = body["questions"];
+            DecideOptions opts;
+            if (body.contains("lang") && body["lang"].is_string()) opts.lang = body["lang"].get<std::string>();
+            opts.ensemble = cfg.ensemble;
+            if (body.contains("ensemble") && body["ensemble"].is_number_integer())
+                opts.ensemble = std::clamp(body["ensemble"].get<int>(), 1, 8);
+            LoadedModel& lm = find_model(body);
+            model_name = lm.name;
+
+            std::vector<ojson> states;
+            if (batch) {
+                if (!body.contains("states") || !body["states"].is_array())
+                    throw HttpError{400, "request body must contain a 'states' array"};
+                if (body["states"].size() > kMaxBatchStates)
+                    throw HttpError{413, "too many states (" + std::to_string(body["states"].size()) + " > " +
+                                             std::to_string(kMaxBatchStates) + ")"};
+                for (const auto& s : body["states"]) {
+                    check_limits(s, questions);
+                    states.push_back(s);
+                }
+            } else {
+                ojson state = body.contains("state") ? body["state"] : ojson();
+                check_limits(state, questions);
+                states.push_back(state);
+            }
+
+            const auto ti = std::chrono::steady_clock::now();
+            std::vector<ojson> results;
+            {
+                auto lease = lm.pool->acquire();
+                results = lease->engine->decide_batch(states, questions, opts);
+            }
+            const double infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
+            for (auto& r : results) {
+                n_tokens += r["usage"]["input_tokens"].get<size_t>();
+                r["routing"] = {{"model", lm.name}, {"engine", "statim"}, {"weights", lm.model->hparams().weight_type}};
+            }
+            char timing[64];
+            std::snprintf(timing, sizeof timing, "inference;dur=%.2f", infer_ms);
+            res.set_header("Server-Timing", timing);
+            std::snprintf(timing, sizeof timing, "%.2f", infer_ms);
+            res.set_header("X-Inference-Time-Ms", timing);
+            send_json(res, 200, batch ? ojson{{"results", results}} : results.front());
+        } catch (const HttpError& e) {
+            status = e.status;
+            send_json(res, status, {{"detail", e.detail}});
+        } catch (const QuestionError& e) {
+            status = 422;
+            send_json(res, status, {{"detail", e.what()}});
+        } catch (const std::exception& e) {
+            status = 500;
+            std::fprintf(stderr, "{\"ts\":\"%s\",\"level\":\"error\",\"event\":\"inference_failed\",\"request_id\":\"%s\",\"error\":%s}\n",
+                         now_iso8601().c_str(), rid.c_str(), ojson(e.what()).dump().c_str());
+            send_json(res, status, {{"detail", "inference failed"}});
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        req_total++;
+        if (status >= 400) req_errors++;
+        tokens_total += n_tokens;
+        latency.observe(ms);
+        {
+            std::lock_guard<std::mutex> lk(status_mu);
+            status_counts[status]++;
+        }
+        if (cfg.access_log)
+            std::fprintf(stdout,
+                         "{\"ts\":\"%s\",\"level\":\"info\",\"event\":\"request\",\"request_id\":\"%s\",\"path\":\"%s\","
+                         "\"status\":%d,\"model\":\"%s\",\"tokens\":%zu,\"ms\":%.2f,\"remote\":\"%s\"}\n",
+                         now_iso8601().c_str(), rid.c_str(), req.path.c_str(), status, model_name.c_str(), n_tokens, ms,
+                         req.remote_addr.c_str());
+        std::fflush(stdout);
+    };
+
+    srv.Post("/v1/systemone", [&](const httplib::Request& q, httplib::Response& r) { handle(q, r, false); });
+    srv.Post("/v1/systemone/batch", [&](const httplib::Request& q, httplib::Response& r) { handle(q, r, true); });
+
+    srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        ojson loaded = ojson::array();
+        for (auto& m : models) loaded.push_back(m.name);
+        send_json(res, 200, {{"status", "ok"}, {"engine", "statim"}, {"version", STATIM_VERSION}, {"loaded", loaded}, {"device", "cpu"}});
+    });
+    srv.Get("/ready", [&](const httplib::Request&, httplib::Response& res) {
+        bool ready = in_flight.load() < cfg.max_concurrent;
+        send_json(res, ready ? 200 : 503, {{"ready", ready}});
+    });
+    srv.Get("/v1/models", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!authorized(req)) return send_json(res, 401, {{"detail", "invalid or missing bearer token"}});
+        ojson data = ojson::array();
+        for (auto& m : models) {
+            const HParams& h = m.model->hparams();
+            data.push_back({{"id", m.name}, {"object", "model"}, {"owned_by", "statim"}, {"source", h.name},
+                            {"weights", h.weight_type}, {"layers", h.n_layer}, {"hidden", h.n_embd}, {"max_len", h.max_len},
+                            {"vocab", m.model->tokenizer().vocab_size()}});
+        }
+        send_json(res, 200, {{"object", "list"}, {"data", data}});
+    });
+    srv.Get("/metrics", [&](const httplib::Request&, httplib::Response& res) {
+        std::ostringstream o;
+        o << "# HELP statim_requests_total Inference requests by HTTP status.\n# TYPE statim_requests_total counter\n";
+        {
+            std::lock_guard<std::mutex> lk(status_mu);
+            for (auto& [code, n] : status_counts) o << "statim_requests_total{code=\"" << code << "\"} " << n << "\n";
+        }
+        o << "# HELP statim_request_duration_ms End-to-end request latency.\n# TYPE statim_request_duration_ms histogram\n";
+        uint64_t cum = 0;
+        for (size_t i = 0; i < std::size(Histogram::kBounds); ++i) {
+            cum += latency.buckets[i];
+            o << "statim_request_duration_ms_bucket{le=\"" << Histogram::kBounds[i] << "\"} " << cum << "\n";
+        }
+        cum += latency.buckets[std::size(Histogram::kBounds)];
+        o << "statim_request_duration_ms_bucket{le=\"+Inf\"} " << cum << "\n";
+        o << "statim_request_duration_ms_sum " << latency.sum_us / 1000.0 << "\n";
+        o << "statim_request_duration_ms_count " << latency.count << "\n";
+        o << "# TYPE statim_input_tokens_total counter\nstatim_input_tokens_total " << tokens_total << "\n";
+        o << "# TYPE statim_rejected_busy_total counter\nstatim_rejected_busy_total " << rejected_busy << "\n";
+        o << "# TYPE statim_in_flight gauge\nstatim_in_flight " << in_flight << "\n";
+        o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
+          << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
+        for (auto& m : models) {
+            o << "statim_workers_busy{model=\"" << m.name << "\"} " << m.pool->busy() << "\n";
+            o << "statim_model_info{model=\"" << m.name << "\",weights=\"" << m.model->hparams().weight_type
+              << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
+        }
+        res.set_content(o.str(), "text/plain; version=0.0.4");
+    });
+
+    std::signal(SIGINT, on_signal);
+    std::signal(SIGTERM, on_signal);
+    std::fprintf(stderr, "{\"ts\":\"%s\",\"level\":\"info\",\"event\":\"listening\",\"host\":\"%s\",\"port\":%d,\"auth\":%s}\n",
+                 now_iso8601().c_str(), cfg.host.c_str(), cfg.port, api_keys.empty() ? "false" : "true");
+    if (!srv.listen(cfg.host, cfg.port)) {
+        std::fprintf(stderr, "statim serve: cannot listen on %s:%d\n", cfg.host.c_str(), cfg.port);
+        return 1;
+    }
+    std::fprintf(stderr, "{\"ts\":\"%s\",\"level\":\"info\",\"event\":\"shutdown\"}\n", now_iso8601().c_str());
+    g_server = nullptr;
+    return 0;
+}
+
+}  // namespace statim
