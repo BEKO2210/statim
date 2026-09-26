@@ -1,4 +1,9 @@
-# Statim
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img alt="Statim" src="assets/brand/logo-light.svg" height="64">
+  </picture>
+</h1>
 
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,

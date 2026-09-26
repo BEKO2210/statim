@@ -37,6 +37,10 @@ GPU inference, a production-grade playground, and a reproducible fine-tuning and
   multilingual sentiment, 12 languages each, seeded stratified samples with identical MASSIVE rows
   across languages; results for the base checkpoints in `bench/results/`.
 - `CHANGELOG.md` and `docs/ROADMAP.md`.
+- **Brand identity** (`assets/brand/`): logo mark (one pass meeting a column of options, one of
+  them chosen), custom monoline wordmark whose i-dot repeats the decision point, light and dark
+  lockups, favicon, PNG icons (16–512 px) and a 1280×640 social preview. Used in the README header
+  and the playground.
 
 ### Changed
 - `/health` and the startup log report the actual compute device instead of a fixed `"cpu"`.
