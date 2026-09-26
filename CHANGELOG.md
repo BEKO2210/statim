@@ -7,6 +7,15 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-27
+
+Diagrams in the brand style for the README.
+
+### Added
+- README diagrams in the brand style, each in a light and a dark variant (switched by the reader's
+  colour scheme): request-to-decision architecture (replaces the ASCII sketch), GPU vs. CPU
+  throughput and latency, and the fine-tuning results. Sources in `assets/diagrams/`.
+
 ## [0.2.0] - 2026-09-27
 
 GPU inference, a production-grade playground, and a reproducible fine-tuning and evaluation toolkit.
@@ -73,6 +82,7 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/BEKO2210/statim/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BEKO2210/statim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/BEKO2210/statim/releases/tag/v0.1.0
