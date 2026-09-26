@@ -5,7 +5,7 @@
 #include <vector>
 
 #ifndef STATIM_VERSION
-#define STATIM_VERSION "0.1.0"
+#define STATIM_VERSION "0.2.0"
 #endif
 
 namespace statim {

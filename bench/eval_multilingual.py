@@ -58,7 +58,7 @@ SENTIMENT_LANGS = [
 SENTIMENT_CLASS_NAMES = ["positive", "neutral", "negative"]
 SENTIMENT_OPTIONS = ["negative", "neutral", "positive"]
 SUITES = ["amazon_massive_intent", "multilingual_sentiments"]
-MODELS = ["english", "multilingual", "consensus", "banking77"]
+MODELS = ["english", "multilingual", "consensus", "banking77", "multitask"]
 LANG_GROUPS = {
     "de": {"de", "german"}, "german": {"de", "german"},
     "en": {"en", "english"}, "english": {"en", "english"},

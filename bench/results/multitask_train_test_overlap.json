@@ -1,0 +1,269 @@
+{
+ "massive": {
+  "af": {
+   "train": 11514,
+   "dropped": 99
+  },
+  "am": {
+   "train": 11514,
+   "dropped": 172
+  },
+  "ar": {
+   "train": 11514,
+   "dropped": 433
+  },
+  "az": {
+   "train": 11514,
+   "dropped": 379
+  },
+  "bn": {
+   "train": 11514,
+   "dropped": 203
+  },
+  "cy": {
+   "train": 11514,
+   "dropped": 183
+  },
+  "da": {
+   "train": 11514,
+   "dropped": 191
+  },
+  "de": {
+   "train": 11514,
+   "dropped": 164
+  },
+  "el": {
+   "train": 11514,
+   "dropped": 186
+  },
+  "en": {
+   "train": 11514,
+   "dropped": 22
+  },
+  "es": {
+   "train": 11514,
+   "dropped": 216
+  },
+  "fa": {
+   "train": 11514,
+   "dropped": 353
+  },
+  "fi": {
+   "train": 11514,
+   "dropped": 266
+  },
+  "fr": {
+   "train": 11514,
+   "dropped": 233
+  },
+  "he": {
+   "train": 11514,
+   "dropped": 219
+  },
+  "hi": {
+   "train": 11514,
+   "dropped": 181
+  },
+  "hu": {
+   "train": 11514,
+   "dropped": 276
+  },
+  "hy": {
+   "train": 11514,
+   "dropped": 210
+  },
+  "id": {
+   "train": 11514,
+   "dropped": 353
+  },
+  "is": {
+   "train": 11514,
+   "dropped": 214
+  },
+  "it": {
+   "train": 11514,
+   "dropped": 384
+  },
+  "ja": {
+   "train": 11514,
+   "dropped": 344
+  },
+  "jv": {
+   "train": 11514,
+   "dropped": 254
+  },
+  "ka": {
+   "train": 11514,
+   "dropped": 621
+  },
+  "km": {
+   "train": 11514,
+   "dropped": 982
+  },
+  "kn": {
+   "train": 11514,
+   "dropped": 138
+  },
+  "ko": {
+   "train": 11514,
+   "dropped": 291
+  },
+  "lv": {
+   "train": 11514,
+   "dropped": 215
+  },
+  "ml": {
+   "train": 11514,
+   "dropped": 227
+  },
+  "mn": {
+   "train": 11514,
+   "dropped": 304
+  },
+  "ms": {
+   "train": 11514,
+   "dropped": 241
+  },
+  "my": {
+   "train": 11514,
+   "dropped": 109
+  },
+  "nb": {
+   "train": 11514,
+   "dropped": 177
+  },
+  "nl": {
+   "train": 11514,
+   "dropped": 176
+  },
+  "pl": {
+   "train": 11514,
+   "dropped": 433
+  },
+  "pt": {
+   "train": 11514,
+   "dropped": 329
+  },
+  "ro": {
+   "train": 11514,
+   "dropped": 180
+  },
+  "ru": {
+   "train": 11514,
+   "dropped": 359
+  },
+  "sl": {
+   "train": 11514,
+   "dropped": 323
+  },
+  "sq": {
+   "train": 11514,
+   "dropped": 340
+  },
+  "sv": {
+   "train": 11514,
+   "dropped": 261
+  },
+  "sw": {
+   "train": 11514,
+   "dropped": 293
+  },
+  "ta": {
+   "train": 11514,
+   "dropped": 201
+  },
+  "te": {
+   "train": 11514,
+   "dropped": 105
+  },
+  "th": {
+   "train": 11514,
+   "dropped": 413
+  },
+  "tl": {
+   "train": 11514,
+   "dropped": 250
+  },
+  "tr": {
+   "train": 11514,
+   "dropped": 244
+  },
+  "ur": {
+   "train": 11514,
+   "dropped": 178
+  },
+  "vi": {
+   "train": 11514,
+   "dropped": 275
+  },
+  "zh-CN": {
+   "train": 11514,
+   "dropped": 353
+  },
+  "zh-TW": {
+   "train": 11514,
+   "dropped": 568
+  }
+ },
+ "sentiment": {
+  "arabic": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "chinese": {
+   "train": 120000,
+   "dropped": 439
+  },
+  "english": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "french": {
+   "train": 1839,
+   "dropped": 2
+  },
+  "german": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "hindi": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "indonesian": {
+   "train": 11000,
+   "dropped": 0
+  },
+  "italian": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "japanese": {
+   "train": 120000,
+   "dropped": 6
+  },
+  "malay": {
+   "train": 4687,
+   "dropped": 5
+  },
+  "portuguese": {
+   "train": 1839,
+   "dropped": 0
+  },
+  "spanish": {
+   "train": 1839,
+   "dropped": 0
+  }
+ },
+ "totals": {
+  "massive": {
+   "train": 587214,
+   "dropped": 14121
+  },
+  "sentiment": {
+   "train": 270399,
+   "dropped": 452
+  }
+ },
+ "rule": "a train row is dropped when its exact text occurs in the test split of the same dataset and language"
+}
