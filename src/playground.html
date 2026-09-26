@@ -260,11 +260,13 @@ const PRESETS = {
     }
   },
   "Support-Ticket (DE)": {
-    state: "Seit dem Update gestern stürzt die App beim Start ab. Unser ganzes Team kann nicht arbeiten, bitte dringend melden!",
+    state: "Seit dem Update gestern stürzt die App beim Start ab und wir können nicht verkaufen. Bitte dringend melden!",
     questions: {
       department: {type: "choice", instructions: "Welche Abteilung ist zuständig?", criteria: {billing: "Rechnungen, Zahlungen", technical: "Fehler, Abstürze, Ausfälle", sales: "Preise, Verträge", other: "Sonstiges"}},
       urgency: {type: "score", instructions: "Wie dringend ist die Anfrage?", criteria: ["nicht dringend", "bald", "kritisch, blockiert die Arbeit"]},
-      outage: {type: "noul", instructions: "Beschreibt der Nutzer einen Ausfall?"}
+      outage: {type: "noul", instructions: "Beschreibt der Nutzer einen Ausfall?"},
+      // a choice picks one department (the cause); side effects get their own yes/no question
+      revenue_impact: {type: "noul", instructions: "Verhindert das Problem Verkäufe oder kostet es Umsatz?"}
     }
   },
   "Review sentiment": {

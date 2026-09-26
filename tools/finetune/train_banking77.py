@@ -11,6 +11,9 @@ temperature), with these changes:
 - Option order is shuffled per item, so the model learns to read the intent names instead of
   their positions in the list.
 - Replay of LocalLLaMA/typed-decisions train (soft targets) against forgetting general decisions.
+- Optional distillation replay (--distill N, learning without forgetting): generic zero-shot
+  questions over tweets and news (never the evaluation datasets), with the base model's own answer
+  distributions as targets. No gold labels; it only anchors the old behaviour.
 - Token embeddings are frozen: mmBERT's 256k-row table is ~90 % of the parameters, and AdamW's
   weight decay would shrink rows of every language the Banking77 data never touches.
 
@@ -75,6 +78,42 @@ def typed_items(tok, rows, max_len, head_max_len):
             if len(markers) != len(render_options(q)) or len(markers) != len(target):
                 continue
             out.append({"ids": seq, "markers": markers, "qtype": QTYPES[t], "target": target, "src": "typed"})
+    return out
+
+
+# Generic questions for distillation replay. Label sets deliberately differ from the evaluation
+# suites; the targets are the base model's own distributions, so nothing here can teach an answer.
+DISTILL_QUESTIONS = [
+    ("choice", "What is the sentiment of `text`?", ["positive", "negative", "neutral"]),
+    ("choice", "What is the overall tone of `text`?", ["cheerful", "gloomy", "irritated", "worried", "amazed", "affectionate", "neutral"]),
+    ("choice", "Which feeling does the author of `text` convey?", ["happiness", "grief", "rage", "anxiety", "astonishment", "tenderness"]),
+    ("choice", "How does the writer of `text` seem to feel?", ["excited", "disappointed", "annoyed", "nervous", "calm"]),
+    ("choice", "What is `text` mainly about?", ["politics", "sports", "business", "technology", "entertainment", "health", "personal life"]),
+    ("choice", "Who is the most likely author of `text`?", ["journalist", "private person", "company", "public figure"]),
+    ("score", "How emotional is `text`?", ["not at all", "somewhat", "very"]),
+    ("score", "How formal is the language of `text`?", ["informal", "neutral", "formal"]),
+    ("noul", "Does `text` express a complaint?", None),
+    ("noul", "Is the author of `text` happy?", None),
+    ("noul", "Does `text` ask a question?", None),
+    ("noul", "Does `text` mention money or prices?", None),
+]
+
+
+def distill_items(tok, texts, max_len, head_max_len, rng):
+    out = []
+    for text in texts:
+        t, ins, labels = rng.choice(DISTILL_QUESTIONS)
+        if t == "choice":
+            labels = list(labels)
+            rng.shuffle(labels)
+            crit = {k: None for k in labels}
+        else:
+            crit = labels or {}
+        q = {"t": t, "ins": ins, "crit": crit}
+        seq, markers = build_sequence(tok, {"text": text}, q, max_len, head_max_len)
+        if len(markers) != len(render_options(q)):
+            continue
+        out.append({"ids": seq, "markers": markers, "qtype": QTYPES[t], "target": None, "src": "distill"})
     return out
 
 
@@ -162,6 +201,8 @@ def main():
     ap.add_argument("--accum", type=int, default=4)
     ap.add_argument("--calib", type=int, default=500, help="Banking77 train rows held out for dev/calibration")
     ap.add_argument("--no-replay", action="store_true")
+    ap.add_argument("--distill", type=int, default=0, help="distillation replay items (tweets + news)")
+    ap.add_argument("--tag", default="banking77", help="model name suffix recorded in the config")
     a = ap.parse_args()
 
     from datasets import load_dataset
@@ -191,12 +232,26 @@ def main():
         n_hold = len(td) // 10
         typed_dev = typed_items(tok, td[:n_hold], max_len, cfg.get("head_max_len", 192))
         train += typed_items(tok, td[n_hold:], max_len, cfg.get("head_max_len", 192))
-    n_bank = sum(it["src"] == "banking77" for it in train)
-    print(f"train items: {len(train)} ({n_bank} banking77, {len(train) - n_bank} typed-decisions) | "
-          f"dev: {len(dev)} banking77, {len(typed_dev)} typed-decisions", flush=True)
+    distill = []
+    if a.distill:
+        tw = [r["text"] for r in load_dataset("cardiffnlp/tweet_eval", "sentiment", split="train")]
+        news = [r["text"] for r in load_dataset("fancyzhx/ag_news", split="train")]
+        rng.shuffle(tw)
+        rng.shuffle(news)
+        texts = tw[:a.distill * 3 // 4] + news[:a.distill - a.distill * 3 // 4]
+        distill = distill_items(tok, texts, max_len, cfg.get("head_max_len", 192), rng)
 
     model = build_model(cfg, encoder_dir=os.path.join(base, "encoder"))
     model.load_state_dict(load_file(os.path.join(base, "model.safetensors")), strict=True)
+    if distill:
+        # teacher = the base model itself, before any update
+        model.to(device)
+        for it, z in zip(distill, predict(model, [dict(it, target=[0.0] * len(it["markers"])) for it in distill], tok.pad_token_id, device, dtype)):
+            zt = torch.tensor(z)
+            it["target"] = torch.softmax(zt, -1).tolist()
+        train += distill
+    counts = {src: sum(it["src"] == src for it in train) for src in ("banking77", "typed", "distill")}
+    print(f"train items: {len(train)} {counts} | dev: {len(dev)} banking77, {len(typed_dev)} typed-decisions", flush=True)
     model.encoder.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.head_checkpointing = True
     model.to(device).train()
@@ -294,10 +349,10 @@ def main():
     for sub in ("encoder", "tokenizer"):
         shutil.copytree(os.path.join(base, sub), os.path.join(a.out, sub), dirs_exist_ok=True)
     cfg.update({"head_max_len": BANK_HEAD, "temperature": temps, "temperature_by_options": tbo,
-                "model_name": "laya-multilingual-banking77", "fine_tuned": True,
+                "model_name": "laya-multilingual-" + a.tag, "fine_tuned": True,
                 "training_banking77": {"base": os.path.basename(base.rstrip("/")), "best_epoch": best_epoch,
                                        "dev_banking77_before": round(acc0, 4), "log": log,
-                                       "replay": not a.no_replay, "frozen": "token embeddings",
+                                       "replay": not a.no_replay, "distill": a.distill, "frozen": "token embeddings",
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)
     print(f"saved {a.out} (best epoch {best_epoch}, dev banking77 {best:.4f})", flush=True)
