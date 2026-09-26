@@ -32,6 +32,9 @@ GPU inference, a production-grade playground, and a reproducible fine-tuning and
     sentiment rows, per language in `bench/results/multitask_train_test_overlap.json`); per-epoch
     task budgets, LR warmup and EMA weights.
   - `merge.py`: model soup, task arithmetic and TIES merging of checkpoints from one base.
+  - `build_mixture.py`: licence-clean training mixture from `tasksource/tasksource-jev-typed-decisions`
+    (commercial rows only, per-source cap, evaluation and emotion sources excluded, exact-match
+    dedup against every reported test split).
   - `eval_laya.py` (test suites on GPU) and `eval_dev.py` (model selection on validation data only).
 - **Multilingual benchmark** `bench/eval_multilingual.py`: MASSIVE intents (59 labels) and
   multilingual sentiment, 12 languages each, seeded stratified samples with identical MASSIVE rows
@@ -50,6 +53,10 @@ GPU inference, a production-grade playground, and a reproducible fine-tuning and
   item (`STATIM_BATCH1`).
 
 ### Fixed
+- Mixture training: items sharing a document with the held-out mixture slice are dropped, so the
+  slice no longer inflates checkpoint selection (found by a pre-training audit).
+- `eval_dev.py` refuses models trained with fewer than 500 held-out Banking77 rows.
+- `--gpu-fast` help text understated the logit drift (up to ~0.12, not ~1e-2).
 - Playground: the mode selector silently overwrote the chosen model. `consensus` is now a model
   option, offered only when both checkpoints are loaded.
 
