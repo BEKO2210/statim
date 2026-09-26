@@ -26,7 +26,8 @@ void usage() {
                  "usage:\n"
                  "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
                  "                 [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
-                 "                 [--api-key-file FILE] [--no-access-log]\n"
+                 "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
+                 "                 [--consensus] [--calibrate]\n"
                  "  statim decide  -m model.gguf [--ensemble K] [--lang xx] < request.json\n"
                  "                 (request: {\"state\": ..., \"questions\": {...}})\n"
                  "  statim bench   -m model.gguf [--threads N] [--runs 5] < request.json\n"
@@ -102,6 +103,9 @@ int main(int argc, char** argv) {
         else if (a == "--lang") dopts.lang = next();
         else if (a == "--runs") runs = std::atoi(next().c_str());
         else if (a == "--no-access-log") cfg.access_log = false;
+        else if (a == "--no-playground") cfg.playground = false;
+        else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
+        else if (a == "--consensus") cfg.consensus = true;
         else if (a == "--api-key-file") {
             std::ifstream f(next());
             std::string line;

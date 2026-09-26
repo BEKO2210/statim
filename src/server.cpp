@@ -14,6 +14,7 @@
 #include <sstream>
 
 #include "httplib.h"
+#include "playground.inc"
 #include "statim/engine.h"
 
 namespace statim {
@@ -322,6 +323,10 @@ int run_server(const ServerConfig& cfg) {
             opts.ensemble = cfg.ensemble;
             if (body.contains("ensemble") && body["ensemble"].is_number_integer())
                 opts.ensemble = std::clamp(body["ensemble"].get<int>(), 1, 8);
+            opts.calibrate = cfg.calibrate;
+            if (body.contains("calibrate") && body["calibrate"].is_boolean()) opts.calibrate = body["calibrate"].get<bool>();
+            if (body.contains("return_logits") && body["return_logits"].is_boolean())
+                opts.return_logits = body["return_logits"].get<bool>();
             if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
                 opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
             std::vector<ojson> states;
@@ -341,19 +346,50 @@ int run_server(const ServerConfig& cfg) {
                 states.push_back(state);
             }
 
+            // Consensus: both English and multilingual checkpoints answer, their option
+            // log-probabilities are averaged. Opt in per request ("model": "consensus") or by default
+            // with --consensus.
+            LoadedModel* en = by_name("english");
+            LoadedModel* ml = by_name("multilingual");
+            const bool want_consensus =
+                en && ml && ((body.contains("model") && body["model"] == "consensus") || (cfg.consensus && !body.contains("model")));
             std::string reason;
-            LoadedModel& lm = find_model(body, states, reason);
-            model_name = lm.name;
+            LoadedModel& lm = want_consensus ? *en : find_model(body, states, reason);
+            model_name = want_consensus ? "consensus" : lm.name;
             const auto ti = std::chrono::steady_clock::now();
             std::vector<ojson> results;
-            {
+            if (want_consensus) {
+                const bool keep_logits = opts.return_logits;
+                opts.return_logits = true;
+                std::vector<ojson> re, rm;
+                {
+                    auto lease = en->pool->acquire();
+                    re = lease->engine->decide_batch(states, questions, opts);
+                }
+                {
+                    auto lease = ml->pool->acquire();
+                    rm = lease->engine->decide_batch(states, questions, opts);
+                }
+                for (size_t i = 0; i < re.size(); ++i) {
+                    ojson f = fuse_answers(questions, {&re[i], &rm[i]}, {0.5, 0.5});
+                    f["model"] = "consensus";
+                    if (keep_logits)
+                        for (auto it = f["answers"].begin(); it != f["answers"].end(); ++it) {
+                            it.value()["logits_by_model"] = {{"english", re[i]["answers"][it.key()]["logits"]},
+                                                             {"multilingual", rm[i]["answers"][it.key()]["logits"]}};
+                        }
+                    results.push_back(std::move(f));
+                }
+                reason = "consensus";
+            } else {
                 auto lease = lm.pool->acquire();
                 results = lease->engine->decide_batch(states, questions, opts);
             }
             const double infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
             for (auto& r : results) {
                 n_tokens += r["usage"]["input_tokens"].get<size_t>();
-                r["routing"] = {{"model", lm.name}, {"reason", reason}, {"engine", "statim"}, {"weights", lm.model->hparams().weight_type}};
+                r["routing"] = {{"model", model_name}, {"reason", reason}, {"engine", "statim"},
+                                {"weights", lm.model->hparams().weight_type}};
             }
             char timing[64];
             std::snprintf(timing, sizeof timing, "inference;dur=%.2f", infer_ms);
@@ -394,6 +430,10 @@ int run_server(const ServerConfig& cfg) {
     srv.Post("/v1/systemone", [&](const httplib::Request& q, httplib::Response& r) { handle(q, r, false); });
     srv.Post("/v1/systemone/batch", [&](const httplib::Request& q, httplib::Response& r) { handle(q, r, true); });
 
+    srv.Get("/", [&](const httplib::Request&, httplib::Response& res) {
+        if (cfg.playground) res.set_content(kPlaygroundHtml, "text/html; charset=utf-8");
+        else send_json(res, 404, {{"detail", "not found"}});
+    });
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         ojson loaded = ojson::array();
         for (auto& m : models) loaded.push_back(m.name);

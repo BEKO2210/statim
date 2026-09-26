@@ -24,10 +24,21 @@ struct DecideOptions {
     std::optional<std::string> lang;          // selects per-language temperatures if the model has them
     int ensemble = 1;              // >1: average choice answers over K cyclic option orders (position debiasing)
     double ensemble_margin = 1.0;  // only ensemble when top-1 minus top-2 probability is below this (1 = always)
+    bool return_logits = false;    // add the raw (pre-temperature) option logits to every answer
+    // Contextual calibration (Zhao et al., 2021): divide out the answer distribution the question
+    // produces on content-free versions of the state. Label-free; the content-free scores are
+    // computed once per question and state shape, then cached.
+    bool calibrate = false;
 };
 
 // Python json.dumps(ensure_ascii=False) with the given separators; key order preserved.
 std::string py_json_dumps(const ojson& v, const char* item_sep = ", ", const char* key_sep = ": ");
+
+struct Question;  // validated question (engine internal)
+
+// Consensus of several checkpoints: weighted mean of their option log-probabilities (the
+// results must have been produced with return_logits). Answers are re-decoded at T = 1.
+ojson fuse_answers(const ojson& questions, const std::vector<const ojson*>& results, const std::vector<double>& weights);
 
 class Engine {
 public:
@@ -48,6 +59,8 @@ public:
 
 private:
     std::vector<ItemResult> run_packed(const std::vector<Item>& items);
+    const std::vector<double>& null_logp(const Question& q, const ojson& qdef, const ojson& state, int max_len,
+                                         int head_max_len);
 
     struct Impl;
     std::shared_ptr<Model> model_;

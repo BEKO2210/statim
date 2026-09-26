@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <unordered_map>
 
 namespace statim {
 
@@ -163,6 +164,8 @@ std::string temp_bucket(int qt, size_t k) {
     return std::string(kQTypes[qt]) + ":" + size;
 }
 
+}  // namespace
+
 // Internal, validated form of one question (mirrors laya.Agent._to_internal).
 struct Question {
     std::string id;
@@ -172,6 +175,9 @@ struct Question {
     std::vector<ojson> levels;       // score: original level values
     std::vector<std::string> options;  // rendered option texts, label-index order
 };
+
+namespace {
+
 
 void check_question(const std::string& qid, const ojson& q) {
     auto err = [&](const std::string& m) { throw QuestionError("question '" + qid + "': " + m); };
@@ -280,16 +286,9 @@ std::string py_json_dumps(const ojson& v, const char* item_sep, const char* key_
     return out;
 }
 
-struct Engine::Impl {
-    std::mutex mu;
-    std::unique_ptr<Runner> runner;
-    std::vector<float> temperature;
-    std::vector<std::pair<std::string, float>> temp_by_options;
-    ojson lang_temps;
-
-    ojson answer(const Question& q, const std::vector<double>& z, const std::vector<float>& act, const DecideOptions& opts) const {
+// Temperature-scaled softmax over option logits -> Laya-shaped answer object.
+ojson decode_answer(const Question& q, const std::vector<double>& z, const std::vector<float>& act, float t) {
         const size_t k = q.options.size();
-        const float t = temperature_for(q.qt, k, opts.lang);
         std::vector<double> p(k);
         double mx = -INFINITY, sum = 0;
         for (size_t j = 0; j < k; ++j) mx = std::max(mx, z[j] / t);
@@ -323,6 +322,19 @@ struct Engine::Impl {
         }
         return {{"type", "noul"}, {"noul", round4(p[1])}, {"confidence", round4(std::max(p[1], 1.0 - p[1]))},
                 {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
+    }
+
+struct Engine::Impl {
+    std::mutex mu;
+    std::mutex cache_mu;
+    std::unordered_map<std::string, std::vector<double>> null_cache;  // question+shape -> mean log p
+    std::unique_ptr<Runner> runner;
+    std::vector<float> temperature;
+    std::vector<std::pair<std::string, float>> temp_by_options;
+    ojson lang_temps;
+
+    ojson answer(const Question& q, const std::vector<double>& z, const std::vector<float>& act, const DecideOptions& opts) const {
+        return decode_answer(q, z, act, temperature_for(q.qt, q.options.size(), opts.lang));
     }
 
     float temperature_for(int qt, size_t k, const std::optional<std::string>& lang) const {
@@ -418,6 +430,22 @@ Item build_item(const Tokenizer& tok, const HParams& h, const Question& q, const
         throw QuestionError("question '" + q.id + "' options exceed head_max_len=" + std::to_string(head_max_len));
     it.markers = std::move(kept);
     return it;
+}
+
+// Same JSON shape, every string replaced by `fill` (numbers/bools are kept: they are structure).
+ojson content_free(const ojson& v, const std::string& fill) {
+    if (v.is_string()) return fill;
+    if (v.is_array()) {
+        ojson out = ojson::array();
+        for (const auto& e : v) out.push_back(content_free(e, fill));
+        return out;
+    }
+    if (v.is_object()) {
+        ojson out = ojson::object();
+        for (auto it = v.begin(); it != v.end(); ++it) out[it.key()] = content_free(it.value(), fill);
+        return out;
+    }
+    return v;
 }
 
 std::vector<size_t> rotation(size_t k, size_t r) {
@@ -522,9 +550,49 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
                 for (size_t j = 0; j < k; ++j) z[v.order[j]] += (v.logits[j] - lse) / static_cast<double>(views[i].size());
             }
         }
+        if (opts.calibrate && q.qt == 0 && k >= 2) {
+            const auto& zn = null_logp(qs[qi], questions[q.id], states[s], max_len, head_max_len);
+            for (size_t j = 0; j < k; ++j) z[j] -= zn[j];
+        }
         results[s]["answers"][q.id] = impl_->answer(q, z, base[i].act_probs, opts);
+        if (opts.return_logits) {
+            ojson lg = ojson::array();
+            for (double v : z) lg.push_back(v);
+            results[s]["answers"][q.id]["logits"] = std::move(lg);
+        }
     }
     return results;
+}
+
+const std::vector<double>& Engine::null_logp(const Question& q, const ojson& qdef, const ojson& state, int max_len,
+                                             int head_max_len) {
+    const std::string key = q.id + "\x1f" + py_json_dumps(qdef) + "\x1f" + py_json_dumps(content_free(state, "")) +
+                            "\x1f" + std::to_string(max_len) + "/" + std::to_string(head_max_len);
+    {
+        std::lock_guard<std::mutex> lk(impl_->cache_mu);
+        auto it = impl_->null_cache.find(key);
+        if (it != impl_->null_cache.end()) return it->second;
+    }
+    const HParams& h = model_->hparams();
+    std::vector<Item> items;
+    for (const char* fill : {"", "N/A", "[MASK]"}) {
+        ojson cf = content_free(state, fill);
+        auto ids = model_->tokenizer().encode(replace_all(serialize_state(cf), h.mask_token, " "));
+        items.push_back(build_item(model_->tokenizer(), h, q, ids, cf.is_array(), max_len, head_max_len,
+                                   rotation(q.options.size(), 0)));
+    }
+    auto res = run_packed(items);
+    const size_t k = q.options.size();
+    std::vector<double> mean(k, 0.0);
+    for (const auto& r : res) {  // average in probability space, then back to log space
+        double mx = *std::max_element(r.logits.begin(), r.logits.end()), sum = 0;
+        for (float v : r.logits) sum += std::exp(v - mx);
+        for (size_t j = 0; j < k; ++j) mean[j] += std::exp(r.logits[j] - mx) / sum / static_cast<double>(res.size());
+    }
+    for (double& v : mean) v = std::log(std::max(v, 1e-12));
+    std::lock_guard<std::mutex> lk(impl_->cache_mu);
+    if (impl_->null_cache.size() > 4096) impl_->null_cache.clear();
+    return impl_->null_cache.emplace(key, std::move(mean)).first->second;
 }
 
 std::vector<ItemResult> Engine::run_packed(const std::vector<Item>& items) {
@@ -550,6 +618,32 @@ std::vector<ItemResult> Engine::run_packed(const std::vector<Item>& items) {
         auto r = impl_->runner->run(chunk);
         for (size_t i = start; i < end; ++i) out[order[i]] = std::move(r[i - start]);
         start = end;
+    }
+    return out;
+}
+
+ojson fuse_answers(const ojson& questions, const std::vector<const ojson*>& results, const std::vector<double>& weights) {
+    auto qs = parse_questions(questions);
+    ojson out = *results.front();
+    size_t tokens = 0;
+    for (const ojson* r : results) tokens += (*r)["usage"]["input_tokens"].get<size_t>();
+    out["usage"]["input_tokens"] = tokens;
+    for (const Question& q : qs) {
+        const size_t k = q.options.size();
+        std::vector<double> z(k, 0.0);
+        for (size_t m = 0; m < results.size(); ++m) {
+            const ojson& lg = (*results[m])["answers"][q.id]["logits"];
+            double mx = -INFINITY, sum = 0;
+            for (size_t j = 0; j < k; ++j) mx = std::max(mx, lg[j].get<double>());
+            for (size_t j = 0; j < k; ++j) sum += std::exp(lg[j].get<double>() - mx);
+            for (size_t j = 0; j < k; ++j) z[j] += weights[m] * (lg[j].get<double>() - mx - std::log(sum));
+        }
+        std::vector<float> act;
+        for (const auto& v : (*results.front())["answers"][q.id]["action"]["act_probability"].is_number()
+                                 ? std::vector<float>{(*results.front())["answers"][q.id]["action"]["act_probability"].get<float>()}
+                                 : std::vector<float>{})
+            act.push_back(v);
+        out["answers"][q.id] = decode_answer(q, z, act, 1.0f);
     }
     return out;
 }

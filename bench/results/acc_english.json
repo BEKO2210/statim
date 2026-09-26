@@ -1,0 +1,29 @@
+{
+  "emotion": {
+    "statim_ensemble_1": {
+      "accuracy": 0.5925,
+      "ece": 0.3088,
+      "nll": 2.184,
+      "brier": 0.6963,
+      "seconds": 132.4
+    }
+  },
+  "ag_news": {
+    "statim_ensemble_1": {
+      "accuracy": 0.95,
+      "ece": 0.0316,
+      "nll": 0.1637,
+      "brier": 0.0808,
+      "seconds": 227.7
+    }
+  },
+  "banking77": {
+    "statim_ensemble_1": {
+      "accuracy": 0.425,
+      "ece": 0.3809,
+      "nll": 6.3158,
+      "brier": 0.9246,
+      "seconds": 526.9
+    }
+  }
+}

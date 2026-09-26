@@ -66,7 +66,12 @@ target_link_libraries(statim-quantize PRIVATE ggml)
 
 # ---- statim binary (CLI + HTTP server)
 find_package(Threads REQUIRED)
-add_executable(statim src/main.cpp src/server.cpp)
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/playground.inc
+  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/playground.html -DDST=${CMAKE_CURRENT_BINARY_DIR}/playground.inc
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.playground.cmake
+  DEPENDS src/playground.html CMakeLists.playground.cmake)
+add_executable(statim src/main.cpp src/server.cpp ${CMAKE_CURRENT_BINARY_DIR}/playground.inc)
+target_include_directories(statim PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(statim PRIVATE STATIM_VERSION="${PROJECT_VERSION}")
 target_link_libraries(statim PRIVATE statim_core Threads::Threads)
 install(TARGETS statim statim-quantize RUNTIME DESTINATION bin)

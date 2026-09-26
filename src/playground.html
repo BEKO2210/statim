@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statim Playground</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--acc:#2f5bea;--acc2:#e8eefe;--ok:#1f8a5b;--bar:#2f5bea}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161a21;--ink:#e8ebf0;--mute:#98a1ae;--line:#262c36;--acc:#7b9bff;--acc2:#1d2640;--ok:#4cc58f;--bar:#7b9bff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:880px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--acc)}
+.tag{font-size:12px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+textarea{width:100%;min-height:110px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px;background:transparent;color:var(--ink);font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button{min-height:44px;padding:0 18px;border-radius:8px;border:0;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+button.ghost{background:var(--acc2);color:var(--acc)}
+button:disabled{opacity:.6}
+select{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:0 10px;font-size:14px}
+.row select{flex:1 1 120px}
+.meta{font-size:13px;color:var(--mute);flex:1 1 100%;text-align:right}
+.ans{border-top:1px solid var(--line);padding:12px 0}
+.ans:first-child{border-top:0;padding-top:0}
+.ans h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.ans h3 b{color:var(--ok)}
+.bar{display:grid;grid-template-columns:minmax(80px,32%) 1fr 52px;gap:8px;align-items:center;font-size:13px;margin:3px 0}
+.bar .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mute)}
+.bar .v{text-align:right;font-variant-numeric:tabular-nums}
+.track{height:8px;background:var(--acc2);border-radius:4px;overflow:hidden}
+.fill{height:100%;background:var(--bar);border-radius:4px}
+.err{color:#d33;font-size:14px;white-space:pre-wrap}
+code{font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Statim <span>Playground</span></h1><div class="tag" id="ver"></div></header>
+<div class="card">
+  <label for="state">State (text or JSON)</label>
+  <textarea id="state">{"subject": "Duplicate charge on invoice #4411", "body": "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."}</textarea>
+</div>
+<div class="card">
+  <label for="qs">Questions</label>
+  <textarea id="qs" style="min-height:190px">{
+ "department": {
+  "type": "choice",
+  "instructions": "Which department should handle this request?",
+  "criteria": {"billing": "invoices, payments, refunds", "technical": "bugs, outages, system errors", "sales": "pricing, new contracts", "other": "everything else"}
+ },
+ "urgency": {
+  "type": "score",
+  "instructions": "How urgent is this request?",
+  "criteria": ["not urgent", "soon", "critical deadline or blocking issue"]
+ },
+ "refund": {"type": "noul", "instructions": "Does the user explicitly request a refund?"}
+}</textarea>
+</div>
+<div class="card">
+  <div class="row">
+    <button id="go">Decide</button>
+    <select id="model" aria-label="Model"></select>
+    <select id="mode" aria-label="Mode"><option value="">exact (Laya)</option><option value="consensus">consensus</option></select>
+    <span class="meta" id="meta"></span>
+  </div>
+</div>
+<div class="card" id="out" hidden></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+fetch("/health").then(r => r.json()).then(h => {
+  $("ver").textContent = "v" + h.version + " · " + h.device;
+  $("model").innerHTML = '<option value="">auto</option>' + h.loaded.map(m => `<option>${esc(m)}</option>`).join("");
+});
+function bars(probs) {
+  return Object.entries(probs).map(([k, v]) =>
+    `<div class="bar"><span class="t" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${(v*100).toFixed(1)}%"></div></div><span class="v">${(v*100).toFixed(1)}%</span></div>`).join("");
+}
+$("go").onclick = async () => {
+  const out = $("out");
+  let state, questions;
+  try { const t = $("state").value.trim(); state = t.startsWith("{") || t.startsWith("[") ? JSON.parse(t) : t; questions = JSON.parse($("qs").value); }
+  catch (e) { out.hidden = false; out.innerHTML = `<div class="err">Invalid JSON: ${esc(e.message)}</div>`; return; }
+  const body = {state, questions};
+  if ($("model").value) body.model = $("model").value;
+  if ($("mode").value) body.model = $("mode").value;
+  $("go").disabled = true; $("meta").textContent = "…";
+  const headers = {"Content-Type": "application/json"};
+  const key = localStorage.getItem("statim_key"); if (key) headers.Authorization = "Bearer " + key;
+  try {
+    const t0 = performance.now();
+    const r = await fetch("/v1/systemone", {method: "POST", headers, body: JSON.stringify(body)});
+    const j = await r.json();
+    out.hidden = false;
+    if (!r.ok) { out.innerHTML = `<div class="err">${r.status}: ${esc(j.detail)}</div>`; return; }
+    $("meta").textContent = `${j.routing.model} · ${r.headers.get("X-Inference-Time-Ms")} ms · ${j.usage.input_tokens} tokens`;
+    out.innerHTML = Object.entries(j.answers).map(([id, a]) => {
+      const head = a.type === "choice" ? `<b>${esc(a.choice)}</b>` : a.type === "score" ? `<b>${a.score.toFixed(2)}</b>` : `<b>${(a.noul*100).toFixed(1)}% yes</b>`;
+      const probs = a.probabilities || {"no": 1 - a.noul, "yes": a.noul};
+      return `<div class="ans"><h3><span>${esc(id)} <code>${a.type}</code></span>${head}</h3>${bars(probs)}</div>`;
+    }).join("");
+  } catch (e) { out.hidden = false; out.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+  finally { $("go").disabled = false; }
+};
+</script>
+</body>
+</html>

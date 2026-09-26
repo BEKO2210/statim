@@ -57,10 +57,12 @@ def metrics(probs, gold):
     return {"accuracy": round(acc, 4), "ece": round(ece, 4), "nll": round(nll, 4), "brier": round(brier, 4)}
 
 
-def run_statim(url, states, questions, qid, keys, ensemble, batch=16, api_key=None):
+def run_statim(url, states, questions, qid, keys, ensemble, batch=16, api_key=None, model=None):
     probs, t0 = [], time.time()
+    run_statim.logits = []
     for i in range(0, len(states), batch):
-        body = json.dumps({"states": states[i:i + batch], "questions": questions, "ensemble": ensemble}).encode()
+        body = json.dumps({"states": states[i:i + batch], "questions": questions, "ensemble": ensemble,
+                           "return_logits": True, **({"model": model} if model else {})}).encode()
         req = urllib.request.Request(url + "/v1/systemone/batch", data=body, headers={"Content-Type": "application/json"})
         if api_key:
             req.add_header("Authorization", "Bearer " + api_key)
@@ -68,6 +70,7 @@ def run_statim(url, states, questions, qid, keys, ensemble, batch=16, api_key=No
         for r in res["results"]:
             pr = r["answers"][qid]["probabilities"]
             probs.append([pr[k] for k in keys])
+            run_statim.logits.append(r["answers"][qid].get("logits"))
     return probs, time.time() - t0
 
 
@@ -84,11 +87,13 @@ def run_laya(path, states, questions, qid, keys):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=None)
+    ap.add_argument("--model", default=None, help="model name on the Statim server")
     ap.add_argument("--laya", default=None, help="checkpoint dir: evaluate the official Python package instead")
     ap.add_argument("--ensemble", type=int, nargs="+", default=[1])
     ap.add_argument("--n", type=int, default=400)
     ap.add_argument("--suites", nargs="+", default=["ag_news", "emotion", "banking77"])
     ap.add_argument("--out", default=None)
+    ap.add_argument("--dump", default=None, help="write per-case probabilities + gold (jsonl) for offline analysis")
     a = ap.parse_args()
     data = suites(a.n)
     report = {}
@@ -101,8 +106,12 @@ def main():
             continue
         report[name] = {}
         for e in a.ensemble:
-            probs, secs = run_statim(a.url, states, questions, qid, keys, e, api_key=os.environ.get("STATIM_API_KEY"))
+            probs, secs = run_statim(a.url, states, questions, qid, keys, e, api_key=os.environ.get("STATIM_API_KEY"), model=a.model)
             report[name]["statim_ensemble_%d" % e] = dict(metrics(probs, gold), seconds=round(secs, 1))
+            if a.dump:
+                with open(a.dump, "a") as f:
+                    f.write(json.dumps({"suite": name, "model": a.model, "ensemble": e, "keys": keys, "gold": gold, "probs": probs,
+                                        "logits": run_statim.logits}) + "\n")
             print(name, e, report[name]["statim_ensemble_%d" % e], flush=True)
     if a.out:
         json.dump(report, open(a.out, "w"), indent=2)
