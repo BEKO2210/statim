@@ -4,109 +4,530 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Statim Playground</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2311151b'/%3E%3Cpath d='M9 20l5-9 4 7 2-3 3 5' stroke='%2334d399' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--acc:#2f5bea;--acc2:#e8eefe;--ok:#1f8a5b;--bar:#2f5bea}
-@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161a21;--ink:#e8ebf0;--mute:#98a1ae;--line:#262c36;--acc:#7b9bff;--acc2:#1d2640;--ok:#4cc58f;--bar:#7b9bff}}
+:root{
+  --bg:#f4f5f7;--panel:#ffffff;--panel2:#f8f9fb;--ink:#12161c;--ink2:#3a4350;--mute:#6b7482;--line:#e3e6eb;--line2:#d3d8df;
+  --acc:#0f9f6e;--acc-ink:#fff;--acc-soft:#e3f6ee;--warn:#b7791f;--warn-soft:#fbf1dd;--bad:#d1435b;--bad-soft:#fbe6ea;
+  --track:#eceff3;--code-bg:#f8f9fb;--shadow:0 1px 2px rgba(16,24,40,.05),0 4px 16px rgba(16,24,40,.04);
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b0d11;--panel:#12151b;--panel2:#0f1217;--ink:#e7eaef;--ink2:#c2c8d1;--mute:#8a93a1;--line:#1f242d;--line2:#2b323d;
+  --acc:#34d399;--acc-ink:#05140e;--acc-soft:#10261e;--warn:#f0b454;--warn-soft:#2a2112;--bad:#f2708a;--bad-soft:#2c141b;
+  --track:#1b2029;--code-bg:#0d1015;--shadow:none;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0d11;--panel:#12151b;--panel2:#0f1217;--ink:#e7eaef;--ink2:#c2c8d1;--mute:#8a93a1;--line:#1f242d;--line2:#2b323d;
+  --acc:#34d399;--acc-ink:#05140e;--acc-soft:#10261e;--warn:#f0b454;--warn-soft:#2a2112;--bad:#f2708a;--bad-soft:#2c141b;
+  --track:#1b2029;--code-bg:#0d1015;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:880px;margin:0 auto;padding:20px 16px 48px}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px}
-h1{font-size:22px;margin:0;letter-spacing:-.01em}
-h1 span{color:var(--acc)}
-.tag{font-size:12px;color:var(--mute)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
-label{display:block;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
-textarea{width:100%;min-height:110px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px;background:transparent;color:var(--ink);font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-button{min-height:44px;padding:0 18px;border-radius:8px;border:0;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-button.ghost{background:var(--acc2);color:var(--acc)}
-button:disabled{opacity:.6}
-select{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:0 10px;font-size:14px}
-.row select{flex:1 1 120px}
-.meta{font-size:13px;color:var(--mute);flex:1 1 100%;text-align:right}
-.ans{border-top:1px solid var(--line);padding:12px 0}
-.ans:first-child{border-top:0;padding-top:0}
-.ans h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:8px}
-.ans h3 b{color:var(--ok)}
-.bar{display:grid;grid-template-columns:minmax(80px,32%) 1fr 52px;gap:8px;align-items:center;font-size:13px;margin:3px 0}
-.bar .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mute)}
-.bar .v{text-align:right;font-variant-numeric:tabular-nums}
-.track{height:8px;background:var(--acc2);border-radius:4px;overflow:hidden}
-.fill{height:100%;background:var(--bar);border-radius:4px}
-.err{color:#d33;font-size:14px;white-space:pre-wrap}
-code{font-size:12px}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 20px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em;font-size:15px}
+.brand svg{flex:none}
+.brand small{font-weight:500;color:var(--mute);font-size:13px}
+.status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);font-family:var(--mono)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.dot.ok{background:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.dot.busy{background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+.dot.down{background:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:500 11px/1 var(--mono);padding:5px 7px;border:1px solid var(--line2);border-radius:6px;color:var(--ink2);background:var(--panel)}
+.spacer{flex:1}
+.icon-btn{height:32px;min-width:32px;padding:0 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--ink2)}
+.icon-btn:hover{border-color:var(--mute);color:var(--ink)}
+.icon-btn.on{color:var(--acc);border-color:var(--acc)}
+
+/* layout */
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;padding:16px 20px 32px;max-width:1480px;margin:0 auto}
+@media (max-width:980px){.wrap{grid-template-columns:1fr;padding:12px 16px 32px}.top{padding:10px 16px;flex-wrap:wrap}.chips{display:none}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0}
+.ph{display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ph h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.ph .spacer{flex:1}
+.pb{padding:14px}
+
+/* editor */
+.editor{position:relative}
+.editor textarea{display:block;width:100%;border:0;background:var(--code-bg);padding:12px 14px;resize:vertical;font:12.5px/1.6 var(--mono);color:var(--ink);tab-size:2;border-radius:0 0 12px 12px}
+.editor textarea:focus{outline:none;box-shadow:inset 0 0 0 1px var(--acc)}
+.editor textarea.bad{box-shadow:inset 0 0 0 1px var(--bad)}
+.lint{font:11px var(--mono);color:var(--mute)}
+.lint.bad{color:var(--bad)}
+.lint.ok{color:var(--acc)}
+.link{background:none;border:0;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--mute);font-size:12px}
+.link:hover{color:var(--ink);background:var(--track)}
+select.preset{height:28px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);padding:0 8px;font-size:12px;max-width:190px}
+
+/* run bar */
+.runbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--mute);letter-spacing:.04em;text-transform:uppercase;margin-bottom:5px}
+.field select,.field input[type=text],.field input[type=number]{width:100%;height:36px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:0 10px;font-size:13px}
+.field .toggle,.toggle{display:flex;align-items:center;gap:8px;height:36px;margin:0;font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink2);cursor:pointer;user-select:none}
+.toggle input{appearance:none;width:30px;height:18px;border-radius:9px;background:var(--line2);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+.toggle input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.toggle input:checked{background:var(--acc)}
+.toggle input:checked::after{transform:translateX(12px)}
+.go-row{display:flex;align-items:center;gap:12px;padding:0 14px 14px}
+.go{height:42px;padding:0 22px;border:0;border-radius:9px;background:var(--acc);color:var(--acc-ink);font-weight:650;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:10px}
+.go:hover{filter:brightness(1.06)}
+.go:disabled{opacity:.6;cursor:progress}
+.go kbd{font:500 11px var(--mono);padding:2px 5px;border-radius:4px;background:rgba(0,0,0,.14)}
+.spin{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;display:none}
+.go:disabled .spin{display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hint{font-size:12px;color:var(--mute)}
+@media (max-width:640px){.runbar{grid-template-columns:1fr 1fr}.go kbd{display:none}}
+
+/* results */
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.stat{padding:12px 14px;border-right:1px solid var(--line);min-width:0}
+.stat:last-child{border-right:0}
+.stat .k{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.stat .v{font:600 17px/1.3 var(--mono);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.stat .r{font:500 11px var(--mono);color:var(--mute);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .v small{font-size:11px;font-weight:500;color:var(--mute);margin-left:2px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(6,minmax(0,1fr))}.stat{grid-column:span 2;border-bottom:1px solid var(--line)}.stat:nth-child(n+4){grid-column:span 3}.stat:nth-child(3),.stat:last-child{border-right:0}}
+.tabs{display:flex;gap:2px}
+.tab{background:none;border:0;padding:6px 10px;border-radius:7px;font-size:12px;font-weight:600;color:var(--mute);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--track);color:var(--ink)}
+.empty{padding:56px 20px;text-align:center;color:var(--mute)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.q{padding:16px 16px 18px;border-top:1px solid var(--line)}
+.q:first-child{border-top:0}
+.qh{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.qh .name{font-weight:650;font-size:14px}
+.qh .instr{font-size:12.5px;color:var(--mute);margin-top:1px}
+.badge{font:600 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px;border-radius:5px;background:var(--track);color:var(--ink2);vertical-align:2px;margin-left:6px}
+.verdict{margin-left:auto;text-align:right;flex:none}
+.verdict .big{font:650 18px/1.2 var(--mono);color:var(--acc)}
+.verdict .sub{font-size:11px;color:var(--mute);font-family:var(--mono)}
+.verdict.low .big{color:var(--warn)}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:minmax(90px,30%) 1fr 56px;gap:10px;align-items:center;font-size:12.5px}
+.bar .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.bar .t small{color:var(--mute);font-family:var(--mono);margin-right:6px}
+.bar.win .t{color:var(--ink);font-weight:600}
+.bar .v{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--mute)}
+.bar.win .v{color:var(--ink)}
+.track{height:8px;background:var(--track);border-radius:4px;overflow:hidden}
+.fill{height:100%;background:var(--line2);border-radius:4px;width:0;transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.bar.win .fill{background:var(--acc)}
+.scale{position:relative;margin:4px 0 16px;height:34px}
+.scale .rail{position:absolute;left:0;right:0;top:14px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--acc-soft),var(--warn-soft),var(--bad-soft))}
+.scale .tick{position:absolute;top:10px;width:2px;height:14px;background:var(--line2);transform:translateX(-1px)}
+.scale .mk{position:absolute;top:6px;width:16px;height:22px;transform:translateX(-8px);border-radius:5px;background:var(--ink);box-shadow:0 0 0 3px var(--panel);transition:left .45s cubic-bezier(.2,.8,.2,1)}
+.scale .lab{position:absolute;top:0;font:600 10px var(--mono);color:var(--mute);transform:translateX(-50%)}
+.split{display:flex;height:26px;border-radius:7px;overflow:hidden;font:600 12px var(--mono)}
+.split div{display:flex;align-items:center;padding:0 10px;white-space:nowrap;min-width:0;overflow:hidden;transition:flex-basis .45s}
+.split .yes{background:var(--acc);color:var(--acc-ink)}
+.split .no{background:var(--track);color:var(--ink2);justify-content:flex-end}
+.meters{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}
+.meter{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mute)}
+.meter .m{width:64px;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
+.meter .m i{display:block;height:100%;background:var(--ink2)}
+.meter b{font:600 11.5px var(--mono);color:var(--ink2)}
+pre.code{margin:0;padding:14px;background:var(--code-bg);font:12px/1.6 var(--mono);overflow:auto;max-height:560px;border-radius:0 0 12px 12px;white-space:pre}
+.j-k{color:var(--ink)}.j-s{color:var(--acc)}.j-n{color:var(--warn)}.j-b{color:var(--bad)}
+.err{margin:14px;padding:12px 14px;border-radius:9px;background:var(--bad-soft);color:var(--bad);font-size:13px;white-space:pre-wrap;font-family:var(--mono)}
+.err b{font-family:var(--sans)}
+
+/* history */
+.hist{list-style:none;margin:0;padding:6px}
+.hist li{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:12px}
+.hist li:hover{background:var(--track)}
+.hist .when{font-family:var(--mono);color:var(--mute)}
+.hist .sum{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.hist .ms{font-family:var(--mono);color:var(--mute)}
+.code-dot{width:6px;height:6px;border-radius:50%;background:var(--acc)}
+.code-dot.e{background:var(--bad)}
+
+/* dialog */
+dialog{border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;width:min(420px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
+dialog h3{margin:0;font-size:15px}
+dialog p{margin:0;font-size:12.5px;color:var(--mute)}
+dialog input{height:38px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);padding:0 10px;font-family:var(--mono);font-size:12.5px}
+dialog .acts{display:flex;justify-content:flex-end;gap:8px}
+.btn2{height:34px;padding:0 14px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);cursor:pointer;font-size:13px}
+.btn2.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+.toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:12.5px;transition:all .2s;pointer-events:none;z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-<main>
-<header><h1>Statim <span>Playground</span></h1><div class="tag" id="ver"></div></header>
-<div class="card">
-  <label for="state">State (text or JSON)</label>
-  <textarea id="state">{"subject": "Duplicate charge on invoice #4411", "body": "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."}</textarea>
-</div>
-<div class="card">
-  <label for="qs">Questions</label>
-  <textarea id="qs" style="min-height:190px">{
- "department": {
-  "type": "choice",
-  "instructions": "Which department should handle this request?",
-  "criteria": {"billing": "invoices, payments, refunds", "technical": "bugs, outages, system errors", "sales": "pricing, new contracts", "other": "everything else"}
- },
- "urgency": {
-  "type": "score",
-  "instructions": "How urgent is this request?",
-  "criteria": ["not urgent", "soon", "critical deadline or blocking issue"]
- },
- "refund": {"type": "noul", "instructions": "Does the user explicitly request a refund?"}
-}</textarea>
-</div>
-<div class="card">
-  <div class="row">
-    <button id="go">Decide</button>
-    <select id="model" aria-label="Model"></select>
-    <select id="mode" aria-label="Mode"><option value="">exact (Laya)</option><option value="consensus">consensus</option></select>
-    <span class="meta" id="meta"></span>
+<header class="top">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--ink)"/><path d="M9 20l5-9 4 7 2-3 3 5" stroke="var(--acc)" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Statim <small>Playground</small>
+  </div>
+  <div class="status" title="Server status (polls /health and /ready)"><span class="dot" id="dot"></span><span id="stxt">connecting…</span></div>
+  <div class="chips" id="chips"></div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="keyBtn" title="API key (stored in this browser only)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg><span>API key</span>
+  </button>
+  <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <section class="panel editor">
+      <div class="ph"><h2>State</h2><span class="lint" id="stateLint"></span><span class="spacer"></span>
+        <select class="preset" id="preset" aria-label="Load example"></select>
+        <button class="link" data-fmt="state">Format</button></div>
+      <textarea id="state" rows="6" spellcheck="false" aria-label="State"></textarea>
+    </section>
+    <section class="panel editor">
+      <div class="ph"><h2>Questions</h2><span class="lint" id="qsLint"></span><span class="spacer"></span>
+        <button class="link" id="addChoice">+ choice</button><button class="link" id="addScore">+ score</button><button class="link" id="addNoul">+ yes/no</button>
+        <button class="link" data-fmt="qs">Format</button></div>
+      <textarea id="qs" rows="18" spellcheck="false" aria-label="Questions"></textarea>
+    </section>
+    <section class="panel">
+      <div class="runbar">
+        <div class="field"><label for="model">Model</label><select id="model"><option value="">auto</option></select></div>
+        <div class="field"><label for="lang">Lang hint</label><input type="text" id="lang" placeholder="e.g. de, en" autocomplete="off"></div>
+        <div class="field"><label for="ens">Ensemble</label><select id="ens"><option value="">server default</option><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select></div>
+        <div class="field"><label>&nbsp;</label><label class="toggle"><input type="checkbox" id="cal"> Calibrate</label></div>
+      </div>
+      <div class="go-row">
+        <button class="go" id="go"><span class="spin"></span>Decide <kbd>⌘/Ctrl ↵</kbd></button>
+        <span class="hint" id="hint">Choice, score and yes/no questions answered in one encoder pass.</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel" id="resPanel">
+      <div class="ph"><h2>Result</h2><span class="spacer"></span>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" aria-selected="true" data-tab="vis">Visual</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="json">JSON</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="curl">cURL</button>
+        </div>
+        <button class="link" id="copyBtn" title="Copy current tab">Copy</button>
+      </div>
+      <div class="stats" id="stats" hidden></div>
+      <div id="vis"><div class="empty"><b>No decision yet</b>Edit the state and questions, then press Decide.</div></div>
+      <pre class="code" id="json" hidden></pre>
+      <pre class="code" id="curl" hidden></pre>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>History</h2><span class="spacer"></span><button class="link" id="clearHist">Clear</button></div>
+      <ul class="hist" id="hist"><li style="cursor:default;color:var(--mute);grid-template-columns:1fr">Runs from this session appear here.</li></ul>
+    </section>
   </div>
 </div>
-<div class="card" id="out" hidden></div>
-</main>
+
+<dialog id="keyDlg"><form method="dialog">
+  <h3>API key</h3>
+  <p>Sent as <code>Authorization: Bearer …</code>. Stored in this browser's localStorage only; needed when the server runs with <code>--api-key-file</code>.</p>
+  <input id="keyIn" type="password" placeholder="sk-…" autocomplete="off">
+  <div class="acts"><button class="btn2" value="clear">Remove</button><button class="btn2" value="cancel">Cancel</button><button class="btn2 pri" value="save">Save</button></div>
+</form></dialog>
+<div class="toast" id="toast"></div>
+
 <script>
+"use strict";
 const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-fetch("/health").then(r => r.json()).then(h => {
-  $("ver").textContent = "v" + h.version + " · " + h.device;
-  $("model").innerHTML = '<option value="">auto</option>' + h.loaded.map(m => `<option>${esc(m)}</option>`).join("");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+};
+const pct = v => (v * 100).toFixed(1) + "%";
+
+const PRESETS = {
+  "Support triage (EN)": {
+    state: {subject: "Duplicate charge on invoice #4411", body: "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."},
+    questions: {
+      department: {type: "choice", instructions: "Which department should handle this request?", criteria: {billing: "invoices, payments, refunds", technical: "bugs, outages, system errors", sales: "pricing, new contracts", other: "everything else"}},
+      urgency: {type: "score", instructions: "How urgent is this request?", criteria: ["not urgent", "soon", "critical deadline or blocking issue"]},
+      refund: {type: "noul", instructions: "Does the user explicitly request a refund?"}
+    }
+  },
+  "Support-Ticket (DE)": {
+    state: "Seit dem Update gestern stürzt die App beim Start ab. Unser ganzes Team kann nicht arbeiten, bitte dringend melden!",
+    questions: {
+      department: {type: "choice", instructions: "Welche Abteilung ist zuständig?", criteria: {billing: "Rechnungen, Zahlungen", technical: "Fehler, Abstürze, Ausfälle", sales: "Preise, Verträge", other: "Sonstiges"}},
+      urgency: {type: "score", instructions: "Wie dringend ist die Anfrage?", criteria: ["nicht dringend", "bald", "kritisch, blockiert die Arbeit"]},
+      outage: {type: "noul", instructions: "Beschreibt der Nutzer einen Ausfall?"}
+    }
+  },
+  "Review sentiment": {
+    state: "The battery life is fantastic, but the screen scratches way too easily and support never answered my emails.",
+    questions: {
+      sentiment: {type: "choice", instructions: "Overall sentiment of the review?", criteria: {positive: "mostly praise", mixed: "both praise and complaints", negative: "mostly complaints"}},
+      rating: {type: "score", instructions: "Which star rating fits this review?", criteria: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]},
+      support_issue: {type: "noul", instructions: "Does the reviewer complain about customer support?"}
+    }
+  },
+  "Content moderation": {
+    state: {author: "guest_2291", message: "Click here to claim your free iPhone!!! Limited offer: bit.ly/xyz"},
+    questions: {
+      category: {type: "choice", instructions: "What kind of message is this?", criteria: {spam: "ads, scams, unsolicited links", abuse: "insults, harassment", normal: "regular conversation"}},
+      remove: {type: "noul", instructions: "Should this message be removed?"}
+    }
+  }
+};
+const TEMPLATES = {
+  choice: {type: "choice", instructions: "Which option fits best?", criteria: {a: "description of a", b: "description of b"}},
+  score: {type: "score", instructions: "How strongly does this apply?", criteria: ["low", "medium", "high"]},
+  noul: {type: "noul", instructions: "Is this true?"}
+};
+
+/* ---------- theme ---------- */
+const root = document.documentElement;
+function applyTheme(t) { if (t) root.dataset.theme = t; else delete root.dataset.theme; }
+applyTheme(store.get("statim_theme"));
+$("themeBtn").onclick = () => {
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const t = dark ? "light" : "dark"; applyTheme(t); store.set("statim_theme", t);
+};
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600); }
+
+/* ---------- api key ---------- */
+function keyUi() { const on = !!store.get("statim_key"); $("keyBtn").classList.toggle("on", on); $("keyBtn").querySelector("span").textContent = on ? "Key set" : "API key"; }
+keyUi();
+$("keyBtn").onclick = () => { $("keyIn").value = store.get("statim_key") || ""; $("keyDlg").showModal(); };
+$("keyDlg").addEventListener("close", () => {
+  const v = $("keyDlg").returnValue;
+  if (v === "save") store.set("statim_key", $("keyIn").value.trim() || null);
+  if (v === "clear") store.set("statim_key", null);
+  keyUi(); loadModels();
 });
-function bars(probs) {
-  return Object.entries(probs).map(([k, v]) =>
-    `<div class="bar"><span class="t" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${(v*100).toFixed(1)}%"></div></div><span class="v">${(v*100).toFixed(1)}%</span></div>`).join("");
+function authHeaders() { const k = store.get("statim_key"); return k ? {Authorization: "Bearer " + k} : {}; }
+
+/* ---------- server status ---------- */
+let loaded = [];
+async function poll() {
+  const dot = $("dot"), txt = $("stxt");
+  try {
+    const h = await (await fetch("/health", {cache: "no-store"})).json();
+    const r = await fetch("/ready", {cache: "no-store"});
+    dot.className = "dot " + (r.ok ? "ok" : "busy");
+    txt.textContent = (r.ok ? "ready" : "busy") + " · v" + h.version + " · " + h.device;
+    if (JSON.stringify(h.loaded) !== JSON.stringify(loaded)) { loaded = h.loaded; fillModels(); loadModels(); }
+  } catch { dot.className = "dot down"; txt.textContent = "offline"; }
 }
-$("go").onclick = async () => {
-  const out = $("out");
-  let state, questions;
-  try { const t = $("state").value.trim(); state = t.startsWith("{") || t.startsWith("[") ? JSON.parse(t) : t; questions = JSON.parse($("qs").value); }
-  catch (e) { out.hidden = false; out.innerHTML = `<div class="err">Invalid JSON: ${esc(e.message)}</div>`; return; }
-  const body = {state, questions};
+function fillModels() {
+  const sel = $("model"), cur = sel.value || store.get("statim_model") || "";
+  let html = '<option value="">auto</option>' + loaded.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  if (loaded.includes("english") && loaded.includes("multilingual")) html += '<option value="consensus">consensus (both)</option>';
+  sel.innerHTML = html;
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+async function loadModels() {
+  try {
+    const r = await fetch("/v1/models", {headers: authHeaders()});
+    if (!r.ok) { $("chips").innerHTML = loaded.map(m => `<span class="chip">${esc(m)}</span>`).join(""); return; }
+    const j = await r.json();
+    $("chips").innerHTML = j.data.map(m => `<span class="chip" title="${esc(m.source)} · ${m.layers} layers · hidden ${m.hidden} · vocab ${m.vocab}">${esc(m.id)} · ${esc(m.weights)} · ${m.max_len} ctx</span>`).join("");
+  } catch {}
+}
+poll(); setInterval(poll, 5000);
+$("model").onchange = () => store.set("statim_model", $("model").value);
+
+/* ---------- editors ---------- */
+const presetSel = $("preset");
+presetSel.innerHTML = '<option value="" disabled selected>Examples…</option>' + Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("");
+function setEditors(state, questions) {
+  $("state").value = typeof state === "string" ? state : JSON.stringify(state, null, 2);
+  $("qs").value = JSON.stringify(questions, null, 2);
+  lintAll();
+}
+presetSel.onchange = () => { const p = PRESETS[presetSel.value]; setEditors(p.state, p.questions); presetSel.selectedIndex = 0; };
+
+function parseState() { const t = $("state").value.trim(); return /^[\[{]/.test(t) ? JSON.parse(t) : t; }
+function lint(id, lintId, fn) {
+  const el = $(id), l = $(lintId);
+  try {
+    const v = fn();
+    el.classList.remove("bad"); l.className = "lint ok";
+    l.textContent = id === "qs" ? `${Object.keys(v || {}).length} question${Object.keys(v || {}).length === 1 ? "" : "s"}` : (typeof v === "string" ? `text · ${v.length} chars` : "json");
+    return true;
+  } catch (e) { el.classList.add("bad"); l.className = "lint bad"; l.textContent = e.message.replace(/^JSON\.parse: /, "").slice(0, 60); return false; }
+}
+function lintAll() {
+  const a = lint("state", "stateLint", parseState);
+  const b = lint("qs", "qsLint", () => { const q = JSON.parse($("qs").value); if (!q || typeof q !== "object" || Array.isArray(q)) throw new Error("must be an object"); return q; });
+  return a && b;
+}
+let lintT;
+for (const id of ["state", "qs"]) {
+  const ta = $(id);
+  ta.addEventListener("input", () => { clearTimeout(lintT); lintT = setTimeout(lintAll, 200); store.set("statim_" + id, ta.value); });
+  ta.addEventListener("keydown", e => {
+    if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); ta.setRangeText("  ", ta.selectionStart, ta.selectionEnd, "end"); ta.dispatchEvent(new Event("input")); }
+  });
+}
+document.querySelectorAll("[data-fmt]").forEach(b => b.onclick = () => {
+  const ta = $(b.dataset.fmt);
+  try { const v = JSON.parse(ta.value); ta.value = JSON.stringify(v, null, 2); lintAll(); } catch { toast("Not valid JSON"); }
+});
+function addQ(kind) {
+  let q; try { q = JSON.parse($("qs").value || "{}"); } catch { return toast("Fix the questions JSON first"); }
+  let n = kind, i = 2; while (q[n]) n = kind + "_" + i++;
+  q[n] = TEMPLATES[kind]; $("qs").value = JSON.stringify(q, null, 2); lintAll(); store.set("statim_qs", $("qs").value);
+}
+$("addChoice").onclick = () => addQ("choice"); $("addScore").onclick = () => addQ("score"); $("addNoul").onclick = () => addQ("noul");
+
+const savedS = store.get("statim_state"), savedQ = store.get("statim_qs");
+if (savedS != null && savedQ != null) { $("state").value = savedS; $("qs").value = savedQ; lintAll(); }
+else { const p = PRESETS["Support triage (EN)"]; setEditors(p.state, p.questions); }
+$("lang").value = store.get("statim_lang") || "";
+$("lang").oninput = () => store.set("statim_lang", $("lang").value.trim() || null);
+
+/* ---------- request ---------- */
+function buildBody() {
+  const body = {state: parseState(), questions: JSON.parse($("qs").value)};
   if ($("model").value) body.model = $("model").value;
-  if ($("mode").value) body.model = $("mode").value;
-  $("go").disabled = true; $("meta").textContent = "…";
-  const headers = {"Content-Type": "application/json"};
-  const key = localStorage.getItem("statim_key"); if (key) headers.Authorization = "Bearer " + key;
+  if ($("lang").value.trim()) body.lang = $("lang").value.trim();
+  if ($("ens").value) body.ensemble = +$("ens").value;
+  if ($("cal").checked) body.calibrate = true;
+  return body;
+}
+function curlFor(body) {
+  const k = store.get("statim_key");
+  const payload = JSON.stringify(body).replace(/'/g, "'\\''");
+  return `curl -s ${location.origin}/v1/systemone \\\n  -H 'Content-Type: application/json' \\\n${k ? "  -H 'Authorization: Bearer $STATIM_KEY' \\\n" : ""}  -d '${payload}'`;
+}
+function highlight(json) {
+  return esc(json).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (m, s, colon, kw) => {
+    if (s) return colon ? `<span class="j-k">${s}</span>${colon}` : `<span class="j-s">${s}</span>`;
+    if (kw) return `<span class="j-b">${m}</span>`;
+    return `<span class="j-n">${m}</span>`;
+  });
+}
+
+let tab = "vis", lastJson = "", lastCurl = "";
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === b));
+  for (const t of ["vis", "json", "curl"]) $(t).hidden = t !== tab;
+});
+$("copyBtn").onclick = async () => {
+  const text = tab === "curl" ? lastCurl : tab === "json" ? lastJson : lastJson;
+  if (!text) return toast("Nothing to copy yet");
+  try { await navigator.clipboard.writeText(text); toast("Copied"); } catch { toast("Clipboard unavailable"); }
+};
+
+function renderStats(j, rt, ms) {
+  const cells = [
+    ["Model", esc(j.routing.model), "", j.routing.reason && j.routing.reason !== j.routing.model ? "route: " + esc(j.routing.reason) : ""],
+    ["Inference", ms != null ? (+ms).toFixed(1) : "–", "ms"],
+    ["Round-trip", rt.toFixed(0), "ms"],
+    ["Tokens", j.usage.input_tokens, "in"],
+    ["Weights", esc(j.routing.weights || "–"), ""]
+  ];
+  $("stats").innerHTML = cells.map(([k, v, s, r]) => `<div class="stat"><div class="k">${k}</div><div class="v" title="${v} ${s}">${v}<small>${s}</small></div>${r ? `<div class="r">${r}</div>` : ""}</div>`).join("");
+  $("stats").hidden = false;
+}
+function meters(a) {
+  const m = (label, v, tip) => `<span class="meter" title="${tip}">${label}<span class="m"><i style="width:${(v * 100).toFixed(1)}%"></i></span><b>${pct(v)}</b></span>`;
+  return `<div class="meters">${m("confidence", a.confidence, "1 − normalized entropy of the answer distribution")}${m("top-1", a.answer_confidence, "probability of the most likely option")}${a.action ? m("act", a.action.act_probability, "action head probability") : ""}</div>`;
+}
+function renderAnswer(id, a, q) {
+  const instr = q && q.instructions ? `<div class="instr">${esc(q.instructions)}</div>` : "";
+  const low = a.answer_confidence < 0.6 ? " low" : "";
+  let verdict, body;
+  if (a.type === "choice") {
+    const entries = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]);
+    verdict = `<div class="big">${esc(a.choice)}</div><div class="sub">${pct(a.probabilities[a.choice] ?? a.answer_confidence)}</div>`;
+    body = `<div class="bars">${entries.map(([k, v]) => `<div class="bar${k === a.choice ? " win" : ""}"><span class="t" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" data-w="${(v * 100).toFixed(2)}"></div></div><span class="v">${pct(v)}</span></div>`).join("")}</div>`;
+  } else if (a.type === "score") {
+    const n = Object.keys(a.probabilities).length, max = Math.max(n - 1, 1);
+    const near = a.legend[String(Math.round(a.score))];
+    const top = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1])[0][0];
+    verdict = `<div class="big">${a.score.toFixed(2)}</div><div class="sub">expected · ≈ ${esc(near)} · 0–${max}</div>`;
+    const ticks = Array.from({length: n}, (_, i) => `<span class="tick" style="left:${i / max * 100}%"></span><span class="lab" style="left:${i / max * 100}%">${i}</span>`).join("");
+    body = `<div class="scale"><div class="rail"></div>${ticks}<div class="mk" style="left:0" data-l="${(a.score / max * 100).toFixed(2)}"></div></div>
+      <div class="bars">${Object.entries(a.probabilities).map(([k, v]) => { const win = k === top; return `<div class="bar${win ? " win" : ""}"><span class="t" title="${esc(a.legend[k])}"><small>${k}</small>${esc(a.legend[k])}</span><div class="track"><div class="fill" data-w="${(v * 100).toFixed(2)}"></div></div><span class="v">${pct(v)}</span></div>`; }).join("")}</div>`;
+  } else {
+    const yes = a.noul, lbl = yes >= 0.5 ? "yes" : "no";
+    verdict = `<div class="big">${lbl}</div><div class="sub">p(yes) ${pct(yes)}</div>`;
+    body = `<div class="split"><div class="yes" style="flex-basis:${(yes * 100).toFixed(2)}%">${yes >= 0.22 ? "yes " + pct(yes) : ""}</div><div class="no" style="flex-basis:${((1 - yes) * 100).toFixed(2)}%">${1 - yes >= 0.22 ? "no " + pct(1 - yes) : ""}</div></div>`;
+  }
+  return `<div class="q"><div class="qh"><div><span class="name">${esc(id)}</span><span class="badge">${a.type === "noul" ? "yes/no" : a.type}</span>${instr}</div><div class="verdict${low}">${verdict}</div></div>${body}${meters(a)}</div>`;
+}
+function animateIn() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll("#vis .fill[data-w]").forEach(f => f.style.width = f.dataset.w + "%");
+    document.querySelectorAll("#vis .mk[data-l]").forEach(m => m.style.left = m.dataset.l + "%");
+  }));
+}
+function showError(title, detail) {
+  $("stats").hidden = true;
+  $("vis").innerHTML = `<div class="err"><b>${esc(title)}</b>\n${esc(detail)}</div>`;
+}
+
+const runs = [];
+function pushHistory(entry) {
+  runs.unshift(entry); if (runs.length > 20) runs.pop();
+  $("hist").innerHTML = runs.map((h, i) => `<li data-i="${i}"><span class="code-dot${h.ok ? "" : " e"}"></span><span class="sum">${esc(h.summary)}</span><span class="ms">${h.ms}</span><span class="when">${h.when}</span></li>`).join("");
+}
+$("hist").onclick = e => {
+  const li = e.target.closest("li[data-i]"); if (!li) return;
+  const h = runs[+li.dataset.i];
+  setEditors(h.body.state, h.body.questions);
+  if (h.body.model !== undefined && [...$("model").options].some(o => o.value === h.body.model)) $("model").value = h.body.model;
+  if (h.result) render(h.result, h.rt, h.ms, h.body); else showError("Request failed", h.summary);
+};
+$("clearHist").onclick = () => { runs.length = 0; $("hist").innerHTML = '<li style="cursor:default;color:var(--mute);grid-template-columns:1fr">Runs from this session appear here.</li>'; };
+
+function render(j, rt, ms, body) {
+  renderStats(j, rt, ms);
+  $("vis").innerHTML = Object.entries(j.answers).map(([id, a]) => renderAnswer(id, a, body.questions[id])).join("");
+  lastJson = JSON.stringify(j, null, 2);
+  $("json").innerHTML = highlight(lastJson);
+  animateIn();
+}
+
+async function run() {
+  if (!lintAll()) return toast("Fix the JSON errors first");
+  const body = buildBody();
+  lastCurl = curlFor(body); $("curl").textContent = lastCurl;
+  const go = $("go"); go.disabled = true;
+  const when = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
   try {
     const t0 = performance.now();
-    const r = await fetch("/v1/systemone", {method: "POST", headers, body: JSON.stringify(body)});
-    const j = await r.json();
-    out.hidden = false;
-    if (!r.ok) { out.innerHTML = `<div class="err">${r.status}: ${esc(j.detail)}</div>`; return; }
-    $("meta").textContent = `${j.routing.model} · ${r.headers.get("X-Inference-Time-Ms")} ms · ${j.usage.input_tokens} tokens`;
-    out.innerHTML = Object.entries(j.answers).map(([id, a]) => {
-      const head = a.type === "choice" ? `<b>${esc(a.choice)}</b>` : a.type === "score" ? `<b>${a.score.toFixed(2)}</b>` : `<b>${(a.noul*100).toFixed(1)}% yes</b>`;
-      const probs = a.probabilities || {"no": 1 - a.noul, "yes": a.noul};
-      return `<div class="ans"><h3><span>${esc(id)} <code>${a.type}</code></span>${head}</h3>${bars(probs)}</div>`;
-    }).join("");
-  } catch (e) { out.hidden = false; out.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-  finally { $("go").disabled = false; }
-};
+    const r = await fetch("/v1/systemone", {method: "POST", headers: {"Content-Type": "application/json", ...authHeaders()}, body: JSON.stringify(body)});
+    const rt = performance.now() - t0;
+    let j; try { j = await r.json(); } catch { j = {detail: "non-JSON response"}; }
+    if (!r.ok) {
+      showError(`HTTP ${r.status}`, j.detail || JSON.stringify(j));
+      lastJson = JSON.stringify(j, null, 2); $("json").innerHTML = highlight(lastJson);
+      if (r.status === 401) $("keyBtn").click();
+      pushHistory({ok: false, summary: `${r.status} · ${j.detail || ""}`, ms: "–", when, body});
+      return;
+    }
+    const ms = r.headers.get("X-Inference-Time-Ms");
+    render(j, rt, ms, body);
+    const summary = Object.entries(j.answers).map(([id, a]) => `${id}=${a.type === "choice" ? a.choice : a.type === "score" ? a.score.toFixed(2) : pct(a.noul)}`).join(" · ");
+    pushHistory({ok: true, summary: `${j.routing.model} · ${summary}`, ms: ms ? (+ms).toFixed(0) + " ms" : "", when, body, result: j, rt});
+  } catch (e) {
+    showError("Network error", e.message);
+    pushHistory({ok: false, summary: e.message, ms: "–", when, body});
+  } finally { go.disabled = false; }
+}
+$("go").onclick = run;
+document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (!$("go").disabled) run(); } });
 </script>
 </body>
 </html>
