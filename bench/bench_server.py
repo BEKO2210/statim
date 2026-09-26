@@ -18,10 +18,12 @@ def main():
     ap.add_argument("--requests", type=int, default=60)
     ap.add_argument("--inputs", default="tests/data/golden_inputs.json")
     ap.add_argument("--label", default="")
+    ap.add_argument("--model", default=None)
     a = ap.parse_args()
     inp = json.load(open(a.inputs))
     states = [s for s in inp["states"] if s != ""][:25]
-    bodies = [json.dumps({"state": s, "questions": inp["questions"]}).encode() for s in states]
+    extra = {"model": a.model} if a.model else {}
+    bodies = [json.dumps({"state": s, "questions": inp["questions"], **extra}).encode() for s in states]
     urllib.request.urlopen(urllib.request.Request(a.url + "/v1/systemone", data=bodies[0]), timeout=600).read()  # warm-up
     for c in a.concurrency:
         lat, errors, lock, idx = [], 0, threading.Lock(), [0]

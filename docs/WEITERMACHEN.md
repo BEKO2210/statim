@@ -26,10 +26,28 @@ Referenz-Python (Laya original) liegt in `.venv-ref/` – nur für Tests/Benchma
 
 ## Ehrliche Befunde
 
-MESSWERTE_PLATZHALTER
+Gemessen auf belkis-home (Xeon E3-1505M v5, Turbo aus), gleiches Modell, gleiche Eingaben:
+
+| | Laya | Statim |
+|---|---|---|
+| Kaltstart bis erste Antwort | 11,35 s | 0,76 s |
+| Server-RAM | 3.915 MB | 650 MB |
+| HTTP-Durchsatz (1 Client) | 0,43 req/s | 1,07 req/s |
+| HTTP p95 (1 Client) | 4.994 ms | 1.280 ms |
+| Latenz im Prozess (Mittel) | 1.186 ms | 1.139 ms – praktisch gleich |
+
+Genauigkeit (je 400 Fälle, Laya's eigene Konstruktion), Konsens-Modus vs. bestes Laya-Modell:
+AG News 0,950 = 0,950 · Emotion 0,600 vs. 0,5925 · Banking77 0,4875 vs. 0,425.
+
+Was nicht geholfen hat (gemessen, deshalb nicht Standard): Options-Rotation (Emotion 0,5375 → 0,525),
+Kontext-Kalibrierung (gemischt), 4-Bit (verfälscht Antworten). Rohe Rechenleistung ist gleich –
+PyTorch/MKL ist auf diesem CPU schon am Limit. Der Vorsprung kommt aus allem drumherum.
 
 ## Offene Punkte
 
 - GPU-Build (CUDA/Vulkan) – Graph ist backend-neutral, Toolchain fehlt auf belkis-home.
 - 4-Bit-Quantisierung kostet Genauigkeit (Details in README) – f32/f16 bleiben Standard.
+- Laya's volle Sprach-Erkennung (Router) und das dritte Modell `typed-decisions` fehlen noch.
+- Banking77 bleibt schwach (alle Modelle < 0,5 bei 77 Optionen) – das wäre der Hebel für eigenes
+  Nachtraining (braucht GPU, ~5 h laut Laya-Config).
 - Repo ist privat. Öffentlich schalten: `gh repo edit BEKO2210/statim --visibility public --accept-visibility-change-consequences`.

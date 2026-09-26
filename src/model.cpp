@@ -279,7 +279,7 @@ std::shared_ptr<Model> Model::load(const std::string& path) {
 namespace {
 
 struct GraphIO {
-    ggml_tensor *ids, *pos, *mask_global, *mask_local, *qtype, *gather_rows, *pool_rows;
+    ggml_tensor *ids, *pos, *mask_global, *mask_local, *qtype, *gather_rows, *pool_rows, *qrows = nullptr, *mask_q = nullptr;
     ggml_tensor *logits, *pooled, *hidden;
 };
 
@@ -443,23 +443,62 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_tensor* te = ggml_get_rows(c, M.type_emb, io.qtype);  // [d, B]
     x = ggml_add(c, x, ggml_reshape_3d(c, te, d, 1, B));
     const int hhd = d / h.head_n_head;
-    for (const HeadLayer& Ly : M.head) {
+    // Only [CLS] and the [MASK] rows of the last head layer are read, so that layer computes its
+    // queries, output projection and FFN for those rows alone (keys/values still span all tokens).
+    int Qn = 1;
+    for (const Item& it : items) Qn = std::max(Qn, 1 + static_cast<int>(it.markers.size()));
+    io.qrows = ggml_new_tensor_1d(c, GGML_TYPE_I32, static_cast<int64_t>(Qn) * B);
+    ggml_set_input(io.qrows);
+    io.mask_q = ggml_new_tensor_4d(c, GGML_TYPE_F16, L, Qn, 1, B);
+    ggml_set_input(io.mask_q);
+    const int n_head_layers = static_cast<int>(M.head.size());
+    int rows_per_seq = L;  // rows of x per sequence: L until the pruned layer, Qn after it
+    for (int li = 0; li < n_head_layers; ++li) {
+        const HeadLayer& Ly = M.head[li];
         ggml_tensor* a = layer_norm(c, x, Ly.norm1_w, Ly.norm1_b, 1e-5f);
-        ggml_tensor* qkv = linear(c, a, Ly.in_w, Ly.in_b);
-        const size_t es = ggml_element_size(qkv);
-        auto view = [&](int part) {
-            return ggml_view_4d(c, qkv, hhd, h.head_n_head, L, B, hhd * es, qkv->nb[1], qkv->nb[2], part * d * es);
-        };
-        ggml_tensor* o = attention(c, ggml_cont(c, view(0)), ggml_cont(c, view(1)), ggml_cont(c, view(2)),
-                                   io.mask_global, hhd, h.head_n_head, L, B, flash);
-        x = ggml_add(c, x, linear(c, o, Ly.out_w, Ly.out_b));
+        if (li + 1 < n_head_layers) {
+            ggml_tensor* qkv = linear(c, a, Ly.in_w, Ly.in_b);
+            const size_t es = ggml_element_size(qkv);
+            auto view = [&](int part) {
+                return ggml_view_4d(c, qkv, hhd, h.head_n_head, L, B, hhd * es, qkv->nb[1], qkv->nb[2], part * d * es);
+            };
+            ggml_tensor* o = attention(c, ggml_cont(c, view(0)), ggml_cont(c, view(1)), ggml_cont(c, view(2)),
+                                       io.mask_global, hhd, h.head_n_head, L, B, flash);
+            x = ggml_add(c, x, linear(c, o, Ly.out_w, Ly.out_b));
+        } else {
+            ggml_tensor* wq = ggml_view_2d(c, Ly.in_w, d, d, Ly.in_w->nb[1], 0);
+            ggml_tensor* wkv = ggml_view_2d(c, Ly.in_w, d, 2 * d, Ly.in_w->nb[1], d * Ly.in_w->nb[1]);
+            ggml_tensor* bq = ggml_view_1d(c, Ly.in_b, d, 0);
+            ggml_tensor* bkv = ggml_view_1d(c, Ly.in_b, 2 * d, d * ggml_element_size(Ly.in_b));
+            ggml_tensor* kv = linear(c, a, wkv, bkv);  // [2d, L, B]
+            const size_t es = ggml_element_size(kv);
+            ggml_tensor* k = ggml_cont(c, ggml_view_4d(c, kv, hhd, h.head_n_head, L, B, hhd * es, kv->nb[1], kv->nb[2], 0));
+            ggml_tensor* v = ggml_cont(c, ggml_view_4d(c, kv, hhd, h.head_n_head, L, B, hhd * es, kv->nb[1], kv->nb[2], d * es));
+            ggml_tensor* aq = ggml_get_rows(c, ggml_reshape_2d(c, a, d, static_cast<int64_t>(L) * B), io.qrows);
+            ggml_tensor* q = ggml_reshape_4d(c, linear(c, aq, wq, bq), hhd, h.head_n_head, Qn, B);
+            // attention() expects equal query/key lengths; call the kernels directly
+            const float scale = 1.0f / std::sqrt(static_cast<float>(hhd));
+            ggml_tensor* qp = ggml_permute(c, q, 0, 2, 1, 3), *kp = ggml_permute(c, k, 0, 2, 1, 3);
+            ggml_tensor* o;
+            if (flash) {
+                o = ggml_flash_attn_ext(c, qp, kp, ggml_permute(c, v, 0, 2, 1, 3), io.mask_q, scale, 0.0f, 0.0f);
+                o = ggml_reshape_3d(c, o, d, Qn, B);
+            } else {
+                ggml_tensor* kq = ggml_soft_max_ext(c, ggml_mul_mat(c, kp, qp), io.mask_q, scale, 0.0f);
+                ggml_tensor* vt = ggml_cont(c, ggml_permute(c, v, 1, 2, 0, 3));
+                o = ggml_cont_3d(c, ggml_permute(c, ggml_mul_mat(c, vt, kq), 0, 2, 1, 3), d, Qn, B);
+            }
+            ggml_tensor* xq = ggml_get_rows(c, ggml_reshape_2d(c, x, d, static_cast<int64_t>(L) * B), io.qrows);
+            x = ggml_add(c, ggml_reshape_3d(c, xq, d, Qn, B), linear(c, o, Ly.out_w, Ly.out_b));
+            rows_per_seq = Qn;
+        }
         ggml_tensor* f = layer_norm(c, x, Ly.norm2_w, Ly.norm2_b, 1e-5f);
         f = ggml_relu(c, linear(c, f, Ly.l1_w, Ly.l1_b));
         x = ggml_add(c, x, linear(c, f, Ly.l2_w, Ly.l2_b));
     }
 
     // ---- scorer on the marker rows, pooled [CLS] rows for the act head
-    ggml_tensor* flat = ggml_reshape_2d(c, x, d, static_cast<int64_t>(L) * B);
+    ggml_tensor* flat = ggml_reshape_2d(c, x, d, static_cast<int64_t>(rows_per_seq) * B);
     ggml_tensor* mk = ggml_get_rows(c, flat, io.gather_rows);  // [d, n_markers]
     mk = layer_norm(c, mk, M.sc_norm_w, M.sc_norm_b, 1e-5f);
     mk = ggml_gelu_erf(c, linear(c, mk, M.sc1_w, M.sc1_b));
@@ -486,14 +525,28 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     build_masks(seqs, L, h.local_window, mg, ml);
     ggml_backend_tensor_set(io.mask_global, mg.data(), 0, ggml_nbytes(io.mask_global));
     ggml_backend_tensor_set(io.mask_local, ml.data(), 0, ggml_nbytes(io.mask_local));
-    std::vector<int32_t> qt(B), rows, pool(B);
+    const bool pruned = !M.head.empty();
+    std::vector<int32_t> qt(B), rows, pool(B), qrows(static_cast<size_t>(Qn) * B, 0);
+    std::vector<ggml_fp16_t> mq(static_cast<size_t>(L) * Qn * B, ggml_fp32_to_fp16(-INFINITY));
     for (int b = 0; b < B; ++b) {
         qt[b] = items[b].qtype;
-        pool[b] = b * L;
-        for (int32_t mpos : items[b].markers) {
-            if (mpos < 0 || mpos >= static_cast<int>(items[b].ids.size())) fail("marker outside sequence");
-            rows.push_back(b * L + mpos);
+        const int n = static_cast<int>(items[b].ids.size());
+        // compact query rows of the last head layer: [CLS], markers..., padding repeats [CLS]
+        for (int r = 0; r < Qn; ++r) {
+            const int src = r == 0 || r > static_cast<int>(items[b].markers.size()) ? 0 : items[b].markers[r - 1];
+            qrows[static_cast<size_t>(b) * Qn + r] = b * L + src;
+            for (int j = 0; j < n; ++j) mq[(static_cast<size_t>(b) * Qn + r) * L + j] = ggml_fp32_to_fp16(0.0f);
         }
+        pool[b] = pruned ? b * Qn : b * L;
+        for (size_t mi = 0; mi < items[b].markers.size(); ++mi) {
+            const int32_t mpos = items[b].markers[mi];
+            if (mpos < 0 || mpos >= n) fail("marker outside sequence");
+            rows.push_back(pruned ? b * Qn + 1 + static_cast<int>(mi) : b * L + mpos);
+        }
+    }
+    if (pruned) {
+        ggml_backend_tensor_set(io.qrows, qrows.data(), 0, ggml_nbytes(io.qrows));
+        ggml_backend_tensor_set(io.mask_q, mq.data(), 0, ggml_nbytes(io.mask_q));
     }
     ggml_backend_tensor_set(io.qtype, qt.data(), 0, ggml_nbytes(io.qtype));
     if (!rows.empty()) ggml_backend_tensor_set(io.gather_rows, rows.data(), 0, ggml_nbytes(io.gather_rows));
