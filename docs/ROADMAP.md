@@ -15,17 +15,16 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 | typed-decisions test | 0.70 | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
 | Banking77, trained on train split | 0.8655 | 94.1 MPNet (supervised) |
 | MASSIVE, 12 languages, trained | 0.689 | 85.7 XLM-R base (supervised, MASSIVE paper) |
-| Emotion, zero-shot | 0.5455 | 0.59–0.60 zero-shot field |
+| Emotion, zero-shot (never trained) | 0.600 consensus, first 400 rows (`bench/results/acc_consensus.json`); 0.528 fine-tuned v3, first 2,000 | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
 
 ## Milestones
 
 **0.3 — one generalist model, no regressions**
-- Multi-task training with temperature-style task budgets, warmup, EMA (research: T5, UniMax).
+- A generalist checkpoint trained with the 0.2.0 tooling (task budgets, warmup, EMA; research: T5, UniMax).
 - Close the supervised gap on MASSIVE / Banking77: full training data, longer schedules, LR sweep.
 - Broader training mixture (15–30 datasets across intent, topic, sentiment, emotion, NLI,
   moderation, support routing; label descriptions, instruction paraphrases, option shuffling),
   with 3–5 datasets held out to measure true zero-shot generalisation.
-- Brand: logo, icon set, favicon, README header.
 
 **0.4 — experts and routing**
 - Router over domain experts with the generalist as fallback; evaluated against the single model on
@@ -36,7 +35,7 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 - CUDA backend, f16/q8 on GPU with parity gates, batching tuned for GPU.
 
 **0.9 — product**
-- Documentation site, OpenAPI spec, client SDKs, Docker images (CPU + GPU), packaged releases,
+- Brand applied everywhere (the 0.2.0 logo, icons and social preview), documentation site, OpenAPI spec, client SDKs, Docker images (CPU + GPU), packaged releases,
   security review, model cards and licence notices for published weights.
 
 **1.0 — release**

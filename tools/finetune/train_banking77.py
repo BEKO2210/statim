@@ -352,7 +352,7 @@ def main():
                 "model_name": "laya-multilingual-" + a.tag, "fine_tuned": True,
                 "training_banking77": {"base": os.path.basename(base.rstrip("/")), "best_epoch": best_epoch,
                                        "dev_banking77_before": round(acc0, 4), "log": log,
-                                       "replay": not a.no_replay, "distill": a.distill, "frozen": "token embeddings",
+                                       "replay": not a.no_replay, "distill": a.distill, "calib": a.calib, "frozen": "token embeddings",
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)
     print(f"saved {a.out} (best epoch {best_epoch}, dev banking77 {best:.4f})", flush=True)

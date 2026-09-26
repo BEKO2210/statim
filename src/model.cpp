@@ -122,7 +122,7 @@ static std::string lower(std::string s) {
 
 static ggml_backend_dev_t find_device(std::string want) {
     // ggml-vulkan converts f32 matmul operands to f16 (coopmat / fp16 shaders), which moves logits by
-    // ~1e-2. Unless STATIM_GPU_FAST is set, keep everything in f32 (parity ~1e-4, like the CPU path).
+    // up to ~0.12 on long inputs. Unless STATIM_GPU_FAST is set, keep everything in f32 (parity ~1e-4, like the CPU path).
     // Must happen before the first registry call, which initialises the Vulkan instance.
     const char* fast = std::getenv("STATIM_GPU_FAST");
     if (!fast || std::string(fast) != "1")

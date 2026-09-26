@@ -11,7 +11,7 @@ temperatures refit on held-out items). Additions:
   so the model learns the task rather than one prompt string.
 - Distillation questions that overlap a trained task (sentiment) are left out; anchoring them to
   the base model would pull against the task's gold labels.
-- Best epoch = mean dev accuracy over the three tasks.
+- Best epoch = mean dev accuracy over the tasks (plus the held-out mixture slice with --mixture).
 - Optional per-epoch task budgets (--budget, temperature-style mixing as in T5 / UniMax: small tasks
   are up-sampled, large ones sub-sampled per epoch), linear warmup (--warmup), and an exponential
   moving average of the weights (--ema), evaluated next to the raw weights every epoch.
@@ -60,6 +60,38 @@ def choice_item(tok, state, instr, keys, gold, max_len, head_max_len, src):
         return None
     return {"ids": seq, "markers": markers, "qtype": QTYPES["choice"],
             "target": [1.0 if k == gold else 0.0 for k in keys], "src": src}
+
+
+def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
+    """Broad typed-decision mixture from build_mixture.py. The first n_dev items are held out, and
+    every later item whose state also occurs in the held-out slice is dropped (several questions of
+    one source can share a document)."""
+    import gzip
+    train, dev, dev_states, leaked = [], [], set(), 0
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        rows = [json.loads(line) for line in f]
+
+    def key(state):
+        return " ".join(json.dumps(state, sort_keys=True, ensure_ascii=False).split()).lower()
+
+    for r in rows[:n_dev + limit] if limit else rows:
+        in_dev = len(dev) < n_dev
+        if not in_dev and key(r["state"]) in dev_states:
+            leaked += 1
+            continue
+        qd = r["q"]
+        q = {"t": qd["type"], "ins": qd["instructions"], "crit": qd.get("criteria") or ({} if qd["type"] == "noul" else None)}
+        seq, markers = build_sequence(tok, r["state"], q, max_len, head_max_len)
+        if len(markers) != len(render_options(q)) or len(markers) != len(r["target"]):
+            continue
+        it = {"ids": seq, "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"], "src": "mixture"}
+        if in_dev:
+            dev.append(it)
+            dev_states.add(key(r["state"]))
+        else:
+            train.append(it)
+    print(f"mixture: {len(train)} train, {len(dev)} dev, {leaked} train items dropped (state in dev)", flush=True)
+    return train, dev
 
 
 def massive_data(tok, langs, per_lang, dev_langs, dev_per_lang, max_len, rng):
@@ -122,6 +154,9 @@ def main():
     ap.add_argument("--warmup", type=float, default=0.0, help="fraction of steps with linear LR warmup")
     ap.add_argument("--ema", type=float, default=0.0, help="EMA decay of the trainable weights (0 = off)")
     ap.add_argument("--tag", default="multitask")
+    ap.add_argument("--mixture", default=None, help="gzipped JSONL from build_mixture.py")
+    ap.add_argument("--mixture-dev", type=int, default=1000)
+    ap.add_argument("--mixture-limit", type=int, default=0, help="use at most this many mixture items (0 = all)")
     a = ap.parse_args()
     from datasets import load_dataset
 
@@ -152,6 +187,10 @@ def main():
     rng.shuffle(td)
     typed_dev = typed_items(tok, td[:len(td) // 10], max_len, hml)
     train += typed_items(tok, td[len(td) // 10:], max_len, hml)
+    x_dev = []
+    if a.mixture:
+        x_train, x_dev = mixture_data(tok, a.mixture, max_len, BANK_HEAD, a.mixture_dev, a.mixture_limit, rng)
+        train += x_train
 
     model = build_model(cfg, encoder_dir=os.path.join(base, "encoder"))
     model.load_state_dict(load_file(os.path.join(base, "model.safetensors")), strict=True)
@@ -232,10 +271,14 @@ def main():
 
     def acc(items):
         z = predict(model, items, tok.pad_token_id, device, dtype)
-        return sum(max(range(len(l)), key=l.__getitem__) == it["target"].index(1.0) for l, it in zip(z, items)) / len(items)
+        return sum(max(range(len(l)), key=l.__getitem__) == max(range(len(it["target"])), key=it["target"].__getitem__)
+                   for l, it in zip(z, items)) / len(items)
 
     def dev_scores():
-        return {"banking77": round(acc(bank_dev), 4), "massive": round(acc(m_dev), 4), "sentiment": round(acc(s_dev), 4)}
+        d = {"banking77": round(acc(bank_dev), 4), "massive": round(acc(m_dev), 4), "sentiment": round(acc(s_dev), 4)}
+        if x_dev:
+            d["mixture"] = round(acc(x_dev), 4)
+        return d
 
     d0 = dev_scores()
     print("dev before:", d0, flush=True)
@@ -301,7 +344,7 @@ def main():
 
     model.load_state_dict(load_file(tmp_best), strict=True)
     os.remove(tmp_best)
-    calib = bank_dev + m_dev + s_dev + typed_dev
+    calib = bank_dev + m_dev + s_dev + typed_dev + x_dev
     zs = predict(model, calib, tok.pad_token_id, device, dtype)
     by_type, by_bucket = {}, {}
     for z, it in zip(zs, calib):
@@ -322,7 +365,8 @@ def main():
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
                                        "massive_per_lang": a.massive_per_lang, "sentiment_per_lang": a.sentiment_per_lang,
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
-                                       "budget": budget, "warmup": a.warmup, "ema": a.ema}})
+                                       "budget": budget, "warmup": a.warmup, "ema": a.ema,
+                                       "mixture": a.mixture and os.path.basename(a.mixture)}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)
     print(f"saved {a.out} (best epoch {best_epoch}, dev mean {best:.4f})", flush=True)
 

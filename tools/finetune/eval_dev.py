@@ -82,6 +82,10 @@ def main():
     import laya
     data = suites(a.per_lang, a.n)
     for m in a.models:
+        cfg = json.load(open(os.path.join(m, "rl_agent_config.json")))
+        calib = cfg.get("training_banking77", {}).get("calib", 500)
+        if calib < 500:  # the model trained on part of these 500 Banking77 rows
+            raise SystemExit(f"{m}: trained with --calib {calib} < 500, overlaps the Banking77 dev rows")
         agent = laya.load(os.path.abspath(m), device="cuda")
         row, t0 = {"model": m}, time.time()
         for name, (states, questions, keys, gold) in data.items():
