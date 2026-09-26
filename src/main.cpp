@@ -25,15 +25,15 @@ void usage() {
                  "statim %s — local System-1 decision engine (Laya/Jev compatible)\n\n"
                  "usage:\n"
                  "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
-                 "                 [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
+                 "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate]\n"
-                 "  statim decide  -m model.gguf [--ensemble K] [--lang xx] < request.json\n"
+                 "  statim decide  -m model.gguf [--device D] [--ensemble K] [--lang xx] < request.json\n"
                  "                 (request: {\"state\": ..., \"questions\": {...}})\n"
-                 "  statim bench   -m model.gguf [--threads N] [--runs 5] < request.json\n"
+                 "  statim bench   -m model.gguf [--device D] [--threads N] [--runs 5] < request.json\n"
                  "  statim info    -m model.gguf\n"
                  "  statim version\n\n"
-                 "env: STATIM_API_KEY (comma-separated keys), STATIM_LOG=debug\n",
+                 "env: STATIM_API_KEY (comma-separated keys), STATIM_DEVICE (default device),\n     STATIM_GPU_FAST=1 (= --gpu-fast: f16 GPU math, faster, logits within ~1e-2), STATIM_LOG=debug\n",
                  STATIM_VERSION);
 }
 
@@ -96,6 +96,8 @@ int main(int argc, char** argv) {
             else cfg.models.emplace_back(model_name_from_path(v), v);
         } else if (a == "--host") cfg.host = next();
         else if (a == "--port") cfg.port = std::atoi(next().c_str());
+        else if (a == "--device") cfg.device = next();
+        else if (a == "--gpu-fast") setenv("STATIM_GPU_FAST", "1", 1);
         else if (a == "--threads" || a == "-t") cfg.threads = std::atoi(next().c_str());
         else if (a == "--workers") cfg.workers = std::atoi(next().c_str());
         else if (a == "--max-concurrent") cfg.max_concurrent = std::atoi(next().c_str());
@@ -132,10 +134,10 @@ int main(int argc, char** argv) {
     try {
         if (cmd == "serve") return statim::run_server(cfg);
 
-        auto model = statim::Model::load(cfg.models.front().second);
+        auto model = statim::Model::load(cfg.models.front().second, cfg.device);
         if (cmd == "info") {
             const auto& h = model->hparams();
-            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"weight_bytes", model->weight_bytes()},
+            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"device", model->device()}, {"weight_bytes", model->weight_bytes()},
                           {"encoder", {{"layers", h.n_layer}, {"hidden", h.n_embd}, {"heads", h.n_head}, {"ff", h.n_ff},
                                        {"local_window", h.local_window}, {"rope_theta_global", h.rope_theta_global},
                                        {"rope_theta_local", h.rope_theta_local}}},
@@ -164,7 +166,7 @@ int main(int argc, char** argv) {
                 engine.decide(st, questions, dopts);
                 ms.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
             }
-            ojson out = {{"engine", "statim"}, {"weights", model->hparams().weight_type}, {"threads", cfg.threads},
+            ojson out = {{"engine", "statim"}, {"weights", model->hparams().weight_type}, {"device", model->device()}, {"threads", cfg.threads},
                          {"states", ms.size()}};
             double sum = 0;
             for (double v : ms) sum += v;

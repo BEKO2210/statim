@@ -49,12 +49,15 @@ struct RunOptions {
 
 class Model {
 public:
-    static std::shared_ptr<Model> load(const std::string& gguf_path);
+    // device: "cpu", "gpu" (first GPU), a backend name ("vulkan", "cuda") or a device name
+    // ("Vulkan0"). Empty: $STATIM_DEVICE, else "cpu". GPU devices get a copy of the weights.
+    static std::shared_ptr<Model> load(const std::string& gguf_path, const std::string& device = "");
     ~Model();
 
     const HParams& hparams() const;
     const Tokenizer& tokenizer() const;
     size_t weight_bytes() const;
+    const std::string& device() const;  // e.g. "cpu", "Vulkan0 (NVIDIA GeForce RTX 3070)"
 
     struct Impl;
     Impl* impl() const { return impl_.get(); }

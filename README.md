@@ -2,7 +2,7 @@
 
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
-no GPU required.
+no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan)).
 
 Statim runs the open [Laya](https://github.com/NandhaKishorM/laya) checkpoints (Apache-2.0) and speaks
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients switch by changing the base URL.
@@ -115,6 +115,37 @@ the scorer reads.
 logits by up to ~0.4 (2 of 240 parity answers change); ARM (dotprod/i8mm) and AVX-512-VNNI CPUs are
 where int8 pays off. 4-bit is not recommended for this model family (see below).
 
+## GPU (Vulkan)
+
+Optional, off by default. Needs the Vulkan headers, `glslc` and SPIR-V headers at build time
+(Debian/Ubuntu: `libvulkan-dev glslc spirv-headers`) and a Vulkan driver at run time.
+
+```bash
+cmake -S . -B build-vk -DSTATIM_VULKAN=ON && cmake --build build-vk
+ctest --test-dir build-vk                      # CPU gates + the same gates on the GPU (*_vulkan)
+./build-vk/statim serve --device vulkan -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf
+```
+
+`--device` takes `cpu` (default), `gpu`, `vulkan` or a device name such as `Vulkan0`
+(`STATIM_DEVICE` sets the default). Weights are copied to VRAM once; both f32 checkpoints use ~3.3 GB.
+
+Measured on an RTX 3070 (8 GB) vs. the same machine's Ryzen 7 5800X (16 threads), f32, the 30 × 8
+golden workload:
+
+| | CPU | **RTX 3070** | |
+|---|---|---|---|
+| multilingual, in-process per state | 535 ms | **54 ms** | **~10×** |
+| english, in-process per state | 1,683 ms | **137 ms** | **~12×** |
+| multilingual, HTTP 1 client | 2.68 req/s · p50 353 ms | **20.5 req/s · p50 45 ms** | **7.7×** |
+| english, HTTP 1 client | 0.91 req/s · p50 1,039 ms | **8.1 req/s · p50 119 ms** | **8.9×** |
+| parity vs. Laya, max \|Δlogit\| (multilingual / english) | 5.0e-4 / 2.0e-4 | **8.8e-5 / 1.6e-4** | 240/240 argmax |
+
+**Exact by default.** ggml's Vulkan backend normally feeds f32 matmuls through f16 (cooperative
+matrices / fp16 shaders), which moves logits by up to ~0.12 on long inputs. Statim disables those paths
+unless asked, and always uses the flash-attention kernel on GPUs (the explicit softmax path converts
+non-contiguous operands to f16). `--gpu-fast` (or `STATIM_GPU_FAST=1`) turns f16 back on: 24.5 ms per
+state instead of 54, argmax still 240/240, but logits within ~1e-1 rather than 1e-4.
+
 ## Accuracy
 
 Same construction as Laya's own Jev comparison (`research/scripts/bench_apps.py`): first 400 test
@@ -150,8 +181,8 @@ What did **not** help, measured and kept out of the defaults:
 
 ## Status
 
-v0.1 — CPU backend (x86-64 AVX2, ARM NEON via ggml). The ggml graph is backend-agnostic; CUDA,
-Vulkan and Metal builds are on the roadmap. Language routing is a light heuristic (English text →
+v0.1 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. CUDA and
+Metal builds are on the roadmap. Language routing is a light heuristic (English text →
 English checkpoint, everything else → multilingual); Laya's full `Router` language detection and the
 `typed-decisions` checkpoint are next.
 

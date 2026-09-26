@@ -15,6 +15,7 @@ struct ServerConfig {
     std::string host = "127.0.0.1";
     int port = 8080;
     int threads = 0;          // total compute threads (0 = all cores)
+    std::string device;       // "cpu", "gpu", "vulkan", "Vulkan0" ... (empty: $STATIM_DEVICE or cpu)
     int workers = 1;          // concurrent inference engines sharing the weights
     int max_concurrent = 16;  // requests past auth at once; more get 503
     int ensemble = 1;         // default option-order views per question

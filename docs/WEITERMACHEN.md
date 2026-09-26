@@ -45,7 +45,8 @@ PyTorch/MKL ist auf diesem CPU schon am Limit. Der Vorsprung kommt aus allem dru
 
 ## Offene Punkte
 
-- GPU-Build (CUDA/Vulkan) – Graph ist backend-neutral, Toolchain fehlt auf belkis-home.
+- GPU: Vulkan läuft (26.09.2026, pop-os, RTX 3070): `-DSTATIM_VULKAN=ON`, `--device vulkan`, ~8× Durchsatz,
+  Parität 240/240 (exakt-f32 als Standard, `--gpu-fast` = f16). CUDA-Backend noch offen (bräuchte nvcc + gcc ≤ 12).
 - 4-Bit-Quantisierung kostet Genauigkeit (Details in README) – f32/f16 bleiben Standard.
 - Laya's volle Sprach-Erkennung (Router) und das dritte Modell `typed-decisions` fehlen noch.
 - Banking77 bleibt schwach (alle Modelle < 0,5 bei 77 Optionen) – das wäre der Hebel für eigenes

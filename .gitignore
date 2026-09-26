@@ -5,3 +5,4 @@ reference/
 __pycache__/
 *.gguf
 *.log
+build-*/

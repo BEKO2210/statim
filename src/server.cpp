@@ -206,12 +206,12 @@ int run_server(const ServerConfig& cfg) {
         auto t0 = std::chrono::steady_clock::now();
         LoadedModel lm;
         lm.name = name;
-        lm.model = Model::load(path);
+        lm.model = Model::load(path, cfg.device);
         lm.pool = std::make_unique<EnginePool>(lm.model, workers, per_worker);
         std::fprintf(stderr,
                      "{\"ts\":\"%s\",\"level\":\"info\",\"event\":\"model_loaded\",\"model\":\"%s\",\"path\":\"%s\","
-                     "\"weights\":\"%s\",\"bytes\":%zu,\"workers\":%d,\"threads_per_worker\":%d,\"ms\":%.0f}\n",
-                     now_iso8601().c_str(), name.c_str(), path.c_str(), lm.model->hparams().weight_type.c_str(),
+                     "\"weights\":\"%s\",\"device\":%s,\"bytes\":%zu,\"workers\":%d,\"threads_per_worker\":%d,\"ms\":%.0f}\n",
+                     now_iso8601().c_str(), name.c_str(), path.c_str(), lm.model->hparams().weight_type.c_str(), ojson(lm.model->device()).dump().c_str(),
                      lm.model->weight_bytes(), workers, per_worker,
                      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
         models.push_back(std::move(lm));
@@ -437,7 +437,7 @@ int run_server(const ServerConfig& cfg) {
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         ojson loaded = ojson::array();
         for (auto& m : models) loaded.push_back(m.name);
-        send_json(res, 200, {{"status", "ok"}, {"engine", "statim"}, {"version", STATIM_VERSION}, {"loaded", loaded}, {"device", "cpu"}});
+        send_json(res, 200, {{"status", "ok"}, {"engine", "statim"}, {"version", STATIM_VERSION}, {"loaded", loaded}, {"device", models.front().model->device()}});
     });
     srv.Get("/ready", [&](const httplib::Request&, httplib::Response& res) {
         bool ready = in_flight.load() < cfg.max_concurrent;

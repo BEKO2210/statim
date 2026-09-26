@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -66,6 +67,10 @@ struct Model::Impl {
     size_t weight_bytes = 0;
     ggml_backend_buffer_t repack_buf = nullptr;  // weights re-laid-out for the CPU's int GEMM kernels
     int n_repacked = 0;
+    ggml_backend_dev_t dev = nullptr;              // device the graphs run on
+    ggml_backend_buffer_t weight_buf = nullptr;    // weights copied to a non-CPU device
+    std::string device_desc = "cpu";
+    bool on_cpu() const { return ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU; }
 
     ggml_tensor *tok_embd, *embd_norm, *final_norm, *type_emb;
     std::vector<EncLayer> enc;
@@ -82,6 +87,7 @@ struct Model::Impl {
 
     ~Impl() {
         if (repack_buf) ggml_backend_buffer_free(repack_buf);
+        if (weight_buf) ggml_backend_buffer_free(weight_buf);
         if (ctx_w) ggml_free(ctx_w);
         if (gguf) gguf_free(gguf);
         if (map) munmap(map, map_size);
@@ -107,6 +113,54 @@ Model::~Model() = default;
 const HParams& Model::hparams() const { return impl_->hp; }
 const Tokenizer& Model::tokenizer() const { return *impl_->tok; }
 size_t Model::weight_bytes() const { return impl_->weight_bytes; }
+const std::string& Model::device() const { return impl_->device_desc; }
+
+static std::string lower(std::string s) {
+    for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+static ggml_backend_dev_t find_device(std::string want) {
+    // ggml-vulkan converts f32 matmul operands to f16 (coopmat / fp16 shaders), which moves logits by
+    // ~1e-2. Unless STATIM_GPU_FAST is set, keep everything in f32 (parity ~1e-4, like the CPU path).
+    // Must happen before the first registry call, which initialises the Vulkan instance.
+    const char* fast = std::getenv("STATIM_GPU_FAST");
+    if (!fast || std::string(fast) != "1")
+        for (const char* v : {"GGML_VK_DISABLE_F16", "GGML_VK_DISABLE_COOPMAT", "GGML_VK_DISABLE_COOPMAT2"}) setenv(v, "1", 0);
+    if (want.empty()) {
+        const char* env = std::getenv("STATIM_DEVICE");
+        want = env && *env ? env : "cpu";
+    }
+    want = lower(want);
+    if (want == "cpu") return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    std::string avail;
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t d = ggml_backend_dev_get(i);
+        const auto type = ggml_backend_dev_type(d);
+        const std::string name = lower(ggml_backend_dev_name(d));
+        const std::string reg = lower(ggml_backend_reg_name(ggml_backend_dev_backend_reg(d)));
+        const bool gpu = type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU;
+        if (name == want || (gpu && (want == "gpu" || want == reg))) return d;
+        avail += std::string(avail.empty() ? "" : ", ") + ggml_backend_dev_name(d);
+    }
+    fail("no device '" + want + "' (available: " + (avail.empty() ? "none" : avail) +
+         "; GPU backends need a build with -DSTATIM_VULKAN=ON)");
+}
+
+// Copy all weights from the mmap into one buffer on the target device, then drop the mapping.
+static void upload_weights(Model::Impl& M) {
+    std::vector<std::pair<ggml_tensor*, const void*>> host;
+    for (ggml_tensor* t = ggml_get_first_tensor(M.ctx_w); t; t = ggml_get_next_tensor(M.ctx_w, t)) {
+        host.emplace_back(t, t->data);
+        t->data = nullptr;
+    }
+    M.weight_buf = ggml_backend_alloc_ctx_tensors_from_buft(M.ctx_w, ggml_backend_dev_buffer_type(M.dev));
+    if (!M.weight_buf) fail(std::string("cannot allocate model weights on ") + ggml_backend_dev_name(M.dev));
+    ggml_backend_buffer_set_usage(M.weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+    for (auto& [t, src] : host) ggml_backend_tensor_set(t, src, 0, ggml_nbytes(t));
+    munmap(M.map, M.map_size);
+    M.map = nullptr;
+}
 
 // Quantized projection weights are copied into ggml's CPU "repack" buffer when the CPU has
 // a blocked int8 GEMM for their type (AVX2: q4_0/q4_K 8x8; ARM dotprod/i8mm: q4_0/q8_0).
@@ -154,9 +208,13 @@ static void repack_weights(Model::Impl& M) {
     }
 }
 
-std::shared_ptr<Model> Model::load(const std::string& path) {
+std::shared_ptr<Model> Model::load(const std::string& path, const std::string& device) {
     std::shared_ptr<Model> m(new Model());
     Impl& M = *m->impl_;
+    M.dev = find_device(device);
+    if (!M.dev) fail("no CPU backend");
+    if (!M.on_cpu())
+        M.device_desc = std::string(ggml_backend_dev_name(M.dev)) + " (" + ggml_backend_dev_description(M.dev) + ")";
 
     gguf_init_params gp{/*no_alloc=*/true, &M.ctx_w};
     M.gguf = gguf_init_from_file(path.c_str(), gp);
@@ -186,7 +244,7 @@ std::shared_ptr<Model> Model::load(const std::string& path) {
         M.weight_bytes += ggml_nbytes(x);
     }
 
-    repack_weights(M);
+    if (M.on_cpu()) repack_weights(M);
 
     HParams& h = M.hp;
     const gguf_context* g = M.gguf;
@@ -270,6 +328,7 @@ std::shared_ptr<Model> Model::load(const std::string& path) {
     M.act0_b = to_f32(M.t("act_head.0.bias"));
     M.act2_w = to_f32(M.t("act_head.2.weight"));
     M.act2_b = to_f32(M.t("act_head.2.bias"));
+    if (!M.on_cpu()) upload_weights(M);
     return m;
 }
 
@@ -336,11 +395,14 @@ struct Runner::Impl {
 
 Runner::Runner(std::shared_ptr<Model> model, RunOptions opts) : model_(std::move(model)), impl_(std::make_unique<Impl>()) {
     impl_->opts = opts;
-    impl_->backend = ggml_backend_cpu_init();
-    if (!impl_->backend) fail("cannot initialise CPU backend");
-    int nt = opts.n_threads > 0 ? opts.n_threads : static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
-    ggml_backend_cpu_set_n_threads(impl_->backend, nt);
-    impl_->galloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
+    const Model::Impl& M = *model_->impl();
+    impl_->backend = ggml_backend_dev_init(M.dev, nullptr);
+    if (!impl_->backend) fail(std::string("cannot initialise backend ") + ggml_backend_dev_name(M.dev));
+    if (M.on_cpu()) {
+        int nt = opts.n_threads > 0 ? opts.n_threads : static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+        ggml_backend_cpu_set_n_threads(impl_->backend, nt);
+    }
+    impl_->galloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(impl_->backend));
     impl_->meta_buf.resize(ggml_tensor_overhead() * 16384 + ggml_graph_overhead_custom(16384, false));
 }
 
@@ -381,7 +443,8 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         L = std::max(L, static_cast<int>(it.ids.size()));
         seqs.push_back(&it.ids);
     }
-    const bool flash = impl_->opts.flash_attn;
+    // on GPU backends the explicit softmax path converts non-contiguous operands to f16
+    const bool flash = impl_->opts.flash_attn || !M.on_cpu();
     // flash attention needs the mask row count padded to GGML_KQ_MASK_PAD
     const int Lpad = L;
 
@@ -432,8 +495,12 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
 
         ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps);
         m = linear(c, m, Ly.wi);  // [2*ff, L, B]; first half = input, second half = gate
-        ggml_tensor* args[] = {m};
-        m = ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr);
+        if (M.on_cpu()) {
+            ggml_tensor* args[] = {m};
+            m = ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr);
+        } else {
+            m = ggml_geglu_erf(c, m);  // same math; custom ops only run on the CPU backend
+        }
         x = ggml_add(c, x, linear(c, m, Ly.wo_mlp));
     }
     x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps);

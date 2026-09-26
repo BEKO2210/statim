@@ -42,18 +42,23 @@ int main(int argc, char** argv) {
         std::vector<statim::Item> items;
         for (auto& r : recs) items.push_back({r["ids"].get<std::vector<int32_t>>(), r["markers"].get<std::vector<int32_t>>(), r["qtype"].get<int>()});
         auto a = std::chrono::steady_clock::now();
-        auto res = runner.run(items);  // one state = one batched graph, like Laya's system_one
+        std::vector<statim::ItemResult> res;
+        if (std::getenv("STATIM_BATCH1")) {  // one graph per item (isolates batching/padding effects)
+            for (auto& it : items) res.push_back(runner.run({it}).front());
+        } else {
+            res = runner.run(items);  // one state = one batched graph, like Laya's system_one
+        }
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - a).count();
         total_ms += ms;
         size_t maxlen = 0;
         for (auto& it : items) maxlen = std::max(maxlen, it.ids.size());
-        if (std::getenv("STATIM_VERBOSE")) std::printf("  state %2d: %zu rows, L=%4zu, %8.1f ms\n", si, items.size(), maxlen, ms);
+        double state_diff = 0;
         for (size_t i = 0; i < recs.size(); ++i) {
             auto ref = recs[i]["logits"].get<std::vector<double>>();
             auto refa = recs[i]["act"].get<std::vector<double>>();
             size_t am_ref = 0, am = 0;
             for (size_t k = 0; k < ref.size(); ++k) {
-                max_diff = std::max(max_diff, std::fabs(ref[k] - res[i].logits[k]));
+                state_diff = std::max(state_diff, std::fabs(ref[k] - res[i].logits[k]));
                 if (ref[k] > ref[am_ref]) am_ref = k;
                 if (res[i].logits[k] > res[i].logits[am]) am = k;
             }
@@ -68,6 +73,9 @@ int main(int argc, char** argv) {
                 std::printf("\n");
             }
         }
+        max_diff = std::max(max_diff, state_diff);
+        if (std::getenv("STATIM_VERBOSE"))
+            std::printf("  state %2d: %zu rows, L=%4zu, %8.1f ms, max |dlogit| %.2e\n", si, items.size(), maxlen, ms, state_diff);
     }
     std::printf("items %zu | argmax agree %zu/%zu | max |dlogit| %.2e | max |dact| %.2e | %.1f ms/state avg\n", n, argmax_ok, n,
                 max_diff, max_act, total_ms / by_state.size());
