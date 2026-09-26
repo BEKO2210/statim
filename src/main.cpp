@@ -33,7 +33,7 @@ void usage() {
                  "  statim bench   -m model.gguf [--device D] [--threads N] [--runs 5] < request.json\n"
                  "  statim info    -m model.gguf\n"
                  "  statim version\n\n"
-                 "env: STATIM_API_KEY (comma-separated keys), STATIM_DEVICE (default device),\n     STATIM_GPU_FAST=1 (= --gpu-fast: f16 GPU math, faster, logits within ~1e-2), STATIM_LOG=debug\n",
+                 "env: STATIM_API_KEY (comma-separated keys), STATIM_DEVICE (default device),\n     STATIM_GPU_FAST=1 (= --gpu-fast: f16 GPU math, ~2x faster, logits move by up to ~0.1), STATIM_LOG=debug\n",
                  STATIM_VERSION);
 }
 

@@ -1,4 +1,9 @@
-# Statim
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img alt="Statim" src="assets/brand/logo-light.svg" height="64">
+  </picture>
+</h1>
 
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
@@ -225,7 +230,8 @@ The weights are not in this repository; the script reproduces them.
 
 ## Status
 
-v0.1 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. CUDA and
+v0.2 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
+[CHANGELOG.md](CHANGELOG.md) for releases and [docs/ROADMAP.md](docs/ROADMAP.md) for the path to 1.0. CUDA and
 Metal builds are on the roadmap. Language routing is a light heuristic (English text →
 English checkpoint, everything else → multilingual); Laya's full `Router` language detection and the
 `typed-decisions` checkpoint are next.

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 64" role="img" aria-label="Statim">
+  <rect width="64" height="64" rx="15" fill="#161B22" stroke="#2B323D"/>
+  <path d="M14 32H31" stroke="#E7EAEF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="43" cy="17.5" r="3.6" fill="none" stroke="#8A93A1" stroke-width="2"/>
+  <circle cx="43" cy="32" r="7.5" fill="#34D399"/>
+  <circle cx="43" cy="46.5" r="3.6" fill="none" stroke="#8A93A1" stroke-width="2"/>
+  <g transform="translate(84 8) scale(0.86)">
+  <g fill="none" stroke="#E7EAEF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 25C24 21 19 20 15.5 20C9 20 5 23 5 28C5 33 10 35 16 37C22 39 28 41 28 47C28 53 23 56 16 56C11 56 7 54 5 51"/>
+    <path d="M44 8V48C44 54 47 56 51 56C53 56 55 55.5 56 55M38 20H51"/>
+    <circle cx="80" cy="38" r="18"/><path d="M98 20V56"/>
+    <path d="M115 8V48C115 54 118 56 122 56C124 56 126 55.5 127 55M109 20H122"/>
+    <path d="M141 20V56"/>
+    <path d="M158 20V56M158 30C158 24 162 20 168 20C174 20 178 24 178 30V56M178 30C178 24 182 20 188 20C194 20 198 24 198 30V56"/>
+  </g>
+  <circle cx="141" cy="6" r="5.5" fill="#34D399"/>
+  </g>
+</svg>
