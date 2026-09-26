@@ -179,6 +179,48 @@ What did **not** help, measured and kept out of the defaults:
 - **4-bit weights** (`q4_0`, `q4_K`): flip 1–2 of 16 parity answers. f32 is the reference; `q8_0`
   halves memory with small logit drift (see benchmarks).
 
+## Many options and fine-tuning (Banking77)
+
+**Option budget.** Laya fits all options into `head_max_len` tokens (192 English, 256 multilingual)
+and, when they do not fit, cuts every option to `(head_max_len - 16) / k` tokens. With Banking77's 77
+intents that is one or two subwords per intent: the model never reads the label names. Raising the
+budget per request (`"head_max_len": 512`, same parameter as Laya's `predict_batch`; server default
+`--head-max-len`) needs no training. It changes nothing for questions whose options already fit, and
+`max_len` grows with it so the state keeps at least 128 tokens.
+
+**Fine-tuning.** `tools/finetune/train_banking77.py` applies Laya's own RLCD recipe (from its
+fine-tuning notebook) to the multilingual checkpoint: Banking77 *train* (option order shuffled per
+item), replay of `LocalLLaMA/typed-decisions` train against forgetting, token embeddings frozen
+(90 % of mmBERT's parameters; weight decay would otherwise erode every language Banking77 never
+touches), best epoch by held-out dev, temperatures refit on held-out items. 3 epochs, 19 minutes on
+an RTX 3070.
+
+```bash
+python -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 datasets
+.venv-train/bin/python tools/finetune/train_banking77.py models/laya-multilingual models/laya-multilingual-banking77
+.venv/bin/python tools/convert_laya.py models/laya-multilingual-banking77 -o models/laya-multilingual-banking77-f32.gguf --type f32 --embd-type f16
+.venv-train/bin/python tools/finetune/eval_laya.py models/laya-multilingual-banking77   # all suites, GPU
+```
+
+Test sets as in [accuracy](#accuracy) (first 400 test rows; never trained on), plus the 2,000
+decisions of the `typed-decisions` test split:
+
+| | multilingual | + `head_max_len` 512 | **fine-tuned** | consensus (English + fine-tuned, 512) |
+|---|---|---|---|---|
+| Banking77 accuracy | 0.465 | 0.540 | **0.845** | 0.8075 |
+| Banking77 ECE | 0.388 | 0.346 | **0.063** | 0.081 |
+| AG News (held out) | 0.935 | 0.935 | 0.9425 | **0.9525** |
+| Emotion (held out) | 0.5375 | 0.540 | 0.500 | **0.5975** |
+| typed-decisions test | 0.351 | 0.351 | 0.6665¹ | – |
+
+¹ In-domain: its train split is the replay data. AG News and Emotion were never trained on.
+
+Honest reading: Banking77 goes from 0.465 to 0.845 with calibrated confidence. AG News is unchanged,
+Emotion drops 4 points (400 cases, ±2.5 pt standard error), and consensus with the English checkpoint
+recovers it at a cost on Banking77. Accuracy is from Statim (f32); the Laya package on the same
+checkpoint gives 0.8475 on Banking77 (bf16 autocast, one case differs). The weights are not in this
+repository; the script reproduces them.
+
 ## Status
 
 v0.1 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. CUDA and

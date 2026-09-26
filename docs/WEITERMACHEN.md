@@ -49,6 +49,8 @@ PyTorch/MKL ist auf diesem CPU schon am Limit. Der Vorsprung kommt aus allem dru
   Parität 240/240 (exakt-f32 als Standard, `--gpu-fast` = f16). CUDA-Backend noch offen (bräuchte nvcc + gcc ≤ 12).
 - 4-Bit-Quantisierung kostet Genauigkeit (Details in README) – f32/f16 bleiben Standard.
 - Laya's volle Sprach-Erkennung (Router) und das dritte Modell `typed-decisions` fehlen noch.
-- Banking77 bleibt schwach (alle Modelle < 0,5 bei 77 Optionen) – das wäre der Hebel für eigenes
-  Nachtraining (braucht GPU, ~5 h laut Laya-Config).
+- Banking77 (26.09.2026): Ursache war v. a. `head_max_len` (77 Optionen → 1 Subword je Intent).
+  Budget 512 allein: 0,465 → 0,54. Nachtraining (`tools/finetune/train_banking77.py`, 19 min auf 3070):
+  0,845, ECE 0,06. Kosten: Emotion −4 Pkt. Modell liegt lokal unter `models/laya-multilingual-banking77*`.
+  Offen: Emotion-Verlust (mehr/andere Replay-Daten, kleinere LR), gewichteter Konsens, Upload nach HF.
 - Repo ist privat. Öffentlich schalten: `gh repo edit BEKO2210/statim --visibility public --accept-visibility-change-consequences`.

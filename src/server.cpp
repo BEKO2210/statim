@@ -327,6 +327,16 @@ int run_server(const ServerConfig& cfg) {
             if (body.contains("calibrate") && body["calibrate"].is_boolean()) opts.calibrate = body["calibrate"].get<bool>();
             if (body.contains("return_logits") && body["return_logits"].is_boolean())
                 opts.return_logits = body["return_logits"].get<bool>();
+            // token budgets, as laya's predict_batch(max_len=, head_max_len=). Many-option choices
+            // (e.g. 77 intents) need head_max_len ~512 or every option is cut to one subword.
+            if (cfg.max_len > 0) opts.max_len = cfg.max_len;
+            if (cfg.head_max_len > 0) opts.head_max_len = cfg.head_max_len;
+            for (const char* k : {"max_len", "head_max_len"}) {
+                if (!body.contains(k)) continue;
+                if (!body[k].is_number_integer() || body[k].get<int>() < 32 || body[k].get<int>() > 8192)
+                    throw HttpError{422, std::string("'") + k + "' must be an integer between 32 and 8192"};
+                (std::string(k) == "max_len" ? opts.max_len : opts.head_max_len) = body[k].get<int>();
+            }
             if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
                 opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
             std::vector<ojson> states;

@@ -27,7 +27,7 @@ void usage() {
                  "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
-                 "                 [--consensus] [--calibrate]\n"
+                 "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
                  "  statim decide  -m model.gguf [--device D] [--ensemble K] [--lang xx] < request.json\n"
                  "                 (request: {\"state\": ..., \"questions\": {...}})\n"
                  "  statim bench   -m model.gguf [--device D] [--threads N] [--runs 5] < request.json\n"
@@ -97,6 +97,8 @@ int main(int argc, char** argv) {
         } else if (a == "--host") cfg.host = next();
         else if (a == "--port") cfg.port = std::atoi(next().c_str());
         else if (a == "--device") cfg.device = next();
+        else if (a == "--max-len") cfg.max_len = std::atoi(next().c_str());
+        else if (a == "--head-max-len") cfg.head_max_len = std::atoi(next().c_str());
         else if (a == "--gpu-fast") setenv("STATIM_GPU_FAST", "1", 1);
         else if (a == "--threads" || a == "-t") cfg.threads = std::atoi(next().c_str());
         else if (a == "--workers") cfg.workers = std::atoi(next().c_str());

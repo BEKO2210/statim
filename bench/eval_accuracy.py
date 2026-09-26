@@ -57,12 +57,13 @@ def metrics(probs, gold):
     return {"accuracy": round(acc, 4), "ece": round(ece, 4), "nll": round(nll, 4), "brier": round(brier, 4)}
 
 
-def run_statim(url, states, questions, qid, keys, ensemble, batch=16, api_key=None, model=None):
+def run_statim(url, states, questions, qid, keys, ensemble, batch=16, api_key=None, model=None, head_max_len=None):
     probs, t0 = [], time.time()
     run_statim.logits = []
     for i in range(0, len(states), batch):
         body = json.dumps({"states": states[i:i + batch], "questions": questions, "ensemble": ensemble,
-                           "return_logits": True, **({"model": model} if model else {})}).encode()
+                           "return_logits": True, **({"model": model} if model else {}),
+                           **({"head_max_len": head_max_len} if head_max_len else {})}).encode()
         req = urllib.request.Request(url + "/v1/systemone/batch", data=body, headers={"Content-Type": "application/json"})
         if api_key:
             req.add_header("Authorization", "Bearer " + api_key)
@@ -91,6 +92,7 @@ def main():
     ap.add_argument("--laya", default=None, help="checkpoint dir: evaluate the official Python package instead")
     ap.add_argument("--ensemble", type=int, nargs="+", default=[1])
     ap.add_argument("--n", type=int, default=400)
+    ap.add_argument("--head-max-len", type=int, default=None, help="option token budget sent with every request")
     ap.add_argument("--suites", nargs="+", default=["ag_news", "emotion", "banking77"])
     ap.add_argument("--out", default=None)
     ap.add_argument("--dump", default=None, help="write per-case probabilities + gold (jsonl) for offline analysis")
@@ -106,7 +108,8 @@ def main():
             continue
         report[name] = {}
         for e in a.ensemble:
-            probs, secs = run_statim(a.url, states, questions, qid, keys, e, api_key=os.environ.get("STATIM_API_KEY"), model=a.model)
+            probs, secs = run_statim(a.url, states, questions, qid, keys, e, api_key=os.environ.get("STATIM_API_KEY"), model=a.model,
+                                     head_max_len=a.head_max_len)
             report[name]["statim_ensemble_%d" % e] = dict(metrics(probs, gold), seconds=round(secs, 1))
             if a.dump:
                 with open(a.dump, "a") as f:

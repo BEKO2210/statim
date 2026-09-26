@@ -458,7 +458,9 @@ std::vector<size_t> rotation(size_t k, size_t r) {
 std::vector<Item> Engine::encode(const ojson& state, const ojson& questions, const DecideOptions& opts) const {
     const HParams& h = model_->hparams();
     auto qs = parse_questions(questions);
-    const int max_len = opts.max_len.value_or(h.max_len), head_max_len = opts.head_max_len.value_or(h.head_max_len);
+    const int head_max_len = opts.head_max_len.value_or(h.head_max_len);
+    // a raised option budget must leave room for the state (never binds at the checkpoint defaults)
+    const int max_len = std::max(opts.max_len.value_or(h.max_len), head_max_len + 128);
     auto state_ids = model_->tokenizer().encode(replace_all(serialize_state(state), h.mask_token, " "));
     std::vector<Item> items;
     for (const auto& q : qs)
@@ -476,7 +478,9 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
             results.push_back({{"model", h.name}, {"answers", ojson::object()}, {"usage", {{"input_tokens", 0}, {"output_tokens", 0}}}});
         return results;
     }
-    const int max_len = opts.max_len.value_or(h.max_len), head_max_len = opts.head_max_len.value_or(h.head_max_len);
+    const int head_max_len = opts.head_max_len.value_or(h.head_max_len);
+    // a raised option budget must leave room for the state (never binds at the checkpoint defaults)
+    const int max_len = std::max(opts.max_len.value_or(h.max_len), head_max_len + 128);
     const size_t ens = static_cast<size_t>(std::max(1, opts.ensemble));
 
     // Phase 1: every (state, question) in the canonical option order, exactly like Laya.
