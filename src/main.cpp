@@ -1,5 +1,7 @@
 // statim — command line entry point.
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -146,6 +148,30 @@ int main(int argc, char** argv) {
         const ojson questions = req.contains("questions") ? req["questions"] : ojson::object();
         if (cmd == "decide") {
             std::cout << engine.decide(state, questions, dopts).dump(2) << "\n";
+            return 0;
+        }
+        if (cmd == "bench" && req.contains("states")) {
+            // per-state latency over a list of states (same protocol as bench/bench_laya_python.py)
+            const ojson& states = req["states"];
+            engine.decide(states[0], questions, dopts);  // warm-up
+            std::vector<double> ms;
+            for (const auto& st : states) {
+                auto t0 = std::chrono::steady_clock::now();
+                engine.decide(st, questions, dopts);
+                ms.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+            }
+            ojson out = {{"engine", "statim"}, {"weights", model->hparams().weight_type}, {"threads", cfg.threads},
+                         {"states", ms.size()}};
+            double sum = 0;
+            for (double v : ms) sum += v;
+            out["mean_ms"] = sum / ms.size();
+            std::vector<double> sorted = ms;
+            std::sort(sorted.begin(), sorted.end());
+            out["p50_ms"] = sorted[sorted.size() / 2];
+            ojson per = ojson::array();
+            for (double v : ms) per.push_back(std::round(v * 10) / 10);
+            out["per_state_ms"] = per;
+            std::cout << out.dump() << "\n";
             return 0;
         }
         if (cmd == "bench") {

@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
     const double tol = argc > 3 ? std::atof(argv[3]) : 1e-3;
     statim::RunOptions ro;
     ro.n_threads = argc > 4 ? std::atoi(argv[4]) : 0;
-    ro.flash_attn = std::getenv("STATIM_FLASH") != nullptr;
+    if (const char* f = std::getenv("STATIM_FLASH")) ro.flash_attn = std::string(f) == "1";
     auto t0 = std::chrono::steady_clock::now();
     auto model = statim::Model::load(argv[1]);
     auto t1 = std::chrono::steady_clock::now();

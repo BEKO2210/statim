@@ -1,0 +1,14 @@
+Statim
+Copyright 2026 Belkis Aslani
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It runs model weights and reproduces the inference semantics of Laya
+(https://github.com/NandhaKishorM/laya, https://huggingface.co/convaiinnovations),
+Copyright its authors, licensed under the Apache License, Version 2.0. Statim is an
+independent project and is not affiliated with or endorsed by the Laya authors or TypeSafe.
+
+Third-party components bundled in source form:
+  - ggml (https://github.com/ggml-org/ggml) — MIT License
+  - cpp-httplib (https://github.com/yhirose/cpp-httplib) — MIT License
+  - nlohmann/json (https://github.com/nlohmann/json) — MIT License

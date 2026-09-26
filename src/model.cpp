@@ -1,5 +1,7 @@
 #include "statim/model.h"
 
+#include "kernels.h"
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -292,6 +294,13 @@ ggml_tensor* linear(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor
     return b ? ggml_add(c, x, b) : x;
 }
 
+void geglu_op(ggml_tensor* dst, int ith, int nth, void*) {
+    const ggml_tensor* src = dst->src[0];
+    const long ff = dst->ne[0], rows = ggml_nrows(dst);
+    const long per = (rows + nth - 1) / nth;
+    geglu_rows(static_cast<float*>(dst->data), static_cast<const float*>(src->data), rows, ff, ith * per, (ith + 1) * per);
+}
+
 // q, k, v: [hd, n_head, L, B] -> [n_embd, L, B]
 ggml_tensor* attention(ggml_context* c, ggml_tensor* q, ggml_tensor* k, ggml_tensor* v, ggml_tensor* mask,
                        int hd, int n_head, int L, int B, bool flash) {
@@ -423,9 +432,8 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
 
         ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps);
         m = linear(c, m, Ly.wi);  // [2*ff, L, B]; first half = input, second half = gate
-        ggml_tensor* in = ggml_view_3d(c, m, h.n_ff, L, B, m->nb[1], m->nb[2], 0);
-        ggml_tensor* gate = ggml_view_3d(c, m, h.n_ff, L, B, m->nb[1], m->nb[2], h.n_ff * ggml_element_size(m));
-        m = ggml_mul(c, ggml_gelu_erf(c, ggml_cont(c, in)), gate);
+        ggml_tensor* args[] = {m};
+        m = ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr);
         x = ggml_add(c, x, linear(c, m, Ly.wo_mlp));
     }
     x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps);
@@ -500,7 +508,9 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
             ggml_backend_graph_compute(impl_->backend, &gv);
             ggml_tensor* n = ggml_graph_node(gf, i);
             std::string k = ggml_op_desc(n);
-            if (n->op == GGML_OP_MUL_MAT) k += std::string("(") + ggml_type_name(n->src[0]->type) + ")";
+            if (n->op == GGML_OP_MUL_MAT)
+                k += std::string(n->src[0]->buffer == nullptr || std::strchr(ggml_get_name(n->src[0]), '.') ? "(W " : "(A ") +
+                     ggml_type_name(n->src[0]->type) + ")";
             by_op[k] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         }
         for (auto& [k, v] : by_op) std::fprintf(stderr, "  %-22s %9.1f ms\n", k.c_str(), v);

@@ -22,7 +22,8 @@ struct QuestionError : std::invalid_argument {
 struct DecideOptions {
     std::optional<int> max_len, head_max_len;  // override the checkpoint's token budgets
     std::optional<std::string> lang;          // selects per-language temperatures if the model has them
-    int ensemble = 1;  // >1: average over cyclic option orders (choice/score), reduces position bias
+    int ensemble = 1;              // >1: average choice answers over K cyclic option orders (position debiasing)
+    double ensemble_margin = 1.0;  // only ensemble when top-1 minus top-2 probability is below this (1 = always)
 };
 
 // Python json.dumps(ensure_ascii=False) with the given separators; key order preserved.
@@ -46,6 +47,8 @@ public:
     const Model& model() const { return *model_; }
 
 private:
+    std::vector<ItemResult> run_packed(const std::vector<Item>& items);
+
     struct Impl;
     std::shared_ptr<Model> model_;
     std::unique_ptr<Impl> impl_;

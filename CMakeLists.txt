@@ -13,6 +13,12 @@ option(STATIM_BUILD_TESTS "Build tests" ON)
 
 # ---- ggml (vendored)
 set(GGML_NATIVE ${STATIM_NATIVE} CACHE BOOL "" FORCE)
+if(NOT STATIM_NATIVE AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  # portable x86-64-v3 baseline (Haswell and newer)
+  foreach(opt GGML_AVX GGML_AVX2 GGML_FMA GGML_F16C GGML_BMI2)
+    set(${opt} ON CACHE BOOL "" FORCE)
+  endforeach()
+endif()
 set(GGML_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE ON CACHE BOOL "" FORCE)
 set(GGML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -26,7 +32,8 @@ add_library(statim_tokenizer STATIC src/tokenizer.cpp)
 target_include_directories(statim_tokenizer PUBLIC include PRIVATE third_party src)
 
 # ---- core runtime
-add_library(statim_core STATIC src/model.cpp src/engine.cpp src/tokenizer_gguf.cpp)
+add_library(statim_core STATIC src/model.cpp src/engine.cpp src/tokenizer_gguf.cpp src/kernels.cpp)
+set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml)
 
@@ -42,6 +49,15 @@ if(STATIM_BUILD_TESTS)
   target_link_libraries(test_model_parity PRIVATE statim_core)
   add_executable(test_engine_parity tests/test_engine_parity.cpp)
   target_link_libraries(test_engine_parity PRIVATE statim_core)
+
+  enable_testing()
+  set(M ${CMAKE_CURRENT_SOURCE_DIR}/models)
+  set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)
+  add_test(NAME tokenizer COMMAND test_tokenizer)
+  add_test(NAME model_parity_multilingual COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
+  add_test(NAME engine_parity_multilingual COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl)
+  add_test(NAME model_parity_english COMMAND test_model_parity ${M}/laya-english-f32.gguf ${D}/golden_laya.jsonl 1e-3)
+  add_test(NAME engine_parity_english COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl)
 endif()
 
 # ---- tools

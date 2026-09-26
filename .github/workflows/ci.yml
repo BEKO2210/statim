@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user numpy safetensors gguf
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: laya-models-v1
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (portable x86-64-v3)
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF
+          cmake --build build
+      - name: Parity gates vs. the official Laya package
+        run: ctest --test-dir build --output-on-failure

@@ -44,7 +44,7 @@ struct ItemResult {
 
 struct RunOptions {
     int n_threads = 0;          // 0 = hardware concurrency
-    bool flash_attn = false;    // ggml flash attention kernel instead of explicit softmax
+    bool flash_attn = true;     // fused flash-attention kernel (false: explicit softmax path)
 };
 
 class Model {

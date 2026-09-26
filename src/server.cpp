@@ -2,6 +2,7 @@
 #include "statim/server.h"
 
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
@@ -54,6 +55,38 @@ std::string new_request_id() {
     char buf[17];
     std::snprintf(buf, sizeof buf, "%016llx", static_cast<unsigned long long>(rng()));
     return buf;
+}
+
+// Cheap English detector: nearly all letters ASCII and enough common English function words.
+bool looks_english(const std::string& text) {
+    size_t ascii_letters = 0, other_letters = 0;
+    for (size_t i = 0; i < text.size();) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c < 0x80) {
+            ascii_letters += std::isalpha(c) != 0;
+            ++i;
+        } else {
+            ++other_letters;
+            i += c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+        }
+    }
+    if (ascii_letters == 0 || other_letters * 50 > ascii_letters) return false;
+    static const char* kWords[] = {"the", "and", "you", "to", "is", "of", "for", "please", "my", "we", "i", "it",
+                                   "this", "that", "with", "have", "not", "are", "was", "can", "your", "our", "on"};
+    size_t words = 0, hits = 0;
+    std::string w;
+    auto flush = [&] {
+        if (w.empty()) return;
+        ++words;
+        for (const char* k : kWords) hits += w == k;
+        w.clear();
+    };
+    for (unsigned char c : text) {
+        if (std::isalpha(c)) w.push_back(static_cast<char>(std::tolower(c)));
+        else flush();
+    }
+    flush();
+    return words < 4 ? hits > 0 || words > 0 : hits * 10 >= words;  // >= 10% function words
 }
 
 // Same guardrails as laya.serve so a client sees identical 400/413 behaviour.
@@ -222,13 +255,33 @@ int run_server(const ServerConfig& cfg) {
         }
         return ok;
     };
-    auto find_model = [&](const ojson& body) -> LoadedModel& {
+    auto by_name = [&](const std::string& n) -> LoadedModel* {
+        for (auto& m : models)
+            if (m.name == n) return &m;
+        return nullptr;
+    };
+    // Explicit "model" wins; otherwise, with both an "english" and a "multilingual" checkpoint
+    // loaded, English text goes to the English one and everything else to the multilingual one.
+    auto find_model = [&](const ojson& body, const std::vector<ojson>& states, std::string& reason) -> LoadedModel& {
         if (body.contains("model") && body["model"].is_string()) {
             const std::string want = body["model"].get<std::string>();
             for (auto& m : models)
-                if (m.name == want || "convaiinnovations/laya-" + m.name == want) return m;
-            // unknown ids (e.g. a Jev model name) fall back to the default model, like laya.serve
+                if (m.name == want || "convaiinnovations/laya-" + m.name == want) {
+                    reason = "requested";
+                    return m;
+                }
+            // unknown ids (e.g. a Jev model name) fall through to routing, like laya.serve
         }
+        LoadedModel* en = by_name("english");
+        LoadedModel* ml = by_name("multilingual");
+        if (en && ml) {
+            std::string text;
+            for (const auto& st : states) text += st.is_string() ? st.get<std::string>() : py_json_dumps(st);
+            bool english = looks_english(text);
+            reason = english ? "lang:en" : "lang:other";
+            return english ? *en : *ml;
+        }
+        reason = "default";
         return models.front();
     };
 
@@ -251,6 +304,7 @@ int run_server(const ServerConfig& cfg) {
             if (in_flight.fetch_add(1) >= cfg.max_concurrent) {
                 --in_flight;
                 rejected_busy++;
+                res.set_header("Retry-After", "1");
                 throw HttpError{503, "server busy, try again later"};
             }
             guard.held = true;
@@ -268,9 +322,8 @@ int run_server(const ServerConfig& cfg) {
             opts.ensemble = cfg.ensemble;
             if (body.contains("ensemble") && body["ensemble"].is_number_integer())
                 opts.ensemble = std::clamp(body["ensemble"].get<int>(), 1, 8);
-            LoadedModel& lm = find_model(body);
-            model_name = lm.name;
-
+            if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
+                opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
             std::vector<ojson> states;
             if (batch) {
                 if (!body.contains("states") || !body["states"].is_array())
@@ -288,6 +341,9 @@ int run_server(const ServerConfig& cfg) {
                 states.push_back(state);
             }
 
+            std::string reason;
+            LoadedModel& lm = find_model(body, states, reason);
+            model_name = lm.name;
             const auto ti = std::chrono::steady_clock::now();
             std::vector<ojson> results;
             {
@@ -297,7 +353,7 @@ int run_server(const ServerConfig& cfg) {
             const double infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
             for (auto& r : results) {
                 n_tokens += r["usage"]["input_tokens"].get<size_t>();
-                r["routing"] = {{"model", lm.name}, {"engine", "statim"}, {"weights", lm.model->hparams().weight_type}};
+                r["routing"] = {{"model", lm.name}, {"reason", reason}, {"engine", "statim"}, {"weights", lm.model->hparams().weight_type}};
             }
             char timing[64];
             std::snprintf(timing, sizeof timing, "inference;dur=%.2f", infer_ms);

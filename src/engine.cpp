@@ -287,6 +287,44 @@ struct Engine::Impl {
     std::vector<std::pair<std::string, float>> temp_by_options;
     ojson lang_temps;
 
+    ojson answer(const Question& q, const std::vector<double>& z, const std::vector<float>& act, const DecideOptions& opts) const {
+        const size_t k = q.options.size();
+        const float t = temperature_for(q.qt, k, opts.lang);
+        std::vector<double> p(k);
+        double mx = -INFINITY, sum = 0;
+        for (size_t j = 0; j < k; ++j) mx = std::max(mx, z[j] / t);
+        for (size_t j = 0; j < k; ++j) sum += (p[j] = std::exp(z[j] / t - mx));
+        for (double& v : p) v /= sum;
+        double pmax = *std::max_element(p.begin(), p.end());
+        double conf = 1.0;
+        if (k >= 2) {
+            double ent = 0;
+            for (double v : p) ent -= v * std::log(std::clamp(v, 1e-12, 1.0));
+            conf = std::clamp(1.0 - ent / std::log(static_cast<double>(k)), 0.0, 1.0);
+        }
+        ojson action = {{"act_probability", round4(act.empty() ? 0.0 : act[0])}};
+        if (q.qt == 0) {
+            size_t best = static_cast<size_t>(std::max_element(p.begin(), p.end()) - p.begin());
+            ojson probs = ojson::object();
+            for (size_t j = 0; j < k; ++j) probs[py_key(q.labels[j])] = round4(p[j]);
+            return {{"type", "choice"}, {"choice", q.labels[best]}, {"probabilities", probs},
+                    {"confidence", round4(conf)}, {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
+        }
+        if (q.qt == 1) {
+            double e = 0;
+            ojson legend = ojson::object(), probs = ojson::object();
+            for (size_t j = 0; j < k; ++j) {
+                e += static_cast<double>(j) * p[j];
+                legend[std::to_string(j)] = q.levels[j];
+                probs[std::to_string(j)] = round4(p[j]);
+            }
+            return {{"type", "score"}, {"score", round4(e)}, {"legend", legend}, {"probabilities", probs},
+                    {"confidence", round4(conf)}, {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
+        }
+        return {{"type", "noul"}, {"noul", round4(p[1])}, {"confidence", round4(std::max(p[1], 1.0 - p[1]))},
+                {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
+    }
+
     float temperature_for(int qt, size_t k, const std::optional<std::string>& lang) const {
         const std::string bucket = temp_bucket(qt, k);
         if (lang && !lang_temps.empty()) {
@@ -411,110 +449,109 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
         return results;
     }
     const int max_len = opts.max_len.value_or(h.max_len), head_max_len = opts.head_max_len.value_or(h.head_max_len);
-    const int ens = std::max(1, opts.ensemble);
+    const size_t ens = static_cast<size_t>(std::max(1, opts.ensemble));
 
-    // rows: for each state, for each question, `views` option orders
-    struct Row { size_t state, q; std::vector<size_t> order; };
+    // Phase 1: every (state, question) in the canonical option order, exactly like Laya.
+    std::vector<std::vector<int32_t>> state_ids(states.size());
     std::vector<Item> items;
-    std::vector<Row> rows;
+    std::vector<std::pair<size_t, size_t>> where;  // (state, question) per item
     std::vector<size_t> tokens(states.size(), 0);
     for (size_t s = 0; s < states.size(); ++s) {
         if (states[s].is_null()) throw QuestionError("'state' is required");
-        auto state_ids = model_->tokenizer().encode(replace_all(serialize_state(states[s]), h.mask_token, " "));
+        state_ids[s] = model_->tokenizer().encode(replace_all(serialize_state(states[s]), h.mask_token, " "));
         for (size_t qi = 0; qi < qs.size(); ++qi) {
-            const size_t k = qs[qi].options.size();
-            const size_t views = std::min<size_t>(static_cast<size_t>(ens), k);
-            for (size_t v = 0; v < views; ++v) {
-                auto order = rotation(k, v * k / views);
-                items.push_back(build_item(model_->tokenizer(), h, qs[qi], state_ids, states[s].is_array(), max_len,
-                                           head_max_len, order));
-                if (v == 0) tokens[s] += items.back().ids.size();
-                rows.push_back({s, qi, std::move(order)});
+            items.push_back(build_item(model_->tokenizer(), h, qs[qi], state_ids[s], states[s].is_array(), max_len,
+                                       head_max_len, rotation(qs[qi].options.size(), 0)));
+            tokens[s] += items.back().ids.size();
+            where.emplace_back(s, qi);
+        }
+    }
+    std::vector<ItemResult> base = run_packed(items);
+
+    // Phase 2 (opt-in): choice questions get extra cyclic option orders; nominal labels only,
+    // since rotating ordinal score levels would break their scale. With ensemble_margin < 1 only
+    // close calls (top-1 minus top-2 probability below the margin) pay for the extra views.
+    struct View {
+        std::vector<size_t> order;
+        std::vector<float> logits;
+    };
+    std::vector<std::vector<View>> views(items.size());
+    if (ens > 1) {
+        std::vector<Item> extra;
+        std::vector<std::pair<size_t, std::vector<size_t>>> extra_of;  // base index, order
+        for (size_t i = 0; i < items.size(); ++i) {
+            const Question& q = qs[where[i].second];
+            const size_t k = q.options.size();
+            if (q.qt != 0 || k < 2) continue;
+            std::vector<float> p(base[i].logits);
+            float mx = *std::max_element(p.begin(), p.end()), sum = 0;
+            for (float& v : p) sum += (v = std::exp(v - mx));
+            std::sort(p.begin(), p.end(), std::greater<>());
+            if ((p[0] - p[1]) / sum >= opts.ensemble_margin) continue;
+            const size_t n = std::min(ens, k);
+            for (size_t v = 1; v < n; ++v) {
+                auto order = rotation(k, v * k / n);
+                extra.push_back(build_item(model_->tokenizer(), h, q, state_ids[where[i].first],
+                                           states[where[i].first].is_array(), max_len, head_max_len, order));
+                extra_of.emplace_back(i, std::move(order));
             }
         }
-    }
-
-    std::vector<ItemResult> out;
-    {
-        std::lock_guard<std::mutex> lock(impl_->mu);
-        // one graph per state keeps padding waste low (all rows of a state share its length)
-        size_t start = 0;
-        while (start < items.size()) {
-            size_t end = start;
-            while (end < items.size() && rows[end].state == rows[start].state) ++end;
-            std::vector<Item> chunk(items.begin() + start, items.begin() + end);
-            auto r = impl_->runner->run(chunk);
-            out.insert(out.end(), std::make_move_iterator(r.begin()), std::make_move_iterator(r.end()));
-            start = end;
+        if (!extra.empty()) {
+            auto more = run_packed(extra);
+            for (size_t j = 0; j < more.size(); ++j) views[extra_of[j].first].push_back({extra_of[j].second, std::move(more[j].logits)});
         }
     }
 
-    // aggregate views: mean log-softmax per original option index
     results.resize(states.size());
-    for (size_t s = 0; s < states.size(); ++s) {
-        results[s] = {{"model", h.name}, {"answers", ojson::object()},
-                      {"usage", {{"input_tokens", tokens[s]}, {"output_tokens", 0}}}};
-    }
-    size_t r = 0;
-    while (r < rows.size()) {
-        const size_t s = rows[r].state, qi = rows[r].q;
+    for (size_t s = 0; s < states.size(); ++s)
+        results[s] = {{"model", h.name}, {"answers", ojson::object()}, {"usage", {{"input_tokens", tokens[s]}, {"output_tokens", 0}}}};
+    for (size_t i = 0; i < items.size(); ++i) {
+        const auto [s, qi] = where[i];
         const Question& q = qs[qi];
         const size_t k = q.options.size();
-        std::vector<double> z(k, 0.0), act(out[r].act_probs.begin(), out[r].act_probs.end());
-        size_t r1 = r;
-        while (r1 < rows.size() && rows[r1].state == s && rows[r1].q == qi) ++r1;
-        if (r1 - r == 1) {
-            for (size_t j = 0; j < k; ++j) z[j] = out[r].logits[j];  // single view: raw logits, exactly Laya
+        std::vector<double> z(k);
+        if (views[i].empty()) {
+            for (size_t j = 0; j < k; ++j) z[j] = base[i].logits[j];  // single view: raw logits, exactly Laya
         } else {
-            for (size_t v = r; v < r1; ++v) {
-                const auto& lg = out[v].logits;
-                double mx = *std::max_element(lg.begin(), lg.end()), sum = 0;
-                for (float x : lg) sum += std::exp(x - mx);
+            // mean log-softmax over all option orders, mapped back to label index
+            views[i].push_back({rotation(k, 0), base[i].logits});
+            for (const View& v : views[i]) {
+                double mx = *std::max_element(v.logits.begin(), v.logits.end()), sum = 0;
+                for (float x : v.logits) sum += std::exp(x - mx);
                 const double lse = mx + std::log(sum);
-                for (size_t j = 0; j < k; ++j) z[rows[v].order[j]] += (lg[j] - lse) / static_cast<double>(r1 - r);
+                for (size_t j = 0; j < k; ++j) z[v.order[j]] += (v.logits[j] - lse) / static_cast<double>(views[i].size());
             }
         }
-        r = r1;
-
-        const float t = impl_->temperature_for(q.qt, k, opts.lang);
-        std::vector<double> p(k);
-        double mx = -INFINITY, sum = 0;
-        for (size_t j = 0; j < k; ++j) mx = std::max(mx, z[j] / t);
-        for (size_t j = 0; j < k; ++j) sum += (p[j] = std::exp(z[j] / t - mx));
-        for (double& v : p) v /= sum;
-
-        double pmax = *std::max_element(p.begin(), p.end());
-        double conf = 1.0;
-        if (k >= 2) {
-            double ent = 0;
-            for (double v : p) ent -= v * std::log(std::clamp(v, 1e-12, 1.0));
-            conf = std::clamp(1.0 - ent / std::log(static_cast<double>(k)), 0.0, 1.0);
-        }
-        ojson action = {{"act_probability", round4(act.empty() ? 0.0 : act[0])}};
-        ojson a;
-        if (q.qt == 0) {
-            size_t best = static_cast<size_t>(std::max_element(p.begin(), p.end()) - p.begin());
-            ojson probs = ojson::object();
-            for (size_t j = 0; j < k; ++j) probs[py_key(q.labels[j])] = round4(p[j]);
-            a = {{"type", "choice"}, {"choice", q.labels[best]}, {"probabilities", probs},
-                 {"confidence", round4(conf)}, {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
-        } else if (q.qt == 1) {
-            double e = 0;
-            ojson legend = ojson::object(), probs = ojson::object();
-            for (size_t j = 0; j < k; ++j) {
-                e += static_cast<double>(j) * p[j];
-                legend[std::to_string(j)] = q.levels[j];
-                probs[std::to_string(j)] = round4(p[j]);
-            }
-            a = {{"type", "score"}, {"score", round4(e)}, {"legend", legend}, {"probabilities", probs},
-                 {"confidence", round4(conf)}, {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
-        } else {
-            a = {{"type", "noul"}, {"noul", round4(p[1])}, {"confidence", round4(std::max(p[1], 1.0 - p[1]))},
-                 {"answer_confidence", round4(std::clamp(pmax, 0.0, 1.0))}, {"action", action}};
-        }
-        results[s]["answers"][q.id] = std::move(a);
+        results[s]["answers"][q.id] = impl_->answer(q, z, base[i].act_probs, opts);
     }
     return results;
+}
+
+std::vector<ItemResult> Engine::run_packed(const std::vector<Item>& items) {
+    std::lock_guard<std::mutex> lock(impl_->mu);
+    // Sort by length so padding stays small; cap rows and padded tokens per graph. Rows of one
+    // state have near-identical lengths, so a single state is usually one graph.
+    std::vector<size_t> order(items.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return items[a].ids.size() < items[b].ids.size(); });
+    std::vector<ItemResult> out(items.size());
+    constexpr size_t kMaxRows = 32, kMaxPaddedTokens = 8192;
+    size_t start = 0;
+    while (start < order.size()) {
+        size_t end = start, longest = 0;
+        while (end < order.size() && end - start < kMaxRows) {
+            size_t len = std::max(longest, items[order[end]].ids.size());
+            if (end > start && len * (end - start + 1) > kMaxPaddedTokens) break;
+            longest = len;
+            ++end;
+        }
+        std::vector<Item> chunk;
+        for (size_t i = start; i < end; ++i) chunk.push_back(items[order[i]]);
+        auto r = impl_->runner->run(chunk);
+        for (size_t i = start; i < end; ++i) out[order[i]] = std::move(r[i - start]);
+        start = end;
+    }
+    return out;
 }
 
 ojson Engine::decide(const ojson& state, const ojson& questions, const DecideOptions& opts) {
