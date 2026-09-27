@@ -2,7 +2,8 @@
 """No-harm promotion gate: evaluate checkpoints on every suite, then decide whether a challenger may
 replace the champion.
 
-    # evaluate (writes <model>/eval.json; needs the GGUF next to the model dir and a Vulkan build)
+    # evaluate (writes <model>/eval.json; needs the GGUF next to the model dir and a Vulkan build,
+    # or STATIM_BIN=build/statim STATIM_GATE_DEVICE=cpu for a CPU-only machine)
     .venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-clean
     # compare
     .venv-train/bin/python tools/finetune/gate.py compare models/champion models/challenger
@@ -30,7 +31,12 @@ import urllib.request
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 PY = os.path.join(ROOT, ".venv-train", "bin", "python")
-PORT = 8097
+PORT = int(os.environ.get("STATIM_GATE_PORT", "8097"))
+# Third parties reproduce on whatever they have: STATIM_BIN and STATIM_GATE_DEVICE override the
+# Vulkan build this project measures with (exact f32 on GPU and CPU give the same answers).
+BIN = os.environ.get("STATIM_BIN", os.path.join(ROOT, "build-vk", "statim"))
+DEVICE = os.environ.get("STATIM_GATE_DEVICE", "vulkan")
+CONVERT_PY = os.environ.get("STATIM_CONVERT_PY", os.path.join(ROOT, ".venv", "bin", "python"))
 
 
 def run(cmd):
@@ -48,13 +54,13 @@ def jsonl(text):
 def gguf_for(model_dir):
     path = model_dir.rstrip("/") + "-f32.gguf"
     if not os.path.exists(path):
-        run([os.path.join(ROOT, ".venv", "bin", "python"), "tools/convert_laya.py", model_dir, "-o", path,
+        run([CONVERT_PY if os.path.exists(CONVERT_PY) else PY, "tools/convert_laya.py", model_dir, "-o", path,
              "--type", "f32", "--embd-type", "f16", "--name", os.path.basename(model_dir.rstrip("/"))])
     return path
 
 
 def http_suites(model_dir, tmp):
-    srv = subprocess.Popen([os.path.join(ROOT, "build-vk", "statim"), "serve", "--device", "vulkan", "-m",
+    srv = subprocess.Popen([BIN, "serve", "--device", DEVICE, "-m",
                             f"m={gguf_for(model_dir)}", "--port", str(PORT), "--no-access-log"],
                            cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
