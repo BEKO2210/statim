@@ -1,0 +1,77 @@
+name: release
+
+# Runs when a release is published (the release notes are written by hand), builds the binaries
+# from the release tag and attaches them to that release.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.flavor }} archive
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: cpu
+            vulkan: "OFF"
+          - flavor: vulkan
+            vulkan: "ON"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake g++ ninja-build
+          if [[ "${{ matrix.vulkan }}" == "ON" ]]; then
+            sudo apt-get install -y --no-install-recommends libvulkan-dev glslc spirv-headers
+          fi
+
+      - name: Build portable binaries
+        run: |
+          cmake -S . -B "build-${{ matrix.flavor }}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSTATIM_NATIVE=OFF \
+            -DSTATIM_BUILD_TESTS=OFF \
+            -DSTATIM_VULKAN=${{ matrix.vulkan }} \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+          cmake --build "build-${{ matrix.flavor }}" --target statim statim-quantize
+
+      - name: Package release archive
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          tools/package_release.sh "build-${{ matrix.flavor }}" "${{ matrix.flavor }}" "${GITHUB_REF_NAME}" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: statim-${{ matrix.flavor }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release assets
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: dist
+        run: sha256sum -- *.tar.gz > SHA256SUMS
+
+      - name: Create release if needed and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" dist/*.tar.gz dist/SHA256SUMS --clobber

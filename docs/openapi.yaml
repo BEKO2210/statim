@@ -2318,7 +2318,7 @@ paths:
               examples:
                 tooManyQuestions:
                   value:
-                    detail: too many questions (65 > 64)
+                    detail: too many questions
                 tooManyOptions:
                   value:
                     detail: too many choice options for 'q' (101 > 100)
