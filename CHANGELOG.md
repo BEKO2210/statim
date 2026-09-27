@@ -7,6 +7,25 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-28
+
+### Fixed
+- The `security` and `security_model` tests no longer fail when run as root (Docker and many cloud
+  sandboxes): root can read a mode-000 file, so the unreadable-key-file check is skipped for root
+  and still runs for every other user.
+- `REPRODUCE.md`, corrected by an independent clean-room run on a fresh CPU-only machine (#16):
+  section 1 clones the repository, uses v0.5.2 and checks the model against its `SHA256SUMS`;
+  section 2 initialises the ggml submodule, installs the converter packages and expects 10 CPU tests
+  (4 more per GPU backend); `huggingface-cli`, which exits 1 in `huggingface_hub` 1.x, is replaced by
+  `hf download`; notes for CPU-only machines. The run is in `docs/reproductions/clean-room.md`: ticket
+  triage 0.896 and 0.915 exactly, typed-decisions and Banking77 exactly, AG News and Emotion within
+  1 and 4 rows of 2,000 (PyTorch reference on CPU instead of CUDA).
+
+### Added
+- `tools/finetune/data_licenses.py --v6 / --synth`: `DATA_LICENSES.md` can list the mixture v6
+  sources (source, category, licence, languages, items) and the synthetic gap data (generator, its
+  licence, verification rate).
+
 ## [0.6.0] - 2026-09-28
 
 ### Added
@@ -281,7 +300,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/BEKO2210/statim/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/BEKO2210/statim/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/BEKO2210/statim/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/BEKO2210/statim/compare/v0.5.0...v0.5.1
