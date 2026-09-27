@@ -154,9 +154,14 @@ def main():
     ap.add_argument("--warmup", type=float, default=0.0, help="fraction of steps with linear LR warmup")
     ap.add_argument("--ema", type=float, default=0.0, help="EMA decay of the trainable weights (0 = off)")
     ap.add_argument("--tag", default="multitask")
+    ap.add_argument("--patience", type=int, default=0,
+                    help="stop after this many epochs without a new best dev mean (0 = run all epochs)")
     ap.add_argument("--mixture", default=None, help="gzipped JSONL from build_mixture.py")
     ap.add_argument("--mixture-dev", type=int, default=1000)
     ap.add_argument("--mixture-limit", type=int, default=0, help="use at most this many mixture items (0 = all)")
+    ap.add_argument("--clean", action="store_true",
+                    help="commercial-clean data only: no tyqiangz sentiment (aggregates research-only corpora),"
+                         " distillation texts from the licence-filtered mixture instead of AG News / tweet_eval")
     a = ap.parse_args()
     from datasets import load_dataset
 
@@ -181,7 +186,12 @@ def main():
             "https://huggingface.co/api/datasets/mteb/amazon_massive_intent/tree/main/train"))]
     eval_langs = {"de", "en", "fr", "es", "it", "tr", "pl", "ru", "ja", "zh-CN", "ar", "hi"}
     m_train, m_dev, m_drop = massive_data(tok, langs, a.massive_per_lang, eval_langs, 50, max_len, rng)
-    s_train, s_dev, s_drop = sentiment_data(tok, a.sentiment_per_lang, 50, max_len, hml, rng)
+    if a.clean:
+        if not a.mixture:
+            raise SystemExit("--clean needs --mixture (licence-filtered data from build_mixture.py)")
+        s_train, s_dev, s_drop = [], [], 0
+    else:
+        s_train, s_dev, s_drop = sentiment_data(tok, a.sentiment_per_lang, 50, max_len, hml, rng)
     train += m_train + s_train
     td = list(load_dataset("LocalLLaMA/typed-decisions", "all", split="train"))
     rng.shuffle(td)
@@ -198,11 +208,19 @@ def main():
     if a.distill:
         import train_banking77 as tb
         tb.DISTILL_QUESTIONS[:] = [q for q in DISTILL_QUESTIONS if "sentiment" not in q[1]]
-        tw = [r["text"] for r in load_dataset("cardiffnlp/tweet_eval", "sentiment", split="train")]
-        news = [r["text"] for r in load_dataset("fancyzhx/ag_news", split="train")]
-        rng.shuffle(tw)
-        rng.shuffle(news)
-        dist = distill_items(tok, tw[:a.distill * 3 // 4] + news[:a.distill - a.distill * 3 // 4], max_len, hml, rng)
+        if a.clean:
+            import gzip
+            with gzip.open(a.mixture, "rt", encoding="utf-8") as f:
+                texts = [t for t in (json.loads(line)["state"] for line in f) if isinstance(t, str) and 20 < len(t) < 2000]
+            rng.shuffle(texts)
+            texts = texts[:a.distill]
+        else:
+            tw = [r["text"] for r in load_dataset("cardiffnlp/tweet_eval", "sentiment", split="train")]
+            news = [r["text"] for r in load_dataset("fancyzhx/ag_news", split="train")]
+            rng.shuffle(tw)
+            rng.shuffle(news)
+            texts = tw[:a.distill * 3 // 4] + news[:a.distill - a.distill * 3 // 4]
+        dist = distill_items(tok, texts, max_len, hml, rng)
         zs = predict(model, [dict(it, target=[0.0] * len(it["markers"])) for it in dist], tok.pad_token_id, device, dtype)
         for it, z in zip(dist, zs):
             it["target"] = torch.softmax(torch.tensor(z), -1).tolist()
@@ -275,7 +293,9 @@ def main():
                    for l, it in zip(z, items)) / len(items)
 
     def dev_scores():
-        d = {"banking77": round(acc(bank_dev), 4), "massive": round(acc(m_dev), 4), "sentiment": round(acc(s_dev), 4)}
+        d = {"banking77": round(acc(bank_dev), 4), "massive": round(acc(m_dev), 4)}
+        if s_dev:
+            d["sentiment"] = round(acc(s_dev), 4)
         if x_dev:
             d["mixture"] = round(acc(x_dev), 4)
         return d
@@ -286,6 +306,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     tmp_best = os.path.join(a.out, "best.safetensors")
     t0 = time.time()
+    since_best = 0
     for epoch in range(a.epochs):
         sigma = 0.4 + (0.1 - 0.4) * (epoch / max(1, a.epochs - 1))
         ep_idx = epoch_indices()
@@ -323,6 +344,7 @@ def main():
             n += 1
             if step % 500 == 0:
                 print(f"  epoch {epoch + 1} step {step}/{len(bl)} ce {run_loss / n:.4f} {time.time() - t0:.0f}s", flush=True)
+        improved = False
         cands = [("raw", dev_scores())]
         if ema is not None:
             swap_ema()
@@ -335,12 +357,17 @@ def main():
             print(f"=== epoch {epoch + 1} [{kind}]: ce {run_loss / n:.4f} | dev {d} mean {mean:.4f} | "
                   f"{time.time() - t0:.0f}s", flush=True)
             if mean > best:
+                improved = True
                 best, best_epoch = mean, f"{epoch + 1}/{kind}"
                 if kind == "ema":
                     swap_ema()
                 save_file({k: v.contiguous().cpu() for k, v in model.state_dict().items()}, tmp_best)
                 if kind == "ema":
                     swap_ema()
+        since_best = 0 if improved else since_best + 1
+        if a.patience and since_best >= a.patience:
+            print(f"early stop: no new best dev mean for {since_best} epoch(s); best {best:.4f} at {best_epoch}", flush=True)
+            break
 
     model.load_state_dict(load_file(tmp_best), strict=True)
     os.remove(tmp_best)
@@ -365,8 +392,8 @@ def main():
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
                                        "massive_per_lang": a.massive_per_lang, "sentiment_per_lang": a.sentiment_per_lang,
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
-                                       "budget": budget, "warmup": a.warmup, "ema": a.ema,
-                                       "mixture": a.mixture and os.path.basename(a.mixture)}})
+                                       "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience,
+                                       "mixture": a.mixture and os.path.basename(a.mixture), "clean": a.clean}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)
     print(f"saved {a.out} (best epoch {best_epoch}, dev mean {best:.4f})", flush=True)
 

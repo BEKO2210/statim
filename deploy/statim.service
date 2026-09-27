@@ -11,7 +11,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/statim/env
+Environment=STATIM_API_KEY=
+EnvironmentFile=/etc/statim/env
 ExecStart=/usr/local/bin/statim serve -m multilingual=/var/lib/statim/multilingual.gguf --host 127.0.0.1 --port 8080 --workers 2
 Restart=on-failure
 RestartSec=2
@@ -31,7 +32,11 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
-LimitNOFILE=65536
+LimitNOFILE=4096
+MemoryHigh=6G
+MemoryMax=8G
+CPUQuota=400%
+TasksMax=256
 
 [Install]
 WantedBy=multi-user.target

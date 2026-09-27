@@ -1,6 +1,7 @@
 // Statim — ModernBERT encoder + Laya decision head, executed with ggml.
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -78,6 +79,7 @@ public:
     // Items in one call are padded to the longest and evaluated in one graph.
     std::vector<ItemResult> run(const std::vector<Item>& items);
 
+    void set_deadline(std::chrono::steady_clock::time_point deadline);
     const Model& model() const { return *model_; }
 
 private:

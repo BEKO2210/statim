@@ -317,15 +317,15 @@ $("keyDlg").addEventListener("close", () => {
 function authHeaders() { const k = store.get("statim_key"); return k ? {Authorization: "Bearer " + k} : {}; }
 
 /* ---------- server status ---------- */
-let loaded = [];
+let loaded = [], device = "";
 async function poll() {
   const dot = $("dot"), txt = $("stxt");
   try {
     const h = await (await fetch("/health", {cache: "no-store"})).json();
     const r = await fetch("/ready", {cache: "no-store"});
     dot.className = "dot " + (r.ok ? "ok" : "busy");
-    txt.textContent = (r.ok ? "ready" : "busy") + " · v" + h.version + " · " + h.device;
-    if (JSON.stringify(h.loaded) !== JSON.stringify(loaded)) { loaded = h.loaded; fillModels(); loadModels(); }
+    txt.textContent = (r.ok ? "ready" : "busy") + " · v" + h.version + (device ? " · " + device : "");
+    if (!loaded.length) loadModels();
   } catch { dot.className = "dot down"; txt.textContent = "offline"; }
 }
 function fillModels() {
@@ -336,10 +336,14 @@ function fillModels() {
   if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
 }
 async function loadModels() {
+  // /health is deliberately minimal; models and device come from /v1/models (needs the key if auth is on)
   try {
     const r = await fetch("/v1/models", {headers: authHeaders()});
-    if (!r.ok) { $("chips").innerHTML = loaded.map(m => `<span class="chip">${esc(m)}</span>`).join(""); return; }
+    if (!r.ok) { $("chips").innerHTML = r.status === 401 ? '<span class="chip">API key needed</span>' : ""; return; }
     const j = await r.json();
+    const ids = j.data.map(m => m.id);
+    device = (j.data[0] && j.data[0].device) || "";
+    if (JSON.stringify(ids) !== JSON.stringify(loaded)) { loaded = ids; fillModels(); poll(); }
     $("chips").innerHTML = j.data.map(m => `<span class="chip" title="${esc(m.source)} · ${m.layers} layers · hidden ${m.hidden} · vocab ${m.vocab}">${esc(m.id)} · ${esc(m.weights)} · ${m.max_len} ctx</span>`).join("");
   } catch {}
 }

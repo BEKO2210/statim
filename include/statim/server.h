@@ -4,8 +4,10 @@
 #include <utility>
 #include <vector>
 
+#include "statim/security.h"
+
 #ifndef STATIM_VERSION
-#define STATIM_VERSION "0.2.1"
+#define STATIM_VERSION "0.3.0"
 #endif
 
 namespace statim {
@@ -23,6 +25,10 @@ struct ServerConfig {
     bool calibrate = false;   // default contextual calibration for choice questions
     bool consensus = false;   // default: fuse english + multilingual checkpoints when both are loaded
     std::vector<std::string> api_keys;
+    SecurityLimits limits;
+    int http_queue = 32;
+    int request_timeout = 30; // absolute header + body read deadline, seconds
+    int inference_timeout = 120; // includes engine queue wait; cooperative compute deadline
     bool access_log = true;
     bool playground = true;   // serve the web playground at "/"
 };
