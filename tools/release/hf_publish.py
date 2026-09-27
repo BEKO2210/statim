@@ -22,6 +22,7 @@ import textwrap
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GITHUB = "https://github.com/BEKO2210/statim"
+SITE = "https://beko2210.github.io/statim"
 
 MODELS = {
     "statim-decide-multilingual-base": {
@@ -140,6 +141,10 @@ def card(a, meta, ev, base_ev, files):
     **choice**, a **score** or a **yes/no** question and get calibrated answers from one forward pass, on
     CPU or GPU, without Python at runtime. Version **{a.version}**, fine-tuned from
     [`{a.info['base_model']}`](https://huggingface.co/{a.info['base_model']}) ({a.info['encoder']} encoder).
+
+    <video controls preload="none" width="100%" poster="{SITE}/images/film-16x9.webp" src="{SITE}/video/statim-flagship-60s-16x9.mp4"></video>
+
+    One support ticket, three typed answers, one forward pass: [the 60-second film]({SITE}/#film).
 
     ## Quick start
 

@@ -324,6 +324,28 @@ h3 { font-size: 1.25rem; letter-spacing: -.015em; }
 
 /* ---------- how it works ---------- */
 .how { display: grid; gap: 40px; }
+
+/* Films. The landscape film sits next to the phone-format story at equal height (256:81 columns);
+   on portrait screens every film plays its 9:16 cut. Nothing loads before the play button. */
+.films { display: grid; gap: 28px; }
+.film, .reel { margin: 0; }
+.frame { --aw: 16; --ah: 9; position: relative; aspect-ratio: var(--aw) / var(--ah); margin-inline: auto;
+  width: min(100%, calc(85vh * var(--aw) / var(--ah))); width: min(100%, calc(85svh * var(--aw) / var(--ah)));
+  border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--ink-1); }
+.film-story .frame { --aw: 9; --ah: 16; }
+.frame video { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--ink-1); }
+.film figcaption { margin-top: 12px; color: var(--fg-3); font-size: .875rem; text-align: center; }
+.play { display: none; position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; border: 0; border-radius: 50%;
+  background: var(--signal); color: var(--signal-ink); cursor: pointer; place-items: center;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, .5); transition: transform .2s var(--ease), background-color .2s var(--ease); }
+.play span { width: 0; height: 0; margin-left: 5px; border-style: solid; border-width: 12px 0 12px 19px;
+  border-color: transparent transparent transparent currentColor; }
+.play:hover { background: #5fe0b3; transform: scale(1.06); }
+.js .play { display: grid; }
+.js .frame.playing .play { display: none; }
+@media (orientation: portrait) { .film-main .frame, .reel .frame { --aw: 9; --ah: 16; } }
+@media (min-width: 960px) and (orientation: landscape) { .films { grid-template-columns: 256fr 81fr; align-items: start; } }
+@media (prefers-reduced-motion: reduce) { .play { transition: none; } .play:hover { transform: none; } }
 .steps { counter-reset: step; display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
 .steps li { counter-increment: step; display: grid; grid-template-columns: 2.25rem 1fr; gap: 14px; padding: 20px 0; border-bottom: 1px solid var(--line); }
 .steps li::before { content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); font: 500 .8125rem/1 var(--mono); color: var(--signal); }
