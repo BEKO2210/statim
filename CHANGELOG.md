@@ -7,6 +7,13 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- Tag-driven GitHub release packaging for portable Linux x86-64 CPU and Vulkan binaries, including
+  licence and deployment documents plus published SHA-256 checksums; model weights remain separate.
+- A non-root Vulkan container image with Mesa and NVIDIA Container Toolkit deployment options.
+- A production deployment guide covering hardened systemd and Docker operation, TLS reverse proxying,
+  authenticated Prometheus scraping, health/readiness probes, and resource ceilings.
+
 ## [0.3.0] - 2026-09-27
 
 A licence-clean multi-task model that passes a no-harm gate, a licensing model for commercial use,

@@ -140,6 +140,8 @@ The systemd example requires `/etc/statim/env` and a nonempty `STATIM_API_KEY`; 
 Tune these for the loaded models/workers. Container deployments should likewise supply
 memory/CPU limits and a TLS-terminating proxy. Application deadlines are cooperative;
 a running compute operation must finish before cancellation takes effect.
+See the [production deployment guide](docs/DEPLOY.md) for hardened systemd, CPU/Vulkan Docker,
+TLS reverse proxy, probe, metrics, and resource-ceiling examples.
 
 Security regressions run through `ctest`, including socket-free HTTP parser/middleware
 checks and live HTTP attacks using the CPU multilingual model. Run the latter directly:

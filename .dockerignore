@@ -4,3 +4,6 @@ models/
 reference/
 *.gguf
 *.log
+build-*/
+data/
+models
