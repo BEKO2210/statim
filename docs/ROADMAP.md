@@ -11,7 +11,7 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 
 | Field | Statim | Best published, same protocol |
 |---|---|---|
-| AG News, zero-shot (never trained) | 0.9385 | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
+| AG News, zero-shot (never trained) | 0.9315 | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
 | typed-decisions test | 0.7585 (licence-clean model) | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
 | Banking77, trained on train split | 0.903 (licence-clean model) | 94.1 MPNet (supervised) |
 | MASSIVE, 12 languages, trained | 0.772 (licence-clean model, 2,000 rows per language) | 85.7 XLM-R base (supervised, MASSIVE paper, full data) |
