@@ -7,6 +7,14 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- `bench/eval_categories.py`: one held-out suite per decision category (sentiment, emotion,
+  complaint, NLI, safety, reading comprehension, similarity, topic, intent, stance, formality,
+  urgency, fact-check, PII), built from the test or otherwise unused splits of the mixture v6
+  sources through the v6 adapters (first instruction paraphrase, fixed option order), 150 seeded
+  stratified items per suite and language, evaluated over HTTP. Every pooled suite text is in the
+  mixture's banned set (`eval_texts.py`), and `gate.py` checks the suites as a `categories` family.
+
 ## [0.6.2] - 2026-09-28
 
 ### Added

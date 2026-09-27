@@ -13,7 +13,8 @@ Suites and their role:
   Emotion validation, AG News train rows): the challenger's mean must be higher. Model selection
   never looks at test splits.
 - held-out tests (eval_laya.py on the first 2,000 rows; bench/eval_multilingual.py per language;
-  bench/eval_zeroshot.py suites never trained on): no suite may drop by more than 2 standard errors
+  bench/eval_zeroshot.py suites never trained on; bench/eval_categories.py, one suite per decision
+  category from the unused splits of the mixture v6 sources): no suite may drop by more than 2 standard errors
   (binomial, sqrt(p(1-p)/n) for each model, combined). That margin separates real regressions
   from sampling noise.
 A challenger that improves validation but harms any held-out suite is rejected: it has started to
@@ -74,7 +75,8 @@ def http_suites(model_dir, tmp):
         # the benchmark scripts only accept known model names; the server has a single model, and an
         # unknown name falls back to it, so pass a valid name
         for script, extra in (("bench/eval_multilingual.py", ["--n", "150"]),
-                              ("bench/eval_zeroshot.py", ["--n", "150"])):
+                              ("bench/eval_zeroshot.py", ["--n", "150"]),
+                              ("bench/eval_categories.py", ["--n", "150"])):
             if not os.path.exists(os.path.join(ROOT, script)):
                 continue
             out = os.path.join(tmp, os.path.basename(script) + ".jsonl")
@@ -96,12 +98,18 @@ def evaluate(model_dir):
         n = r.get("n", 2000)
         res["heldout"][f"test/{r['suite']}"] = {"acc": r["accuracy"], "n": n, "ece": r.get("ece")}
     for r in http_suites(model_dir, tmp):
-        if r.get("lang") == "macro":
+        if r.get("lang") == "macro" or "accuracy" not in r:  # macro line, or a skipped language
             continue
-        res["heldout"][f"{r['suite']}/{r['lang']}"] = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
+        res["heldout"][f"{suite_key(r)}/{r['lang']}"] = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
     json.dump(res, open(os.path.join(model_dir, "eval.json"), "w"), indent=1)
     print(json.dumps({"validation_mean": round(sum(res["validation"].values()) / len(res["validation"]), 4),
                       "heldout_suites": len(res["heldout"])}))
+
+
+def suite_key(record):
+    """eval_categories.py names its suites after the category ("sentiment", "nli"); prefix them so they
+    cannot collide with a suite of another script."""
+    return ("categories:" + record["suite"]) if record.get("family") == "categories" else record["suite"]
 
 
 ZERO_SHOT = {"go_emotions", "multi_hatecheck", "sib200", "indonli", "farstail", "belebele", "semrel"}
@@ -133,6 +141,7 @@ def compare(champ_dir, chall_dir, z=2.0):
         "trained": lambda k: k.split("/")[0] == "amazon_massive_intent" or k in ("test/banking77", "test/typed_decisions"),
         "zero-shot": lambda k: k.split("/")[0] in ZERO_SHOT or k in ("test/ag_news", "test/emotion"),
         "sentiment": lambda k: k.split("/")[0] == "multilingual_sentiments",
+        "categories": lambda k: k.startswith("categories:"),
     }
     common = sorted(set(a["heldout"]) & set(b["heldout"]))
     for fam, member in families.items():
