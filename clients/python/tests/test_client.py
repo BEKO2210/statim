@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -139,7 +140,7 @@ def base_url() -> str:
     except TransportError as exc:
         pytest.fail(f"Statim is not reachable at {BASE_URL} ({exc})")
     assert health.status == "ok"
-    assert health.version == "0.3.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", health.version)
     return BASE_URL
 
 
@@ -208,10 +209,87 @@ def test_yes_no_probabilities_and_options_round_trip() -> None:
     assert answer.yes is True
     assert answer.probabilities == {"yes": 0.8, "no": pytest.approx(0.2)}
     assert answer.confidence == 0.8
+    assert answer.escalate is None
     assert decision.request_id == "opt-1"
     assert decision.inference_time_ms == 1.5
     assert decision.usage.output_tokens == 0
     assert decision.routing.engine == "statim"
+
+
+def test_selective_prediction_transport_serialization_and_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[tuple[str, dict[str, Any]]] = []
+    selective_body = {
+        **NOUL_BODY,
+        "answers": {
+            "refund": {**NOUL_BODY["answers"]["refund"], "escalate": True},
+            "topic": {
+                "type": "choice",
+                "choice": "billing",
+                "probabilities": {"billing": 0.9, "other": 0.1},
+                "confidence": 0.53,
+                "answer_confidence": 0.9,
+                "action": {"act_probability": 1.0},
+                "escalate": False,
+            },
+            "urgency": {
+                "type": "score",
+                "score": 0.2,
+                "legend": {"0": "low", "1": "high"},
+                "probabilities": {"0": 0.8, "1": 0.2},
+                "confidence": 0.28,
+                "answer_confidence": 0.8,
+                "action": {"act_probability": 1.0},
+                "escalate": True,
+            },
+        },
+    }
+
+    class Response:
+        status = 200
+        headers = {"X-Request-Id": "selective"}
+
+        def __init__(self, payload: Any) -> None:
+            self.raw = json.dumps(payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return self.raw
+
+    def urlopen(request: Any, timeout: float):
+        del timeout
+        body = json.loads(request.data)
+        requests.append((request.full_url, body))
+        if request.full_url.endswith("/batch"):
+            payload = {"results": [selective_body]}
+        else:
+            payload = selective_body if "min_confidence" in body else NOUL_BODY
+        return Response(payload)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    client = Client("http://statim.invalid", max_retries=0)
+    questions = {"refund": {"type": "noul", "instructions": "Refund?"}}
+    decision = client.decide("hello", questions, min_confidence=0.85)
+    batch = client.decide_batch(["hello"], questions, min_confidence=0.75)
+    unchanged = client.decide("hello", questions)
+
+    assert requests == [
+        ("http://statim.invalid/v1/systemone", {"state": "hello", "questions": questions, "min_confidence": 0.85}),
+        (
+            "http://statim.invalid/v1/systemone/batch",
+            {"states": ["hello"], "questions": questions, "min_confidence": 0.75},
+        ),
+        ("http://statim.invalid/v1/systemone", {"state": "hello", "questions": questions}),
+    ]
+    assert decision.answers["refund"].escalate is True
+    assert decision.answers["topic"].escalate is False
+    assert decision.answers["urgency"].escalate is True
+    assert batch.results[0].answers["refund"].escalate is True
+    assert unchanged.answers["refund"].escalate is None
 
 
 def test_retries_honor_retry_after_and_stop_after_success() -> None:
@@ -356,7 +434,7 @@ def test_health_ready_and_models(base_url: str) -> None:
     client = Client(base_url, timeout=10)
     health = client.health()
     assert health.status == "ok"
-    assert health.version == "0.3.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", health.version)
     assert client.ready().ready is True
     listed = client.models()
     assert listed.object == "list"

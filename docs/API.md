@@ -222,6 +222,7 @@ With no API keys configured, the bearer check is skipped and every path is open.
 | `ensemble_margin` | no | Number, clamped to 0..1. A non-number is ignored. The default is 1. Extra option orders run only when the gap between the top probability and the second is below this margin. A margin of 0 runs no extra orders. |
 | `calibrate` | no | Boolean. A non-boolean is ignored. The server default is false unless `--calibrate` was set. When true, each choice question with at least two options is adjusted by the distribution that question produces on content-free copies of the state (empty string, `N/A`, and `[MASK]`). |
 | `return_logits` | no | Boolean. A non-boolean is ignored. When true, each answer gains a `logits` array, in option order, before temperature scaling. Under consensus the field is `logits_by_model` instead. See below. |
+| `min_confidence` | no | Number from 0 to 1 inclusive. A positive value enables selective prediction and overrides `--min-confidence`; `0` disables it for this request. Any other present value is HTTP 422 with `min_confidence must be a number from 0 to 1`. |
 | `max_len` | no | Integer from 32 to 8192 inclusive. Anything else that is present, including a non-integer, is HTTP 422. Omitting it uses the checkpoint default (English 512, multilingual 1024 on these files). |
 | `head_max_len` | no | Integer from 32 to 8192 inclusive, same error rule. This is the token budget for the question and its options. Checkpoint defaults on these files: English 192, multilingual 256. |
 
@@ -266,6 +267,55 @@ For noul, `noul` is the probability of the true side. `confidence` and `answer_c
 The English checkpoint applies a stored temperature that depends on the question type and how many options it has. The multilingual checkpoint uses temperature 1. Consensus averages the option log-probabilities of both checkpoints and decodes at temperature 1.
 
 With `return_logits: true`, a single checkpoint adds `logits` in option order. Those values are the raw scores for one view. After an ensemble they are the averaged log-softmax values. Consensus does not put a fused `logits` array on the answer. It adds `logits_by_model`, with the raw logits of `english` and `multilingual`.
+
+## Selective prediction
+
+Selective prediction lets an application accept confident answers automatically and hand uncertain ones to a person or a larger model. Set `min_confidence` to a number from 0 to 1 in either decision request, or start the server with `--min-confidence P` to use a default for all requests. A request value overrides the server default; `min_confidence: 0` disables selective prediction for that request.
+
+When the effective threshold is greater than zero, every answer that has `answer_confidence` also has an `escalate` boolean. It is `true` exactly when `answer_confidence < min_confidence`; confidence equal to the threshold is not escalated. When no positive threshold applies, `escalate` is absent, preserving the original response shape.
+
+```json
+{
+  "state": "I was charged twice for the same transfer.",
+  "questions": {
+    "intent": {
+      "type": "choice",
+      "instructions": "What is the banking intent?",
+      "criteria": {
+        "cash_withdrawal": "cash withdrawal issue",
+        "card_payment_fee_charged": "fee charged for a card payment",
+        "cash_withdrawal_or_transfer_charged_twice": "cash withdrawal or transfer charged twice"
+      }
+    }
+  },
+  "min_confidence": 0.9
+}
+```
+
+```json
+{
+  "model": "laya-multilingual",
+  "answers": {
+    "intent": {
+      "type": "choice",
+      "choice": "cash_withdrawal_or_transfer_charged_twice",
+      "probabilities": {
+        "cash_withdrawal": 0.03,
+        "card_payment_fee_charged": 0.05,
+        "cash_withdrawal_or_transfer_charged_twice": 0.92
+      },
+      "confidence": 0.7315,
+      "answer_confidence": 0.92,
+      "action": {"act_probability": 1.0},
+      "escalate": false
+    }
+  },
+  "usage": {"input_tokens": 42, "output_tokens": 0},
+  "routing": {"model": "multilingual", "reason": "default", "engine": "statim", "weights": "f32"}
+}
+```
+
+On 400 Banking77 test rows, the 0.4.0 model measured 91.5% accuracy at full coverage. Keeping the 90% most confident answers raised accuracy to 95.6%; keeping the 60% most confident raised it to 99.2%. Coverage is the share answered automatically; the remainder is the candidate escalation set. These measurements describe that evaluation set, not a universal calibration guarantee, so choose the threshold on representative validation data.
 
 ## Question types
 
@@ -832,6 +882,7 @@ Handler errors are JSON objects with one string field, `detail`. HTTP framing, d
 | 422 | `model` or `lang` is not a string of at most 256 bytes | `{"detail":"model must be a string of at most 256 bytes"}` (the field name changes) |
 | 422 | `max_len` or `head_max_len` is not an integer from 32 to 8192 | `{"detail":"max_len must be an integer between 32 and 8192"}` (the field name changes) |
 | 422 | `ensemble` is not an integer from 1 to 8 | `{"detail":"ensemble must be an integer between 1 and 8"}` |
+| 422 | `min_confidence` is not a number from 0 to 1 | `{"detail":"min_confidence must be a number from 0 to 1"}` |
 | 422 | effective `max(max_len, head_max_len + 128)` exceeds the selected model's capacity | `{"detail":"effective max_len exceeds model capacity (head_max_len needs 128 state tokens)"}` |
 | 422 | a question definition is invalid, or its options do not fit the token budget | `{"detail":"question '<id>': ..."}` or `{"detail":"question '<id>' options exceed head_max_len=<n>"}` |
 | 422 | the cooperative inference deadline expires (default 120 seconds from admission) | `{"detail":"inference deadline exceeded"}` |
@@ -1298,6 +1349,7 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | Criterion or label value | 4,096 bytes | Object label keys are limited to 1,024 bytes |
 | `max_len`, `head_max_len` | checkpoint defaults | Explicit request values and nonzero CLI defaults must be integers 32–8,192; CLI 0 selects checkpoint defaults |
 | `ensemble` / `--ensemble` | 1 | Integer 1–8 |
+| `min_confidence` / `--min-confidence` | unset | Number 0–1; a positive effective value adds `escalate` to answers below the threshold |
 | `--max-request-work` | 4,096 | `states × views × models`; choice ensembles, three calibration views, and two consensus models count |
 | `--max-request-tokens` | 1,048,576 | Work rows × effective sequence length |
 | `--max-attention-mib` | 1,024 MiB | Conservative packed-graph attention estimate |

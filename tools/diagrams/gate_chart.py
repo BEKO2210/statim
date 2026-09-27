@@ -42,6 +42,29 @@ SECTIONS = [
     ]),
 ]
 
+# An English-only model is judged on the English variant of each suite.
+BASE_NAME = "laya-multilingual"
+SECTIONS_EN = [
+    ("Trained tasks, held-out test rows", [
+        ("test/banking77", "Banking77 intents", "77 labels, 2,000 rows"),
+        ("amazon_massive_intent/en", "MASSIVE intents", "59 labels, English"),
+        ("test/typed_decisions", "Typed decisions", "2,000 decisions"),
+    ]),
+    ("Never trained on (zero-shot), English", [
+        ("go_emotions", "GoEmotions", "28 labels"),
+        ("sib200/en", "SIB-200 topic", "7 topics"),
+        ("multi_hatecheck/en", "HateCheck", "hate speech"),
+        ("multilingual_sentiments/en", "Sentiment", "3 labels"),
+        ("test/ag_news", "AG News", "2,000 rows"),
+        ("test/emotion", "DAIR Emotion", "2,000 rows"),
+        ("semrel/en", "SemRel", "ordinal similarity"),
+        ("belebele/en", "Belebele", "reading"),
+    ]),
+    ("Sibling dataset (shares MASSIVE's intent labels)", [
+        ("hwu64", "HWU64 intents", "rows seen in MASSIVE removed"),
+    ]),
+]
+
 
 def group(ev, key):
     rows = [v for k, v in ev["heldout"].items() if k == key or k.split("/")[0] == key]
@@ -91,7 +114,7 @@ def render(base, cand, theme, version, name):
         grid.append(f'<path d="M{x:.1f} 162V{y - 18}" stroke="{c["line"]}" stroke-width="1"/>')
         grid.append(text(x, 156, f"{t:g}", 12, c["muted"], anchor="middle", family=MONO))
     legend = (f'<rect x="{X0}" y="{y - 2}" width="12" height="12" rx="3" fill="{c["base"]}"/>'
-              + text(X0 + 18, y + 8.5, "base checkpoint (laya-multilingual)", 12.5, c["text2"])
+              + text(X0 + 18, y + 8.5, f"base checkpoint ({BASE_NAME})", 12.5, c["text2"])
               + f'<rect x="{X0 + 250}" y="{y - 2}" width="12" height="12" rx="3" fill="{c["signal"]}"/>'
               + text(X0 + 268, y + 8.5, f"Statim {version}, licence-clean training data", 12.5, c["text2"]))
     note = text(40, y + 36, "Accuracy. A green chip marks a difference larger than two standard errors; "
@@ -99,7 +122,7 @@ def render(base, cand, theme, version, name):
     head = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{h}" viewBox="0 0 {W} {h}" role="img" '
             f'aria-labelledby="{name}-title {name}-desc">'
             f'<title id="{name}-title">Statim {version}: licence-clean model vs. base checkpoint</title>'
-            f'<desc id="{name}-desc">Accuracy of the base multilingual checkpoint and the Statim {version} model on '
+            f'<desc id="{name}-desc">Accuracy of the base checkpoint and the Statim {version} model on '
             + "; ".join(f"{lab}: {group(base, k)[0]:.3f} to {group(cand, k)[0]:.3f}" for _, rs in SECTIONS for k, lab, _ in rs)
             + ".</desc>"
             f'<rect x="0" y="0" width="{W}" height="{h}" rx="16" fill="{c["panel"]}"/>'
@@ -120,7 +143,11 @@ def main():
     ap.add_argument("candidate")
     ap.add_argument("--out", required=True)
     ap.add_argument("--version", required=True)
+    ap.add_argument("--english", action="store_true", help="English model: use the English variant of each suite")
     a = ap.parse_args()
+    if a.english:
+        global SECTIONS, BASE_NAME
+        SECTIONS, BASE_NAME = SECTIONS_EN, "laya, English"
     base, cand = json.load(open(a.base)), json.load(open(a.candidate))
     for theme in THEMES:
         name = a.out.split("/")[-1] + "-" + theme

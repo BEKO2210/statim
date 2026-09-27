@@ -7,7 +7,7 @@
 #include "statim/security.h"
 
 #ifndef STATIM_VERSION
-#define STATIM_VERSION "0.4.0"
+#define STATIM_VERSION "0.5.0"
 #endif
 
 namespace statim {
@@ -21,6 +21,7 @@ struct ServerConfig {
     int workers = 1;          // concurrent inference engines sharing the weights
     int max_concurrent = 16;  // requests past auth at once; more get 503
     int ensemble = 1;         // default option-order views per question
+    double min_confidence = 0; // >0: mark answers below this answer_confidence with "escalate": true
     int max_len = 0, head_max_len = 0;  // default token budgets (0 = the checkpoint's)
     bool calibrate = false;   // default contextual calibration for choice questions
     bool consensus = false;   // default: fuse english + multilingual checkpoints when both are loaded

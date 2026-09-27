@@ -56,6 +56,7 @@ class ChoiceAnswer:
     action: Action
     logits: tuple[float, ...] | None = None
     logits_by_model: dict[str, tuple[float, ...]] | None = None
+    escalate: bool | None = None
     type: str = "choice"
 
 
@@ -71,6 +72,7 @@ class ScoreAnswer:
     action: Action
     logits: tuple[float, ...] | None = None
     logits_by_model: dict[str, tuple[float, ...]] | None = None
+    escalate: bool | None = None
     type: str = "score"
 
 
@@ -92,6 +94,7 @@ class YesNoAnswer:
     action: Action
     logits: tuple[float, ...] | None = None
     logits_by_model: dict[str, tuple[float, ...]] | None = None
+    escalate: bool | None = None
     type: str = "noul"
 
 
@@ -218,6 +221,15 @@ def _logits_by_model(obj: Mapping[str, Any]) -> dict[str, tuple[float, ...]] | N
     return {str(key): _float_tuple(item, f"logits_by_model.{key}") for key, item in raw.items()}
 
 
+def _escalate(obj: Mapping[str, Any]) -> bool | None:
+    if "escalate" not in obj:
+        return None
+    value = obj["escalate"]
+    if not isinstance(value, bool):
+        raise _fail("escalate must be a boolean")
+    return value
+
+
 def _action(obj: Mapping[str, Any]) -> Action:
     raw = _mapping(_field(obj, "action"), "action")
     return Action(act_probability=_number(_field(raw, "act_probability"), "action.act_probability"))
@@ -239,6 +251,7 @@ def parse_answer(value: Any) -> ChoiceAnswer | ScoreAnswer | YesNoAnswer:
         "confidence": _number(_field(obj, "confidence"), "confidence"),
         "answer_confidence": _number(_field(obj, "answer_confidence"), "answer_confidence"),
         "action": _action(obj),
+        "escalate": _escalate(obj),
         "logits": _logits(obj),
         "logits_by_model": _logits_by_model(obj),
     }

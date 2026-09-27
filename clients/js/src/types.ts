@@ -40,6 +40,7 @@ export interface ChoiceAnswer {
   confidence: number;
   answer_confidence: number;
   action: Action;
+  escalate?: boolean;
   logits?: number[];
   logits_by_model?: Record<string, number[]>;
 }
@@ -52,6 +53,7 @@ export interface ScoreAnswer {
   confidence: number;
   answer_confidence: number;
   action: Action;
+  escalate?: boolean;
   logits?: number[];
   logits_by_model?: Record<string, number[]>;
 }
@@ -63,6 +65,7 @@ export interface NoulAnswer {
   confidence: number;
   answer_confidence: number;
   action: Action;
+  escalate?: boolean;
   logits?: number[];
   logits_by_model?: Record<string, number[]>;
 }
@@ -102,6 +105,7 @@ export interface SystemOneRequest {
   ensemble_margin?: number;
   calibrate?: boolean;
   return_logits?: boolean;
+  min_confidence?: number;
   max_len?: number;
   head_max_len?: number;
 }
@@ -115,6 +119,7 @@ export interface BatchRequest {
   ensemble_margin?: number;
   calibrate?: boolean;
   return_logits?: boolean;
+  min_confidence?: number;
   max_len?: number;
   head_max_len?: number;
 }
@@ -164,6 +169,7 @@ export interface DecideOptions {
   ensemble_margin?: number;
   calibrate?: boolean;
   return_logits?: boolean;
+  min_confidence?: number;
   max_len?: number;
   head_max_len?: number;
   request_id?: string;
@@ -176,6 +182,7 @@ const DECISION_OPTIONS = new Set([
   "ensemble_margin",
   "calibrate",
   "return_logits",
+  "min_confidence",
   "max_len",
   "head_max_len",
   "request_id",
@@ -274,6 +281,9 @@ export function parseAnswer(value: unknown): Answer {
     confidence: num(field(value, "confidence"), "confidence"),
     answer_confidence: num(field(value, "answer_confidence"), "answer_confidence"),
     action: actionOf(value),
+    ...("escalate" in value
+      ? { escalate: typeof value.escalate === "boolean" ? value.escalate : fail("escalate must be a boolean") }
+      : {}),
   };
   const logits = logitsOf(value);
   const byModel = logitsByModel(value);

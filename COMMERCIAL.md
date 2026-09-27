@@ -1,17 +1,19 @@
 # Commercial licensing
 
-Statim is dual-licensed:
-
 | | Licence | Cost |
 |---|---|---|
 | Source code (engine, server, tools) | [Apache License 2.0](LICENSE) | free, including commercial use |
-| Model weights published by Statim | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md) | free for noncommercial use |
-| Model weights, commercial use | Statim commercial licence | paid |
+| Model weights, noncommercial use | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md) | free |
+| Model weights, small companies | [PolyForm Small Business 1.0.0](LICENSE-MODEL.md) | free, including commercial use |
+| Model weights, evaluation by any company | [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md) | free for fewer than 32 consecutive days |
+| Model weights, any other commercial use | Statim commercial licence | paid |
 
 ## When you need a commercial licence
 
-You need one if you use Statim's model weights, or outputs produced with them, for anything with an
-anticipated commercial application, for example:
+You need one if your company has 100 or more people (employees and independent contractors) or at
+least 1,000,000 USD (2019, adjusted for inflation) revenue in the prior tax year, and you use
+Statim's model weights, or outputs produced with them, beyond a trial of fewer than 32 consecutive
+days for anything with an anticipated commercial application, for example:
 
 - inside a company's products, services, internal tools or workflows;
 - in a SaaS product, an app or a website that earns money (subscriptions, ads, sales);
@@ -24,6 +26,13 @@ anticipated commercial application, for example:
 Personal study, research, experiments and testing, hobby projects, private entertainment, and use by
 charities, educational institutions, public research organisations and government institutions are
 free under [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md).
+
+Small companies (fewer than 100 people and less than 1,000,000 USD (2019, adjusted for inflation)
+revenue in the prior tax year) may use the weights commercially for free under
+[PolyForm Small Business 1.0.0](LICENSE-MODEL.md).
+
+Any company may evaluate whether the weights suit a particular application for fewer than 32
+consecutive calendar days under [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md).
 
 The Apache-2.0 source code never needs a commercial licence. The original Laya checkpoints that
 Statim can also run are published by their authors under Apache-2.0 and are not covered by this

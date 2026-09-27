@@ -39,6 +39,7 @@ x-server-configuration:
     --max-len: 0 selects checkpoint default; nonzero values must be 32-8192 and fit model capacity
     --head-max-len: 0 selects checkpoint default; nonzero values must be 32-8192
     --ensemble: 1 (valid range 1-8)
+    --min-confidence: unset (number 0-1; 0 disables selective prediction)
   other-flags:
   - --host
   - --port
@@ -182,6 +183,10 @@ components:
           type: number
         answer_confidence: &id002
           type: number
+        escalate: &escalate
+          type: boolean
+          description: Present only when a positive min_confidence threshold applies; true when answer_confidence
+            is below that threshold.
         action: &id003
           $ref: '#/components/schemas/Action'
         logits: &id004
@@ -218,6 +223,7 @@ components:
             type: number
         confidence: *id001
         answer_confidence: *id002
+        escalate: *escalate
         action: *id003
         logits: *id004
         logits_by_model: *id005
@@ -236,6 +242,7 @@ components:
           type: number
         confidence: *id001
         answer_confidence: *id002
+        escalate: *escalate
         action: *id003
         logits: *id004
         logits_by_model: *id005
@@ -323,6 +330,12 @@ components:
           description: A boolean override; any other JSON type is accepted and ignored.
         return_logits:
           description: A boolean override; any other JSON type is accepted and ignored.
+        min_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Overrides --min-confidence. Zero disables selective prediction for this request;
+            invalid present values return 422.
         max_len:
           type: integer
           minimum: 32
@@ -369,6 +382,12 @@ components:
           description: A boolean override; any other JSON type is accepted and ignored.
         return_logits:
           description: A boolean override; any other JSON type is accepted and ignored.
+        min_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Overrides --min-confidence. Zero disables selective prediction for this request;
+            invalid present values return 422.
         max_len:
           type: integer
           minimum: 32
@@ -479,7 +498,7 @@ paths:
       - decisions
       summary: Score one state.
       description: Runs every question against one state. model, lang, ensemble, ensemble_margin, calibrate,
-        return_logits, max_len, and head_max_len are optional. See docs/API.md.
+        return_logits, min_confidence, max_len, and head_max_len are optional. See docs/API.md.
       operationId: decide
       security:
       - bearerAuth: []
@@ -2367,9 +2386,9 @@ paths:
               schema:
                 type: string
         '422':
-          description: model/lang field validation; strict integer validation of ensemble (1..8), max_len,
-            or head_max_len (32..8192); effective sequence capacity; question validation; option-marker
-            budget; or expiry of the cooperative inference deadline.
+          description: model/lang field validation; min_confidence validation (0..1); strict integer validation
+            of ensemble (1..8), max_len, or head_max_len (32..8192); effective sequence capacity; question
+            validation; option-marker budget; or expiry of the cooperative inference deadline.
           content:
             application/json:
               schema:
@@ -2391,6 +2410,9 @@ paths:
                 ensemble:
                   value:
                     detail: ensemble must be an integer between 1 and 8
+                minConfidence:
+                  value:
+                    detail: min_confidence must be a number from 0 to 1
                 capacity:
                   value:
                     detail: effective max_len exceeds model capacity (head_max_len needs 128 state tokens)
@@ -2902,13 +2924,17 @@ paths:
               schema:
                 type: string
         '422':
-          description: model/lang field validation; strict integer validation of ensemble (1..8), max_len,
-            or head_max_len (32..8192); effective sequence capacity; question validation; option-marker
-            budget; or expiry of the cooperative inference deadline.
+          description: model/lang field validation; min_confidence validation (0..1); strict integer validation
+            of ensemble (1..8), max_len, or head_max_len (32..8192); effective sequence capacity; question
+            validation; option-marker budget; or expiry of the cooperative inference deadline.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                minConfidence:
+                  value:
+                    detail: min_confidence must be a number from 0 to 1
           headers:
             X-Request-Id:
               description: Echoed client value, or 16 generated hexadecimal characters.

@@ -54,10 +54,12 @@ console.log(decision.request_id, decision.inference_time_ms);
 | `ready()` | `GET /ready` |
 
 Options match the Python client: `model`, `lang`, `ensemble`, `ensemble_margin`,
-`calibrate`, `return_logits`, `max_len`, `head_max_len`, `request_id`. `null`
+`calibrate`, `return_logits`, `min_confidence`, `max_len`, `head_max_len`, `request_id`. `null`
 and `undefined` omit a field. Question type `noul` is returned as
 `YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's
 `noul` value and `probabilities.no` is `1 - noul`.
+Every answer type has optional `escalate`, present only when a positive
+confidence threshold applied to the response.
 
 `request_id` is sent as `X-Request-Id`. When omitted, the client generates a
 UUID. The id on the result is the one the server echoed.

@@ -9,17 +9,41 @@
   <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
   <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
-  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%2B%20commercial-161B22"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, Small Business, Free Trial or commercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%C2%B7%20Small%20Business%20%C2%B7%20Trial%20%2B%20commercial-161B22"></a>
 </p>
 
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
-no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan)).
+no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan-or-cuda)).
 
 Statim runs the open [Laya](https://github.com/NandhaKishorM/laya) checkpoints (Apache-2.0) and speaks
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients switch by changing the base URL.
 
 > *statim* (Latin): immediately, at once.
+
+**Try it:** [live demo](https://huggingface.co/spaces/Beko2210/statim) (no install, no key) ·
+**Models:** [statim-decide-en-large](https://huggingface.co/Beko2210/statim-decide-en-large) and
+[statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) on
+Hugging Face · **Example:** [ticket triage in ten minutes](examples/ticket-triage)
+
+## Models
+
+Statim runs any Laya checkpoint. The Statim Decide models are fine-tuned on licence-audited data and
+pass the no-harm gate (below) before release:
+
+| Model | Encoder | Languages | typed-decisions | Banking77 | MASSIVE | Files |
+|---|---|---|---|---|---|---|
+| [statim-decide-en-large](https://huggingface.co/Beko2210/statim-decide-en-large) 0.5.0 | ModernBERT-large, 395M | English | **0.768** | **0.928** | 0.867 (en) | f32 1.58 GB · q8_0 0.45 GB |
+| [statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) 0.4.0 | mmBERT-base | 12 evaluated | 0.7585 | 0.903 | 0.772 (12 languages) | f32 0.91 GB · q8_0 0.36 GB |
+
+```bash
+huggingface-cli download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --local-dir models
+./statim serve -m english=models/statim-decide-en-large-q8_0.gguf
+```
+
+For comparison under the same protocol: typed-decisions meraGPT 0.768, laya-typed-decisions 0.766,
+Jev 0.727; Banking77 supervised MPNet 0.941. Weights are free for noncommercial use, for small
+companies and for a 32-day trial; see [License](#license).
 
 ```bash
 statim serve -m multilingual=laya-multilingual-f32.gguf --port 8080
@@ -78,7 +102,7 @@ See [accuracy](#accuracy) before choosing 4-bit.
 
 | endpoint | |
 |---|---|
-| `POST /v1/systemone` | `{state, questions, model?, lang?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). Extras: `return_logits`, `calibrate`, `ensemble` |
+| `POST /v1/systemone` | `{state, questions, model?, lang?, min_confidence?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). Extras: `return_logits`, `calibrate`, `ensemble`; a positive `min_confidence` adds `escalate` to each answer |
 | `POST /v1/systemone/batch` | `{states: [...], questions, ...}` → `{results: [...]}` packed into shared forward passes |
 | `GET /v1/models` | loaded models |
 | `GET /health`, `GET /ready` | liveness / readiness |
@@ -121,6 +145,7 @@ state object fields remain supported. Limits count UTF-8 **bytes** unless stated
 | Criterion / label value | 4,096 bytes | Per value, including structured score legends; object label keys: 1,024 bytes |
 | `max_len`, `head_max_len` / `--max-len`, `--head-max-len` | Checkpoint defaults | Explicit nonzero budgets: integers 32–8,192, checked before narrowing. Effective length is `max(max_len, head_max_len + 128)` and must fit model capacity. CLI `0` selects checkpoint defaults |
 | `ensemble` / `--ensemble` | 1 | Integer 1–8 |
+| `min_confidence` / `--min-confidence` | unset | Number 0–1; answers below a positive threshold get `escalate: true` |
 | `--max-request-work` | 4,096 | State × question × view evaluations, including consensus models and three calibration views on every potential cache miss |
 | `--max-request-tokens` | 1,048,576 | Conservative total: evaluated rows × effective sequence budget, including ensembles/calibration/consensus |
 | `--max-attention-mib` | 1,024 MiB | Conservative per-graph estimate: `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes, covering all shorter packed rows too |
@@ -217,10 +242,11 @@ the scorer reads.
 logits by up to ~0.4 (2 of 240 parity answers change); ARM (dotprod/i8mm) and AVX-512-VNNI CPUs are
 where int8 pays off. 4-bit is not recommended for this model family (see below).
 
-## GPU (Vulkan)
+## GPU (Vulkan or CUDA)
 
-Optional, off by default. Needs the Vulkan headers, `glslc` and SPIR-V headers at build time
-(Debian/Ubuntu: `libvulkan-dev glslc spirv-headers`) and a Vulkan driver at run time.
+Optional, off by default. Vulkan needs the Vulkan headers, `glslc` and SPIR-V headers at build time
+(Debian/Ubuntu: `libvulkan-dev glslc spirv-headers`) and a Vulkan driver at run time. CUDA needs the
+CUDA toolkit (`-DSTATIM_CUDA=ON`); its `*_cuda` parity gates pass like the Vulkan ones.
 
 ```bash
 cmake -S . -B build-vk -DSTATIM_VULKAN=ON && cmake --build build-vk
@@ -228,8 +254,21 @@ ctest --test-dir build-vk                      # CPU gates + the same gates on t
 ./build-vk/statim serve --device vulkan -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf
 ```
 
-`--device` takes `cpu` (default), `gpu`, `vulkan` or a device name such as `Vulkan0`
+`--device` takes `cpu` (default), `gpu`, `vulkan`, `cuda` or a device name such as `Vulkan0`
 (`STATIM_DEVICE` sets the default). Weights are copied to VRAM once; both f32 checkpoints use ~3.3 GB.
+
+Which backend: measured on an RTX 3070 and a Ryzen 7 5800X with the English large model (HTTP,
+one client, 60 requests; `bench/bench_server.py`):
+
+| | CPU | Vulkan | CUDA |
+|---|---|---|---|
+| f32, exact (default) | 0.84 req/s | 8.40 req/s | 8.35 req/s |
+| f32, `--gpu-fast` (f16 math) | | **16.4 req/s** | 11.7 req/s |
+| q8_0 weights | | 9.0 req/s | **15.7 req/s** |
+
+Exact f32 runs equally fast on both backends (the multilingual model: Vulkan 21.9, CUDA 16.2 req/s),
+so Vulkan stays the default. On NVIDIA cards, q8_0 on CUDA is the fastest way to serve the large
+model while keeping f32 activations; q8_0 and `--gpu-fast` both move logits slightly.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/gpu-dark.svg">
@@ -286,7 +325,30 @@ What did **not** help, measured and kept out of the defaults:
 - **4-bit weights** (`q4_0`, `q4_K`): flip 1–2 of 16 parity answers. f32 is the reference; `q8_0`
   halves memory with small logit drift (see benchmarks).
 
-## Results (0.4.0)
+## Results
+
+### 0.5.0: statim-decide-en-large
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.5.0-dark.svg">
+  <img alt="Statim 0.5.0 English model vs. the English base checkpoint: Banking77 0.550 to 0.928, MASSIVE English 0.533 to 0.867, typed decisions 0.361 to 0.768, HWU64 0.607 to 0.833; zero-shot suites within noise." src="assets/diagrams/results-0.5.0-light.svg" width="100%">
+</picture>
+
+The English checkpoint (ModernBERT-large) fine-tuned with the same licence-clean recipe; 8-bit AdamW
+fits it on an 8 GB GPU. Against its base on 54 held-out suites: 11 significant gains, 0 regressions,
+and the suites it never trained on stay within noise. typed-decisions 0.768 equals the best
+published result (meraGPT 0.768). Reproduce:
+
+```bash
+.venv-train/bin/python tools/finetune/train_multitask.py models/laya models/laya-english-big1 --clean \
+    --mixture data/mixture-v5.jsonl.gz --massive-langs en --massive-per-lang 11000 --max-len 1024 \
+    --epochs 12 --patience 3 --distill 12000 --budget banking77=12000,massive=8000,mixture=20000,typed=4000,distill=6000 \
+    --warmup 0.06 --ema 0 --optim adamw8bit --max-tokens 3072 --accum 6
+.venv-train/bin/python tools/finetune/gate.py eval models/laya-english-big1
+.venv-train/bin/python tools/finetune/gate.py compare models/laya models/laya-english-big1
+```
+
+### 0.4.0: statim-decide-multilingual-base
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.4.0-dark.svg">
@@ -361,19 +423,22 @@ The weights are not in this repository; the script reproduces them.
 
 ## Status
 
-v0.4 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
-[CHANGELOG.md](CHANGELOG.md) for releases and [docs/ROADMAP.md](docs/ROADMAP.md) for the path to 1.0. CUDA and
-Metal builds are on the roadmap. Language routing is a light heuristic (English text →
-English checkpoint, everything else → multilingual); Laya's full `Router` language detection and the
-`typed-decisions` checkpoint are next.
+v0.5 — CPU backend (x86-64 AVX2, ARM NEON via ggml), optional Vulkan and CUDA GPU backends, two
+published Statim Decide models, and a public demo. See [CHANGELOG.md](CHANGELOG.md) for releases and
+[docs/ROADMAP.md](docs/ROADMAP.md) for the path to 1.0. Next: training on every decision category
+(sentiment including mixed opinions, emotion, NLI, moderation, reading comprehension, similarity)
+with licence-clean data, and better language routing. Language routing is a light heuristic today
+(English text → English model, everything else → multilingual). Metal is on the roadmap.
 
 ## License
 
 | | Licence |
 |---|---|
 | Source code (engine, server, tools) | [Apache-2.0](LICENSE), free for any use |
-| Model weights published by Statim | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): free for personal use, research, experiments and noncommercial organisations |
-| Commercial use of Statim weights | paid licence, see [COMMERCIAL.md](COMMERCIAL.md) |
+| Model weights published by Statim, noncommercial | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): free for personal use, research, experiments and noncommercial organisations |
+| Model weights, small companies | [PolyForm Small Business 1.0.0](LICENSE-MODEL.md): free, including commercial use, below 100 people and 1 M USD revenue |
+| Model weights, evaluation | [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md): any company may evaluate them for fewer than 32 consecutive days |
+| Any other commercial use of Statim weights | paid licence, see [COMMERCIAL.md](COMMERCIAL.md) |
 
 Released weights are trained only on commercially usable, non-ShareAlike data; every source is listed
 in [DATA_LICENSES.md](DATA_LICENSES.md). The original Laya checkpoints that Statim runs are Apache-2.0

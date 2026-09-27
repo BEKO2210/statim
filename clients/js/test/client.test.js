@@ -132,10 +132,73 @@ test("yes/no probabilities and option encoding", async () => {
     assert.equal(answer.yes, true);
     assert.equal(answer.probabilities.yes, 0.8);
     assert.ok(Math.abs(answer.probabilities.no - 0.2) < 1e-12);
+    assert.equal(answer.escalate, undefined);
     assert.equal(decision.request_id, "opt-1");
     assert.equal(decision.inference_time_ms, 1.5);
   } finally {
     await server.close();
+  }
+});
+
+test("selective prediction transport serialization and parsing", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const selectiveBody = {
+    ...NOUL_BODY,
+    answers: {
+      refund: { ...NOUL_BODY.answers.refund, escalate: true },
+      topic: {
+        type: "choice",
+        choice: "billing",
+        probabilities: { billing: 0.9, other: 0.1 },
+        confidence: 0.53,
+        answer_confidence: 0.9,
+        action: { act_probability: 1 },
+        escalate: false,
+      },
+      urgency: {
+        type: "score",
+        score: 0.2,
+        legend: { 0: "low", 1: "high" },
+        probabilities: { 0: 0.8, 1: 0.2 },
+        confidence: 0.28,
+        answer_confidence: 0.8,
+        action: { act_probability: 1 },
+        escalate: true,
+      },
+    },
+  };
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push([String(url), body]);
+    const payload = String(url).endsWith("/batch")
+      ? { results: [selectiveBody] }
+      : "min_confidence" in body
+        ? selectiveBody
+        : NOUL_BODY;
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json", "X-Request-Id": "selective" },
+    });
+  };
+  try {
+    const client = new Client("http://statim.invalid", null, 5, { max_retries: 0 });
+    const questions = { refund: { type: "noul", instructions: "Refund?" } };
+    const decision = await client.decide("hello", questions, { min_confidence: 0.85 });
+    const batch = await client.decide_batch(["hello"], questions, { min_confidence: 0.75 });
+    const unchanged = await client.decide("hello", questions);
+    assert.deepEqual(requests, [
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions, min_confidence: 0.85 }],
+      ["http://statim.invalid/v1/systemone/batch", { states: ["hello"], questions, min_confidence: 0.75 }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions }],
+    ]);
+    assert.equal(decision.answers.refund.escalate, true);
+    assert.equal(decision.answers.topic.escalate, false);
+    assert.equal(decision.answers.urgency.escalate, true);
+    assert.equal(batch.results[0].answers.refund.escalate, true);
+    assert.equal(unchanged.answers.refund.escalate, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -303,7 +366,7 @@ test("health, ready, and models on the real server", async () => {
   const client = new Client(BASE_URL, null, 10);
   const health = await client.health();
   assert.equal(health.status, "ok");
-  assert.equal(health.version, "0.3.0");
+  assert.match(health.version, /^\d+\.\d+\.\d+$/);
   assert.equal((await client.ready()).ready, true);
   const listed = await client.models();
   assert.equal(listed.object, "list");

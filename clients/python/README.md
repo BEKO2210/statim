@@ -52,10 +52,12 @@ print(decision.request_id, decision.inference_time_ms)
 | `ready()` | `GET /ready` |
 
 Options are `model`, `lang`, `ensemble`, `ensemble_margin`, `calibrate`,
-`return_logits`, `max_len`, `head_max_len`, and `request_id`. Pass `None` to
+`return_logits`, `min_confidence`, `max_len`, `head_max_len`, and `request_id`. Pass `None` to
 omit a field. Question type `noul` is the yes/no question; the parsed object
 is `YesNoAnswer`. Its `noul` field is the server probability that the
 statement holds, and `probabilities` is `{"yes": noul, "no": 1 - noul}`.
+Every answer has optional `escalate`, which is `None` unless a positive
+confidence threshold applied to the response.
 
 `request_id` is sent as `X-Request-Id`. When omitted, the client generates a
 UUID. The id on the result is the one the server echoed. Values outside 1–128

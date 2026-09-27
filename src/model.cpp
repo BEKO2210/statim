@@ -121,13 +121,21 @@ static std::string lower(std::string s) {
     return s;
 }
 
+static bool gpu_fast() {
+    const char* fast = std::getenv("STATIM_GPU_FAST");
+    return fast && std::string(fast) == "1";
+}
+
 static ggml_backend_dev_t find_device(std::string want) {
     // ggml-vulkan converts f32 matmul operands to f16 (coopmat / fp16 shaders), which moves logits by
     // up to ~0.12 on long inputs. Unless STATIM_GPU_FAST is set, keep everything in f32 (parity ~1e-4, like the CPU path).
     // Must happen before the first registry call, which initialises the Vulkan instance.
-    const char* fast = std::getenv("STATIM_GPU_FAST");
-    if (!fast || std::string(fast) != "1")
+    // ggml-cuda enables TF32 tensor-core math for every cuBLAS handle (10-bit mantissa);
+    // NVIDIA_TF32_OVERRIDE=0 is NVIDIA's documented switch that disables TF32 in cuBLAS.
+    if (!gpu_fast()) {
         for (const char* v : {"GGML_VK_DISABLE_F16", "GGML_VK_DISABLE_COOPMAT", "GGML_VK_DISABLE_COOPMAT2"}) setenv(v, "1", 0);
+        setenv("NVIDIA_TF32_OVERRIDE", "0", 0);
+    }
     if (want.empty()) {
         const char* env = std::getenv("STATIM_DEVICE");
         want = env && *env ? env : "cpu";
@@ -145,7 +153,7 @@ static ggml_backend_dev_t find_device(std::string want) {
         avail += std::string(avail.empty() ? "" : ", ") + ggml_backend_dev_name(d);
     }
     fail("no device '" + want + "' (available: " + (avail.empty() ? "none" : avail) +
-         "; GPU backends need a build with -DSTATIM_VULKAN=ON)");
+         "; GPU backends need a build with -DSTATIM_VULKAN=ON or -DSTATIM_CUDA=ON)");
 }
 
 // Copy all weights from the mmap into one buffer on the target device, then drop the mapping.
@@ -453,8 +461,15 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         L = std::max(L, static_cast<int>(it.ids.size()));
         seqs.push_back(&it.ids);
     }
-    // on GPU backends the explicit softmax path converts non-contiguous operands to f16
-    const bool flash = impl_->opts.flash_attn || !M.on_cpu();
+    // Exact mode picks the attention path that stays in f32 on each backend: Vulkan's explicit
+    // softmax path converts non-contiguous operands to f16, so it uses flash attention; every CUDA
+    // flash-attention kernel converts f32 K/V to f16, so CUDA uses the explicit path (f32 cuBLAS).
+    // With STATIM_GPU_FAST=1 both GPUs use flash attention.
+    bool flash = impl_->opts.flash_attn;
+    if (!M.on_cpu()) {
+        const std::string reg = ggml_backend_reg_name(ggml_backend_dev_backend_reg(M.dev));
+        flash = (reg == "CUDA" && !gpu_fast()) ? false : true;
+    }
     // flash attention needs the mask row count padded to GGML_KQ_MASK_PAD
     const int Lpad = L;
 
