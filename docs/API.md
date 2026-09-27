@@ -813,7 +813,7 @@ Handler errors are JSON objects with one string field, `detail`. HTTP framing, d
 | 413 | JSON nodes exceed `--max-json-nodes` (default 100,000) | `{"detail":"too many JSON nodes"}` |
 | 413 | one object exceeds `--max-object-members` (default 1,024) | `{"detail":"too many JSON object members"}` |
 | 413 | a JSON object key exceeds 4,096 bytes | `{"detail":"JSON key exceeds 4096 bytes"}` |
-| 413 | more than 64 questions | `{"detail":"too many questions (65 > 64)"}` |
+| 413 | more than 64 questions | `{"detail":"too many questions"}` |
 | 413 | more than 100 choice options in one question | `{"detail":"too many choice options for 'q' (101 > 100)"}` |
 | 413 | more than 32 score levels in one question | `{"detail":"too many score levels for 'q' (33 > 32)"}` |
 | 413 | choice options plus score levels across questions exceed 512 | `{"detail":"too many answer options across questions (540 > 512)"}` |
@@ -1202,7 +1202,7 @@ print(response.text)
 
 ```text
 413
-{"detail":"too many questions (65 > 64)"}
+{"detail":"too many questions"}
 413
 {"detail":"too many choice options for 'q' (101 > 100)"}
 413
@@ -1322,7 +1322,7 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/health
 ```
 
 ```text
-{"status":"ok","version":"0.2.1"}
+{"status":"ok","version":"0.3.0"}
 200
 ```
 

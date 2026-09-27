@@ -5,6 +5,13 @@
   </picture>
 </h1>
 
+<p align="center">
+  <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
+  <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%2B%20commercial-161B22"></a>
+</p>
+
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
 no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan)).
@@ -140,6 +147,8 @@ The systemd example requires `/etc/statim/env` and a nonempty `STATIM_API_KEY`; 
 Tune these for the loaded models/workers. Container deployments should likewise supply
 memory/CPU limits and a TLS-terminating proxy. Application deadlines are cooperative;
 a running compute operation must finish before cancellation takes effect.
+See the [production deployment guide](docs/DEPLOY.md) for hardened systemd, CPU/Vulkan Docker,
+TLS reverse proxy, probe, metrics, and resource-ceiling examples.
 
 Security regressions run through `ctest`, including socket-free HTTP parser/middleware
 checks and live HTTP attacks using the CPU multilingual model. Run the latter directly:
@@ -151,6 +160,33 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 The [security coverage report](tests/security/REPORT.md) maps each finding to its fix and regression.
 The script tries localhost port 8094, then a free port. Environments that forbid binding
 report a CTest skip (exit 77); run this command manually in a socket-capable environment.
+
+## Client SDKs
+
+Official clients live in `clients/`. Both speak the HTTP API above, ship with no runtime
+dependencies beyond the language standard library, and retry `503` with backoff.
+
+| Package | Path |
+|---|---|
+| Python `statim` | [`clients/python`](clients/python) (`pip install ./clients/python`) |
+| TypeScript `@statim/client` | [`clients/js`](clients/js) (`npx tsc`, then import the package) |
+
+```python
+from statim import Client
+
+client = Client("http://127.0.0.1:8080", timeout=120)
+decision = client.decide(
+    {"subject": "Duplicate charge on invoice #4411"},
+    {"refund": {"type": "noul", "instructions": "Does the user explicitly request a refund?"}},
+    model="multilingual",
+)
+print(decision.answers["refund"].noul, decision.answers["refund"].confidence)
+```
+
+`decide`, `decide_batch`, `models`, `health`, and `ready` are the same methods in both
+languages. Yes/no questions use wire type `noul` and come back as `YesNoAnswer`.
+Examples, errors, and request IDs: [`clients/python/README.md`](clients/python/README.md),
+[`clients/js/README.md`](clients/js/README.md).
 
 ## Benchmarks
 
@@ -250,27 +286,28 @@ What did **not** help, measured and kept out of the defaults:
 - **4-bit weights** (`q4_0`, `q4_K`): flip 1–2 of 16 parity answers. f32 is the reference; `q8_0`
   halves memory with small logit drift (see benchmarks).
 
-## Results (0.3.0)
+## Results (0.4.0)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.3.0-dark.svg">
-  <img alt="Statim 0.3.0 vs. the base checkpoint: MASSIVE 0.340 to 0.733, Banking77 0.517 to 0.891, typed decisions 0.351 to 0.691, zero-shot suites within noise or better." src="assets/diagrams/results-0.3.0-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.4.0-dark.svg">
+  <img alt="Statim 0.4.0 vs. the base checkpoint: MASSIVE 0.340 to 0.772, Banking77 0.517 to 0.903, typed decisions 0.351 to 0.758, zero-shot suites within noise." src="assets/diagrams/results-0.4.0-light.svg" width="100%">
 </picture>
 
-The 0.3.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
-(`train_multitask.py --clean`; every source in [DATA_LICENSES.md](DATA_LICENSES.md)). A new model
-replaces the current one only through `tools/finetune/gate.py`: its validation mean must improve,
-and none of 54 held-out suites (test splits, 12 languages, eight zero-shot suites never trained
-on) may drop by more than two standard errors. Training runs use early stopping on validation, so
-longer schedules and more data are only kept when they help. Reproduce:
+The 0.4.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
+(`train_multitask.py --clean`; every source in [DATA_LICENSES.md](DATA_LICENSES.md)). typed-decisions
+0.7585 is above Jev (0.727) and the dataset's teacher agreement ceiling (0.735). A new model replaces
+the current one only through `tools/finetune/gate.py`: its validation mean must improve, no held-out
+suite may drop by more than two standard errors, and no suite family (trained, zero-shot, sentiment)
+may drift down significantly when pooled. Training uses early stopping on validation. Reproduce:
 
 ```bash
-.venv-train/bin/python tools/finetune/build_mixture.py --out data/mixture-v3.jsonl.gz --per-source 250 --audit tools/finetune/licence_audit.json
-.venv-train/bin/python tools/finetune/train_multitask.py models/laya-multilingual models/laya-multilingual-clean --clean \
-    --mixture data/mixture-v3.jsonl.gz --massive-per-lang 800 --epochs 8 \
-    --budget banking77=12000,massive=14000,mixture=12000,typed=4000,distill=3000 --warmup 0.06 --ema 0.999
-.venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-clean
-.venv-train/bin/python tools/finetune/gate.py compare models/laya-multilingual models/laya-multilingual-clean
+.venv-train/bin/python tools/finetune/build_mixture.py --out data/mixture-v4.jsonl.gz --per-source 2000 --audit tools/finetune/licence_audit.json
+.venv-train/bin/python tools/finetune/build_extra.py --out data/extra-v1.jsonl.gz   # then merge v4 + extra into data/mixture-v5.jsonl.gz
+.venv-train/bin/python tools/finetune/train_multitask.py models/laya-multilingual models/laya-multilingual-big1 --clean \
+    --mixture data/mixture-v5.jsonl.gz --massive-per-lang 2000 --epochs 20 --patience 3 \
+    --budget banking77=12000,massive=16000,mixture=20000,typed=4000,distill=3000 --warmup 0.06 --ema 0.999
+.venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-big1
+.venv-train/bin/python tools/finetune/gate.py compare models/laya-multilingual-clean models/laya-multilingual-big1
 ```
 
 ## Many options and fine-tuning (Banking77)
@@ -324,7 +361,7 @@ The weights are not in this repository; the script reproduces them.
 
 ## Status
 
-v0.3 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
+v0.4 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
 [CHANGELOG.md](CHANGELOG.md) for releases and [docs/ROADMAP.md](docs/ROADMAP.md) for the path to 1.0. CUDA and
 Metal builds are on the roadmap. Language routing is a light heuristic (English text →
 English checkpoint, everything else → multilingual); Laya's full `Router` language detection and the

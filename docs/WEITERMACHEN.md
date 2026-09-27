@@ -1,6 +1,6 @@
 # Statim – hier weitermachen
 
-Stand: 26.09.2026, nachts gebaut auf belkis-home. Repo: https://github.com/BEKO2210/statim (privat).
+Stand: 26.09.2026, nachts gebaut auf belkis-home. Repo: https://github.com/BEKO2210/statim (öffentlich seit 27.09.2026).
 
 ## Was steht
 
@@ -53,4 +53,3 @@ PyTorch/MKL ist auf diesem CPU schon am Limit. Der Vorsprung kommt aus allem dru
   v3 (`--distill 6000 --epochs 5`, 35 min auf 3070): Banking77 0,4885 → 0,8655 (n=2000), Emotion/AG News
   unverändert (Distillation verhindert Vergessen, v1 ohne verlor 3 Pkt. Emotion). Modelle lokal:
   `models/laya-multilingual-banking77*` (v3), `-v1` (alt). Offen: HF-Upload, mehr Domänen (MASSIVE, CLINC).
-- Repo ist privat. Öffentlich schalten: `gh repo edit BEKO2210/statim --visibility public --accept-visibility-change-consequences`.

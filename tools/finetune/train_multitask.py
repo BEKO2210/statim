@@ -147,6 +147,8 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=4096)
     ap.add_argument("--accum", type=int, default=4)
     ap.add_argument("--massive-per-lang", type=int, default=400)
+    ap.add_argument("--max-len", type=int, default=0, help="override the checkpoint's max_len (e.g. 1024 for ModernBERT)")
+    ap.add_argument("--massive-langs", default=None, help="comma-separated MASSIVE languages (default: all 51)")
     ap.add_argument("--sentiment-per-lang", type=int, default=1200)
     ap.add_argument("--distill", type=int, default=6000)
     ap.add_argument("--budget", default=None,
@@ -173,6 +175,8 @@ def main():
     cfg = json.load(open(os.path.join(base, "rl_agent_config.json")))
     tok = _load_tokenizer(os.path.join(base, "tokenizer"), cfg)
     dtype = torch.bfloat16 if cfg.get("amp_dtype") == "bf16" else torch.float16
+    if a.max_len:
+        cfg["max_len"] = a.max_len  # saved with the model, so inference uses the same budget
     max_len, hml = cfg.get("max_len", 512), cfg.get("head_max_len", 192)
 
     # ---- data
@@ -184,7 +188,9 @@ def main():
     langs = [x["path"].split("/")[-1].replace(".json.gz", "") for x in json.load(
         __import__("urllib.request", fromlist=["urlopen"]).urlopen(
             "https://huggingface.co/api/datasets/mteb/amazon_massive_intent/tree/main/train"))]
-    eval_langs = {"de", "en", "fr", "es", "it", "tr", "pl", "ru", "ja", "zh-CN", "ar", "hi"}
+    if a.massive_langs:
+        langs = [l for l in langs if l in set(a.massive_langs.split(","))]
+    eval_langs = {"de", "en", "fr", "es", "it", "tr", "pl", "ru", "ja", "zh-CN", "ar", "hi"} & set(langs)
     m_train, m_dev, m_drop = massive_data(tok, langs, a.massive_per_lang, eval_langs, 50, max_len, rng)
     if a.clean:
         if not a.mixture:
@@ -390,7 +396,7 @@ def main():
                 "model_name": "laya-multilingual-" + a.tag, "fine_tuned": True,
                 "training_multitask": {"base": os.path.basename(base.rstrip("/")), "best_epoch": best_epoch,
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
-                                       "massive_per_lang": a.massive_per_lang, "sentiment_per_lang": a.sentiment_per_lang,
+                                       "massive_per_lang": a.massive_per_lang, "massive_langs": a.massive_langs, "sentiment_per_lang": a.sentiment_per_lang,
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
                                        "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience,
                                        "mixture": a.mixture and os.path.basename(a.mixture), "clean": a.clean}})

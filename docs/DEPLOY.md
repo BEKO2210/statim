@@ -1,0 +1,155 @@
+# Production deployment
+
+Statim should listen on a private interface, require bearer authentication, and sit behind a
+TLS-terminating reverse proxy. Model weights are separate artifacts: obtain or convert them as
+described in the README, verify their provenance, and mount them read-only. Release archives and
+container images do not contain weights.
+
+## systemd
+
+Install the CPU or Vulkan release binary and a model, then install the supplied unit:
+
+```sh
+sudo install -Dm0755 statim /usr/local/bin/statim
+sudo install -Dm0644 model.gguf /var/lib/statim/multilingual.gguf
+sudo install -Dm0644 deploy/statim.service /etc/systemd/system/statim.service
+sudo install -d -m0750 /etc/statim
+printf 'STATIM_API_KEY=%s\n' 'replace-with-a-long-random-key' | sudo tee /etc/statim/env >/dev/null
+sudo chmod 0600 /etc/statim/env
+sudo systemctl daemon-reload
+sudo systemctl enable --now statim
+```
+
+The unit binds to `127.0.0.1:8080`, runs as a dynamic unprivileged user, and requires a nonempty
+`STATIM_API_KEY`. A comma-separated value supports key rotation. An explicitly configured empty or
+invalid environment value makes startup fail closed.
+
+The shipped unit starts two workers and enforces `MemoryHigh=6G`, `MemoryMax=8G`, `CPUQuota=400%`,
+`TasksMax=256`, and `LimitNOFILE=4096`. Tune the workers and ceilings together after measuring the
+chosen model. Keep application limits explicit when increasing them, for example:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/local/bin/statim serve -m multilingual=/var/lib/statim/multilingual.gguf --host 127.0.0.1 --port 8080 --workers 2 --max-concurrent 16 --http-queue 32 --max-request-work 4096 --max-request-tokens 1048576 --max-attention-mib 1024 --max-response-bytes 16777216 --request-timeout 30 --inference-timeout 120
+```
+
+Place overrides in `/etc/systemd/system/statim.service.d/limits.conf`, then run `systemctl daemon-reload`
+and restart the service. The request, JSON, state, question, and option limits in the README remain in
+force; do not treat the process memory ceiling as a replacement for them.
+
+## Docker CPU
+
+Build the existing distroless CPU image and run it with a read-only model mount and host ceilings:
+
+```sh
+docker build -t statim:1.0 .
+docker run -d --name statim-cpu --restart unless-stopped \
+  --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --memory 8g --memory-reservation 6g --cpus 4 --pids-limit 256 \
+  --ulimit nofile=4096:4096 --security-opt no-new-privileges \
+  --env-file /etc/statim/container.env \
+  -v /srv/statim/model.gguf:/models/model.gguf:ro \
+  -p 127.0.0.1:8080:8080 statim:1.0
+```
+
+`/etc/statim/container.env` must contain a valid `STATIM_API_KEY` and should be readable only by the
+administrator. The image runs as the distroless `nonroot` user.
+
+## Docker GPU (Vulkan)
+
+Build `Dockerfile.vulkan`, then expose only the GPU devices needed by the container:
+
+```sh
+docker build -f Dockerfile.vulkan -t statim-vulkan:1.0 .
+docker run -d --name statim-gpu --restart unless-stopped \
+  --device /dev/dri --group-add "$(getent group render | cut -d: -f3)" \
+  --read-only --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+  --memory 8g --memory-reservation 6g --cpus 4 --pids-limit 256 \
+  --ulimit nofile=4096:4096 --security-opt no-new-privileges \
+  --env-file /etc/statim/container.env \
+  -v /srv/statim/model.gguf:/models/model.gguf:ro \
+  -p 127.0.0.1:8080:8080 statim-vulkan:1.0
+```
+
+For NVIDIA, install and configure NVIDIA Container Toolkit on the host and replace the `--device`
+and `--group-add` arguments with:
+
+```sh
+--gpus all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+```
+
+The host driver must provide a Vulkan-capable ICD. The image also includes Mesa Vulkan drivers for
+`/dev/dri` devices. It runs as UID/GID 65532 and defaults to `--device vulkan`; no GPU is required to
+build the image. Budget VRAM for all loaded models (the two f32 checkpoints need about 3.3 GB).
+
+## TLS reverse proxy
+
+Keep Statim bound to loopback or a private container network. In the NGINX `http` context, define
+connection and request-rate zones:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=statim_rate:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=statim_conn:10m;
+```
+
+Then use a TLS server block such as:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name statim.example.com;
+    ssl_certificate /etc/letsencrypt/live/statim.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/statim.example.com/privkey.pem;
+
+    client_max_body_size 2m;
+    limit_req zone=statim_rate burst=20 nodelay;
+    limit_conn statim_conn 20;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 125s;
+        proxy_send_timeout 35s;
+    }
+}
+```
+
+Add a separate port-80 redirect and manage certificates with the mechanism appropriate to the
+site. The proxy passes `Authorization` by default; never log bearer values. Align proxy timeouts
+with Statim's 30-second request and 120-second inference deadlines, and apply network-level rate
+limits because application admission control is not a complete denial-of-service boundary.
+
+## Probes and metrics
+
+Liveness and readiness are deliberately unauthenticated so an orchestrator can probe them without
+holding an API key:
+
+```sh
+curl --fail --silent http://127.0.0.1:8080/health
+curl --fail --silent http://127.0.0.1:8080/ready
+```
+
+`/health` reports only status and version. `/ready` becomes successful only when the service can
+accept traffic. Inference, `/v1/models`, and `/metrics` require the bearer key whenever auth is
+configured. Configure Prometheus with a dedicated rotatable key:
+
+```yaml
+scrape_configs:
+  - job_name: statim
+    static_configs:
+      - targets: ["127.0.0.1:8080"]
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/statim.token
+```
+
+Protect the token file with restrictive permissions and do not expose `/metrics` through the public
+proxy. Alert on readiness failures, HTTP 503s, latency, in-flight requests, and busy workers. See
+`docs/SECURITY.md` for the threat boundaries and regression coverage behind these recommendations.

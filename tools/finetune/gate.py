@@ -98,6 +98,13 @@ def evaluate(model_dir):
                       "heldout_suites": len(res["heldout"])}))
 
 
+ZERO_SHOT = {"go_emotions", "multi_hatecheck", "sib200", "indonli", "farstail", "belebele", "semrel"}
+
+
+def _var(x):
+    return x["acc"] * (1 - x["acc"]) / x["n"]
+
+
 def compare(champ_dir, chall_dir, z=2.0):
     a = json.load(open(os.path.join(champ_dir, "eval.json")))
     b = json.load(open(os.path.join(chall_dir, "eval.json")))
@@ -113,6 +120,34 @@ def compare(champ_dir, chall_dir, z=2.0):
             harms.append((k, x["acc"], y["acc"], d, se))
         elif d > z * se:
             gains.append((k, x["acc"], y["acc"], d, se))
+    # Family-level check: many small suites can each stay inside their noise band while all drifting
+    # the same way. Pool each family (row-weighted and suite-weighted) and treat a significant pooled
+    # drop as a regression too.
+    families = {
+        "trained": lambda k: k.split("/")[0] == "amazon_massive_intent" or k in ("test/banking77", "test/typed_decisions"),
+        "zero-shot": lambda k: k.split("/")[0] in ZERO_SHOT or k in ("test/ag_news", "test/emotion"),
+        "sentiment": lambda k: k.split("/")[0] == "multilingual_sentiments",
+    }
+    common = sorted(set(a["heldout"]) & set(b["heldout"]))
+    for fam, member in families.items():
+        ks = [k for k in common if member(k)]
+        if not ks:
+            continue
+        bysuite = {}
+        for k in ks:
+            bysuite.setdefault(k if k.startswith("test/") else k.split("/")[0], []).append(k)
+        def pooled(groups):
+            ds, var = [], 0.0
+            for g in groups:
+                ds.append(sum(b["heldout"][k]["acc"] - a["heldout"][k]["acc"] for k in g) / len(g))
+                var += sum(_var(a["heldout"][k]) + _var(b["heldout"][k]) for k in g) / len(g) ** 2
+            return sum(ds) / len(ds), math.sqrt(var) / len(ds)
+        for weighting, groups in (("rows", [[k] for k in ks]), ("suites", list(bysuite.values()))):
+            d, se = pooled(groups)
+            flag = "REGRESSION" if d < -z * se else ("gain" if d > z * se else "within noise")
+            print(f"family {fam:10s} ({weighting:6s}, {len(groups):2d}): {d * 100:+.2f} pts, 2se {2 * se * 100:.2f} -> {flag}")
+            if d < -z * se:
+                harms.append((f"family:{fam}/{weighting}", 0.0, d, d, se))
     print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f})")
     for name, rows in (("significant gains", gains), ("significant regressions", harms)):
         print(f"{name}: {len(rows)}")

@@ -7,6 +7,42 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+A stronger licence-clean model trained on five times more audited data, official client SDKs,
+release packaging with binaries on every release, and a stricter no-harm gate.
+
+### Results
+- 0.4.0 model (multilingual checkpoint, `train_multitask.py --clean` on mixture v5: 163 audited
+  tasksource sources plus Nemotron-Safety, IndicGuard, MINDS-14 and SNIPS, MASSIVE 2,000 rows per
+  language, 20 epochs with early stopping; best epoch 19). Against 0.3.0 the gate reports
+  PROMOTE: typed-decisions 0.6905 → 0.7585 (above Jev's 0.727 and the dataset's teacher agreement
+  0.735), MASSIVE over 12 languages 0.733 → 0.772, Banking77 0.891 → 0.903, HWU64 0.760 → 0.820,
+  Belebele 0.273 → 0.310. Zero-shot suites pooled: −0.3 points (rows) / −1.6 (suites), both within
+  two standard errors; the next run strengthens distillation to reverse that trend. Against the
+  base checkpoint: trained tasks +41 points, sentiment +3.4 (significant), zero-shot within noise.
+  Chart: `assets/diagrams/results-0.4.0-*.svg`. Weights are not yet published.
+- Context length was measured, not assumed: 13.4 % of training items exceed 512 tokens, 2.4 % 1,024
+  and 0.2 % 2,048, and no evaluation item exceeds 1,024. typed-decisions: 0.756 at max_len 512,
+  0.7585 at 1,024 and at 2,048 (identical).
+
+### Added
+- `gate.py` also pools each suite family (trained, zero-shot, sentiment), row- and suite-weighted,
+  so a drift spread over many small suites counts as a regression even when no single suite is
+  significant.
+- `train_multitask.py --massive-langs` and `--max-len` (per-language MASSIVE selection; context
+  length override saved with the model).
+- Official client SDKs for the HTTP API: Python package `statim` in `clients/python`
+  (standard library only) and TypeScript package `@statim/client` in `clients/js`
+  (`fetch`, no runtime dependencies). Both expose `decide`, `decide_batch`, `models`,
+  `health`, and `ready`, typed choice, score, and yes/no answers, request IDs, and
+  retries with backoff for HTTP 503.
+- GitHub release packaging (runs when a release is published) for portable Linux x86-64 CPU and Vulkan binaries, including
+  licence and deployment documents plus published SHA-256 checksums; model weights remain separate.
+- A non-root Vulkan container image with Mesa and NVIDIA Container Toolkit deployment options.
+- A production deployment guide covering hardened systemd and Docker operation, TLS reverse proxying,
+  authenticated Prometheus scraping, health/readiness probes, and resource ceilings.
+
 ## [0.3.0] - 2026-09-27
 
 A licence-clean multi-task model that passes a no-harm gate, a licensing model for commercial use,
@@ -140,7 +176,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/BEKO2210/statim/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BEKO2210/statim/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/BEKO2210/statim/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BEKO2210/statim/compare/v0.1.0...v0.2.0
