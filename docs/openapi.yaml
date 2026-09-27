@@ -1,0 +1,2995 @@
+openapi: 3.1.0
+info:
+  title: Statim HTTP API
+  version: 0.2.0
+  description: 'HTTP API of the Statim decision server. Samples were captured from a binary whose GET
+    /health version is 0.2.0. See docs/API.md for the narrative guide. JSON error bodies are objects with
+    a single string field, detail. A body over 2 MiB is HTTP 413 with an empty body and no X-Request-Id.
+    GET /ready returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. 401
+    and 500 bodies are produced by the handler when a key is configured or an unexpected exception is
+    thrown. The server that produced the live samples had no API key and did not throw, so those two bodies
+    are the handler strings rather than captured responses.'
+  license:
+    name: Apache-2.0
+servers:
+- url: http://127.0.0.1:8080
+  description: Default listen address (--host 127.0.0.1 --port 8080).
+tags:
+- name: decisions
+  description: Typed decisions.
+- name: operations
+  description: Health, models, metrics, playground.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Required only when STATIM_API_KEY or --api-key-file configures at least one key. The
+        header must be exactly 'Bearer ' followed by one configured key. Health, ready, metrics, and the
+        playground never require it.
+  parameters:
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Echoed on handler responses. If omitted, the server generates 16 hexadecimal characters.
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - detail
+      properties:
+        detail:
+          type: string
+    Action:
+      type: object
+      additionalProperties: false
+      required:
+      - act_probability
+      properties:
+        act_probability:
+          type: number
+    Usage:
+      type: object
+      additionalProperties: false
+      required:
+      - input_tokens
+      - output_tokens
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          const: 0
+    Routing:
+      type: object
+      additionalProperties: false
+      required:
+      - model
+      - reason
+      - engine
+      - weights
+      properties:
+        model:
+          type: string
+        reason:
+          type: string
+          enum:
+          - requested
+          - lang:en
+          - lang:other
+          - default
+          - consensus
+        engine:
+          type: string
+          const: statim
+        weights:
+          type: string
+    ChoiceAnswer:
+      type: object
+      required:
+      - type
+      - choice
+      - probabilities
+      - confidence
+      - answer_confidence
+      - action
+      properties:
+        type:
+          const: choice
+        choice:
+          oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: 'null'
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+        confidence: &id001
+          type: number
+        answer_confidence: &id002
+          type: number
+        action: &id003
+          $ref: '#/components/schemas/Action'
+        logits: &id004
+          type: array
+          items:
+            type: number
+        logits_by_model: &id005
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: number
+    ScoreAnswer:
+      type: object
+      required:
+      - type
+      - score
+      - legend
+      - probabilities
+      - confidence
+      - answer_confidence
+      - action
+      properties:
+        type:
+          const: score
+        score:
+          type: number
+        legend:
+          type: object
+          additionalProperties: true
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+        confidence: *id001
+        answer_confidence: *id002
+        action: *id003
+        logits: *id004
+        logits_by_model: *id005
+    NoulAnswer:
+      type: object
+      required:
+      - type
+      - noul
+      - confidence
+      - answer_confidence
+      - action
+      properties:
+        type:
+          const: noul
+        noul:
+          type: number
+        confidence: *id001
+        answer_confidence: *id002
+        action: *id003
+        logits: *id004
+        logits_by_model: *id005
+    Decision:
+      type: object
+      additionalProperties: false
+      required:
+      - model
+      - answers
+      - usage
+      - routing
+      properties:
+        model:
+          type: string
+        answers:
+          type: object
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/ChoiceAnswer'
+            - $ref: '#/components/schemas/ScoreAnswer'
+            - $ref: '#/components/schemas/NoulAnswer'
+        usage:
+          $ref: '#/components/schemas/Usage'
+        routing:
+          $ref: '#/components/schemas/Routing'
+    Question:
+      type: object
+      required:
+      - type
+      - instructions
+      properties:
+        type:
+          type: string
+          enum:
+          - choice
+          - score
+          - noul
+        instructions:
+          description: Text the model answers. A non-string is serialized as JSON.
+        criteria:
+          description: 'Choice: object of label to description, or a list of scalars. Score: list of level
+            descriptions. Noul: optional object keyed true and false.'
+        labels:
+          type: object
+          description: Noul only. Maps false and true to distinct non-empty strings.
+          properties:
+            'true':
+              type: string
+            'false':
+              type: string
+    SystemOneRequest:
+      type: object
+      required:
+      - state
+      - questions
+      properties:
+        state:
+          description: Any JSON value except null.
+        questions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
+        model:
+          type: string
+        lang:
+          type: string
+        ensemble:
+          type: integer
+          description: Clamped to 1..8. Non-integers are ignored.
+        ensemble_margin:
+          type: number
+          description: Clamped to 0..1. Non-numbers are ignored.
+        calibrate:
+          type: boolean
+        return_logits:
+          type: boolean
+        max_len:
+          type: integer
+          minimum: 32
+          maximum: 8192
+        head_max_len:
+          type: integer
+          minimum: 32
+          maximum: 8192
+    BatchRequest:
+      type: object
+      required:
+      - states
+      - questions
+      properties:
+        states:
+          type: array
+          maxItems: 256
+          items:
+            description: Same values as state.
+        questions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
+        model:
+          type: string
+        lang:
+          type: string
+        ensemble:
+          type: integer
+        ensemble_margin:
+          type: number
+        calibrate:
+          type: boolean
+        return_logits:
+          type: boolean
+        max_len:
+          type: integer
+          minimum: 32
+          maximum: 8192
+        head_max_len:
+          type: integer
+          minimum: 32
+          maximum: 8192
+    BatchResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Decision'
+    Health:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      - engine
+      - version
+      - loaded
+      - device
+      properties:
+        status:
+          const: ok
+        engine:
+          const: statim
+        version:
+          type: string
+        loaded:
+          type: array
+          items:
+            type: string
+        device:
+          type: string
+    Ready:
+      type: object
+      additionalProperties: false
+      required:
+      - ready
+      properties:
+        ready:
+          type: boolean
+    Model:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - object
+      - owned_by
+      - source
+      - weights
+      - layers
+      - hidden
+      - max_len
+      - vocab
+      properties:
+        id:
+          type: string
+        object:
+          const: model
+        owned_by:
+          const: statim
+        source:
+          type: string
+        weights:
+          type: string
+        layers:
+          type: integer
+        hidden:
+          type: integer
+        max_len:
+          type: integer
+        vocab:
+          type: integer
+    ModelList:
+      type: object
+      additionalProperties: false
+      required:
+      - object
+      - data
+      properties:
+        object:
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Model'
+paths:
+  /v1/systemone:
+    post:
+      tags:
+      - decisions
+      summary: Score one state.
+      description: Runs every question against one state. model, lang, ensemble, ensemble_margin, calibrate,
+        return_logits, max_len, and head_max_len are optional. See docs/API.md.
+      operationId: decide
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemOneRequest'
+            examples:
+              invoice:
+                summary: Choice, score, and noul on one English state
+                value:
+                  state: &id006
+                    subject: 'Duplicate charge on invoice #4411'
+                    body: We were billed twice for March. Please refund the duplicate today or we will
+                      cancel.
+                  questions: &id007
+                    department:
+                      type: choice
+                      instructions: Which department should handle this request?
+                      criteria:
+                        billing: invoices, payments, refunds
+                        technical: bugs, outages
+                        sales: pricing, new contracts
+                        other: everything else
+                    urgency:
+                      type: score
+                      instructions: How urgent is this request?
+                      criteria:
+                      - not urgent
+                      - soon
+                      - critical deadline or blocking issue
+                    refund:
+                      type: noul
+                      instructions: Does the user explicitly request a refund?
+                x-expect-status: 200
+              choiceList:
+                summary: Choice criteria as a list of labels
+                value:
+                  state: The app crashes when I open settings.
+                  model: english
+                  questions:
+                    topic:
+                      type: choice
+                      instructions: Topic?
+                      criteria:
+                      - billing
+                      - technical
+                      - other
+                x-expect-status: 200
+              scalarLabels:
+                summary: Numeric and null choice labels
+                value:
+                  state: Pick 2.
+                  model: english
+                  questions:
+                    n:
+                      type: choice
+                      instructions: Which number is named?
+                      criteria:
+                      - 1
+                      - 2
+                      - null
+                x-expect-status: 200
+              noulCustom:
+                summary: Noul with labels and criteria
+                value:
+                  state: Please refund the duplicate charge.
+                  model: english
+                  questions:
+                    refund:
+                      type: noul
+                      instructions: Does the user explicitly request a refund?
+                      criteria:
+                        'true': the user asks for money back
+                        'false': no refund is requested
+                      labels:
+                        'true': 'yes'
+                        'false': 'no'
+                x-expect-status: 200
+              noulLabels:
+                summary: Noul labels are not distinct
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: noul
+                      instructions: x
+                      labels:
+                        'false': 'no'
+                        'true': 'no'
+                x-expect-status: 422
+              emptyQuestions:
+                summary: No questions
+                value:
+                  state: hello
+                  questions: {}
+                x-expect-status: 200
+              german:
+                summary: Automatic route to the multilingual checkpoint
+                value:
+                  state: Die Rechnung wurde doppelt belastet. Bitte erstatten Sie den Betrag noch heute.
+                  questions:
+                    refund:
+                      type: noul
+                      instructions: Does the user explicitly request a refund?
+                x-expect-status: 200
+              consensus:
+                summary: Equal-weight consensus of both checkpoints
+                value:
+                  state: *id006
+                  questions: *id007
+                  model: consensus
+                x-expect-status: 200
+              consensusLogits:
+                summary: Consensus with logits_by_model
+                value:
+                  state: Please refund the duplicate charge today.
+                  model: consensus
+                  return_logits: true
+                  questions: &id008
+                    refund:
+                      type: noul
+                      instructions: Does the user explicitly request a refund?
+                x-expect-status: 200
+              returnLogits:
+                summary: Raw logits on one checkpoint
+                value:
+                  state: Please refund the duplicate charge today.
+                  model: english
+                  return_logits: true
+                  questions: *id008
+                x-expect-status: 200
+              ensemble1:
+                summary: Single option order
+                value:
+                  state: I was charged twice and also the site is down.
+                  model: english
+                  questions: &id009
+                    topic:
+                      type: choice
+                      instructions: What is this about?
+                      criteria:
+                        billing: payments and refunds
+                        technical: bugs and outages
+                        other: anything else
+                  ensemble: 1
+                  ensemble_margin: 1
+                x-expect-status: 200
+              ensemble3:
+                summary: Three cyclic option orders
+                value:
+                  state: I was charged twice and also the site is down.
+                  model: english
+                  questions: *id009
+                  ensemble: 3
+                  ensemble_margin: 1
+                x-expect-status: 200
+              clampedEnsemble:
+                summary: Out-of-range ensemble is clamped, bad types ignored
+                value:
+                  state: hi there
+                  questions: {}
+                  ensemble: 99
+                  ensemble_margin: 5
+                  calibrate: 'yes'
+                x-expect-status: 200
+              calibrateOff:
+                summary: Choice without calibration
+                value:
+                  state: Please refund the duplicate charge today.
+                  model: english
+                  questions: &id010
+                    topic:
+                      type: choice
+                      instructions: What is this about?
+                      criteria:
+                        billing: payments and refunds
+                        technical: bugs and outages
+                  calibrate: false
+                x-expect-status: 200
+              calibrateOn:
+                summary: Choice with contextual calibration
+                value:
+                  state: Please refund the duplicate charge today.
+                  model: english
+                  questions: *id010
+                  calibrate: true
+                x-expect-status: 200
+              invalidJson:
+                summary: Body is not JSON
+                description: Send this text as the raw body. It is not a JSON object.
+                value: not json
+                x-expect-status: 400
+              jsonArray:
+                summary: JSON array
+                description: Send this text as the raw body. It is not a JSON object.
+                value: '[1,2]'
+                x-expect-status: 400
+              missingQuestions:
+                summary: No questions field
+                value:
+                  state: x
+                x-expect-status: 400
+              missingState:
+                summary: No state
+                value:
+                  questions: {}
+                x-expect-status: 400
+              nullState:
+                summary: Null state
+                value:
+                  state: null
+                  questions: {}
+                x-expect-status: 400
+              questionsNotObject:
+                summary: Questions is a list
+                value:
+                  state: x
+                  questions: []
+                x-expect-status: 400
+              maxLenLow:
+                summary: max_len below 32
+                value:
+                  state: x
+                  questions: {}
+                  max_len: 31
+                x-expect-status: 422
+              maxLenHigh:
+                summary: max_len above 8192
+                value:
+                  state: x
+                  questions: {}
+                  max_len: 8193
+                x-expect-status: 422
+              headLenFloat:
+                summary: head_max_len is not an integer
+                value:
+                  state: x
+                  questions: {}
+                  head_max_len: 32.5
+                x-expect-status: 422
+              badType:
+                summary: Unknown question type
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: rank
+                      instructions: x
+                x-expect-status: 422
+              noInstructions:
+                summary: Missing instructions
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: noul
+                x-expect-status: 422
+              notObject:
+                summary: Question is not an object
+                value:
+                  state: x
+                  questions:
+                    q: noul
+                x-expect-status: 422
+              choiceEmpty:
+                summary: Choice with no criteria
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: choice
+                      instructions: x
+                      criteria: {}
+                x-expect-status: 422
+              choiceString:
+                summary: Choice criteria is a string
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: choice
+                      instructions: x
+                      criteria: a, b
+                x-expect-status: 422
+              choiceNested:
+                summary: Choice label is an object
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: choice
+                      instructions: x
+                      criteria:
+                      - a: 1
+                x-expect-status: 422
+              scoreObject:
+                summary: Score criteria is an object
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: score
+                      instructions: x
+                      criteria:
+                        a: b
+                x-expect-status: 422
+              scoreEmpty:
+                summary: Score with no levels
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: score
+                      instructions: x
+                      criteria: []
+                x-expect-status: 422
+              scoreNull:
+                summary: Null score level
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: score
+                      instructions: x
+                      criteria:
+                      - ok
+                      - null
+                x-expect-status: 422
+              noulList:
+                summary: Noul criteria is a list
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: noul
+                      instructions: x
+                      criteria:
+                      - maybe
+                x-expect-status: 422
+              noulKey:
+                summary: Noul criteria key
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: noul
+                      instructions: x
+                      criteria:
+                        maybe: x
+                x-expect-status: 422
+              labelsOnChoice:
+                summary: labels on a choice
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: choice
+                      instructions: x
+                      criteria:
+                      - a
+                      labels:
+                        'true': y
+                        'false': n
+                x-expect-status: 422
+              tooManyQuestions:
+                summary: tooManyQuestions
+                value:
+                  state: x
+                  questions:
+                    q0:
+                      type: noul
+                      instructions: x
+                    q1:
+                      type: noul
+                      instructions: x
+                    q2:
+                      type: noul
+                      instructions: x
+                    q3:
+                      type: noul
+                      instructions: x
+                    q4:
+                      type: noul
+                      instructions: x
+                    q5:
+                      type: noul
+                      instructions: x
+                    q6:
+                      type: noul
+                      instructions: x
+                    q7:
+                      type: noul
+                      instructions: x
+                    q8:
+                      type: noul
+                      instructions: x
+                    q9:
+                      type: noul
+                      instructions: x
+                    q10:
+                      type: noul
+                      instructions: x
+                    q11:
+                      type: noul
+                      instructions: x
+                    q12:
+                      type: noul
+                      instructions: x
+                    q13:
+                      type: noul
+                      instructions: x
+                    q14:
+                      type: noul
+                      instructions: x
+                    q15:
+                      type: noul
+                      instructions: x
+                    q16:
+                      type: noul
+                      instructions: x
+                    q17:
+                      type: noul
+                      instructions: x
+                    q18:
+                      type: noul
+                      instructions: x
+                    q19:
+                      type: noul
+                      instructions: x
+                    q20:
+                      type: noul
+                      instructions: x
+                    q21:
+                      type: noul
+                      instructions: x
+                    q22:
+                      type: noul
+                      instructions: x
+                    q23:
+                      type: noul
+                      instructions: x
+                    q24:
+                      type: noul
+                      instructions: x
+                    q25:
+                      type: noul
+                      instructions: x
+                    q26:
+                      type: noul
+                      instructions: x
+                    q27:
+                      type: noul
+                      instructions: x
+                    q28:
+                      type: noul
+                      instructions: x
+                    q29:
+                      type: noul
+                      instructions: x
+                    q30:
+                      type: noul
+                      instructions: x
+                    q31:
+                      type: noul
+                      instructions: x
+                    q32:
+                      type: noul
+                      instructions: x
+                    q33:
+                      type: noul
+                      instructions: x
+                    q34:
+                      type: noul
+                      instructions: x
+                    q35:
+                      type: noul
+                      instructions: x
+                    q36:
+                      type: noul
+                      instructions: x
+                    q37:
+                      type: noul
+                      instructions: x
+                    q38:
+                      type: noul
+                      instructions: x
+                    q39:
+                      type: noul
+                      instructions: x
+                    q40:
+                      type: noul
+                      instructions: x
+                    q41:
+                      type: noul
+                      instructions: x
+                    q42:
+                      type: noul
+                      instructions: x
+                    q43:
+                      type: noul
+                      instructions: x
+                    q44:
+                      type: noul
+                      instructions: x
+                    q45:
+                      type: noul
+                      instructions: x
+                    q46:
+                      type: noul
+                      instructions: x
+                    q47:
+                      type: noul
+                      instructions: x
+                    q48:
+                      type: noul
+                      instructions: x
+                    q49:
+                      type: noul
+                      instructions: x
+                    q50:
+                      type: noul
+                      instructions: x
+                    q51:
+                      type: noul
+                      instructions: x
+                    q52:
+                      type: noul
+                      instructions: x
+                    q53:
+                      type: noul
+                      instructions: x
+                    q54:
+                      type: noul
+                      instructions: x
+                    q55:
+                      type: noul
+                      instructions: x
+                    q56:
+                      type: noul
+                      instructions: x
+                    q57:
+                      type: noul
+                      instructions: x
+                    q58:
+                      type: noul
+                      instructions: x
+                    q59:
+                      type: noul
+                      instructions: x
+                    q60:
+                      type: noul
+                      instructions: x
+                    q61:
+                      type: noul
+                      instructions: x
+                    q62:
+                      type: noul
+                      instructions: x
+                    q63:
+                      type: noul
+                      instructions: x
+                    q64:
+                      type: noul
+                      instructions: x
+                x-expect-status: 413
+              tooManyOptions:
+                summary: tooManyOptions
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                        o90: d
+                        o91: d
+                        o92: d
+                        o93: d
+                        o94: d
+                        o95: d
+                        o96: d
+                        o97: d
+                        o98: d
+                        o99: d
+                        o100: d
+                x-expect-status: 413
+              tooManyLevels:
+                summary: tooManyLevels
+                value:
+                  state: x
+                  questions:
+                    q:
+                      type: score
+                      instructions: x
+                      criteria:
+                      - level 0
+                      - level 1
+                      - level 2
+                      - level 3
+                      - level 4
+                      - level 5
+                      - level 6
+                      - level 7
+                      - level 8
+                      - level 9
+                      - level 10
+                      - level 11
+                      - level 12
+                      - level 13
+                      - level 14
+                      - level 15
+                      - level 16
+                      - level 17
+                      - level 18
+                      - level 19
+                      - level 20
+                      - level 21
+                      - level 22
+                      - level 23
+                      - level 24
+                      - level 25
+                      - level 26
+                      - level 27
+                      - level 28
+                      - level 29
+                      - level 30
+                      - level 31
+                      - level 32
+                x-expect-status: 413
+              tooManyTotal:
+                summary: tooManyTotal
+                value:
+                  state: x
+                  questions:
+                    q0:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                    q1:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                    q2:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                    q3:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                    q4:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                    q5:
+                      type: choice
+                      instructions: x
+                      criteria:
+                        o0: d
+                        o1: d
+                        o2: d
+                        o3: d
+                        o4: d
+                        o5: d
+                        o6: d
+                        o7: d
+                        o8: d
+                        o9: d
+                        o10: d
+                        o11: d
+                        o12: d
+                        o13: d
+                        o14: d
+                        o15: d
+                        o16: d
+                        o17: d
+                        o18: d
+                        o19: d
+                        o20: d
+                        o21: d
+                        o22: d
+                        o23: d
+                        o24: d
+                        o25: d
+                        o26: d
+                        o27: d
+                        o28: d
+                        o29: d
+                        o30: d
+                        o31: d
+                        o32: d
+                        o33: d
+                        o34: d
+                        o35: d
+                        o36: d
+                        o37: d
+                        o38: d
+                        o39: d
+                        o40: d
+                        o41: d
+                        o42: d
+                        o43: d
+                        o44: d
+                        o45: d
+                        o46: d
+                        o47: d
+                        o48: d
+                        o49: d
+                        o50: d
+                        o51: d
+                        o52: d
+                        o53: d
+                        o54: d
+                        o55: d
+                        o56: d
+                        o57: d
+                        o58: d
+                        o59: d
+                        o60: d
+                        o61: d
+                        o62: d
+                        o63: d
+                        o64: d
+                        o65: d
+                        o66: d
+                        o67: d
+                        o68: d
+                        o69: d
+                        o70: d
+                        o71: d
+                        o72: d
+                        o73: d
+                        o74: d
+                        o75: d
+                        o76: d
+                        o77: d
+                        o78: d
+                        o79: d
+                        o80: d
+                        o81: d
+                        o82: d
+                        o83: d
+                        o84: d
+                        o85: d
+                        o86: d
+                        o87: d
+                        o88: d
+                        o89: d
+                x-expect-status: 413
+              stateTooLarge:
+                summary: stateTooLarge
+                value:
+                  state: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                  questions: {}
+                x-expect-status: 413
+              headBudget:
+                summary: headBudget
+                value:
+                  state: x
+                  max_len: 32
+                  head_max_len: 32
+                  questions:
+                    q:
+                      type: choice
+                      instructions: pick one
+                      criteria:
+                        o0: description 0
+                        o1: description 1
+                        o2: description 2
+                        o3: description 3
+                        o4: description 4
+                        o5: description 5
+                        o6: description 6
+                        o7: description 7
+                        o8: description 8
+                        o9: description 9
+                        o10: description 10
+                        o11: description 11
+                        o12: description 12
+                        o13: description 13
+                        o14: description 14
+                        o15: description 15
+                        o16: description 16
+                        o17: description 17
+                        o18: description 18
+                        o19: description 19
+                        o20: description 20
+                        o21: description 21
+                        o22: description 22
+                        o23: description 23
+                        o24: description 24
+                        o25: description 25
+                        o26: description 26
+                        o27: description 27
+                        o28: description 28
+                        o29: description 29
+                        o30: description 30
+                        o31: description 31
+                        o32: description 32
+                        o33: description 33
+                        o34: description 34
+                        o35: description 35
+                        o36: description 36
+                        o37: description 37
+                        o38: description 38
+                        o39: description 39
+                        o40: description 40
+                        o41: description 41
+                        o42: description 42
+                        o43: description 43
+                        o44: description 44
+                        o45: description 45
+                        o46: description 46
+                        o47: description 47
+                        o48: description 48
+                        o49: description 49
+                        o50: description 50
+                        o51: description 51
+                        o52: description 52
+                        o53: description 53
+                        o54: description 54
+                        o55: description 55
+                        o56: description 56
+                        o57: description 57
+                        o58: description 58
+                        o59: description 59
+                        o60: description 60
+                        o61: description 61
+                        o62: description 62
+                        o63: description 63
+                        o64: description 64
+                        o65: description 65
+                        o66: description 66
+                        o67: description 67
+                        o68: description 68
+                        o69: description 69
+                        o70: description 70
+                        o71: description 71
+                        o72: description 72
+                        o73: description 73
+                        o74: description 74
+                        o75: description 75
+                        o76: description 76
+                        o77: description 77
+                        o78: description 78
+                        o79: description 79
+                        o80: description 80
+                        o81: description 81
+                        o82: description 82
+                        o83: description 83
+                        o84: description 84
+                        o85: description 85
+                        o86: description 86
+                        o87: description 87
+                        o88: description 88
+                        o89: description 89
+                        o90: description 90
+                        o91: description 91
+                        o92: description 92
+                        o93: description 93
+                        o94: description 94
+                        o95: description 95
+                        o96: description 96
+                        o97: description 97
+                        o98: description 98
+                        o99: description 99
+                x-expect-status: 422
+      responses:
+        '200':
+          description: Decision succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+              examples:
+                invoice:
+                  value:
+                    model: laya
+                    answers:
+                      department:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 0.97
+                          technical: 0.0095
+                          sales: 0.0107
+                          other: 0.0098
+                        confidence: 0.8791
+                        answer_confidence: 0.97
+                        action:
+                          act_probability: 1.0
+                      urgency:
+                        type: score
+                        score: 1.3385
+                        legend:
+                          '0': not urgent
+                          '1': soon
+                          '2': critical deadline or blocking issue
+                        probabilities:
+                          '0': 0.1022
+                          '1': 0.4571
+                          '2': 0.4407
+                        confidence: 0.1334
+                        answer_confidence: 0.4571
+                        action:
+                          act_probability: 1.0
+                      refund:
+                        type: noul
+                        noul: 0.8306
+                        confidence: 0.8306
+                        answer_confidence: 0.8306
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 215
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: lang:en
+                      engine: statim
+                      weights: f32
+                choiceList:
+                  value:
+                    model: laya
+                    answers:
+                      topic:
+                        type: choice
+                        choice: technical
+                        probabilities:
+                          billing: 0.0653
+                          technical: 0.8436
+                          other: 0.091
+                        confidence: 0.5086
+                        answer_confidence: 0.8436
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 24
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                scalarLabels:
+                  value:
+                    model: laya
+                    answers:
+                      n:
+                        type: choice
+                        choice: 2
+                        probabilities:
+                          '1': 0.1383
+                          '2': 0.684
+                          'null': 0.1777
+                        confidence: 0.235
+                        answer_confidence: 0.684
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 21
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                noulCustom:
+                  value:
+                    model: laya
+                    answers:
+                      refund:
+                        type: noul
+                        noul: 0.8266
+                        confidence: 0.8266
+                        answer_confidence: 0.8266
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 38
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                emptyQuestions:
+                  value:
+                    model: laya
+                    answers: {}
+                    usage:
+                      input_tokens: 0
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: lang:en
+                      engine: statim
+                      weights: f32
+                german:
+                  value:
+                    model: laya-multilingual
+                    answers:
+                      refund:
+                        type: noul
+                        noul: 0.9657
+                        confidence: 0.9657
+                        answer_confidence: 0.9657
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 50
+                      output_tokens: 0
+                    routing:
+                      model: multilingual
+                      reason: lang:other
+                      engine: statim
+                      weights: f32
+                consensus:
+                  value:
+                    model: consensus
+                    answers:
+                      department:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 1.0
+                          technical: 0.0
+                          sales: 0.0
+                          other: 0.0
+                        confidence: 0.9999
+                        answer_confidence: 1.0
+                        action:
+                          act_probability: 1.0
+                      urgency:
+                        type: score
+                        score: 1.6652
+                        legend:
+                          '0': not urgent
+                          '1': soon
+                          '2': critical deadline or blocking issue
+                        probabilities:
+                          '0': 0.0223
+                          '1': 0.2901
+                          '2': 0.6875
+                        confidence: 0.3614
+                        answer_confidence: 0.6875
+                        action:
+                          act_probability: 1.0
+                      refund:
+                        type: noul
+                        noul: 0.963
+                        confidence: 0.963
+                        answer_confidence: 0.963
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 433
+                      output_tokens: 0
+                    routing:
+                      model: consensus
+                      reason: consensus
+                      engine: statim
+                      weights: f32
+                consensusLogits:
+                  value:
+                    model: consensus
+                    answers:
+                      refund:
+                        type: noul
+                        noul: 0.976
+                        confidence: 0.976
+                        answer_confidence: 0.976
+                        action:
+                          act_probability: 1.0
+                        logits_by_model:
+                          english:
+                          - -2.530663013458252
+                          - 1.1402685642242432
+                          multilingual:
+                          - -3.2405383586883545
+                          - 0.49913012981414795
+                    usage:
+                      input_tokens: 82
+                      output_tokens: 0
+                    routing:
+                      model: consensus
+                      reason: consensus
+                      engine: statim
+                      weights: f32
+                returnLogits:
+                  value:
+                    model: laya
+                    answers:
+                      refund:
+                        type: noul
+                        noul: 0.8642
+                        confidence: 0.8642
+                        answer_confidence: 0.8642
+                        action:
+                          act_probability: 1.0
+                        logits:
+                        - -2.530663013458252
+                        - 1.1402685642242432
+                    usage:
+                      input_tokens: 41
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                ensemble1:
+                  value:
+                    model: laya
+                    answers:
+                      topic:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 0.7798
+                          technical: 0.2015
+                          other: 0.0187
+                        confidence: 0.4619
+                        answer_confidence: 0.7798
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 42
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                ensemble3:
+                  value:
+                    model: laya
+                    answers:
+                      topic:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 0.678
+                          technical: 0.2976
+                          other: 0.0244
+                        confidence: 0.3494
+                        answer_confidence: 0.678
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 42
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                clampedEnsemble:
+                  value:
+                    model: laya
+                    answers: {}
+                    usage:
+                      input_tokens: 0
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: lang:en
+                      engine: statim
+                      weights: f32
+                calibrateOff:
+                  value:
+                    model: laya
+                    answers:
+                      topic:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 0.932
+                          technical: 0.068
+                        confidence: 0.6415
+                        answer_confidence: 0.932
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 33
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+                calibrateOn:
+                  value:
+                    model: laya
+                    answers:
+                      topic:
+                        type: choice
+                        choice: billing
+                        probabilities:
+                          billing: 0.9122
+                          technical: 0.0878
+                        confidence: 0.5709
+                        answer_confidence: 0.9122
+                        action:
+                          act_probability: 1.0
+                    usage:
+                      input_tokens: 33
+                      output_tokens: 0
+                    routing:
+                      model: english
+                      reason: requested
+                      engine: statim
+                      weights: f32
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+            X-Inference-Time-Ms:
+              description: Inference time in milliseconds, two decimal places.
+              schema:
+                type: string
+            Server-Timing:
+              description: inference;dur=<milliseconds with two decimal places>.
+              schema:
+                type: string
+        '400':
+          description: The body is not a JSON object with the fields this path requires.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidJson:
+                  value:
+                    detail: request body must be valid JSON
+                jsonArray:
+                  value:
+                    detail: request body must be an object with a 'questions' field
+                missingQuestions:
+                  value:
+                    detail: request body must be an object with a 'questions' field
+                missingState:
+                  value:
+                    detail: '''state'' is required'
+                nullState:
+                  value:
+                    detail: '''state'' is required'
+                questionsNotObject:
+                  value:
+                    detail: '''questions'' must be an object'
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '401':
+          description: Keys are configured and Authorization is missing or is not 'Bearer ' plus one of
+            those keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  value:
+                    detail: invalid or missing bearer token
+                  x-live: false
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '413':
+          description: 'A count or size limit failed. A body larger than 2097152 bytes never reaches this
+            JSON form: the HTTP stack returns 413 with an empty body and no X-Request-Id.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tooManyQuestions:
+                  value:
+                    detail: too many questions (65 > 64)
+                tooManyOptions:
+                  value:
+                    detail: too many choice options for 'q' (101 > 100)
+                tooManyLevels:
+                  value:
+                    detail: too many score levels for 'q' (33 > 32)
+                tooManyTotal:
+                  value:
+                    detail: too many answer options across questions (540 > 512)
+                stateTooLarge:
+                  value:
+                    detail: state too large (50001 > 50000 chars)
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '422':
+          description: max_len or head_max_len is present and outside 32..8192, or a question definition
+            is invalid, or option markers do not fit the token budget.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noulLabels:
+                  value:
+                    detail: 'question ''q'': noul labels must map exactly ''false'' and ''true'' to distinct
+                      non-empty strings'
+                maxLenLow:
+                  value:
+                    detail: '''max_len'' must be an integer between 32 and 8192'
+                maxLenHigh:
+                  value:
+                    detail: '''max_len'' must be an integer between 32 and 8192'
+                headLenFloat:
+                  value:
+                    detail: '''head_max_len'' must be an integer between 32 and 8192'
+                badType:
+                  value:
+                    detail: 'question ''q'': unknown type; use one of [''choice'', ''noul'', ''score'']'
+                noInstructions:
+                  value:
+                    detail: 'question ''q'': no ''instructions''; add the text the model should answer'
+                notObject:
+                  value:
+                    detail: 'question ''q'': definition must be an object'
+                choiceEmpty:
+                  value:
+                    detail: 'question ''q'': a choice question needs at least one criterion'
+                choiceString:
+                  value:
+                    detail: 'question ''q'': a choice question takes ''criteria'' as a dict of label ->
+                      description, or a list of labels'
+                choiceNested:
+                  value:
+                    detail: 'question ''q'': choice label 0 must be a scalar (a string, number or null)'
+                scoreObject:
+                  value:
+                    detail: 'question ''q'': a score question takes ''criteria'' as a list of level descriptions,
+                      index 0 first'
+                scoreEmpty:
+                  value:
+                    detail: 'question ''q'': a score question needs at least one level'
+                scoreNull:
+                  value:
+                    detail: 'question ''q'': score level 1 is null; give every level a description'
+                noulList:
+                  value:
+                    detail: 'question ''q'': a noul question takes ''criteria'' as a dict with optional
+                      ''true''/''false'' descriptions, or omits it'
+                noulKey:
+                  value:
+                    detail: 'question ''q'': a noul question takes ''criteria'' keyed only ''true''/''false'''
+                labelsOnChoice:
+                  value:
+                    detail: 'question ''q'': ''labels'' is only supported for noul questions'
+                headBudget:
+                  value:
+                    detail: question 'q' options exceed head_max_len=32
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '500':
+          description: The handler caught an unexpected exception. The client receives this fixed string.
+            The process log contains the exception text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                inferenceFailed:
+                  value:
+                    detail: inference failed
+                  x-live: false
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '503':
+          description: in_flight was already at max_concurrent (default 16). Retry-After is 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                busy:
+                  value:
+                    detail: server busy, try again later
+                  x-live: saturation
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+            Retry-After:
+              description: Seconds to wait. The handler sets this to 1.
+              schema:
+                type: string
+                const: '1'
+  /v1/systemone/batch:
+    post:
+      tags:
+      - decisions
+      summary: Score many states with one question set.
+      description: states is an array of up to 256 values. questions is shared. results preserves order.
+      operationId: decideBatch
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchRequest'
+            examples:
+              twoStates:
+                summary: Two states, one choice question
+                value:
+                  states:
+                  - Please refund the duplicate charge today.
+                  - The login page returns a 500 error.
+                  model: english
+                  questions:
+                    topic:
+                      type: choice
+                      instructions: What is this about?
+                      criteria:
+                        billing: payments and refunds
+                        technical: bugs and outages
+                x-expect-status: 200
+              empty:
+                summary: No states
+                value:
+                  states: []
+                  questions: {}
+                x-expect-status: 200
+              batchMissingStates:
+                summary: Batch without states
+                value:
+                  questions: *id008
+                x-expect-status: 400
+              tooManyStates:
+                summary: tooManyStates
+                value:
+                  states:
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  - x
+                  questions: {}
+                x-expect-status: 413
+      responses:
+        '200':
+          description: Decision succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResponse'
+              examples:
+                twoStates:
+                  value:
+                    results:
+                    - model: laya
+                      answers:
+                        topic:
+                          type: choice
+                          choice: billing
+                          probabilities:
+                            billing: 0.932
+                            technical: 0.068
+                          confidence: 0.6415
+                          answer_confidence: 0.932
+                          action:
+                            act_probability: 1.0
+                      usage:
+                        input_tokens: 33
+                        output_tokens: 0
+                      routing:
+                        model: english
+                        reason: requested
+                        engine: statim
+                        weights: f32
+                    - model: laya
+                      answers:
+                        topic:
+                          type: choice
+                          choice: technical
+                          probabilities:
+                            billing: 0.0745
+                            technical: 0.9255
+                          confidence: 0.6175
+                          answer_confidence: 0.9255
+                          action:
+                            act_probability: 1.0
+                      usage:
+                        input_tokens: 34
+                        output_tokens: 0
+                      routing:
+                        model: english
+                        reason: requested
+                        engine: statim
+                        weights: f32
+                empty:
+                  value:
+                    results: []
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+            X-Inference-Time-Ms:
+              description: Inference time in milliseconds, two decimal places.
+              schema:
+                type: string
+            Server-Timing:
+              description: inference;dur=<milliseconds with two decimal places>.
+              schema:
+                type: string
+        '400':
+          description: The body is not a JSON object with the fields this path requires.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                batchMissingStates:
+                  value:
+                    detail: request body must contain a 'states' array
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '401':
+          description: Keys are configured and Authorization is missing or is not 'Bearer ' plus one of
+            those keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  value:
+                    detail: invalid or missing bearer token
+                  x-live: false
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '413':
+          description: 'A count or size limit failed. A body larger than 2097152 bytes never reaches this
+            JSON form: the HTTP stack returns 413 with an empty body and no X-Request-Id.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                tooManyStates:
+                  value:
+                    detail: too many states (257 > 256)
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '422':
+          description: max_len or head_max_len is present and outside 32..8192, or a question definition
+            is invalid, or option markers do not fit the token budget.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '500':
+          description: The handler caught an unexpected exception. The client receives this fixed string.
+            The process log contains the exception text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                inferenceFailed:
+                  value:
+                    detail: inference failed
+                  x-live: false
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+        '503':
+          description: in_flight was already at max_concurrent (default 16). Retry-After is 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                busy:
+                  value:
+                    detail: server busy, try again later
+                  x-live: saturation
+          headers:
+            X-Request-Id:
+              description: Echoed client value, or 16 generated hexadecimal characters.
+              schema:
+                type: string
+            Retry-After:
+              description: Seconds to wait. The handler sets this to 1.
+              schema:
+                type: string
+                const: '1'
+  /health:
+    get:
+      tags:
+      - operations
+      summary: Liveness.
+      operationId: health
+      responses:
+        '200':
+          description: The process is accepting connections.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    engine: statim
+                    version: 0.2.0
+                    loaded:
+                    - english
+                    - multilingual
+                    device: cpu
+  /ready:
+    get:
+      tags:
+      - operations
+      summary: Readiness.
+      description: '200 when in_flight is below max_concurrent. 503 {"ready": false} when the cap is full.
+        No Retry-After on this response.'
+      operationId: ready
+      responses:
+        '200':
+          description: Admission control has room.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ready'
+              examples:
+                ready:
+                  value:
+                    ready: true
+        '503':
+          description: in_flight is at max_concurrent. This body is not the decision-handler detail object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ready'
+              examples:
+                saturated:
+                  value:
+                    ready: false
+                  x-live: saturation
+  /v1/models:
+    get:
+      tags:
+      - operations
+      summary: List loaded checkpoints.
+      operationId: listModels
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Checkpoints in load order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+              examples:
+                loaded:
+                  value:
+                    object: list
+                    data:
+                    - id: english
+                      object: model
+                      owned_by: statim
+                      source: laya
+                      weights: f32
+                      layers: 28
+                      hidden: 1024
+                      max_len: 512
+                      vocab: 50368
+                    - id: multilingual
+                      object: model
+                      owned_by: statim
+                      source: laya-multilingual
+                      weights: f32
+                      layers: 22
+                      hidden: 768
+                      max_len: 1024
+                      vocab: 256000
+        '401':
+          description: Keys are configured and the bearer token does not match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  value:
+                    detail: invalid or missing bearer token
+                  x-live: false
+  /metrics:
+    get:
+      tags:
+      - operations
+      summary: Prometheus metrics.
+      operationId: metrics
+      responses:
+        '200':
+          description: Prometheus exposition, version 0.0.4. Counter values change. See docs/API.md for
+            each series.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: '# HELP statim_requests_total Inference requests by HTTP status.
+
+                # TYPE statim_requests_total counter
+
+                # HELP statim_request_duration_ms End-to-end request latency.
+
+                # TYPE statim_request_duration_ms histogram
+
+                statim_request_duration_ms_bucket{le="5"} 0
+
+                statim_request_duration_ms_bucket{le="+Inf"} 0
+
+                statim_request_duration_ms_sum 0
+
+                statim_request_duration_ms_count 0
+
+                # TYPE statim_input_tokens_total counter
+
+                statim_input_tokens_total 0
+
+                # TYPE statim_rejected_busy_total counter
+
+                statim_rejected_busy_total 0
+
+                # TYPE statim_in_flight gauge
+
+                statim_in_flight 0
+
+                # TYPE statim_uptime_seconds gauge
+
+                statim_uptime_seconds 0
+
+                statim_workers_busy{model="english"} 0
+
+                statim_model_info{model="english",weights="f32",version="0.2.0"} 1
+
+                '
+              x-verify: metrics
+  /:
+    get:
+      tags:
+      - operations
+      summary: Playground, or 404 when disabled.
+      operationId: playground
+      responses:
+        '200':
+          description: The playground HTML document. Default. Content-Type is text/html; charset=utf-8.
+            The document title is Statim Playground.
+          content:
+            text/html:
+              schema:
+                type: string
+              example: '<!doctype html>
+
+                <html lang="en">
+
+                <head>
+
+                <title>Statim Playground</title>'
+              x-verify: playground
+        '404':
+          description: Returned for GET / when the server was started with --no-playground. Other unknown
+            paths return 404 with an empty body instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                disabled:
+                  value:
+                    detail: not found
+                  x-live: false
