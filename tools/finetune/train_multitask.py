@@ -63,12 +63,39 @@ def choice_item(tok, state, instr, keys, gold, max_len, head_max_len, src):
             "target": [1.0 if k == gold else 0.0 for k in keys], "src": src}
 
 
+V6_CATEGORIES = {"1": "sentiment", "2": "emotion", "3": "complaint", "4": "nli", "5": "safety", "6": "reading",
+                 "7": "similarity", "8": "topic", "9": "intent", "10": "other"}
+
+
+def v6_categories():
+    """Source id -> category family for mixture v6 rows (src "v6/<id>/<config>"), read from the registry
+    so the mixture file itself stays plain."""
+    reg = os.path.join(os.path.dirname(__file__), "sources", "v6-keep.json")
+    if not os.path.exists(reg):
+        return {}
+    out = {}
+    for e in json.load(open(reg)):
+        num = e.get("category", "").split(";")[0].strip().split("-")[0]
+        out[e["id"]] = V6_CATEGORIES.get(num, "other")
+    return out
+
+
+def mixture_src(row, cats):
+    """Budget key of a mixture row: "mixture" for v5 files, "mixture:<category>" for v6 rows."""
+    src = row.get("src", "")
+    if not src.startswith("v6/"):
+        return "mixture"
+    sid = src[3:].rsplit("/", 1)[0]
+    return "mixture:" + (row.get("category") or cats.get(sid, "other"))
+
+
 def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
-    """Broad typed-decision mixture from build_mixture.py. The first n_dev items are held out, and
-    every later item whose state also occurs in the held-out slice is dropped (several questions of
-    one source can share a document)."""
+    """Broad typed-decision mixture from build_mixture.py or mixture_v6/build.py. The first n_dev items
+    are held out (v6 writes its dev slice first), and every later item whose state also occurs in the
+    held-out slice is dropped (several questions of one source can share a document)."""
     import gzip
     train, dev, dev_states, leaked = [], [], set(), 0
+    cats = v6_categories()
     with gzip.open(path, "rt", encoding="utf-8") as f:
         rows = [json.loads(line) for line in f]
 
@@ -86,13 +113,17 @@ def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
         if len(markers) != len(render_options(q)) or len(markers) != len(r["target"]):
             continue
         it = {"ids": np.asarray(seq, dtype=np.int32), "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"],
-              "src": "mixture"}
+              "src": mixture_src(r, cats)}
         if in_dev:
             dev.append(it)
             dev_states.add(key(r["state"]))
         else:
             train.append(it)
-    print(f"mixture: {len(train)} train, {len(dev)} dev, {leaked} train items dropped (state in dev)", flush=True)
+    by_cat = {}
+    for it in train:
+        by_cat[it["src"]] = by_cat.get(it["src"], 0) + 1
+    print(f"mixture: {len(train)} train, {len(dev)} dev, {leaked} train items dropped (state in dev)"
+          + (f" | {by_cat}" if len(by_cat) > 1 else ""), flush=True)
     return train, dev
 
 
@@ -164,6 +195,9 @@ def main():
     ap.add_argument("--mixture", default=None, help="gzipped JSONL from build_mixture.py")
     ap.add_argument("--mixture-dev", type=int, default=1000)
     ap.add_argument("--mixture-limit", type=int, default=0, help="use at most this many mixture items (0 = all)")
+    ap.add_argument("--mixture-temperature", type=float, default=2.0,
+                    help="with --budget mixture=N and a v6 mixture: split N over the categories in proportion to"
+                         " size^(1/T) (T5-style temperature mixing; 1 = proportional, large = uniform)")
     ap.add_argument("--clean", action="store_true",
                     help="commercial-clean data only: no tyqiangz sentiment (aggregates research-only corpora),"
                          " distillation texts from the licence-filtered mixture instead of AG News / tweet_eval")
@@ -267,6 +301,17 @@ def main():
     for i, it in enumerate(train):
         by_src.setdefault(it["src"], []).append(i)
     budget = {k: int(v) for k, v in (kv.split("=") for kv in a.budget.split(","))} if a.budget else None
+    if budget and "mixture" in budget:
+        # v6: one number for the whole mixture, shared over its categories by temperature mixing;
+        # explicit mixture:<category>=N entries win.
+        cats_n = {k: len(v) for k, v in by_src.items() if k.startswith("mixture:") and k not in budget}
+        if cats_n:
+            t = max(a.mixture_temperature, 1e-6)
+            w = {k: n ** (1.0 / t) for k, n in cats_n.items()}
+            tot = sum(w.values())
+            for k in cats_n:
+                budget[k] = max(1, int(round(budget["mixture"] * w[k] / tot)))
+            print("mixture budget per category:", {k: budget[k] for k in sorted(cats_n)}, flush=True)
 
     def epoch_indices():
         if not budget:
@@ -316,6 +361,9 @@ def main():
             d["sentiment"] = round(acc(s_dev), 4)
         if x_dev:
             d["mixture"] = round(acc(x_dev), 4)
+            cats = sorted({it["src"] for it in x_dev if it["src"].startswith("mixture:")})
+            if cats:  # per-category dev accuracy is logged, not part of the model-selection mean
+                print("  mixture dev by category:", {c.split(":", 1)[1]: round(acc([it for it in x_dev if it["src"] == c]), 3) for c in cats}, flush=True)
         return d
 
     d0 = dev_scores()
