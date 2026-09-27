@@ -6,6 +6,7 @@
 #include <future>
 #include <iostream>
 #include <thread>
+#include <unistd.h>
 
 using namespace statim;
 static int checks = 0;
@@ -120,7 +121,8 @@ int main(int argc, char** argv) try {
     { std::ofstream file(path); file << "# comment\n secret\r\n"; }
     require(load_key_file(path) == std::vector<std::string>{"secret"}, "valid key file rejected");
     std::filesystem::permissions(path, std::filesystem::perms::none);
-    startup_rejects([&] { load_key_file(path); });
+    if (geteuid() != 0) startup_rejects([&] { load_key_file(path); });
+    else std::cerr << "note: running as root, which can read a mode-000 file; unreadable key file check skipped\n";
     std::filesystem::permissions(path, std::filesystem::perms::owner_all);
     std::filesystem::remove(path);
     require(valid_request_id("audit-123_ABC.test"), "valid request id rejected");
