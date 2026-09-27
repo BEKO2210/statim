@@ -1,0 +1,89 @@
+{
+  "dataset": "PolyAI/banking77",
+  "split": "test",
+  "licence": "CC-BY-4.0",
+  "n_test": 3080,
+  "n": 500,
+  "limit": 500,
+  "sample": "seeded stratified by intent",
+  "seed": 0,
+  "intents_in_sample": 77,
+  "url": "http://127.0.0.1:8198",
+  "model_requested": "multilingual",
+  "checkpoint": "statim-decide-multilingual-base",
+  "routing_model": "multilingual",
+  "weights": "q8_0",
+  "loaded_model": {
+    "id": "multilingual",
+    "source": "statim-decide-multilingual-base",
+    "weights": "q8_0",
+    "device": "cpu",
+    "max_len": 1024,
+    "layers": 22,
+    "hidden": 768
+  },
+  "head_max_len": 512,
+  "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+  "logical_cpus": 16,
+  "accuracy": 0.896,
+  "correct": 448,
+  "curve": [
+    {
+      "min_confidence": 0.0,
+      "coverage": 1.0,
+      "answered": 500,
+      "escalated": 0,
+      "accuracy": 0.896,
+      "correct": 448
+    },
+    {
+      "min_confidence": 0.5,
+      "coverage": 0.972,
+      "answered": 486,
+      "escalated": 14,
+      "accuracy": 0.9094650205761317,
+      "correct": 442
+    },
+    {
+      "min_confidence": 0.6,
+      "coverage": 0.966,
+      "answered": 483,
+      "escalated": 17,
+      "accuracy": 0.9130434782608695,
+      "correct": 441
+    },
+    {
+      "min_confidence": 0.7,
+      "coverage": 0.966,
+      "answered": 483,
+      "escalated": 17,
+      "accuracy": 0.9130434782608695,
+      "correct": 441
+    },
+    {
+      "min_confidence": 0.8,
+      "coverage": 0.966,
+      "answered": 483,
+      "escalated": 17,
+      "accuracy": 0.9130434782608695,
+      "correct": 441
+    },
+    {
+      "min_confidence": 0.9,
+      "coverage": 0.96,
+      "answered": 480,
+      "escalated": 20,
+      "accuracy": 0.9145833333333333,
+      "correct": 439
+    }
+  ],
+  "latency_ms": {
+    "p50": 514.562684998964,
+    "p95": 556.7299918009667,
+    "unit": "end-to-end HTTP request, including queueing"
+  },
+  "concurrency": 2,
+  "throughput_rps": 3.9832102145782953,
+  "wall_seconds": 125.52689239699976,
+  "question": "intent"
+}
