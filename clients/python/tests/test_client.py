@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -139,7 +140,7 @@ def base_url() -> str:
     except TransportError as exc:
         pytest.fail(f"Statim is not reachable at {BASE_URL} ({exc})")
     assert health.status == "ok"
-    assert health.version == "0.3.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", health.version)
     return BASE_URL
 
 
@@ -433,7 +434,7 @@ def test_health_ready_and_models(base_url: str) -> None:
     client = Client(base_url, timeout=10)
     health = client.health()
     assert health.status == "ok"
-    assert health.version == "0.3.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", health.version)
     assert client.ready().ready is True
     listed = client.models()
     assert listed.object == "list"

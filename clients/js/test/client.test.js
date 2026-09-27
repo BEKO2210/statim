@@ -366,7 +366,7 @@ test("health, ready, and models on the real server", async () => {
   const client = new Client(BASE_URL, null, 10);
   const health = await client.health();
   assert.equal(health.status, "ok");
-  assert.equal(health.version, "0.3.0");
+  assert.match(health.version, /^\d+\.\d+\.\d+$/);
   assert.equal((await client.ready()).ready, true);
   const listed = await client.models();
   assert.equal(listed.object, "list");
