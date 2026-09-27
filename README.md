@@ -5,6 +5,13 @@
   </picture>
 </h1>
 
+<p align="center">
+  <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
+  <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%2B%20commercial-161B22"></a>
+</p>
+
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
 no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan)).
