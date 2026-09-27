@@ -58,6 +58,39 @@ TOPICS = [
     "a case note that quotes a customer email",
 ]
 
+# Attribute axes (AttrPrompt, Yu et al. 2023): independent attributes drawn per seed, so the prompt
+# space has millions of combinations instead of a short cycle that repeats every few hundred seeds.
+INDUSTRIES = [
+    "a retail bank", "a hospital", "a logistics company", "an online shop", "a software company",
+    "a city administration", "a car-parts manufacturer", "a university", "a hotel chain",
+    "a telecom provider", "an insurance company", "an energy utility", "a law firm", "an airline",
+    "a pharmacy chain", "a construction firm",
+]
+REGISTERS = [
+    "a short chat message", "a formal email", "a note taken during a phone call", "a web form submission",
+    "an excerpt from a forwarded email thread", "an excerpt from meeting minutes",
+    "an internal ticket with terse notes", "a letter",
+]
+LENGTHS = ["short: 25 to 50 words", "medium: 60 to 110 words", "long: 120 to 180 words"]
+SCORE_LENGTHS = ["short: 30 to 60 words", "medium: 60 to 110 words"]
+DIFFICULTIES = [
+    "straightforward: the situation plainly supports one option",
+    "subtle: the deciding detail sits in the middle of the text, not in the first sentence",
+    "near miss: one wrong option looks right at first glance, and one specific detail in the situation rules it out",
+]
+READING_KINDS = [
+    "an internal security advisory about a workplace tool", "a release note for an internal app",
+    "a travel-expense rule", "an incident timeline for an outage", "a supplier contract clause in plain language",
+    "an onboarding guide for new staff", "a short budget memo", "a facilities notice",
+    "a maintenance-window announcement", "a case note that quotes a customer email", "a meeting summary",
+    "an FAQ entry for customers", "a workplace safety instruction", "a change to the shift schedule",
+]
+READING_DIFFICULTIES = [
+    "direct: the answer is stated in a single sentence of the passage",
+    "combine: the answer needs two facts from different sentences",
+    "paraphrase: the correct option restates the passage in different words; wrong options reuse its words",
+]
+
 TASKS = ("business", "score", "reading")
 
 
@@ -77,40 +110,54 @@ def plan(task, n, seed):
     domains = _shuffled(DOMAINS, rng)
     personas = _shuffled(PERSONAS, rng)
     aspects = _shuffled(ASPECTS, rng)
-    topics = _shuffled(TOPICS, rng)
     rows = []
     for i in range(n):
+        # Languages cycle so every language gets the same share; every other attribute is drawn.
         if task == "business":
-            domain_id, domain_brief = domains[i % len(domains)]
+            domain_id, domain_brief = rng.choice(domains)
             form = "noul" if i % 3 == 0 else "choice"
             spec = {
                 "task": task,
                 "lang": langs[i % len(langs)],
                 "domain": domain_id,
                 "domain_brief": domain_brief,
-                "persona": personas[(i * 5) % len(personas)],
+                "industry": rng.choice(INDUSTRIES),
+                "register": rng.choice(REGISTERS),
+                "length": rng.choice(LENGTHS),
+                "difficulty": rng.choice(DIFFICULTIES),
+                "persona": rng.choice(personas),
                 "form": form,
-                "n_options": 3 + (i % 10),
+                "n_options": rng.randint(3, 12),
                 "i": i,
             }
+            if form == "noul":
+                # Half the yes/no items must be answered "false": generators otherwise favour "true".
+                spec["target"] = "true" if (i // 3) % 2 == 0 else "false"
         elif task == "score":
             aspect, aspect_help = aspects[i % len(aspects)]
+            n_levels = rng.randint(3, 5)
             spec = {
                 "task": task,
                 "lang": langs[i % len(langs)],
                 "aspect": aspect,
                 "aspect_help": aspect_help,
-                "persona": personas[(i * 5) % len(personas)],
-                "n_levels": 3 + (i % 3),
+                "industry": rng.choice(INDUSTRIES),
+                "register": rng.choice(REGISTERS),
+                "length": rng.choice(SCORE_LENGTHS),
+                "persona": rng.choice(personas),
+                "n_levels": n_levels,
+                # Every level equally often as the right one, not mostly the middle.
+                "target": rng.randint(1, n_levels),
                 "i": i,
             }
         else:
             spec = {
                 "task": task,
                 "lang": langs[i % len(langs)],
-                "topic": topics[i % len(topics)],
-                "persona": personas[(i * 5) % len(personas)],
-                "n_options": 4 if i % 2 else 3,
+                "topic": "%s at %s" % (rng.choice(READING_KINDS), rng.choice(INDUSTRIES)),
+                "difficulty": rng.choice(READING_DIFFICULTIES),
+                "persona": rng.choice(personas),
+                "n_options": rng.choice((3, 4)),
                 "i": i,
             }
         spec["id"] = canonical_id({k: v for k, v in spec.items() if k != "id"})

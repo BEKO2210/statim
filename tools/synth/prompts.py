@@ -4,7 +4,7 @@ PROMPT_VERSION is recorded in the manifest. Bump it when a template changes.
 """
 import hashlib
 
-PROMPT_VERSION = "synth-prompts-2"
+PROMPT_VERSION = "synth-prompts-3"
 
 GEN_SYSTEM = (
     "You write one original workplace decision as JSON for a classifier. "
@@ -27,34 +27,41 @@ VER_SYSTEM = (
 
 _GEN_CHOICE = """Language: {language} ({code}). Write every trainee-facing string in this language only.
 Domain: {domain}
+Setting: {industry}. The situation is written as {register}.
 Perspective: {persona}
 Form: one choice question with exactly {n_options} options.
+Difficulty: {difficulty}.
 Each option needs a short label (key) and a one-sentence description of what that label means. Keys must be distinct, in the requested language, and must not be single letters.
 The question asks for a handling, routing, compliance, triage, or ownership decision in this domain. It must be answerable from the situation alone.
-Situation length: 60 to 140 words. For Chinese and Japanese, count characters as words.
+Situation length: {length}. For Chinese and Japanese, count characters as words.
 JSON fields: state (the situation), instructions (the question), options (array of {{key, description}}), gold (the key of the one correct option, copied exactly), rationale (one short sentence, not repeated elsewhere)."""
 
 _GEN_NOUL = """Language: {language} ({code}). Write every trainee-facing string in this language only.
 Domain: {domain}
+Setting: {industry}. The situation is written as {register}.
 Perspective: {persona}
 Form: one yes/no question (true means the statement holds, false means it does not).
+Difficulty: {difficulty}.
+The correct answer must be {target}: write the situation so that it clearly supports {target}, without giving the answer away in the question.
 The question asks for a handling, compliance, or applicability decision in this domain, answerable from the situation alone.
 Also give a one-sentence description of what false means here and what true means here, in the requested language.
-Situation length: 60 to 140 words. For Chinese and Japanese, count characters as words.
+Situation length: {length}. For Chinese and Japanese, count characters as words.
 JSON fields: state, instructions, false_description, true_description, gold (boolean), rationale (one short sentence, not repeated elsewhere)."""
 
 _GEN_SCORE = """Language: {language} ({code}). Write every trainee-facing string in this language only.
+Setting: {industry}. The situation is written as {register}.
 Perspective: {persona}
 Scale: {aspect} — {aspect_help}.
 Use exactly {n_levels} ordinal levels, ordered from low to high, each a short phrase in the requested language. Levels must be mutually exclusive and cover the scale.
-The situation must make exactly one level clearly right.
-Situation length: 40 to 120 words. For Chinese and Japanese, count characters as words.
+The situation must make exactly one level clearly right: level {target} of {n_levels}, counting from 1 = lowest.
+Situation length: {length}. For Chinese and Japanese, count characters as words.
 If the scale is similarity, the situation contains two separate texts divided by a line that is exactly ---.
 If the scale is relevance, the situation states the need and then the candidate text.
 JSON fields: state, instructions (the rating question, which must not contain the level phrases), levels (array of strings, low to high), gold (one level string copied exactly from levels), rationale (one short sentence, not repeated elsewhere)."""
 
 _GEN_READING = """Language: {language} ({code}). Write every trainee-facing string in this language only.
-Write an original passage of 150 to 220 words about: {topic}. Perspective: {persona}.
+Write an original passage of 150 to 220 words: {topic}. Perspective: {persona}.
+Question difficulty: {difficulty}.
 For Chinese and Japanese, count characters as words. Do not use a real news story or a published benchmark passage.
 Then write one question that can be answered only from the passage, with exactly {n_options} options.
 Each option is an object with key "A", "B", "C", or "D" in order, and description equal to the answer text in the requested language.
@@ -165,25 +172,28 @@ def generate_request(seed):
     if task == "business" and seed["form"] == "choice":
         user = _GEN_CHOICE.format(
             language=lang, code=seed["lang"], domain=seed["domain_brief"],
-            persona=seed["persona"], n_options=seed["n_options"])
+            persona=seed["persona"], n_options=seed["n_options"], industry=seed["industry"],
+            register=seed["register"], length=seed["length"], difficulty=seed["difficulty"])
         return [{"role": "system", "content": GEN_SYSTEM},
                 {"role": "user", "content": user}], SCHEMA_CHOICE, 900
     if task == "business":
         user = _GEN_NOUL.format(
             language=lang, code=seed["lang"], domain=seed["domain_brief"],
-            persona=seed["persona"])
+            persona=seed["persona"], industry=seed["industry"], register=seed["register"],
+            length=seed["length"], difficulty=seed["difficulty"], target=seed["target"])
         return [{"role": "system", "content": GEN_SYSTEM},
                 {"role": "user", "content": user}], SCHEMA_NOUL, 900
     if task == "score":
         user = _GEN_SCORE.format(
             language=lang, code=seed["lang"], persona=seed["persona"],
             aspect=seed["aspect"], aspect_help=seed["aspect_help"],
-            n_levels=seed["n_levels"])
+            n_levels=seed["n_levels"], industry=seed["industry"], register=seed["register"],
+            length=seed["length"], target=seed["target"])
         return [{"role": "system", "content": GEN_SYSTEM},
                 {"role": "user", "content": user}], SCHEMA_SCORE, 800
     user = _GEN_READING.format(
         language=lang, code=seed["lang"], topic=seed["topic"],
-        persona=seed["persona"], n_options=seed["n_options"])
+        persona=seed["persona"], n_options=seed["n_options"], difficulty=seed["difficulty"])
     return [{"role": "system", "content": GEN_SYSTEM},
             {"role": "user", "content": user}], SCHEMA_READING, 1400
 

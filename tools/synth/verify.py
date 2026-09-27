@@ -242,6 +242,8 @@ def _build_noul(seed, parsed, rationale, lang):
             gold = False
     if not isinstance(gold, bool):
         return _rej("bad_gold", rationale)
+    if "target" in seed and gold != (seed["target"] == "true"):
+        return _rej("target_mismatch", rationale)
     # noul target order is always [false, true].
     item = {
         "state": state,
@@ -280,6 +282,8 @@ def _build_score(seed, parsed, rationale, lang):
     gold = nfc(parsed.get("gold"))
     if gold not in levels:
         return _rej("gold_not_in_options", rationale)
+    if "target" in seed and levels.index(gold) + 1 != seed["target"]:
+        return _rej("target_mismatch", rationale)
     if _leaked(instructions, [gold]):
         return _rej("answer_leaked", rationale)
     item = {
@@ -432,7 +436,13 @@ def run_checks():
     assert agrees(ngot["item"], "true")
     assert not agrees(ngot["item"], "false")
     messages, _schema, _npred = generate_request(score_seed | {
-        "persona": "a clerk", "aspect_help": "how soon", "n_levels": 3, "lang": "en"})
+        "persona": "a clerk", "aspect_help": "how soon", "n_levels": 3, "lang": "en",
+        "industry": "a retail bank", "register": "a letter", "length": "short: 30 to 60 words", "target": 2})
+    # A generator that ignores the requested answer is rejected, so the label balance holds.
+    assert build_item(dict(noul_seed, target="false"), noul)["reason"] == "target_mismatch"
+    assert build_item(dict(noul_seed, target="true"), noul)["status"] == "ok"
+    assert build_item(dict(score_seed, target=3), score)["reason"] == "target_mismatch"
+    assert build_item(dict(score_seed, target=2), score)["status"] == "ok"
     assert "gold" not in messages[1]["content"] or "gold (" in messages[1]["content"]
     print("verify checks ok")
 
