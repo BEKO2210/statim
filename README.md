@@ -9,7 +9,7 @@
   <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
   <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
-  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%2B%20commercial-161B22"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, Small Business, Free Trial or commercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%C2%B7%20Small%20Business%20%C2%B7%20Trial%20%2B%20commercial-161B22"></a>
 </p>
 
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
@@ -373,8 +373,10 @@ English checkpoint, everything else → multilingual); Laya's full `Router` lang
 | | Licence |
 |---|---|
 | Source code (engine, server, tools) | [Apache-2.0](LICENSE), free for any use |
-| Model weights published by Statim | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): free for personal use, research, experiments and noncommercial organisations |
-| Commercial use of Statim weights | paid licence, see [COMMERCIAL.md](COMMERCIAL.md) |
+| Model weights published by Statim, noncommercial | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): free for personal use, research, experiments and noncommercial organisations |
+| Model weights, small companies | [PolyForm Small Business 1.0.0](LICENSE-MODEL.md): free, including commercial use, below 100 people and 1 M USD revenue |
+| Model weights, evaluation | [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md): any company may evaluate them for fewer than 32 consecutive days |
+| Any other commercial use of Statim weights | paid licence, see [COMMERCIAL.md](COMMERCIAL.md) |
 
 Released weights are trained only on commercially usable, non-ShareAlike data; every source is listed
 in [DATA_LICENSES.md](DATA_LICENSES.md). The original Laya checkpoints that Statim runs are Apache-2.0

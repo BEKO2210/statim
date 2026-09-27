@@ -13,8 +13,10 @@ Third-party components bundled in source form:
   - cpp-httplib (https://github.com/yhirose/cpp-httplib) — MIT License
   - nlohmann/json (https://github.com/nlohmann/json) — MIT License
 
-Model weights published by Statim are licensed separately under the PolyForm Noncommercial License
-1.0.0 (see LICENSE-MODEL.md); commercial use requires a commercial licence (see COMMERCIAL.md).
+Model weights published by Statim are licensed separately, at the user's choice, under the PolyForm
+Noncommercial License 1.0.0, the PolyForm Small Business License 1.0.0 or the PolyForm Free Trial
+License 1.0.0 (see LICENSE-MODEL.md); any other commercial use requires a commercial licence (see
+COMMERCIAL.md).
 Their training data and its licences are listed in DATA_LICENSES.md. Attribution for CC-BY training
 data: Banking77 (Casanueva et al., 2020, PolyAI), MASSIVE (FitzGerald et al., 2022, Amazon), and the
 CC-BY sources listed in DATA_LICENSES.md.

@@ -7,6 +7,12 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Changed
+- Model weights can now be used under PolyForm Small Business 1.0.0 (free commercial use for
+  companies below 100 people and 1 M USD revenue) and PolyForm Free Trial 1.0.0 (any company may
+  evaluate them for fewer than 32 days), in addition to PolyForm Noncommercial 1.0.0 and the
+  commercial licence. Licence texts are embedded verbatim in `LICENSE-MODEL.md`.
+
 ### Added
 - Selective prediction via the `min_confidence` decision option and `--min-confidence` server default;
   responses annotate answers below an active threshold with `escalate: true`.
