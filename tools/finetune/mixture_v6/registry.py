@@ -304,6 +304,20 @@ def _label_fields(entry, row):
     return [(path, _get(row, path)) for path in candidates if _get(row, path) is not None]
 
 
+# big_patent configs are CPC section letters; the letter alone is not a topic a reader can pick.
+CPC_SECTIONS = {
+    "a": "human necessities", "b": "performing operations; transporting", "c": "chemistry; metallurgy",
+    "d": "textiles; paper", "e": "fixed constructions",
+    "f": "mechanical engineering; lighting; heating; weapons; blasting", "g": "physics", "h": "electricity",
+    "y": "general tagging of new technological developments",
+}
+# joelniklaus/covid19_emergency_event card: event1..event8 name COVID-19 measures.
+COVID_EVENTS = {
+    "event1": "state of emergency", "event2": "restrictions of fundamental rights and civil liberties",
+    "event3": "restrictions of daily liberties", "event4": "closures or lockdown",
+    "event5": "suspension of international cooperation and commitments", "event6": "police mobilization",
+    "event7": "army mobilization", "event8": "government oversight",
+}
 AEGIS1_SAFE = {"safe", "needs caution"}
 
 
@@ -354,9 +368,10 @@ def labels_from(entry, row):
                 events = json.loads(events.replace("'", '"'))
             except json.JSONDecodeError:
                 events = []
-        return [human(x) for x in (events or [])]
+        return [COVID_EVENTS.get(str(x), human(x)) for x in (events or [])]
     if sid == "NortheasternUniversity/big_patent":
-        return [human(row.get("_v6_config", ""))]
+        section = CPC_SECTIONS.get(str(row.get("_v6_config", "")).lower())
+        return [section] if section else []
     if "multi_woz_v22" in sid and row.get("services"):
         return [human(row["services"][0])]
     if "CrossWOZ" in sid:

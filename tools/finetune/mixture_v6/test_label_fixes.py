@@ -142,6 +142,18 @@ def test_special_topic_labels():
     assert registry.field_labels(nhtsa, {"components": "AIR BAGS, STEERING"}, {}) == []
 
 
+def test_big_patent_labels_are_cpc_section_titles():
+    e = entry("NortheasternUniversity/big_patent")
+    rows = [{"abstract": "A machine.", "_v6_config": "a"}, {"abstract": "A circuit.", "_v6_config": "h"}]
+    items = list(adapt(e, rows, 1))
+    assert golds(items, "choice") == {"human necessities": 1, "electricity": 1}
+
+
+def test_covid_events_are_named():
+    e = entry("joelniklaus/covid19_emergency_event")
+    assert registry.labels_from(e, {"text": "x", "all_events": ["event4"]}) == ["closures or lockdown"]
+
+
 def test_urgency_is_binary():
     e = entry("IDinsight/urgency_detection_maternal_health_synthetic")
     assert registry.field_labels(e, {"matching_rule": "Changes in your vision"}, {}) == [("urgency", "urgent")]
@@ -226,6 +238,10 @@ def test_audit_flags():
     assert "constant-yes-no" in flags
     flags = audit.audit_items([_choice_item(["a", "b"], "a") for _ in range(40)])
     assert "constant-choice" in flags
+    flags = audit.audit_items([_choice_item(["event1", "event4"], "event1")])
+    assert "opaque-option" in flags
+    flags = audit.audit_items([_choice_item(["a", "b", "c"], "a")])
+    assert "opaque-option" in flags
     flags = audit.audit_items([_choice_item(["billing", "delivery"], "billing", task="sentiment")])
     assert "option-mismatch" in flags
     clean = [_choice_item(["negative", "positive"], g, task="sentiment") for g in ["negative", "positive"] * 20]
@@ -237,4 +253,4 @@ def test_allow_entries_have_reasons():
         assert key in {registry.source_key(e) for e in registry.ENTRIES}, key
         for flag, reason in flags.items():
             assert flag in {"serialized-option", "numeric-option", "constant-yes-no", "constant-choice",
-                            "option-mismatch"} and len(reason) > 20
+                            "option-mismatch", "opaque-option"} and len(reason) > 20

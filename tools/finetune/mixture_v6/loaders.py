@@ -781,7 +781,7 @@ CONFIGS = {
         "mixtral_written_texts_for_tasks_v3", "mixtral_written_texts_for_tasks_v4",
     ],
     "bench-llms/or-bench": ["or-bench-80k", "or-bench-hard-1k", "or-bench-toxic"],
-    "NortheasternUniversity/big_patent": list("abcdefghijklmnopqrstuvwxy"),
+    "NortheasternUniversity/big_patent": list("abcdefghy"),  # the CPC sections the dataset has
     "amyrmahdy/decima-synthetic-decisions": ["short", "long", "relabel"],
 }
 

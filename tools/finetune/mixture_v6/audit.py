@@ -13,6 +13,7 @@ the items. A flag fails the audit (exit 1) unless ALLOW lists it for that source
   constant-yes-no    one answer in >= 97 % of a source's yes/no items for one task
   constant-choice    one gold option in >= 90 % of a source's items for one question
   option-mismatch    a sentiment or NLI question whose options are not sentiment / NLI labels
+  opaque-option      an option that is an id, not a name: "event4", "LABEL_2", a single Latin letter
 
 A source that fails to load or yields no items is reported as a warning, not a failure: CI
 downloads from the Hub and a flaky source must not block an unrelated change.
@@ -42,6 +43,7 @@ SENTIMENT_OPTIONS = {"positive", "negative", "neutral", "mixed", "very positive"
 NLI_OPTIONS = {"entailment", "neutral", "contradiction"}
 NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 SERIALIZED = re.compile(r"^\s*[\[{]|'\s*:\s*|\"\s*:\s*")
+OPAQUE = re.compile(r"(?i)^(?:[a-z]|(?:label|class|event|cat|category|topic|intent|tag)[ _-]?\d+)$")
 
 # source key -> {flag: reason}. Every entry needs a reason a reviewer can check.
 ALLOW = {
@@ -75,6 +77,9 @@ def audit_items(items):
             if SERIALIZED.search(option) or len(option) > MAX_OPTION_CHARS:
                 flags["serialized-option"].append(option[:80])
                 break
+        opaque = [o for o in options if OPAQUE.fullmatch(o.strip())]
+        if opaque:
+            flags["opaque-option"].append(", ".join(opaque[:6]))
         if all(NUMBER.fullmatch(o.strip()) for o in options):
             flags["numeric-option"].append(", ".join(options[:6]))
         allowed = SENTIMENT_OPTIONS if task == "sentiment" else NLI_OPTIONS if task == "nli" else None
