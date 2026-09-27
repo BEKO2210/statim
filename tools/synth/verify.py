@@ -243,7 +243,11 @@ def _paraphrase_banned(seed, item):
 
 
 def _apply_paraphrase(seed, item, view):
-    """Replace the generated question with a seeded paraphrase. Levels and labels stay."""
+    """Replace the generated question with a seeded paraphrase. Levels and labels stay.
+    Reading items keep their generated question: it names the fact the gold option answers, and a
+    generic "which option does the passage support?" can make two options correct."""
+    if seed.get("task") == "reading":
+        return None
     from prompts import paraphrase_candidates
     lines = paraphrase_candidates(seed)
     generated = item["q"]["instructions"]

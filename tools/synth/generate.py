@@ -37,7 +37,9 @@ from common import has_key, training_item  # noqa: E402
 from filter import BanIndex, apply_filter, load_ban_strings, public_item  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from prompts import PROMPT_VERSION, generate_request, prompts_digest  # noqa: E402
-from seeds import TASKS, acceptance_from_rows, load_target_weights, plan  # noqa: E402
+from seeds import (  # noqa: E402
+    STATIC_TARGET_ACCEPTANCE, TASKS, acceptance_from_rows, load_target_weights, plan, weights_from_acceptance,
+)
 from verify import agrees, build_item, parse_model_json, verify_view  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -285,7 +287,8 @@ def main():
     ap.add_argument("--balance-from", default=None,
                     help="manifest.json; target weights are 1/acceptance, clamped to [1, 4]")
     ap.add_argument("--max-class-share", type=float, default=0.45,
-                    help="drop surplus so no class exceeds this share of a task")
+                    help="per task/language cell, keep at most this share of the cell's size before the cap"
+                         " per class; final shares can be higher, and a cell with one class is kept")
     args = ap.parse_args()
     if args.n < 1 or args.workers < 1:
         raise SystemExit("--n and --workers must be >= 1")
@@ -296,7 +299,8 @@ def main():
     args.tasks = tasks
     if not (0 < args.max_class_share <= 1):
         raise SystemExit("--max-class-share must be in (0, 1]")
-    args.target_weights = load_target_weights(args.balance_from) if args.balance_from else None
+    args.target_weights = (load_target_weights(args.balance_from) if args.balance_from
+                           else weights_from_acceptance(STATIC_TARGET_ACCEPTANCE))  # documented fallback
     items_path, prov_path, manifest_path = derive_paths(Path(args.out))
     if args.no_resume and (prov_path.exists() or items_path.exists()):
         raise SystemExit("refusing --no-resume because %s already exists" % prov_path)

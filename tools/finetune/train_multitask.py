@@ -92,24 +92,26 @@ def mixture_src(row, cats):
     return "mixture:" + (row.get("category") or cats.get(sid, "other"))
 
 
+def state_key(state):
+    """Held-out comparison key of a mixture state; the same key filters train rows and distillation texts."""
+    return " ".join(json.dumps(state, sort_keys=True, ensure_ascii=False).split()).lower()
+
+
 def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
     """Broad typed-decision mixture from build_mixture.py or mixture_v6/build.py. The first n_dev items
     are held out (v6 writes its dev slice first), and every later item whose state also occurs in the
-    held-out slice is dropped (several questions of one source can share a document)."""
+    held-out slice is dropped (several questions of one source can share a document). Returns
+    (train, dev, dev_states), dev_states being the state_key() of every held-out state."""
     import gzip
     import itertools
     train, dev, dev_states, leaked = [], [], set(), 0
     cats = v6_categories()
-
-    def key(state):
-        return " ".join(json.dumps(state, sort_keys=True, ensure_ascii=False).split()).lower()
-
     # Streamed: mixture v7 has ~1M rows, which as parsed dicts alone would take ~2 GB of RAM.
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for line in itertools.islice(f, n_dev + limit) if limit else f:
             r = json.loads(line)
             in_dev = len(dev) < n_dev
-            if not in_dev and key(r["state"]) in dev_states:
+            if not in_dev and state_key(r["state"]) in dev_states:
                 leaked += 1
                 continue
             qd = r["q"]
@@ -121,7 +123,7 @@ def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
                   "src": mixture_src(r, cats)}
             if in_dev:
                 dev.append(it)
-                dev_states.add(key(r["state"]))
+                dev_states.add(state_key(r["state"]))
             else:
                 train.append(it)
     by_cat = {}
@@ -129,7 +131,7 @@ def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
         by_cat[it["src"]] = by_cat.get(it["src"], 0) + 1
     print(f"mixture: {len(train)} train, {len(dev)} dev, {leaked} train items dropped (state in dev)"
           + (f" | {by_cat}" if len(by_cat) > 1 else ""), flush=True)
-    return train, dev
+    return train, dev, dev_states
 
 
 def massive_data(tok, langs, per_lang, dev_langs, dev_per_lang, max_len, rng):
@@ -245,9 +247,9 @@ def main():
     rng.shuffle(td)
     typed_dev = typed_items(tok, td[:len(td) // 10], max_len, hml)
     train += typed_items(tok, td[len(td) // 10:], max_len, hml)
-    x_dev = []
+    x_dev, x_dev_states = [], set()
     if a.mixture:
-        x_train, x_dev = mixture_data(tok, a.mixture, max_len, BANK_HEAD, a.mixture_dev, a.mixture_limit, rng)
+        x_train, x_dev, x_dev_states = mixture_data(tok, a.mixture, max_len, BANK_HEAD, a.mixture_dev, a.mixture_limit, rng)
         train += x_train
 
     model = build_model(cfg, encoder_dir=os.path.join(base, "encoder"))
@@ -258,10 +260,9 @@ def main():
         tb.DISTILL_QUESTIONS[:] = [q for q in DISTILL_QUESTIONS if "sentiment" not in q[1]]
         if a.clean:
             import gzip
-            import itertools
-            with gzip.open(a.mixture, "rt", encoding="utf-8") as f:  # never the held-out dev prefix
-                texts = [t for t in (json.loads(line)["state"] for line in itertools.islice(f, a.mixture_dev, None))
-                         if isinstance(t, str) and 20 < len(t) < 2000]
+            with gzip.open(a.mixture, "rt", encoding="utf-8") as f:  # never a held-out dev state
+                texts = [t for t in (json.loads(line)["state"] for line in f)
+                         if isinstance(t, str) and 20 < len(t) < 2000 and state_key(t) not in x_dev_states]
             rng.shuffle(texts)
             texts = texts[:a.distill]
         else:
