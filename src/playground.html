@@ -275,8 +275,8 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
   <h2>Settings</h2>
   <div class="row"><label for="lang">Language hint</label><input class="field" id="lang" placeholder="Automatic, or e.g. de, en" autocomplete="off"><p>Routes the request to the right model when several are loaded.</p></div>
   <div class="row"><span class="l">Review threshold</span>
-    <div class="range"><input type="range" id="minc" min="0" max="0.95" step="0.05" value="0" aria-label="Review threshold"><output id="mincOut">off</output></div>
-    <p>Answers less confident than this are marked “Needs review”, so a person can check them.</p></div>
+    <div class="range"><input type="range" id="minc" min="0" max="0.95" step="0.05" value="0.6" aria-label="Review threshold"><output id="mincOut">off</output></div>
+    <p>Answers less confident than this are marked “Needs review”, so a person can check them. Set it to off to see every answer as final.</p></div>
   <div class="row"><label for="ens">Ensemble</label><select class="field" id="ens"><option value="">Server default</option><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select><p>Averages several option orders; slower, sometimes steadier.</p></div>
   <label class="switch"><input type="checkbox" id="cal"> Calibrate against option-order bias</label>
   <div class="acts"><button class="btn pri" value="ok">Done</button></div>

@@ -262,7 +262,7 @@ Probabilities, scores, `noul`, `confidence`, `answer_confidence`, and `act_proba
 
 For noul, `noul` is the probability of the true side. `confidence` and `answer_confidence` are both `max(noul, 1 - noul)`.
 
-`action.act_probability` is the checkpoint's action head. The published Laya configs train that head with an `escalate` cost. The HTTP response does not name the action.
+`action.act_probability` is the checkpoint's action head. The published Laya configs train that head with an `escalate` cost. The HTTP response does not name the action. On the published checkpoints this head saturates at 1.0 whatever the confidence, so it is not a usable abstain signal; use `min_confidence` and the `escalate` flag (see [Selective prediction](#selective-prediction)) to decide when a person should look instead.
 
 The English checkpoint applies a stored temperature that depends on the question type and how many options it has. The multilingual checkpoint uses temperature 1. Consensus averages the option log-probabilities of both checkpoints and decodes at temperature 1.
 
