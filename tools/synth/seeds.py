@@ -1,14 +1,19 @@
 """Deterministic seed table: domain x persona x language x task.
 
-The first n seeds are a prefix of the first n+k seeds (same --seed), so a
-resumed run does not reshuffle work that was already done.
+The first n seeds are a prefix of the first n+k seeds (same --seed and the
+same target weights), so a resumed run does not reshuffle work already done.
 Arabic and Hindi are listed twice for business decisions only.
 
 Sentiment, emotion, complaint, urgency, and sarcasm use the same attribute
 axes. Gap languages are repeated in the cycle (weight x2). Legacy business,
 score, and reading seeds keep their previous ids.
+
+Target weights are optional. A weight is 1/acceptance of that target, clamped
+to [1, 4]. Under-accepted targets are requested more often. Verify stays exact.
 """
+import json
 import random
+from pathlib import Path
 
 from common import canonical_id
 
@@ -124,6 +129,116 @@ TOPICS = [
     "a maintenance-window announcement",
     "a case note that quotes a customer email",
 ]
+
+# Eight opening rules. The cue is part of the rule so the first words are not one shared phrase.
+OPENING_KINDS = (
+    "quote", "datetime", "order", "name", "question", "mid", "place", "number",
+)
+_OPENING_TEXT = {
+    "quote": "Start with a quoted sentence in quotation marks. The quoted sentence is about: {cue}. Write that sentence in the requested language.",
+    "datetime": "Start with this date or time before any other word: {cue}.",
+    "order": "Start with this product or order number before any other word, the word translated into the requested language and the number kept: {cue}.",
+    "name": "Start with this person's name before any other word: {cue}.",
+    "question": "Start with a question that mentions: {cue}. Write the question in the requested language.",
+    "mid": "Start in the middle of the situation, with no greeting and no date. The first words must bring up: {cue}. Write them in the requested language.",
+    "place": "Start with this place before any other word, the word translated into the requested language and the number kept: {cue}.",
+    "number": "Start with this number or amount before any other word, the unit written in the requested language: {cue}.",
+}
+_OPENING_CUES = {
+    "quote": (
+        "a locked door", "a missing reply", "a cold meal", "a late bus",
+        "a cracked screen", "a quiet office", "a full waiting room", "a wrong size",
+    ),
+    "datetime": (
+        "09:40", "16:05", "14 March", "Tuesday", "2024-11-02", "07:15", "30 June", "Friday 18:20",
+    ),
+    "order": (
+        "order 48219", "item A-3307", "ticket 90112", "parcel 77-14",
+        "invoice 2208", "booking 6610", "SKU 14823", "ref 3055",
+    ),
+    "name": (
+        "Lina", "Omar", "Kenji", "Sofia", "Jonas", "Priya", "Elena", "Mateo",
+    ),
+    "question": (
+        "the refund window", "the second parcel", "the evening shift", "the broken latch",
+        "the extra charge", "the gate change", "the missing key", "the short reply",
+    ),
+    "mid": (
+        "the queue at the counter", "the third flight of stairs", "the unpaid balance", "the torn sleeve",
+        "the dark hallway", "the last empty seat", "the spilled coffee", "the blinking error light",
+    ),
+    "place": (
+        "room 312", "platform 4", "gate B7", "desk 12", "locker 19", "floor 3", "bay 6", "counter 2",
+    ),
+    "number": (
+        "18 EUR", "6 boxes", "45 minutes", "2 tickets", "120 pages", "8 percent", "3 nights", "90 kg",
+    ),
+}
+# Concrete facts, not sentences. The text must contain one of these.
+DETAIL_KINDS = ("amount", "deadline", "product_type", "duration", "location", "quantity")
+DETAIL_VALUES = {
+    "amount": ("18 EUR", "240 USD", "75 GBP", "1200 JPY", "90 BRL", "40 AED"),
+    "deadline": ("16:00", "09:30", "Friday", "2 hours", "31 March", "Monday"),
+    "product_type": ("kettle", "phone case", "winter coat", "lamp", "headphones", "suitcase"),
+    "duration": ("10 minutes", "3 days", "2 weeks", "45 minutes", "6 months", "1 hour"),
+    "location": ("room 418", "platform 9", "desk 27", "gate C3", "floor 5", "locker 44"),
+    "quantity": ("2", "6", "12", "4", "30", "8"),
+}
+
+# Pilot-2 acceptance, per task. Nested keys are strata (complaint form, urgency
+# level count). Leaf dicts are attempts/accepted. weights_from_acceptance()
+# turns each rate into a request weight. This table is the fallback when no
+# manifest is passed; --balance-from recomputes the same shape from a run.
+STATIC_TARGET_ACCEPTANCE = {
+    "sentiment": {
+        "positive": {"attempts": 50, "accepted": 32},
+        "negative": {"attempts": 50, "accepted": 30},
+        "mixed": {"attempts": 50, "accepted": 34},
+        "neutral": {"attempts": 50, "accepted": 7},
+    },
+    "emotion": {
+        "sadness": {"attempts": 25, "accepted": 24},
+        "surprise": {"attempts": 25, "accepted": 22},
+        "joy": {"attempts": 25, "accepted": 21},
+        "anger": {"attempts": 25, "accepted": 16},
+        "fear": {"attempts": 25, "accepted": 15},
+        "trust": {"attempts": 25, "accepted": 15},
+        "disgust": {"attempts": 25, "accepted": 12},
+        "neutral": {"attempts": 25, "accepted": 11},
+    },
+    "sarcasm": {
+        "false": {"attempts": 100, "accepted": 47},
+        "true": {"attempts": 100, "accepted": 43},
+    },
+    "complaint": {
+        "noul": {
+            "true": {"attempts": 50, "accepted": 41},
+            "false": {"attempts": 50, "accepted": 41},
+        },
+        "choice": {
+            "delivery": {"attempts": 15, "accepted": 13},
+            "billing": {"attempts": 15, "accepted": 13},
+            "product_defect": {"attempts": 14, "accepted": 12},
+            "service_quality": {"attempts": 14, "accepted": 10},
+            "refund": {"attempts": 14, "accepted": 5},
+            "communication": {"attempts": 14, "accepted": 3},
+            "other": {"attempts": 14, "accepted": 1},
+        },
+    },
+    "urgency": {
+        "4": {
+            "1": {"attempts": 25, "accepted": 21},
+            "2": {"attempts": 25, "accepted": 5},
+            "3": {"attempts": 25, "accepted": 4},
+            "4": {"attempts": 25, "accepted": 21},
+        },
+        "3": {
+            "1": {"attempts": 34, "accepted": 21},
+            "2": {"attempts": 33, "accepted": 10},
+            "3": {"attempts": 33, "accepted": 17},
+        },
+    },
+}
 
 # Attribute axes (AttrPrompt, Yu et al. 2023): independent attributes drawn per seed, so the prompt
 # space has millions of combinations instead of a short cycle that repeats every few hundred seeds.
@@ -272,13 +387,49 @@ def _plan_legacy(task, n, seed):
     return rows
 
 
+def _opening_cue(kind, rng):
+    """Numbers, places and times are drawn per seed: a fixed list of eight cues repeated the same
+    "parcel 77-14" or "90 kg" at the start of many texts (pilot 3)."""
+    if kind == "order":
+        return "%s %d" % (rng.choice(("order", "item", "ticket", "parcel", "invoice", "booking", "reference", "case")), rng.randint(1000, 99999))
+    if kind == "place":
+        return "%s %d" % (rng.choice(("room", "platform", "gate", "desk", "locker", "floor", "bay", "counter", "office", "ward")), rng.randint(1, 80))
+    if kind == "datetime":
+        if rng.random() < 0.5:
+            return "%02d:%02d" % (rng.randint(6, 22), rng.randrange(0, 60, 5))
+        return "%d.%d." % (rng.randint(1, 28), rng.randint(1, 12))
+    if kind == "number":
+        return "%d %s" % (rng.randint(2, 480), rng.choice(("EUR", "USD", "boxes", "minutes", "tickets", "pages", "percent", "nights", "kg", "hours", "items", "calls")))
+    return rng.choice(_OPENING_CUES[kind])
+
+
+def _detail_value(kind, rng):
+    if kind == "amount":
+        return "%d %s" % (rng.randint(5, 2500), rng.choice(("EUR", "USD", "GBP", "JPY", "BRL", "AED", "INR", "TRY", "PLN")))
+    if kind == "deadline":
+        return rng.choice(("%02d:%02d" % (rng.randint(7, 20), rng.randrange(0, 60, 15)), "in %d hours" % rng.randint(1, 72), "day %d of the month" % rng.randint(1, 28)))
+    if kind == "duration":
+        return "%d %s" % (rng.randint(2, 90), rng.choice(("minutes", "hours", "days", "weeks", "months")))
+    if kind == "location":
+        return "%s %d" % (rng.choice(("room", "platform", "gate", "desk", "locker", "floor", "bay", "counter")), rng.randint(1, 80))
+    if kind == "quantity":
+        return str(rng.randint(2, 60))
+    return rng.choice(DETAIL_VALUES[kind])
+
+
 def _message_attrs(rng):
+    kind = rng.choice(OPENING_KINDS)
+    cue = _opening_cue(kind, rng)
+    detail_kind = rng.choice(DETAIL_KINDS)
+    detail_value = _detail_value(detail_kind, rng)
     return {
         "industry": rng.choice(INDUSTRIES),
         "register": rng.choice(MESSAGE_REGISTERS),
         "length": rng.choice(LENGTHS),
         "difficulty": rng.choice(DIFFICULTIES),
         "persona": rng.choice(MESSAGE_PERSONAS),
+        "opening": _OPENING_TEXT[kind].format(cue=cue),
+        "detail": "%s: %s" % (detail_kind, detail_value),
     }
 
 
@@ -287,7 +438,148 @@ def _finish_spec(spec):
     return spec
 
 
-def _plan_message(task, n, seed):
+def acceptance_to_weight(rate):
+    """1/acceptance, clamped to [1, 4]. A zero rate takes the top of the clamp."""
+    if rate <= 0:
+        return 4.0
+    return min(4.0, max(1.0, 1.0 / float(rate)))
+
+
+def _is_count_leaf(node):
+    return isinstance(node, dict) and "attempts" in node and "accepted" in node
+
+
+def weights_from_acceptance(node):
+    """Map an acceptance tree onto request weights. Strata stay nested."""
+    if _is_count_leaf(node):
+        attempts = node["attempts"]
+        rate = (node["accepted"] / attempts) if attempts else 0.0
+        return acceptance_to_weight(rate)
+    if isinstance(node, dict):
+        return {key: weights_from_acceptance(value) for key, value in node.items()}
+    return acceptance_to_weight(float(node))
+
+
+def iter_weight_strata(weights):
+    """Yield each flat label->weight map. Nested strata are yielded separately."""
+    if not isinstance(weights, dict) or not weights:
+        return
+    if all(isinstance(value, (int, float)) for value in weights.values()):
+        yield weights
+        return
+    for value in weights.values():
+        if isinstance(value, dict):
+            yield from iter_weight_strata(value)
+
+
+def normalized_weight_sum(weights):
+    total = float(sum(weights.values()))
+    if total <= 0:
+        return 0.0
+    return sum(float(value) / total for value in weights.values())
+
+
+def _weight_list(weights, labels, stratum=None):
+    """Aligned weights, or None when the caller asked for a uniform round robin."""
+    if weights is None:
+        return None
+    node = weights
+    if stratum is not None:
+        node = weights.get(stratum) if isinstance(weights, dict) else None
+        if not isinstance(node, dict):
+            node = {}
+    if not isinstance(node, dict):
+        return None
+    out = []
+    for label in labels:
+        raw = node.get(str(label), node.get(label, 1.0))
+        if isinstance(raw, dict):
+            raw = 1.0
+        out.append(float(raw))
+    return out
+
+
+def _weighted_label(index, labels, weights):
+    """Round robin when weights is None. Otherwise a golden-ratio scan.
+
+    The scan only depends on `index`, so plan(n) stays a prefix of plan(n+k).
+    """
+    labels = tuple(labels)
+    if not labels:
+        raise SystemExit("no labels to draw")
+    if weights is None:
+        return labels[index % len(labels)]
+    total = float(sum(weights))
+    if total <= 0:
+        return labels[index % len(labels)]
+    point = (index * 0.6180339887498949) % 1.0
+    acc = 0.0
+    for label, weight in zip(labels, weights):
+        acc += float(weight) / total
+        if point < acc:
+            return label
+    return labels[-1]
+
+
+def _stratum_of(seed):
+    """(stratum or None, target string) for acceptance accounting."""
+    task = seed.get("task")
+    target = str(seed.get("target"))
+    if task == "complaint":
+        return seed.get("form") or "noul", target
+    if task == "urgency":
+        return str(seed.get("n_levels")), target
+    return None, target
+
+
+def acceptance_from_rows(rows):
+    """Per-task acceptance tree. Latest row per id wins."""
+    last = {}
+    for row in rows:
+        last[row.get("id")] = row
+    counts = {}
+    for rec in last.values():
+        seed = rec.get("seed") or {}
+        task = seed.get("task")
+        if not task or "target" not in seed:
+            continue
+        stratum, target = _stratum_of(seed)
+        key = (task, stratum, target)
+        cell = counts.setdefault(key, [0, 0])
+        cell[0] += 1
+        cell[1] += rec.get("status") == "accepted"
+    tree = {}
+    for (task, stratum, target), (attempts, accepted) in counts.items():
+        leaf = {"attempts": attempts, "accepted": accepted,
+                "rate": (accepted / attempts) if attempts else 0.0}
+        if stratum is None:
+            tree.setdefault(task, {})[target] = leaf
+        else:
+            tree.setdefault(task, {}).setdefault(stratum, {})[target] = leaf
+    return tree
+
+
+def load_target_weights(path):
+    """Weights from a manifest's target_acceptance, else from its provenance."""
+    path = Path(path)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    acceptance = manifest.get("target_acceptance")
+    if not acceptance:
+        prov = path.with_name(path.name.replace(".manifest.json", ".provenance.jsonl.gz"))
+        if not prov.is_file():
+            raise SystemExit("no target_acceptance in %s and no provenance at %s" % (path, prov))
+        import gzip
+        rows = []
+        with gzip.open(prov, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        acceptance = acceptance_from_rows(rows)
+    return weights_from_acceptance(acceptance)
+
+
+def _plan_message(task, n, seed, weights=None):
     rng = random.Random(seed + _SALT[task])
     langs = _shuffled(_LANG_CYCLE[task], rng)
     rows = []
@@ -297,7 +589,8 @@ def _plan_message(task, n, seed):
         spec["lang"] = langs[i % len(langs)]
         spec["i"] = i
         if task == "sentiment":
-            spec["target"] = SENTIMENT_LABELS[i % len(SENTIMENT_LABELS)]
+            spec["target"] = _weighted_label(
+                i, SENTIMENT_LABELS, _weight_list(weights, SENTIMENT_LABELS))
             # i % 4 would lock a class to one variant. Mix the two cycles.
             spec["variant"] = "aspect" if ((i // 4) + (i % 4)) % 2 else "overall"
             spec["aspects"] = []
@@ -307,38 +600,46 @@ def _plan_message(task, n, seed):
                 spec["aspects"] = picked
                 spec["focus"] = picked[i % 3]
         elif task == "emotion":
-            spec["target"] = EMOTION_LABELS[i % len(EMOTION_LABELS)]
+            spec["target"] = _weighted_label(
+                i, EMOTION_LABELS, _weight_list(weights, EMOTION_LABELS))
             spec["genre"] = EMOTION_GENRES[
                 ((i // len(EMOTION_LABELS)) + (i % len(EMOTION_LABELS))) % len(EMOTION_GENRES)]
         elif task == "complaint":
             drawn = rng.choice(COMPLAINT_TOPICS)
             if i % 2 == 0:
                 spec["form"] = "noul"
-                spec["target"] = "true" if (i // 2) % 2 == 0 else "false"
+                spec["target"] = _weighted_label(
+                    i // 2, ("true", "false"),
+                    _weight_list(weights, ("true", "false"), "noul"))
                 spec["topic"] = drawn
             else:
                 spec["form"] = "choice"
-                spec["target"] = COMPLAINT_LABELS[(i // 2) % len(COMPLAINT_LABELS)]
+                spec["target"] = _weighted_label(
+                    i // 2, COMPLAINT_LABELS,
+                    _weight_list(weights, COMPLAINT_LABELS, "choice"))
                 spec["topic"] = COMPLAINT_TOPIC[spec["target"]]
         elif task == "urgency":
             if i % 2 == 0:
                 spec["n_levels"] = 4
-                spec["target"] = (i // 2) % 4 + 1
             else:
                 spec["n_levels"] = 3
-                spec["target"] = (i // 2) % 3 + 1
+            labels = tuple(range(1, spec["n_levels"] + 1))
+            spec["target"] = _weighted_label(
+                i // 2, labels, _weight_list(weights, labels, str(spec["n_levels"])))
             spec["levels_brief"] = list(URGENCY_MEANINGS[spec["n_levels"]])
         else:
-            spec["target"] = "true" if i % 2 == 0 else "false"
+            spec["target"] = _weighted_label(
+                i, ("true", "false"), _weight_list(weights, ("true", "false")))
         rows.append(_finish_spec(spec))
     return rows
 
 
-def plan(task, n, seed):
+def plan(task, n, seed, weights=None):
+    """Plan n seeds. `weights` is an optional per-task acceptance-weight tree."""
     if task not in TASKS:
         raise SystemExit("unknown task %s" % task)
     if n < 1:
         raise SystemExit("--n must be >= 1")
     if task in {"business", "score", "reading"}:
         return _plan_legacy(task, n, seed)
-    return _plan_message(task, n, seed)
+    return _plan_message(task, n, seed, weights)
