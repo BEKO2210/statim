@@ -152,6 +152,33 @@ The [security coverage report](tests/security/REPORT.md) maps each finding to it
 The script tries localhost port 8094, then a free port. Environments that forbid binding
 report a CTest skip (exit 77); run this command manually in a socket-capable environment.
 
+## Client SDKs
+
+Official clients live in `clients/`. Both speak the HTTP API above, ship with no runtime
+dependencies beyond the language standard library, and retry `503` with backoff.
+
+| Package | Path |
+|---|---|
+| Python `statim` | [`clients/python`](clients/python) (`pip install ./clients/python`) |
+| TypeScript `@statim/client` | [`clients/js`](clients/js) (`npx tsc`, then import the package) |
+
+```python
+from statim import Client
+
+client = Client("http://127.0.0.1:8080", timeout=120)
+decision = client.decide(
+    {"subject": "Duplicate charge on invoice #4411"},
+    {"refund": {"type": "noul", "instructions": "Does the user explicitly request a refund?"}},
+    model="multilingual",
+)
+print(decision.answers["refund"].noul, decision.answers["refund"].confidence)
+```
+
+`decide`, `decide_batch`, `models`, `health`, and `ready` are the same methods in both
+languages. Yes/no questions use wire type `noul` and come back as `YesNoAnswer`.
+Examples, errors, and request IDs: [`clients/python/README.md`](clients/python/README.md),
+[`clients/js/README.md`](clients/js/README.md).
+
 ## Benchmarks
 
 Measured on a 2015-class laptop CPU (Intel Xeon E3-1505M v5, 4 cores / 8 threads, AVX2, turbo off,
