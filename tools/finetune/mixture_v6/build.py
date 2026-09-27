@@ -6,8 +6,11 @@ from __future__ import annotations
 import argparse
 import collections
 import gzip
+import hashlib
 import json
+import multiprocessing
 import random
+import resource
 import sys
 import traceback
 from pathlib import Path
@@ -24,6 +27,69 @@ else:
 
 ROOT = Path(__file__).resolve().parents[3]
 MAX_LOADED = 60_000
+_BANNED = frozenset()  # evaluation texts; set by main() before any source worker is forked
+
+
+class SourceFailed(RuntimeError):
+    """A source failed inside its worker process: the worker's error line and traceback."""
+
+    def __init__(self, error, trace):
+        super().__init__(error)
+        self.error, self.trace = error, trace
+
+
+def _error_line(exc):
+    return "%s: %s" % (type(exc).__name__, (str(exc).splitlines() or [""])[0])
+
+
+def _worker(conn, fn, args):
+    try:
+        conn.send((True, fn(*args)))
+    except BaseException as exc:  # the parent records the failure; the worker must not die silently
+        conn.send((False, (_error_line(exc), traceback.format_exc(limit=3))))
+    finally:
+        conn.close()
+
+
+def run_isolated(fn, *args):
+    """Run fn(*args) in a forked worker and return its result. Hub streaming, Arrow buffers and
+    the fragmented heap of one source die with its worker, so memory stays flat over 121 sources
+    (in one process it reached 4.5 GB after 33 of 121 sources). In-process where fork is missing."""
+    if "fork" not in multiprocessing.get_all_start_methods():
+        return fn(*args)
+    ctx = multiprocessing.get_context("fork")
+    recv, send = ctx.Pipe(duplex=False)
+    proc = ctx.Process(target=_worker, args=(send, fn, args))
+    proc.start()
+    send.close()
+    try:
+        ok, payload = recv.recv()  # before join: a large result would otherwise block the worker
+    except EOFError:
+        proc.join()
+        raise SourceFailed("WorkerDied: exit code %s" % proc.exitcode, "") from None
+    finally:
+        recv.close()
+    proc.join()
+    if not ok:
+        raise SourceFailed(*payload)
+    return payload
+
+
+def _rss_mb():
+    """(this process, largest finished worker) resident memory in MB, for the progress log."""
+    try:
+        with open("/proc/self/status") as fh:
+            own = next(int(line.split()[1]) for line in fh if line.startswith("VmRSS:"))
+    except (OSError, StopIteration):
+        own = 0
+    return own // 1024, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024
+
+
+def load_source(entry, load_limit, cap, seed, number):
+    """Load, adapt and clean one source (runs inside its worker)."""
+    rows, warnings = load_rows(entry, load_limit)
+    items, dropped = clean_items(entry, adapt(entry, rows, seed), _BANNED, cap, seed + number)
+    return {"rows_loaded": len(rows), "items": items, "dropped": dict(dropped), "warnings": warnings}
 
 def valid_item(item):
     if not isinstance(item, dict) or not isinstance(item.get("state"), str) or not item["state"].strip():
@@ -132,7 +198,7 @@ def split_source(items, n_dev, seed, assigned=None):
     """Split one source's items into dev and train by state. ``assigned`` maps a normalised state
     to "dev" or "train" across ALL sources: a state that an earlier source already placed keeps
     that side, so the same text can never be in dev for one source and in train for another."""
-    assigned = {} if assigned is None else assigned
+    assigned = {} if assigned is None else assigned  # keys are 16-byte digests: ~700k states fit in ~60 MB
     by_state = collections.defaultdict(list)
     for item in items:
         by_state[norm(item["state"])].append(item)
@@ -140,10 +206,11 @@ def split_source(items, n_dev, seed, assigned=None):
     random.Random(seed).shuffle(keys)
     dev, train = [], []
     for key in keys:
-        side = assigned.get(key)
+        slot = hashlib.blake2b(key.encode("utf-8"), digest_size=16).digest()
+        side = assigned.get(slot)
         if side is None:
             side = "dev" if len(dev) < n_dev else "train"
-            assigned[key] = side
+            assigned[slot] = side
         (dev if side == "dev" else train).extend(by_state[key])
     return dev, train
 
@@ -206,10 +273,11 @@ def main(argv=None):
     # This assertion is intentionally close to loading: disabled entries can
     # never reach load_rows, even if the JSON later gains extra metadata.
     assert all(e.get("use") is True and source_key(e) in ADAPTERS for e in selected)
-    banned = load_eval_texts(ROOT / "data" / "eval-texts.pkl")
+    global _BANNED
+    _BANNED = banned = load_eval_texts(ROOT / "data" / "eval-texts.pkl")
     out_path, manifest_path, report_path = paths_for(a.out, a.smoke)
     cap = a.smoke or (a.per_source + a.dev_per_source)
-    all_dev, all_train, records = [], [], []
+    all_dev, all_train, records = [], [], []  # items as JSON lines: a third of the memory of dicts
     assigned = {}  # normalised state -> "dev" / "train", shared by all sources
     for number, entry in enumerate(selected):
         key, meta = source_key(entry), metadata(entry)
@@ -217,22 +285,25 @@ def main(argv=None):
                "rows_loaded": 0, "kept": 0, "train": 0, "dev": 0, "dropped": {}}
         try:
             load_limit = min(MAX_LOADED, max(cap * 8, 500))
-            rows, warnings = load_rows(entry, load_limit)
-            rec["rows_loaded"] = len(rows)
-            items, dropped = clean_items(entry, adapt(entry, rows, a.seed), banned, cap, a.seed + number)
+            got = run_isolated(load_source, entry, load_limit, cap, a.seed, number)
+            items = got["items"]
+            rec["rows_loaded"] = got["rows_loaded"]
             dev_n = min(a.dev_per_source, max(0, len(items) // 5)) if a.smoke else min(a.dev_per_source, len(items))
             dev, train = split_source(items, dev_n, a.seed + number, assigned)
-            all_dev.extend(dev)
-            all_train.extend(train)
-            rec.update(kept=len(items), dev=len(dev), train=len(train), dropped=dict(dropped))
+            all_dev.extend(json.dumps(x, ensure_ascii=False) for x in dev)
+            all_train.extend(json.dumps(x, ensure_ascii=False) for x in train)
+            rec.update(kept=len(items), dev=len(dev), train=len(train), dropped=got["dropped"])
             rec["per_language"] = dict(collections.Counter(x["lang"] for x in items))
             rec["per_question_type"] = dict(collections.Counter(x["q"]["type"] for x in items))
-            if warnings:
-                rec["load_warnings"] = warnings
-            print("[%d/%d] %s: loaded %d, kept %d" % (number + 1, len(selected), key, len(rows), len(items)), flush=True)
+            if got["warnings"]:
+                rec["load_warnings"] = got["warnings"]
+            print("[%d/%d] %s: loaded %d, kept %d (RSS %d MB, largest worker %d MB)"
+                  % ((number + 1, len(selected), key, got["rows_loaded"], len(items)) + _rss_mb()), flush=True)
         except Exception as exc:
-            rec["error"] = "%s: %s" % (type(exc).__name__, str(exc).splitlines()[0])
-            rec["traceback"] = traceback.format_exc(limit=3)
+            if isinstance(exc, SourceFailed):
+                rec["error"], rec["traceback"] = exc.error, exc.trace
+            else:
+                rec["error"], rec["traceback"] = _error_line(exc), traceback.format_exc(limit=3)
             print("[%d/%d] %s: FAILED %s" % (number + 1, len(selected), key, rec["error"]), flush=True)
         records.append(rec)
     rng = random.Random(a.seed)
@@ -240,8 +311,8 @@ def main(argv=None):
     rng.shuffle(all_train)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(out_path, "wt", encoding="utf-8") as fh:
-        for item in all_dev + all_train:  # consumer holds out the prefix
-            fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+        for line in all_dev + all_train:  # consumer holds out the prefix
+            fh.write(line + "\n")
     manifest = {"version": 6, "registry": str(Path("tools/finetune/sources/v6-keep.json")),
                 "seed": a.seed, "per_source_cap": cap, "dev_per_source": a.dev_per_source,
                 "smoke": a.smoke or None, "eval_texts": len(banned), "items": len(all_dev) + len(all_train),
