@@ -4,6 +4,11 @@ name: mixture-audit
 # the source registry change, weekly (upstream datasets change under a fixed revision name), and
 # on demand.
 on:
+  push:
+    paths:
+      - "tools/finetune/mixture_v6/**"
+      - "tools/finetune/sources/**"
+      - ".github/workflows/mixture-audit.yml"
   pull_request:
     paths:
       - "tools/finetune/mixture_v6/**"
