@@ -77,11 +77,80 @@ See [accuracy](#accuracy) before choosing 4-bit.
 | `GET /health`, `GET /ready` | liveness / readiness |
 | `GET /metrics` | Prometheus: request counts by status, latency histogram, tokens, in-flight, busy workers |
 
-Errors use FastAPI's `{"detail": "..."}` shape with the same status codes as `laya-serve`
-(400 malformed, 401 auth, 413 limits, 422 invalid question, 503 saturated). Limits match
-`laya.serve`: 64 questions, 50,000 state characters, 2 MB body, 100 choice options.
+Errors retain FastAPI's `{"detail": "..."}` shape: 400 malformed input, 401 auth,
+413 resource limits, 422 invalid questions/budgets or an expired inference deadline,
+and 503 admission/engine queue saturation. Successful Jev/Laya response shapes are unchanged.
 
-Auth: `STATIM_API_KEY=key1,key2` or `--api-key-file`. Compared in constant time.
+Auth: set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE` (one key per line;
+blank lines and lines beginning with `#`, after trimming whitespace, are ignored).
+Keys are compared in constant time. Each explicitly configured source must independently
+provide at least one valid key; missing/unreadable/empty/comment-only files and empty
+or invalid environment values abort startup, even if another source provides a key.
+Keys contain 1–4096 printable ASCII bytes without whitespace. With **no key source
+configured**, local unauthenticated use remains the default; startup logs explicitly
+include `"auth":false,"auth_status":"off"`.
+
+Bearer auth covers inference, `/metrics`, and `/v1/models`. `/health` and `/ready`
+remain open for orchestrators; `/health` returns only `status` and `version`.
+The playground at `/` remains public. Request IDs accept 1–128 ASCII letters,
+digits, `.`, `_`, and `-`; other supplied IDs are replaced. Logs are serialized JSON.
+
+Resource limits apply before ordered JSON DOM construction or inference. Unknown
+request and question-definition fields and duplicate JSON keys are rejected; arbitrary
+state object fields remain supported. Limits count UTF-8 **bytes** unless stated otherwise.
+
+| Limit / server flag | Default | Meaning |
+|---|---:|---|
+| Request body | 2 MiB | Both length-framed and chunked bodies; oversized declared lengths are rejected without reading/draining the body |
+| `--max-json-depth` | 64 | Nested objects/arrays including the root; configurable up to a hard ceiling of 128 |
+| `--max-json-nodes` | 100,000 | Containers, scalar values, and object keys in the entire request |
+| `--max-object-members` | 1,024 | Members per object, checked before ordered-map insertion |
+| JSON object key | 4,096 bytes | Applies also to arbitrary state objects |
+| States / questions | 256 / 64 | Per batch / per request |
+| State size | 50,000 Unicode codepoints | Per state, using its Python-compatible serialization for structured states |
+| Choice / score / total options | 100 / 32 / 512 | Per question / per question / across questions |
+| Question ID / model / language | 256 bytes each | Bounds names and routing fields |
+| Instructions | 16,384 bytes | Per question; rendered JSON length for structured instructions |
+| Criterion / label value | 4,096 bytes | Per value, including structured score legends; object label keys: 1,024 bytes |
+| `max_len`, `head_max_len` / `--max-len`, `--head-max-len` | Checkpoint defaults | Explicit nonzero budgets: integers 32–8,192, checked before narrowing. Effective length is `max(max_len, head_max_len + 128)` and must fit model capacity. CLI `0` selects checkpoint defaults |
+| `ensemble` / `--ensemble` | 1 | Integer 1–8 |
+| `--max-request-work` | 4,096 | State × question × view evaluations, including consensus models and three calibration views on every potential cache miss |
+| `--max-request-tokens` | 1,048,576 | Conservative total: evaluated rows × effective sequence budget, including ensembles/calibration/consensus |
+| `--max-attention-mib` | 1,024 MiB | Conservative per-graph estimate: `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes, covering all shorter packed rows too |
+| `--max-response-bytes` | 16,777,216 | Conservative response estimate before inference, plus a final serialized-response check |
+| `--max-concurrent` | 16 | Admitted inference requests including body reception and engine queueing; excess gets 503; configurable 1–256 |
+| `--workers` | 1 | Inference workers per model; configurable 1–64 |
+| `--http-queue` | 32 | Pending sockets, in addition to `max-concurrent + 4` fixed HTTP workers; excess sockets are closed |
+| `--request-timeout` | 30 seconds | Absolute combined header/body read deadline; periodic bytes do not extend it |
+| Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Bounds idle connections and individual blocked writes |
+| `--inference-timeout` | 120 seconds | From admission, including body reception and engine queue wait; cooperative CPU cancellation between ggml operations, GPU checks between bounded graphs |
+| Calibration cache | 4 MiB and 4,096 entries per engine | LRU, with retained key/value bytes and bookkeeping charged; oversized entries are computed but not retained |
+
+Aggregate budgets deliberately use upper bounds, so short tokenized text can still be
+rejected when its requested sequence budget is large. Long-context workloads can raise
+the token/attention limits explicitly; these are estimates, not a process memory ceiling.
+Response estimates reserve 1,024 bytes/state plus 4,096 bytes/question and eight times
+the serialized question and ID sizes. Bounded token buffers retain the existing graph
+sorting and packing order to preserve inference results. Calibration keys include only
+rendered question inputs, content-free state shape, and effective budgets. They use exact
+bounded strings rather than lossy hashes, preserving cache correctness.
+
+The systemd example requires `/etc/statim/env` and a nonempty `STATIM_API_KEY`; it sets
+`MemoryHigh=6G`, `MemoryMax=8G`, `CPUQuota=400%`, `TasksMax=256`, and `LimitNOFILE=4096`.
+Tune these for the loaded models/workers. Container deployments should likewise supply
+memory/CPU limits and a TLS-terminating proxy. Application deadlines are cooperative;
+a running compute operation must finish before cancellation takes effect.
+
+Security regressions run through `ctest`, including socket-free HTTP parser/middleware
+checks and live HTTP attacks using the CPU multilingual model. Run the latter directly:
+
+```sh
+python3 tests/security/test_http.py --binary build/statim --model models/laya-multilingual-f32.gguf
+```
+
+The [security coverage report](tests/security/REPORT.md) maps each finding to its fix and regression.
+The script tries localhost port 8094, then a free port. Environments that forbid binding
+report a CTest skip (exit 77); run this command manually in a socket-capable environment.
 
 ## Benchmarks
 

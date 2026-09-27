@@ -1,4 +1,5 @@
 #include "statim/engine.h"
+#include "statim/security.h"
 
 #include <algorithm>
 #include <cmath>
@@ -327,7 +328,7 @@ ojson decode_answer(const Question& q, const std::vector<double>& z, const std::
 struct Engine::Impl {
     std::mutex mu;
     std::mutex cache_mu;
-    std::unordered_map<std::string, std::vector<double>> null_cache;  // question+shape -> mean log p
+    CalibrationCache null_cache;  // byte-bounded LRU of semantic question+shape keys
     std::unique_ptr<Runner> runner;
     std::vector<float> temperature;
     std::vector<std::pair<std::string, float>> temp_by_options;
@@ -460,7 +461,7 @@ std::vector<Item> Engine::encode(const ojson& state, const ojson& questions, con
     auto qs = parse_questions(questions);
     const int head_max_len = opts.head_max_len.value_or(h.head_max_len);
     // a raised option budget must leave room for the state (never binds at the checkpoint defaults)
-    const int max_len = std::max(opts.max_len.value_or(h.max_len), head_max_len + 128);
+    const int max_len = effective_max_len(h, opts);
     auto state_ids = model_->tokenizer().encode(replace_all(serialize_state(state), h.mask_token, " "));
     std::vector<Item> items;
     for (const auto& q : qs)
@@ -470,6 +471,8 @@ std::vector<Item> Engine::encode(const ojson& state, const ojson& questions, con
 }
 
 std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const ojson& questions, const DecideOptions& opts) {
+    if (std::chrono::steady_clock::now() >= opts.deadline) throw HttpError(422, "inference deadline exceeded");
+    impl_->runner->set_deadline(opts.deadline);
     const HParams& h = model_->hparams();
     auto qs = parse_questions(questions);
     std::vector<ojson> results;
@@ -480,7 +483,7 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
     }
     const int head_max_len = opts.head_max_len.value_or(h.head_max_len);
     // a raised option budget must leave room for the state (never binds at the checkpoint defaults)
-    const int max_len = std::max(opts.max_len.value_or(h.max_len), head_max_len + 128);
+    const int max_len = effective_max_len(h, opts);
     const size_t ens = static_cast<size_t>(std::max(1, opts.ensemble));
 
     // Phase 1: every (state, question) in the canonical option order, exactly like Laya.
@@ -489,6 +492,7 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
     std::vector<std::pair<size_t, size_t>> where;  // (state, question) per item
     std::vector<size_t> tokens(states.size(), 0);
     for (size_t s = 0; s < states.size(); ++s) {
+        if (std::chrono::steady_clock::now() >= opts.deadline) throw HttpError(422, "inference deadline exceeded");
         if (states[s].is_null()) throw QuestionError("'state' is required");
         state_ids[s] = model_->tokenizer().encode(replace_all(serialize_state(states[s]), h.mask_token, " "));
         for (size_t qi = 0; qi < qs.size(); ++qi) {
@@ -555,7 +559,7 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
             }
         }
         if (opts.calibrate && q.qt == 0 && k >= 2) {
-            const auto& zn = null_logp(qs[qi], questions[q.id], states[s], max_len, head_max_len);
+            const auto& zn = null_logp(qs[qi], states[s], max_len, head_max_len);
             for (size_t j = 0; j < k; ++j) z[j] -= zn[j];
         }
         results[s]["answers"][q.id] = impl_->answer(q, z, base[i].act_probs, opts);
@@ -568,14 +572,14 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
     return results;
 }
 
-const std::vector<double>& Engine::null_logp(const Question& q, const ojson& qdef, const ojson& state, int max_len,
-                                             int head_max_len) {
-    const std::string key = q.id + "\x1f" + py_json_dumps(qdef) + "\x1f" + py_json_dumps(content_free(state, "")) +
-                            "\x1f" + std::to_string(max_len) + "/" + std::to_string(head_max_len);
+std::vector<double> Engine::null_logp(const Question& q, const ojson& state, int max_len, int head_max_len) {
+    // Only the rendered inputs affect calibration: ignored metadata and question
+    // IDs must never become retained cache material. Exact keys preserve parity.
+    const std::string key = ojson::array({q.qt, q.ins, q.options, content_free(state, ""), max_len, head_max_len}).dump();
     {
         std::lock_guard<std::mutex> lk(impl_->cache_mu);
-        auto it = impl_->null_cache.find(key);
-        if (it != impl_->null_cache.end()) return it->second;
+        std::vector<double> cached;
+        if (impl_->null_cache.get(key, cached)) return cached;
     }
     const HParams& h = model_->hparams();
     std::vector<Item> items;
@@ -595,8 +599,8 @@ const std::vector<double>& Engine::null_logp(const Question& q, const ojson& qde
     }
     for (double& v : mean) v = std::log(std::max(v, 1e-12));
     std::lock_guard<std::mutex> lk(impl_->cache_mu);
-    if (impl_->null_cache.size() > 4096) impl_->null_cache.clear();
-    return impl_->null_cache.emplace(key, std::move(mean)).first->second;
+    impl_->null_cache.put(key, mean);
+    return mean;
 }
 
 std::vector<ItemResult> Engine::run_packed(const std::vector<Item>& items) {

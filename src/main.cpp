@@ -28,6 +28,10 @@ void usage() {
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
+                 "                 [--max-json-depth 64] [--max-json-nodes 100000] [--max-object-members 1024]\n"
+                 "                 [--max-request-work 4096] [--max-request-tokens 1048576]\n"
+                 "                 [--max-attention-mib 1024] [--max-response-bytes 16777216]\n"
+                 "                 [--http-queue 32] [--request-timeout 30] [--inference-timeout 120]\n"
                  "  statim decide  -m model.gguf [--device D] [--ensemble K] [--lang xx] < request.json\n"
                  "                 (request: {\"state\": ..., \"questions\": {...}})\n"
                  "  statim bench   -m model.gguf [--device D] [--threads N] [--runs 5] < request.json\n"
@@ -77,63 +81,77 @@ int main(int argc, char** argv) {
         std::printf("statim %s\n", STATIM_VERSION);
         return 0;
     }
-    statim::ServerConfig cfg;
-    statim::DecideOptions dopts;
-    int runs = 5;
-    for (int i = 2; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next = [&]() -> std::string {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "missing value for %s\n", a.c_str());
-                std::exit(2);
+    try {
+        statim::ServerConfig cfg;
+        statim::DecideOptions dopts;
+        int runs = 5;
+        for (int i = 2; i < argc; ++i) {
+            std::string a = argv[i];
+            auto next = [&]() -> std::string {
+                if (i + 1 >= argc) {
+                    std::fprintf(stderr, "missing value for %s\n", a.c_str());
+                    std::exit(2);
+                }
+                return argv[++i];
+            };
+            auto number = [&]() { const auto v = next();
+                size_t used = 0; long long n;
+                try { n = std::stoll(v, &used); } catch (...) { throw std::runtime_error("invalid integer for " + a); }
+                if (used != v.size() || n < 0 || n > 2147483647) throw std::runtime_error("invalid integer for " + a);
+                return static_cast<int>(n);
+            };
+            auto limit = [&]() { int n = number(); if (n < 1) throw std::runtime_error(a + " must be positive"); return n; };
+            if (a == "-m" || a == "--model") {
+                std::string v = next();
+                auto eq = v.find('=');
+                if (eq != std::string::npos && v.find('/') > eq) cfg.models.emplace_back(v.substr(0, eq), v.substr(eq + 1));
+                else cfg.models.emplace_back(model_name_from_path(v), v);
+            } else if (a == "--host") cfg.host = next();
+            else if (a == "--port") cfg.port = number();
+            else if (a == "--device") cfg.device = next();
+            else if (a == "--max-len") cfg.max_len = number();
+            else if (a == "--head-max-len") cfg.head_max_len = number();
+            else if (a == "--gpu-fast") setenv("STATIM_GPU_FAST", "1", 1);
+            else if (a == "--threads" || a == "-t") cfg.threads = number();
+            else if (a == "--workers") cfg.workers = number();
+            else if (a == "--max-concurrent") cfg.max_concurrent = number();
+            else if (a == "--ensemble") cfg.ensemble = dopts.ensemble = number();
+            else if (a == "--lang") dopts.lang = next();
+            else if (a == "--runs") runs = number();
+            else if (a == "--max-json-depth") { cfg.limits.max_json_depth = limit(); if (cfg.limits.max_json_depth > 128) throw std::runtime_error("max-json-depth cannot exceed 128"); }
+            else if (a == "--max-json-nodes") cfg.limits.max_json_nodes = limit();
+            else if (a == "--max-object-members") cfg.limits.max_object_members = limit();
+            else if (a == "--max-request-work") cfg.limits.max_request_work = limit();
+            else if (a == "--max-request-tokens") cfg.limits.max_request_tokens = limit();
+            else if (a == "--max-attention-mib") cfg.limits.max_attention_bytes = size_t(limit()) * 1024 * 1024;
+            else if (a == "--max-response-bytes") cfg.limits.max_response_bytes = limit();
+            else if (a == "--http-queue") cfg.http_queue = limit();
+            else if (a == "--request-timeout") cfg.request_timeout = limit();
+            else if (a == "--inference-timeout") cfg.inference_timeout = limit();
+            else if (a == "--no-access-log") cfg.access_log = false;
+            else if (a == "--no-playground") cfg.playground = false;
+            else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
+            else if (a == "--consensus") cfg.consensus = true;
+            else if (a == "--api-key-file") {
+                auto keys = statim::load_key_file(next());
+                cfg.api_keys.insert(cfg.api_keys.end(), keys.begin(), keys.end());
+            } else if (a == "-h" || a == "--help") {
+                usage();
+                return 0;
+            } else {
+                std::fprintf(stderr, "unknown argument: %s\n", a.c_str());
+                return 2;
             }
-            return argv[++i];
-        };
-        if (a == "-m" || a == "--model") {
-            std::string v = next();
-            auto eq = v.find('=');
-            if (eq != std::string::npos && v.find('/') > eq) cfg.models.emplace_back(v.substr(0, eq), v.substr(eq + 1));
-            else cfg.models.emplace_back(model_name_from_path(v), v);
-        } else if (a == "--host") cfg.host = next();
-        else if (a == "--port") cfg.port = std::atoi(next().c_str());
-        else if (a == "--device") cfg.device = next();
-        else if (a == "--max-len") cfg.max_len = std::atoi(next().c_str());
-        else if (a == "--head-max-len") cfg.head_max_len = std::atoi(next().c_str());
-        else if (a == "--gpu-fast") setenv("STATIM_GPU_FAST", "1", 1);
-        else if (a == "--threads" || a == "-t") cfg.threads = std::atoi(next().c_str());
-        else if (a == "--workers") cfg.workers = std::atoi(next().c_str());
-        else if (a == "--max-concurrent") cfg.max_concurrent = std::atoi(next().c_str());
-        else if (a == "--ensemble") cfg.ensemble = dopts.ensemble = std::atoi(next().c_str());
-        else if (a == "--lang") dopts.lang = next();
-        else if (a == "--runs") runs = std::atoi(next().c_str());
-        else if (a == "--no-access-log") cfg.access_log = false;
-        else if (a == "--no-playground") cfg.playground = false;
-        else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
-        else if (a == "--consensus") cfg.consensus = true;
-        else if (a == "--api-key-file") {
-            std::ifstream f(next());
-            std::string line;
-            while (std::getline(f, line))
-                if (!line.empty() && line[0] != '#') cfg.api_keys.push_back(line);
-        } else if (a == "-h" || a == "--help") {
+        }
+        if (const char* env = std::getenv("STATIM_API_KEY")) {
+            auto keys = statim::load_key_env(env);
+            cfg.api_keys.insert(cfg.api_keys.end(), keys.begin(), keys.end());
+        }
+        if (cfg.models.empty()) {
             usage();
-            return 0;
-        } else {
-            std::fprintf(stderr, "unknown argument: %s\n", a.c_str());
             return 2;
         }
-    }
-    if (const char* env = std::getenv("STATIM_API_KEY")) {
-        std::stringstream ss(env);
-        std::string k;
-        while (std::getline(ss, k, ','))
-            if (!k.empty()) cfg.api_keys.push_back(k);
-    }
-    if (cfg.models.empty()) {
-        usage();
-        return 2;
-    }
-    try {
+        if (cfg.ensemble < 1 || cfg.ensemble > 8 || runs < 1) throw std::runtime_error("ensemble must be 1-8 and runs must be positive");
         if (cmd == "serve") return statim::run_server(cfg);
 
         auto model = statim::Model::load(cfg.models.front().second, cfg.device);
@@ -150,8 +168,11 @@ int main(int argc, char** argv) {
         }
         statim::RunOptions ro;
         ro.n_threads = cfg.threads;
+        if (cfg.max_len) dopts.max_len = cfg.max_len;
+        if (cfg.head_max_len) dopts.head_max_len = cfg.head_max_len;
+        statim::effective_max_len(model->hparams(), dopts);
         statim::Engine engine(model, ro);
-        ojson req = ojson::parse(read_all(std::cin));
+        ojson req = statim::parse_request(read_all(std::cin));
         const ojson state = req.contains("state") ? req["state"] : ojson();
         const ojson questions = req.contains("questions") ? req["questions"] : ojson::object();
         if (cmd == "decide") {

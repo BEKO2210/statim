@@ -20,6 +20,32 @@ between minor versions; every change is listed here.
 - `build_mixture.py` keeps only rows whose every listed licence is permissive (Apache-2.0, MIT, BSD,
   CC0, CC-BY, ODC-By, AFL-3.0); ShareAlike, copyleft, custom and unknown terms are excluded.
 
+### Security
+- Fail closed when any explicitly configured key file/environment value cannot supply valid
+  keys. Log unauthenticated local mode explicitly; require the production environment file/key.
+- Preflight JSON with depth, node, object-width, key-length, and duplicate-key checks before
+  constructing the ordered DOM, preventing deeply nested crashes and quadratic wide-object parsing.
+- Bound HTTP workers and pending sockets; authenticate and admit inference requests before
+  body reception. Reject oversized declared bodies without draining, and enforce absolute
+  header/body deadlines even when a peer keeps sending bytes.
+- Bound field sizes and aggregate batch/ensemble/calibration/consensus work, token budgets,
+  attention-memory estimates, and response bytes. Add cooperative inference deadlines and
+  systemd memory/CPU/task/file-descriptor ceilings without changing graph packing or math.
+- Replace the entry-count-only calibration cache with a byte-bounded LRU keyed on the validated
+  question only, so unknown fields (still ignored, as by laya.serve) are never retained; a test
+  sends 64 MiB of ignored metadata and checks that memory stays flat.
+- Allowlist request IDs and serialize log records as JSON to prevent log injection.
+- Validate signed/unsigned token and ensemble budgets before integer narrowing, including
+  CLI defaults; reject effective sequence lengths beyond model capacity with 422.
+- Upgrade vendored cpp-httplib from 0.26.0 to 0.58.0. Explicitly reject simultaneous
+  Content-Length/Transfer-Encoding (including zero lengths) and duplicate Content-Length headers.
+- Require bearer auth for `/metrics` and `/v1/models` when configured. Keep `/health` and
+  `/ready` open; reduce `/health` to status and version. `/v1/models` now also reports each
+  model's compute device, and the playground reads models and device from there.
+- Use local timestamp storage with `gmtime_r` (`gmtime_s` on Windows) for concurrent logs.
+- Install a global HTTP exception handler with fixed client errors and server-only details.
+- Add C++, CPU model-backed, and live HTTP security regressions alongside existing parity gates.
+
 ## [0.2.1] - 2026-09-27
 
 Diagrams in the brand style for the README.

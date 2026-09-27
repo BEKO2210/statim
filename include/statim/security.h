@@ -1,0 +1,51 @@
+#pragma once
+
+#include "statim/engine.h"
+#include <chrono>
+#include <list>
+#include <unordered_map>
+
+namespace statim {
+struct HttpError : std::runtime_error {
+    int status;
+    HttpError(int status, const std::string& detail) : std::runtime_error(detail), status(status) {}
+};
+struct SecurityLimits {
+    size_t max_json_depth = 64;
+    size_t max_json_nodes = 100000;
+    size_t max_object_members = 1024;
+    size_t max_request_work = 4096;
+    size_t max_request_tokens = 1048576;
+    size_t max_attention_bytes = 1024ULL * 1024 * 1024;
+    size_t max_response_bytes = 16 * 1024 * 1024;
+};
+constexpr size_t max_body_bytes = 2 * 1024 * 1024;
+ojson parse_request(const std::string& text, const SecurityLimits& limits = {});
+void validate_request_fields(const ojson& body);
+void check_limits(const ojson& state, const ojson& questions);
+int bounded_integer(const ojson& value, int low, int high, const std::string& name);
+int effective_max_len(const HParams& h, const DecideOptions& opts);
+void check_work(const ojson& questions, size_t states, const HParams& h, const DecideOptions& opts,
+                const SecurityLimits& limits, size_t models = 1);
+std::vector<std::string> load_key_file(const std::string& path);
+std::vector<std::string> load_key_env(const std::string& value);
+bool valid_request_id(const std::string& value);
+std::string now_iso8601();
+
+// Exact semantic keys avoid hash-collision changes to inference. Both retained key
+// bytes and values are charged; an entry ceiling also bounds allocator overhead.
+class CalibrationCache {
+public:
+    explicit CalibrationCache(size_t max_bytes = 4 * 1024 * 1024, size_t max_entries = 4096)
+        : max_bytes_(max_bytes), max_entries_(max_entries) {}
+    bool get(const std::string& key, std::vector<double>& value);
+    void put(std::string key, const std::vector<double>& value);
+    size_t bytes() const { return bytes_; }
+    size_t size() const { return entries_.size(); }
+private:
+    struct Entry { std::string key; std::vector<double> value; size_t bytes; };
+    std::list<Entry> entries_;
+    std::unordered_map<std::string, std::list<Entry>::iterator> index_;
+    size_t bytes_ = 0, max_bytes_, max_entries_;
+};
+} // namespace statim
