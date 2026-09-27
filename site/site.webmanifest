@@ -1,0 +1,10 @@
+{
+  "name": "Statim",
+  "short_name": "Statim",
+  "description": "Typed decisions in one forward pass, from a native C++ engine.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0d1014",
+  "theme_color": "#0d1014",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
