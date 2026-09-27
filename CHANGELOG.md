@@ -7,6 +7,19 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-27
+
+### Added
+- `REPRODUCE.md`: how to check every published number, from the ten-minute ticket-triage run to the
+  full gate evaluation of a published model and its comparison with the base checkpoint, with the
+  values to expect.
+
+### Changed
+- `gate.py` runs on machines without a Vulkan build: `STATIM_BIN`, `STATIM_GATE_DEVICE`,
+  `STATIM_GATE_PORT` and `STATIM_CONVERT_PY` override the binary, device, port and converter.
+- Website hero shows the 0.5.0 English model's real answers; the demo Space Dockerfile defaults to
+  the current release.
+
 ## [0.5.0] - 2026-09-27
 
 The first English Statim Decide model, published weights on Hugging Face, a public demo, a CUDA

@@ -24,7 +24,8 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients switch by changi
 **Try it:** [live demo](https://huggingface.co/spaces/Beko2210/statim) (no install, no key) ·
 **Models:** [statim-decide-en-large](https://huggingface.co/Beko2210/statim-decide-en-large) and
 [statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) on
-Hugging Face · **Example:** [ticket triage in ten minutes](examples/ticket-triage)
+Hugging Face · **Example:** [ticket triage in ten minutes](examples/ticket-triage) ·
+**Check the numbers yourself:** [REPRODUCE.md](REPRODUCE.md)
 
 ## Models
 
