@@ -117,7 +117,7 @@ ojson parse_request(const std::string& text, const SecurityLimits& limits) {
 }
 void validate_request_fields(const ojson& body) {
     fields(body, {"state", "states", "questions", "model", "lang", "ensemble", "ensemble_margin", "calibrate",
-                  "return_logits", "max_len", "head_max_len"});
+                  "return_logits", "max_len", "head_max_len", "min_confidence"});
     if (!body.contains("questions") || !body["questions"].is_object()) throw HttpError(400, "'questions' must be an object");
     for (const char* name : {"model", "lang"})
         if (body.contains(name) && (!body[name].is_string() || rendered_size(body[name]) > 256))

@@ -26,6 +26,7 @@ void usage() {
                  "usage:\n"
                  "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
+                 "                 [--min-confidence P]\n"
                  "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
                  "                 [--max-json-depth 64] [--max-json-nodes 100000] [--max-object-members 1024]\n"
@@ -116,6 +117,13 @@ int main(int argc, char** argv) {
             else if (a == "--workers") cfg.workers = number();
             else if (a == "--max-concurrent") cfg.max_concurrent = number();
             else if (a == "--ensemble") cfg.ensemble = dopts.ensemble = number();
+            else if (a == "--min-confidence") {
+                const auto v = next();
+                size_t used = 0; double x = -1;
+                try { x = std::stod(v, &used); } catch (...) {}
+                if (used != v.size() || !(x >= 0.0 && x <= 1.0)) throw std::runtime_error("--min-confidence must be a number from 0 to 1");
+                cfg.min_confidence = x;
+            }
             else if (a == "--lang") dopts.lang = next();
             else if (a == "--runs") runs = number();
             else if (a == "--max-json-depth") { cfg.limits.max_json_depth = limit(); if (cfg.limits.max_json_depth > 128) throw std::runtime_error("max-json-depth cannot exceed 128"); }

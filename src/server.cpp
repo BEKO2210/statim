@@ -273,6 +273,15 @@ int run_server(const ServerConfig& cfg) {
             }
             if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
                 opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
+            // Selective prediction: answers below the threshold get "escalate": true so the caller can hand
+            // them to a person or a larger model; without a threshold the response is unchanged.
+            double min_confidence = cfg.min_confidence;
+            if (body.contains("min_confidence")) {
+                const auto& v = body["min_confidence"];
+                if (!v.is_number() || v.get<double>() < 0.0 || v.get<double>() > 1.0)
+                    throw HttpError{422, "min_confidence must be a number from 0 to 1"};
+                min_confidence = v.get<double>();
+            }
             std::vector<ojson> states;
             if (batch) {
                 if (!body.contains("states") || !body["states"].is_array())
@@ -337,6 +346,10 @@ int run_server(const ServerConfig& cfg) {
                 n_tokens += r["usage"]["input_tokens"].get<size_t>();
                 r["routing"] = {{"model", model_name}, {"reason", reason}, {"engine", "statim"},
                                 {"weights", lm.model->hparams().weight_type}};
+                if (min_confidence > 0 && r.contains("answers"))
+                    for (auto& [qid, ans] : r["answers"].items())
+                        if (ans.contains("answer_confidence"))
+                            ans["escalate"] = ans["answer_confidence"].get<double>() < min_confidence;
             }
             char timing[64];
             std::snprintf(timing, sizeof timing, "inference;dur=%.2f", infer_ms);

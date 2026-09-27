@@ -145,6 +145,13 @@ def main():
                 grown = rss_kib() - before
                 print('rss growth over 64 x 1 MiB ignored fields after warm-up: %d KiB' % grown, flush=True)
                 assert grown < 32 * 1024, 'memory grows with ignored fields (%d KiB for 64 MiB sent)' % grown
+                # selective prediction: no threshold -> response unchanged; threshold -> escalate flag per answer
+                status, body_ok, _ = request('/v1/systemone', req)
+                assert status == 200 and all('escalate' not in a for a in json.loads(body_ok)['answers'].values())
+                status, body_hi, _ = request('/v1/systemone', dict(req, min_confidence=0.999999))
+                assert status == 200 and all(a['escalate'] is (a['answer_confidence'] < 0.999999) for a in json.loads(body_hi)['answers'].values())
+                assert request('/v1/systemone', dict(req, min_confidence=1.5))[0] == 422
+                assert request('/v1/systemone', dict(req, min_confidence='high'))[0] == 422
                 for rid in ('audit%0D%0Aforged-log-line', 'audit", "forged":true', 'x' * 129):
                     status, _, headers = request('/v1/systemone', {'state': 'ok', 'questions': {}}, rid=rid)
                     assert status == 200 and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', headers['X-Request-Id'])
