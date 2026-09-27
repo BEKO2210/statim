@@ -7,12 +7,31 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-28
+
 ### Added
 - Opt-in server-side micro-batching for concurrent `POST /v1/systemone` calls via
   `--batch-window-ms` (default 0/off) and `--max-batch` (default 16). Compatible requests share the
   existing packed batch execution path while retaining independent responses, deadlines, admission
   accounting and request IDs. Prometheus exposes `statim_batch_size` and `statim_batch_wait_ms`
   summaries, and a CPU live-server test gates packed/unpacked answers at 1e-4.
+- Mixture v6 builder (`tools/finetune/mixture_v6/`): 121 training sources, each with a
+  commercial-use, non-ShareAlike licence checked at the source (registry
+  `tools/finetune/sources/v6-keep.json`, review notes in `v6-research.md`), task-specific adapters and
+  question templates in 14 languages, removal of every text that occurs in an evaluation suite
+  (862k texts from 20 suites), one dev/train side per text across all sources, and one worker
+  process per source so memory stays flat over the whole build.
+- Synthetic gap data v2 (`tools/synth/`), generated only by a local model (qwen3:8b through Ollama)
+  for categories without enough licence-clean human data: target labels weighted by acceptance
+  rate, a blind second answer that must match the gold label, fixed question paraphrases, varied
+  openings and details, near-duplicate removal with multilingual-e5-small (cosine >= 0.92), and a
+  quality report that ends in SCALE UP, REVISE or INSUFFICIENT DATA.
+
+### Changed
+- `train_multitask.py`: with `--budget mixture=N`, a v6 mixture is shared over its categories by
+  temperature mixing (`--mixture-temperature`, default 2) and dev accuracy is logged per category.
+  The mixture is read as a stream (about 2 GB less RAM for a mixture of a million rows), and
+  distillation texts no longer come from the held-out dev slice.
 
 ## [0.5.2] - 2026-09-27
 
@@ -262,7 +281,11 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/BEKO2210/statim/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/BEKO2210/statim/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/BEKO2210/statim/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/BEKO2210/statim/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/BEKO2210/statim/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BEKO2210/statim/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/BEKO2210/statim/compare/v0.2.0...v0.2.1
