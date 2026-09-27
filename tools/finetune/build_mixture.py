@@ -3,11 +3,19 @@
 (2.5M typed decisions in Statim's own choice / score / noul schema, 667 sources).
 
 Rules:
-- Only rows marked license_use == "commercial".
+- Only rows marked license_use == "commercial" AND whose every listed licence is permissive
+  (Apache-2.0, MIT, BSD, CC0, CC-BY, ODC-By, AFL-3.0). ShareAlike (CC-BY-SA), copyleft (GPL,
+  AGPL, MPL, ODbL), "Custom", "other" and corpus-specific terms are excluded: Statim's weights are
+  licensed PolyForm Noncommercial with paid commercial licences, which ShareAlike or copyleft data
+  could contradict.
 - Sources that feed our evaluations are excluded entirely: AG News, every emotion source
   (so DAIR Emotion stays an unseen concept), Banking77, MASSIVE, tyqiangz multilingual sentiment,
   tweet_eval and tweet_sentiment_multilingual (tweet_eval texts are used for distillation;
   the latter is the source of tyqiangz multilingual sentiment), typed-decisions.
+- With --audit (tools/finetune/licence_audit.json): a source is used only if it matches a
+  keep_families prefix of the audit and is not listed in its exclude map. The audit checked the
+  origin of each source's text and labels upstream, because the recorded licence tags are
+  best-effort and sometimes wrong (e.g. Stack Overflow tagged Apache-2.0, wikiHow tagged MIT).
 - At most --per-source rows per source (Laurer et al. 2023 cap diversity rather than volume).
 - Any row whose state text occurs in one of our test splits is dropped (exact match after
   whitespace normalisation): Banking77 test, MASSIVE test (51 languages), tyqiangz test (12),
@@ -36,6 +44,14 @@ REPO = "tasksource/tasksource-jev-typed-decisions"
 EXCLUDE = re.compile(r"(^|/)(ag_news|emotion|go_emotions|text_emotion|banking77|massive|multilingual-sentiments|"
                      r"tweet_eval|tweet_sentiment_multilingual|universal-joy|emo2019|emobank-[a-z]+)(/|$)|LocalLLaMA|typed-decisions/(all|default)$", re.I)
 SEED = 20260927
+PERMISSIVE = {"apache-2.0", "apache license 2.0 (dpi)", "mit", "mit license (dpi)", "bsd",
+              "bsd 2-clause license (dpi)", "cc0-1.0", "cc0 1.0 (dpi)", "cc-by-4.0", "cc by 4.0 (dpi)",
+              "cc-by-3.0", "odc-by", "afl-3.0"}
+
+
+def permissive(license_field):
+    parts = [p.strip().lower() for p in (license_field or "").split(",") if p.strip()]
+    return bool(parts) and all(p in PERMISSIVE for p in parts)
 
 
 def norm(t):
@@ -84,12 +100,18 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--per-source", type=int, default=120)
     ap.add_argument("--max-state-chars", type=int, default=6000)
+    ap.add_argument("--audit", default=None, help="licence audit JSON (whitelist of sources)")
     a = ap.parse_args()
     import pyarrow.parquet as pq
     from huggingface_hub import snapshot_download
 
     path = snapshot_download(REPO, repo_type="dataset", allow_patterns=["data/*.parquet"])
     rng = random.Random(SEED)
+    audit = json.load(open(a.audit)) if a.audit else None
+
+    def audited(src):
+        return audit is None or (src not in audit["exclude"] and any(src.startswith(p) for p in audit["keep_families"]))
+
     banned = test_texts()
     print(f"test texts to avoid: {len(banned)}", flush=True)
     by_src = collections.defaultdict(list)
@@ -100,6 +122,12 @@ def main():
             if r["license_use"] != "commercial":
                 stats["not_commercial"] += 1
                 continue
+            if not permissive(r["license"]):
+                stats["not_permissive"] += 1
+                continue
+            if not audited(r["source"]):
+                stats["audit_excluded"] += 1
+                continue
             if EXCLUDE.search(r["source"]):
                 stats["excluded_source"] += 1
                 continue
@@ -107,7 +135,7 @@ def main():
                 stats["too_long"] += 1
                 continue
             by_src[r["source"]].append(r)
-    items, per_src = [], {}
+    items, per_src, licenses = [], {}, {}
     for src, rows in sorted(by_src.items()):
         rng.shuffle(rows)
         kept = 0
@@ -124,6 +152,7 @@ def main():
             items.append(it)
             kept += 1
         per_src[src] = kept
+        licenses[src] = rows[0]["license"] if rows else ""
     rng.shuffle(items)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     with gzip.open(a.out, "wt", encoding="utf-8") as f:
@@ -131,7 +160,7 @@ def main():
             f.write(json.dumps(it, ensure_ascii=False) + "\n")
     kinds = collections.Counter(it["q"]["type"] for it in items)
     manifest = {"repo": REPO, "items": len(items), "sources": len(per_src), "kinds": kinds, "stats": stats,
-                "per_source_cap": a.per_source, "per_source": per_src, "seed": SEED}
+                "per_source_cap": a.per_source, "audit": a.audit and os.path.basename(a.audit), "per_source": per_src, "licenses": licenses, "seed": SEED}
     with open(a.out.replace(".jsonl.gz", ".manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
     print(f"items {len(items)} from {len(per_src)} sources | kinds {dict(kinds)} | {dict(stats)}", flush=True)

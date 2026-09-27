@@ -240,4 +240,13 @@ English checkpoint, everything else → multilingual); Laya's full `Router` lang
 
 ## License
 
-Apache-2.0. Statim is independent and not affiliated with the Laya authors or TypeSafe; see `NOTICE`.
+| | Licence |
+|---|---|
+| Source code (engine, server, tools) | [Apache-2.0](LICENSE), free for any use |
+| Model weights published by Statim | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): free for personal use, research, experiments and noncommercial organisations |
+| Commercial use of Statim weights | paid licence, see [COMMERCIAL.md](COMMERCIAL.md) |
+
+Released weights are trained only on commercially usable, non-ShareAlike data; every source is listed
+in [DATA_LICENSES.md](DATA_LICENSES.md). The original Laya checkpoints that Statim runs are Apache-2.0
+by their authors. Statim is independent and not affiliated with the Laya authors or TypeSafe; see
+[NOTICE](NOTICE).
