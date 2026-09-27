@@ -26,6 +26,7 @@ void usage() {
                  "usage:\n"
                  "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
+                 "                 [--batch-window-ms 0] [--max-batch 16]\n"
                  "                 [--min-confidence P]\n"
                  "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
@@ -116,6 +117,8 @@ int main(int argc, char** argv) {
             else if (a == "--threads" || a == "-t") cfg.threads = number();
             else if (a == "--workers") cfg.workers = number();
             else if (a == "--max-concurrent") cfg.max_concurrent = number();
+            else if (a == "--batch-window-ms") cfg.batch_window_ms = number();
+            else if (a == "--max-batch") cfg.max_batch = limit();
             else if (a == "--ensemble") cfg.ensemble = dopts.ensemble = number();
             else if (a == "--min-confidence") {
                 const auto v = next();

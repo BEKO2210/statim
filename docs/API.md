@@ -383,6 +383,14 @@ curl -sS -w '\n%{http_code}\n' \
 
 `POST /v1/systemone/batch` takes `states`, an array of up to 256 values, and one `questions` object applied to every state. The response is `{"results":[...]}` in the same order. Each element has the single-decision shape. The states share forward passes. One state that fails a limit fails the whole request.
 
+When the server starts with a positive `--batch-window-ms`, compatible concurrent
+`POST /v1/systemone` calls are also packed into shared forward passes, up to `--max-batch` states.
+Compatibility requires the same resolved model, validated questions, language, and effective token,
+ensemble, calibration, logits, and confidence options. Each call keeps its own request ID, routing,
+usage, deadline, and single-decision JSON shape. Answers are identical to isolated execution within
+the 1e-4 probability parity tolerance. Explicit `/v1/systemone/batch` calls are not delayed or
+combined by this scheduler.
+
 ```bash
 curl -sS -w '\n%{http_code}\n' \
   -H 'Content-Type: application/json' \
@@ -1356,6 +1364,8 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | `--max-response-bytes` | 16,777,216 | Conservative preflight estimate and final serialized response |
 | `--max-concurrent` | 16 | Admitted decision requests; valid range 1–256 |
 | `--workers` | 1 | Inference workers per model; valid range 1–64 |
+| `--batch-window-ms` | 0 | Collection window for compatible concurrent single-state requests; 0 disables micro-batching |
+| `--max-batch` | 16 | Maximum states in a server-created micro-batch; valid range 1–256 |
 | `--http-queue` | 32 | Pending sockets beyond the fixed `max-concurrent + 4` HTTP workers |
 | `--request-timeout` | 30 seconds | Absolute combined header/body read deadline |
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
@@ -1432,6 +1442,8 @@ playground-ok
 | `statim_request_duration_ms_sum`, `statim_request_duration_ms_count` | Histogram sum and count. |
 | `statim_input_tokens_total` | Sum of `usage.input_tokens` on successful decisions. |
 | `statim_rejected_busy_total` | Requests rejected with 503. |
+| `statim_batch_size_sum`, `statim_batch_size_count` | Summary of states in server-created micro-batch jobs. |
+| `statim_batch_wait_ms_sum`, `statim_batch_wait_ms_count` | Summary of admitted-request time waiting for compatible peers. |
 | `statim_in_flight` | Requests currently in the handler. |
 | `statim_uptime_seconds` | Seconds since the process started listening. |
 | `statim_workers_busy{model="<id>"}` | Workers currently running inference for that checkpoint. This line has no TYPE comment. |

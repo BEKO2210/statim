@@ -153,6 +153,8 @@ state object fields remain supported. Limits count UTF-8 **bytes** unless stated
 | `--max-response-bytes` | 16,777,216 | Conservative response estimate before inference, plus a final serialized-response check |
 | `--max-concurrent` | 16 | Admitted inference requests including body reception and engine queueing; excess gets 503; configurable 1–256 |
 | `--workers` | 1 | Inference workers per model; configurable 1–64 |
+| `--batch-window-ms` | 0 | Wait this many milliseconds to combine compatible concurrent `/v1/systemone` requests; 0 disables micro-batching |
+| `--max-batch` | 16 | Maximum states in one server-created micro-batch; configurable 1–256 |
 | `--http-queue` | 32 | Pending sockets, in addition to `max-concurrent + 4` fixed HTTP workers; excess sockets are closed |
 | `--request-timeout` | 30 seconds | Absolute combined header/body read deadline; periodic bytes do not extend it |
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Bounds idle connections and individual blocked writes |
@@ -257,6 +259,27 @@ ctest --test-dir build-vk                      # CPU gates + the same gates on t
 
 `--device` takes `cpu` (default), `gpu`, `vulkan`, `cuda` or a device name such as `Vulkan0`
 (`STATIM_DEVICE` sets the default). Weights are copied to VRAM once; both f32 checkpoints use ~3.3 GB.
+
+With the usual single GPU worker, enable server-side micro-batching to turn concurrent single-state
+calls into packed forward passes:
+
+```bash
+./build-vk/statim serve --device vulkan -m english=models/laya-english-f32.gguf \
+  --batch-window-ms 2 --max-batch 16
+```
+
+Each admitted `POST /v1/systemone` waits at most 2 ms for compatible peers. Requests must resolve to
+the same model and use the same validated questions and effective inference options; other requests
+form separate groups. Every client still receives the ordinary single-state response with its own
+request ID, routing and usage. Packing uses the existing `/v1/systemone/batch` execution path and
+produces the same answers as running each request alone (probabilities within the 1e-4 parity gate).
+The default window is 0, so latency and scheduling are unchanged unless this is enabled.
+
+Measured with the English model on an RTX 3070 (Vulkan, exact f32, the long golden workload of up
+to 770 tokens and 8 questions per request): 8.47 → 8.30 req/s with one client (−2 %), 8.50 → 9.64
+with 8 concurrent clients (+13 %), 8.48 → 10.78 with 16 (+27 %). Each long request already keeps the
+GPU busy, so the gain grows with concurrency and should be larger for short requests. On a CPU it
+does not help (the cores are already saturated); leave it off there.
 
 Which backend: measured on an RTX 3070 and a Ryzen 7 5800X with the English large model (HTTP,
 one client, 60 requests; `bench/bench_server.py`):

@@ -37,7 +37,7 @@ from common import has_key, training_item  # noqa: E402
 from filter import BanIndex, apply_filter, load_ban_strings, public_item  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from prompts import PROMPT_VERSION, generate_request, prompts_digest  # noqa: E402
-from seeds import TASKS, plan  # noqa: E402
+from seeds import TASKS, acceptance_from_rows, load_target_weights, plan  # noqa: E402
 from verify import agrees, build_item, parse_model_json, verify_view  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -101,11 +101,12 @@ def digest_from_show(show):
     }
 
 
-def _record(seed, status, reason, item, rationale, raw, verify, usage, attempts):
+def _record(seed, status, reason, item, rationale, raw, verify, usage, attempts,
+            generated_instructions=None):
     item_out = training_item(item) if item else None
     if item_out is not None and has_key(item_out, "rationale"):
         status, reason, item_out = "rejected", "rationale_in_item", None
-    return {
+    record = {
         "id": seed["id"],
         "seed": seed,
         "status": status,
@@ -119,6 +120,10 @@ def _record(seed, status, reason, item, rationale, raw, verify, usage, attempts)
         "prompt_version": PROMPT_VERSION,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    if generated_instructions:
+        # The question the model wrote, before the seeded paraphrase replaced it.
+        record["generated_instructions"] = generated_instructions
+    return record
 
 
 def generate_once(client, seed, temperature):
@@ -140,14 +145,15 @@ def generate_once(client, seed, temperature):
         return rec
     built = build_item(seed, parsed)
     usage = _usage(resp)
+    generated_instructions = built.get("generated_instructions")
     if built["status"] != "ok":
         return _record(seed, "rejected", built["reason"], None, built["rationale"],
-                       resp["content"], None, usage, 1)
+                       resp["content"], None, usage, 1, generated_instructions)
     try:
         answer, vresp = verify_view(client, built["view"], seed_int)
     except (OllamaError, json.JSONDecodeError, ValueError, RuntimeError) as exc:
         return _record(seed, "error", "verify_transport", built["item"], built["rationale"],
-                       resp["content"], {"error": str(exc)}, usage, 1)
+                       resp["content"], {"error": str(exc)}, usage, 1, generated_instructions)
     ok = agrees(built["item"], answer)
     verify = {
         "answer": answer if isinstance(answer, (str, bool, int, float)) else str(answer),
@@ -156,9 +162,9 @@ def generate_once(client, seed, temperature):
     }
     if not ok:
         return _record(seed, "rejected", "verify_disagree", None, built["rationale"],
-                       resp["content"], verify, usage, 1)
+                       resp["content"], verify, usage, 1, generated_instructions)
     return _record(seed, "accepted", None, built["item"], built["rationale"],
-                   resp["content"], verify, usage, 1)
+                   resp["content"], verify, usage, 1, generated_instructions)
 
 
 def _usage(resp):
@@ -214,7 +220,8 @@ def write_outputs(items_path, manifest_path, provenance_rows, model_meta, args, 
     print("filter: %d accepted before overlap/dedup" % len(accepted), flush=True)
     strings = load_ban_strings()
     ban = BanIndex(strings)
-    kept, dropped = apply_filter(accepted, ban)
+    kept, dropped = apply_filter(
+        accepted, ban, seed=args.seed, max_class_share=args.max_class_share, semantic=True)
     rng = random.Random(args.seed)
     rng.shuffle(kept)
     final = [public_item(item) for item in kept]
@@ -246,7 +253,10 @@ def write_outputs(items_path, manifest_path, provenance_rows, model_meta, args, 
         "verify_agreed": agreed,
         "verify_acceptance_rate": rate,
         "reasons": dict(reasons),
-        "filter_dropped": dict(dropped),
+        "filter_dropped": dropped,
+        "target_acceptance": acceptance_from_rows(list(last.values())),
+        "target_weights": getattr(args, "target_weights", None),
+        "max_class_share": args.max_class_share,
         "items": len(final),
         "counts": counts_of(final),
     }
@@ -272,6 +282,10 @@ def main():
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--stage", choices=("all", "generate", "filter"), default="all")
     ap.add_argument("--no-resume", action="store_true")
+    ap.add_argument("--balance-from", default=None,
+                    help="manifest.json; target weights are 1/acceptance, clamped to [1, 4]")
+    ap.add_argument("--max-class-share", type=float, default=0.45,
+                    help="drop surplus so no class exceeds this share of a task")
     args = ap.parse_args()
     if args.n < 1 or args.workers < 1:
         raise SystemExit("--n and --workers must be >= 1")
@@ -280,6 +294,9 @@ def main():
         if task not in TASKS:
             raise SystemExit("unknown task %s" % task)
     args.tasks = tasks
+    if not (0 < args.max_class_share <= 1):
+        raise SystemExit("--max-class-share must be in (0, 1]")
+    args.target_weights = load_target_weights(args.balance_from) if args.balance_from else None
     items_path, prov_path, manifest_path = derive_paths(Path(args.out))
     if args.no_resume and (prov_path.exists() or items_path.exists()):
         raise SystemExit("refusing --no-resume because %s already exists" % prov_path)
@@ -295,7 +312,8 @@ def main():
     if args.stage != "filter":
         seeds = []
         for task in tasks:
-            seeds.extend(plan(task, args.n, args.seed))
+            weights = None if args.target_weights is None else args.target_weights.get(task)
+            seeds.extend(plan(task, args.n, args.seed, weights=weights))
         done = set()
         for rec in latest_by_id(existing).values():
             # A new prompt version has to run again. The previous reject was for other wording.
