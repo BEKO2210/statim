@@ -298,7 +298,8 @@ def main():
             seeds.extend(plan(task, args.n, args.seed))
         done = set()
         for rec in latest_by_id(existing).values():
-            if rec.get("status") in {"accepted", "rejected"}:
+            # A new prompt version has to run again. The previous reject was for other wording.
+            if rec.get("status") in {"accepted", "rejected"} and rec.get("prompt_version") == PROMPT_VERSION:
                 done.add(rec["id"])
         pending = [seed for seed in seeds if seed["id"] not in done]
         print("planned %d pending %d resume-skip %d" % (len(seeds), len(pending), len(seeds) - len(pending)),

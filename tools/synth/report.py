@@ -25,7 +25,17 @@ from pathlib import Path
 SEED = 20260927
 MIN_DISTRIBUTION = 20
 SEMANTIC_MODEL = "intfloat/multilingual-e5-small"
-SEED_ATTRIBUTES = ("domain", "industry", "register", "difficulty", "aspect", "topic", "form")
+SEED_ATTRIBUTES = (
+    "domain", "industry", "register", "difficulty", "aspect", "topic", "form", "variant", "target",
+)
+
+
+def latest_records(rows):
+    """Last provenance row per id. A prompt-version rerun appends; the latest is the one that counts."""
+    last = {}
+    for index, row in enumerate(rows):
+        last[row.get("id") or index] = row
+    return list(last.values())
 
 
 def read_jsonl_gz(path):
@@ -194,6 +204,105 @@ def chi_square_uniform(position_counts):
             "p_value": p_value, "note": None}
 
 
+def gold_key(item):
+    target = item.get("target") or []
+    if not target:
+        return None
+    index = argmax(target)
+    criteria = (item.get("q") or {}).get("criteria")
+    if isinstance(criteria, dict):
+        keys = list(criteria)
+        return keys[index] if index < len(keys) else None
+    if isinstance(criteria, list):
+        return index if index < len(criteria) else None
+    return index
+
+
+def _choice_task_stats(choice):
+    sets = []
+    counts = collections.Counter()
+    for item in choice:
+        criteria = (item.get("q") or {}).get("criteria")
+        if isinstance(criteria, dict):
+            sets.append(frozenset(criteria))
+        counts[str(gold_key(item))] += 1
+    closed = bool(sets) and all(group == sets[0] for group in sets)
+    if closed:
+        labels = sorted(sets[0])
+        chi = chi_square_uniform([counts[key] for key in labels])
+        chi["labels"] = labels
+    else:
+        chi = {"p_value": None, "note": "open label set"}
+        best = None
+        by_count = collections.defaultdict(list)
+        for item in choice:
+            by_count[len(item.get("target") or [])].append(item)
+        for count, group in sorted(by_count.items()):
+            positions = [0] * count
+            for item in group:
+                positions[argmax(item["target"])] += 1
+            result = chi_square_uniform(positions)
+            if result["p_value"] is not None and (best is None or result["p_value"] < best):
+                best = result["p_value"]
+                chi = result
+    return {"n": len(choice), "closed": closed, "gold_counts": dict(sorted(counts.items())),
+            "chi_square": chi, "position_bins": histogram_position(choice)}
+
+
+def _score_task_stats(score):
+    by_n = collections.defaultdict(lambda: collections.Counter())
+    for item in score:
+        criteria = (item.get("q") or {}).get("criteria")
+        if isinstance(criteria, list):
+            by_n[len(criteria)][argmax(item["target"])] += 1
+    bins = histogram_position(score)
+    total = sum(bins)
+    shares = [value / total for value in bins] if total else [0.0] * 5
+    return {
+        "n": len(score),
+        "by_level_count": {str(count): [found[i] for i in range(count)] for count, found in sorted(by_n.items())},
+        "gold_fraction_bins": bins,
+        "gold_fraction_shares": shares,
+    }
+
+
+def per_task_label_balance(items):
+    groups = collections.defaultdict(list)
+    for item in items:
+        groups[task_lang(item)[0]].append(item)
+    out = {}
+    notes = []
+    testable = False
+    for task, group in sorted(groups.items()):
+        choice = [item for item in group if item.get("q", {}).get("type") == "choice"]
+        noul = [item for item in group if item.get("q", {}).get("type") == "noul"]
+        score = [item for item in group if item.get("q", {}).get("type") == "score"]
+        entry = {"n": len(group)}
+        if choice:
+            entry["choice"] = _choice_task_stats(choice)
+            chi_p = entry["choice"]["chi_square"].get("p_value")
+            if entry["choice"]["n"] >= MIN_DISTRIBUTION:
+                testable = True
+                if chi_p is not None and chi_p < 0.01:
+                    notes.append("%s choice p=%.4g" % (task, chi_p))
+        if noul:
+            true_count = sum(bool(item.get("target", [0, 0])[1] == 1) for item in noul)
+            entry["noul"] = {"n": len(noul), "true": true_count, "true_share": rate(true_count, len(noul))}
+            if len(noul) >= MIN_DISTRIBUTION:
+                testable = True
+                if not (0.40 <= entry["noul"]["true_share"] <= 0.60):
+                    notes.append("%s noul true=%s" % (task, pct(entry["noul"]["true_share"])))
+        if score:
+            entry["score"] = _score_task_stats(score)
+            if len(score) >= MIN_DISTRIBUTION:
+                testable = True
+                shares = entry["score"]["gold_fraction_shares"]
+                if any(share > 0.40 for share in shares) or shares[2] > 0.50:
+                    notes.append("%s score bins skewed" % task)
+        out[task] = entry
+    return out, notes, testable
+
+
 def label_balance(items, checks):
     choice = [x for x in items if x.get("q", {}).get("type") == "choice"]
     noul = [x for x in items if x.get("q", {}).get("type") == "noul"]
@@ -236,6 +345,14 @@ def label_balance(items, checks):
                else "too few items (%d; need %d)" % (score_total, MIN_DISTRIBUTION))
 
     option_counts = collections.Counter(len(x.get("target") or []) for x in items)
+    by_task, task_notes, task_testable = per_task_label_balance(items)
+    if not task_testable:
+        checks.add("label_balance", "per-task label balance", False,
+                   "too few items (no task reaches %d)" % MIN_DISTRIBUTION)
+    else:
+        checks.add("label_balance", "per-task label balance", bool(task_notes),
+                   "; ".join(task_notes) if task_notes else
+                   "no task with at least %d items is imbalanced" % MIN_DISTRIBUTION)
     return {
         "choice": {"n": len(choice), "gold_fraction_bins": choice_bins,
                    "bin_edges": [0, .2, .4, .6, .8, 1.0], "chi_square_by_option_count": chi},
@@ -243,6 +360,7 @@ def label_balance(items, checks):
         "score": {"n": len(score), "gold_fraction_bins": score_bins,
                   "gold_fraction_shares": score_shares, "bin_edges": [0, .2, .4, .6, .8, 1.0]},
         "option_count_histogram": {str(k): v for k, v in sorted(option_counts.items())},
+        "by_task": by_task,
     }
 
 
@@ -417,22 +535,89 @@ def repetition_report(items, checks):
     checks.add("repetition", "near-duplicate states", bool(duplicate_warns),
                "; ".join(duplicate_warns) if duplicate_warns else "no language has >2% of items in a pair")
 
-    key_counts = collections.Counter()
-    choice_count = 0
+    by_task_items = collections.defaultdict(list)
     for item in items:
-        q = item.get("q") or {}
-        if q.get("type") == "choice" and isinstance(q.get("criteria"), dict):
-            choice_count += 1
-            key_counts.update(str(key) for key in q["criteria"])
+        by_task_items[task_lang(item)[0]].append(item)
+    open_choice = []
+    closed_tasks = []
+    task_repetition = {}
+    task_prefix_warns = []
+    task_dup_warns = []
+    for task, group in sorted(by_task_items.items()):
+        choice = [item for item in group if (item.get("q") or {}).get("type") == "choice"
+                  and isinstance((item.get("q") or {}).get("criteria"), dict)]
+        key_sets = [frozenset(item["q"]["criteria"]) for item in choice]
+        if len(choice) >= 3 and key_sets and all(
+                key_set == key_sets[0] and len(key_set) >= 2 for key_set in key_sets):
+            closed_tasks.append(task)
+        else:
+            open_choice.extend(choice)
+        by_lang = collections.defaultdict(list)
+        for item in group:
+            by_lang[task_lang(item)[1]].append(item)
+        lang_stats = {lang: repetition_group(rows, lang) for lang, rows in sorted(by_lang.items())}
+
+        def _worst(field, stats=lang_stats):
+            best = None
+            for lang, result in stats.items():
+                if result["n"] < 3:
+                    continue
+                top = result[field]["top_prefix"]
+                share = top["share"] if top["share"] is not None else -1
+                if best is None or share > best[0]:
+                    best = (share, lang, top)
+            if best is None:
+                return {"language": None, "prefix": None, "share": None, "count": 0}
+            return {"language": best[1], "prefix": best[2]["prefix"], "share": best[2]["share"],
+                    "count": best[2]["count"]}
+
+        near_items = sum(result["near_duplicate_items"] for result in lang_stats.values())
+        task_repetition[task] = {
+            "n": len(group),
+            "states": {"top_prefix": _worst("states")},
+            "instructions": {"top_prefix": _worst("instructions")},
+            "near_duplicate_pairs": sum(result["near_duplicate_pairs"] for result in lang_stats.values()),
+            "near_duplicate_items": near_items,
+            "near_duplicate_item_share": near_items / len(group) if group else None,
+        }
+        for lang, result in lang_stats.items():
+            if result["n"] < MIN_DISTRIBUTION:
+                continue
+            for field in ("states", "instructions"):
+                top = result[field]["top_prefix"]
+                if top["share"] is not None and top["share"] > 0.05:
+                    task_prefix_warns.append("%s/%s %s %r=%s" % (task, lang, field, top["prefix"], pct(top["share"])))
+            if result["near_duplicate_item_share"] > 0.02:
+                task_dup_warns.append("%s/%s=%s" % (task, lang, pct(result["near_duplicate_item_share"])))
+    checks.add("repetition", "per-task prefixes", bool(task_prefix_warns),
+               "; ".join(task_prefix_warns) if task_prefix_warns else
+               "none exceeds 5% in a task and language with at least 20 items")
+    checks.add("repetition", "per-task near-duplicates", bool(task_dup_warns),
+               "; ".join(task_dup_warns) if task_dup_warns else
+               "no task/language cell has >2% of its items in a pair")
+
+    key_counts = collections.Counter()
+    for item in open_choice:
+        key_counts.update(str(key) for key in item["q"]["criteria"])
+    choice_count = len(open_choice)
     frequent = [{"key": key, "count": count, "share": count / choice_count if choice_count else None}
                 for key, count in key_counts.most_common(20)]
     top_share = frequent[0]["share"] if frequent else None
     key_enough = choice_count >= MIN_DISTRIBUTION
-    checks.add("repetition", "option-key reuse", bool(key_enough and top_share > 0.25),
-               ("top key %r appears in %s of choice items" % (frequent[0]["key"], pct(top_share)))
-               if key_enough and frequent else "too few choice items (%d; need %d)" % (choice_count, MIN_DISTRIBUTION))
-    return {"overall": overall, "by_language": languages,
-            "option_keys": {"choice_items": choice_count, "most_frequent": frequent}}
+    if not open_choice and closed_tasks:
+        key_detail = "closed label sets only (%s); reuse check does not apply" % ", ".join(closed_tasks)
+        key_warn = False
+    elif not key_enough:
+        key_detail = "too few choice items (%d; need %d)" % (choice_count, MIN_DISTRIBUTION)
+        key_warn = False
+    else:
+        key_warn = bool(top_share > 0.25)
+        key_detail = ("top key %r appears in %s of open choice items" % (frequent[0]["key"], pct(top_share))
+                      if key_warn else "no open-set key exceeds 25%")
+    checks.add("repetition", "option-key reuse", key_warn, key_detail)
+    return {"overall": overall, "by_language": languages, "by_task": task_repetition,
+            "option_keys": {"choice_items": choice_count, "most_frequent": frequent,
+                            "closed_label_tasks": closed_tasks}}
 
 
 def normalize_vectors(raw):
@@ -747,6 +932,18 @@ def write_markdown(path, report):
                          "n/a" if value["chi_square"] is None else "%.4f" % value["chi_square"],
                          "n/a" if value["p_value"] is None else "%.6g" % value["p_value"], value["note"] or ""])
     lines.extend(md_table(["Options", "N", "Positions", "χ²", "p", "Note"], chi_rows or [["-", 0, "[]", "n/a", "n/a", "no choice items"]]))
+    lines.extend(["", "### Per task", ""])
+    task_rows = []
+    for task, entry in lb.get("by_task", {}).items():
+        parts = []
+        if "choice" in entry:
+            parts.append("choice %s" % json.dumps(entry["choice"]["gold_counts"], ensure_ascii=False, sort_keys=True))
+        if "noul" in entry:
+            parts.append("noul true %s (%d/%d)" % (pct(entry["noul"]["true_share"]), entry["noul"]["true"], entry["noul"]["n"]))
+        if "score" in entry:
+            parts.append("score %s" % json.dumps(entry["score"]["by_level_count"], sort_keys=True))
+        task_rows.append([task, entry["n"], "; ".join(parts)])
+    lines.extend(md_table(["Task", "N", "Gold"], task_rows or [["-", 0, ""]]))
 
     lines.extend(["", "## 3. Repetition and template collapse", ""])
     repetition_rows = []
@@ -760,9 +957,27 @@ def write_markdown(path, report):
                                 "n/a" if value["mean_pairwise_jaccard"] is None else "%.4f" % value["mean_pairwise_jaccard"]])
     lines.extend(md_table(["Language", "N", "State d1/d2/d3", "Instruction d1/d2/d3",
                            "Top state prefix", "Top instruction prefix", "Near pairs / item share", "Mean Jaccard"], repetition_rows))
+    lines.extend(["", "### By task", "",
+                  "Prefixes are the worst language inside the task among languages with at least 3 items. "
+                  "Near-duplicates stay inside one language.", ""])
+    task_rep_rows = []
+    for task, value in rep.get("by_task", {}).items():
+        state_prefix = value["states"]["top_prefix"]
+        instruction_prefix = value["instructions"]["top_prefix"]
+        task_rep_rows.append([
+            task, value["n"],
+            "%s %r (%s)" % (state_prefix["language"], state_prefix["prefix"], pct(state_prefix["share"])),
+            "%s %r (%s)" % (instruction_prefix["language"], instruction_prefix["prefix"], pct(instruction_prefix["share"])),
+            "%d / %s" % (value["near_duplicate_pairs"], pct(value["near_duplicate_item_share"])),
+        ])
+    lines.extend(md_table(["Task", "N", "Worst state prefix", "Worst instruction prefix", "Near pairs / item share"],
+                          task_rep_rows or [["-", 0, "", "", ""]]))
     lines.extend(["", "### Frequent choice option keys", ""])
-    lines.extend(md_table(["Key", "Count", "Share of choice items"],
+    lines.extend(md_table(["Key", "Count", "Share of open choice items"],
                           [[x["key"], x["count"], pct(x["share"])] for x in rep["option_keys"]["most_frequent"]] or [["(none)", 0, "n/a"]]))
+    closed = rep["option_keys"].get("closed_label_tasks") or []
+    if closed:
+        lines.extend(["", "Closed label sets, excluded from the reuse check: %s." % ", ".join(closed), ""])
 
     lines.extend(["", "## 4. Semantic diversity", ""])
     if not sem["available"]:
@@ -818,7 +1033,7 @@ def main(argv=None):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     items = read_jsonl_gz(input_path)
-    provenance = read_jsonl_gz(provenance_path)
+    provenance = latest_records(read_jsonl_gz(provenance_path))
     checks = Checks()
     y = yield_report(items, provenance, checks)
     labels = label_balance(items, checks)
