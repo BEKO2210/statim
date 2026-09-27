@@ -13,6 +13,8 @@ import gzip
 import hashlib
 import io
 import json
+import os
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -109,7 +111,14 @@ def _fetch_verified(url, dest, digest):
         return dest
     dest.unlink(missing_ok=True)
     partial = dest.with_name(dest.name + ".part")
-    urllib.request.urlretrieve(url, partial)
+    for attempt in range(3):  # a proxy can cut a large download short (ContentTooShortError)
+        try:
+            urllib.request.urlretrieve(url, partial)
+            break
+        except urllib.error.ContentTooShortError:
+            partial.unlink(missing_ok=True)
+            if attempt == 2:
+                raise
     if sha256_file(partial) != digest:
         partial.unlink(missing_ok=True)
         raise RuntimeError("SHA-256 mismatch for %s" % dest.name)
@@ -146,7 +155,10 @@ def _hub(repo, filename, revision=None):
 
 
 def sample_parquet(path, limit, columns=None, drop=("audio", "audio_path")):
-    """Read at most ``limit`` rows, spread across the file so blocked labels are not missed."""
+    """Read at most ``limit`` rows spread across the file so blocked labels are not missed: one row
+    at a seeded random offset inside each of ``limit`` equal strata. A fixed stride would alias with
+    a file whose labels cycle (turkish-intent repeats 20 intents, so every 1,000th row has the same one)."""
+    import bisect
     import pyarrow.parquet as pq
     pf = pq.ParquetFile(path)
     names = list(columns) if columns else [n for n in pf.schema_arrow.names if n not in drop]
@@ -154,18 +166,46 @@ def sample_parquet(path, limit, columns=None, drop=("audio", "audio_path")):
     if total <= 0:
         return []
     if total <= limit:
-        want = None
+        want = list(range(total))
     else:
+        import random
+        rng = random.Random("%s|%d|%d" % (Path(path).name, total, limit))
         step = total / float(limit)
-        want = {min(total - 1, int(i * step)) for i in range(limit)}
+        want = sorted({min(total - 1, int(i * step + rng.random() * step)) for i in range(limit)})
     rows, seen = [], 0
-    for batch in pf.iter_batches(batch_size=512, columns=names):
-        for row in batch.to_pylist():
-            if want is None or seen in want:
-                rows.append(row)
-            seen += 1
-            if want is not None and len(rows) >= limit and seen > max(want):
-                return rows
+    for batch in pf.iter_batches(batch_size=4096, columns=names):
+        n = batch.num_rows
+        lo, hi = bisect.bisect_left(want, seen), bisect.bisect_left(want, seen + n)
+        if hi > lo:
+            rows.extend(batch.take([w - seen for w in want[lo:hi]]).to_pylist())
+        seen += n
+        if seen > want[-1]:
+            break
+    return rows[:limit]
+
+
+def contiguous_parquet(path, limit, blocks=8):
+    """``limit`` rows as ``blocks`` contiguous runs at evenly spaced offsets. Pair builders need
+    neighbouring rows (a paraphrase set, a day's headlines); an evenly spread sample splits them."""
+    import pyarrow.parquet as pq
+    pf = pq.ParquetFile(path)
+    total = pf.metadata.num_rows or 0
+    if total <= limit:
+        return sample_parquet(path, limit)
+    run = max(1, limit // blocks)
+    spans = [(start, start + run) for start in
+             (int(i * (total - run) / max(1, blocks - 1)) for i in range(blocks))]
+    rows, seen = [], 0
+    names = [n for n in pf.schema_arrow.names if n not in ("audio", "audio_path")]
+    for batch in pf.iter_batches(batch_size=1024, columns=names):
+        lo, hi = seen, seen + batch.num_rows
+        if any(a < hi and b > lo for a, b in spans):
+            for j, row in enumerate(batch.to_pylist()):
+                if any(a <= lo + j < b for a, b in spans):
+                    rows.append(row)
+        seen = hi
+        if seen >= spans[-1][1]:
+            break
     return rows[:limit]
 
 
@@ -400,9 +440,22 @@ def _load_tapaco(limit):
     per = max(1, limit // len(TAPACO_CONFIGS))
     for lang in TAPACO_CONFIGS:
         path = _hub("community-datasets/tapaco", "%s/train/0000.parquet" % lang, PARQUET_REV)
-        rows = sample_parquet(path, per)
+        rows = contiguous_parquet(path, per)  # whole paraphrase sets, so positive pairs exist
         groups[lang] = _tag(rows, _v6_config=lang, _v6_lang="zh" if lang == "cmn" else lang)
     return _balanced_take(groups, limit)
+
+
+def _load_headlines(limit):
+    """Contiguous runs of the date-ordered file, so one day's stories (group_id) come together."""
+    repo = "dell-research-harvard/headlines-semantic-similarity"
+    shards = sorted(f for f in _parquet_listing(repo) if f.startswith("default/train/"))
+    if len(shards) > MAX_SHARDS:
+        shards = [shards[int(i * len(shards) / MAX_SHARDS)] for i in range(MAX_SHARDS)]
+    per = max(1, limit // max(1, len(shards)))
+    rows = []
+    for shard in shards:
+        rows.extend(contiguous_parquet(_hub(repo, shard, PARQUET_REV), per))
+    return _tag(rows, _v6_lang="en", _v6_config="default")
 
 
 def _load_job_titles(limit):
@@ -555,6 +608,7 @@ def _load_fairytale(limit):
             continue
         rows.append({"context": story, "question": question,
                      "answers": {"text": [answer]} if answer else {"text": []},
+                     "story_name": row.get("story_name") or "",
                      "_v6_lang": "en", "_v6_config": "plain_text"})
     return rows
 
@@ -680,6 +734,7 @@ _DISPATCH = {
     "Helsinki-NLP/tatoeba": _load_tatoeba,
     "boun-tabi/nli_tr": lambda entry, limit: _load_nli_tr(limit),
     "community-datasets/tapaco": lambda entry, limit: _load_tapaco(limit),
+    "dell-research-harvard/headlines-semantic-similarity": lambda entry, limit: _load_headlines(limit),
     "Avature/Job-Title-Similarity": lambda entry, limit: _load_job_titles(limit),
     "github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset (v0.2.3.csv; NOT tasksource/dynahate mirror tagged gpl)": lambda entry, limit: _load_dynahate(limit),
     "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)": lambda entry, limit: _load_gahd(limit),
@@ -731,8 +786,92 @@ CONFIGS = {
 }
 
 
+# Parquet shards read per config/split; bounds the download for multi-GB datasets. The CI audit sets 1.
+MAX_SHARDS = int(os.environ.get("STATIM_V6_MAX_SHARDS", "4"))
+
+
+def class_label_names(path):
+    """{column: [names]} for ClassLabel columns, from the datasets metadata in a parquet schema."""
+    import pyarrow.parquet as pq
+    meta = pq.read_schema(path).metadata or {}
+    try:
+        features = json.loads(meta[b"huggingface"])["info"]["features"]
+    except (KeyError, ValueError, TypeError):
+        return {}
+    return {col: list(feat["names"]) for col, feat in features.items()
+            if isinstance(feat, dict) and feat.get("_type") == "ClassLabel" and feat.get("names")}
+
+
+def decode_class_labels(rows, names):
+    """ClassLabel ints -> their names. An adapter would otherwise offer "0", "1", "2" as options."""
+    for row in rows:
+        for col, labels in names.items():
+            value = row.get(col)
+            if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < len(labels):
+                row[col] = labels[value]
+    return rows
+
+
+_PARQUET_LISTING = {}
+
+
+def _parquet_listing(dataset_id):
+    if dataset_id not in _PARQUET_LISTING:
+        from huggingface_hub import HfApi
+        files = HfApi().list_repo_files(dataset_id, repo_type="dataset", revision=PARQUET_REV)
+        _PARQUET_LISTING[dataset_id] = [f for f in files if f.endswith(".parquet")]
+    return _PARQUET_LISTING[dataset_id]
+
+
+def _parquet_config(dataset_id, config):
+    dirs = sorted({f.split("/")[0] for f in _parquet_listing(dataset_id)})
+    if config is not None:
+        return config if config in dirs else None
+    if "default" in dirs:
+        return "default"
+    return dirs[0] if len(dirs) == 1 else None
+
+
+def _parquet_split_rows(dataset_id, config, split, limit):
+    """``limit`` rows spread evenly over the split (at most MAX_SHARDS shards, evenly spaced), so a
+    split sorted by label still yields every label. ClassLabel ints are decoded to names."""
+    shards = sorted(f for f in _parquet_listing(dataset_id) if f.startswith("%s/%s/" % (config, split)))
+    if len(shards) > MAX_SHARDS:
+        step = len(shards) / float(MAX_SHARDS)
+        shards = [shards[int(i * step)] for i in range(MAX_SHARDS)]
+    per = max(1, limit // max(1, len(shards)))
+    rows = []
+    for shard in shards:
+        path = _hub(dataset_id, shard, PARQUET_REV)
+        rows.extend(decode_class_labels(sample_parquet(path, per), class_label_names(path)))
+    return rows[:limit]
+
+
+def _load_hf_parquet(entry, limit, dataset_id, configs):
+    """Rows from the auto-converted parquet revision. Configs without a parquet conversion are skipped
+    (as streaming skips configs that fail); returns None when none has one."""
+    names = [(config, _parquet_config(dataset_id, config)) for config in configs]
+    names = [(config, name) for config, name in names if name is not None]
+    if not names:
+        return None
+    rows = []
+    per_config = max(1, limit // len(names))
+    for config, name in names:
+        available = sorted({f.split("/")[1] for f in _parquet_listing(dataset_id) if f.startswith(name + "/")})
+        splits = _split_candidates(entry.get("split", "train"), available)
+        for split in splits:
+            part = _parquet_split_rows(dataset_id, name, split, per_config)
+            for record in part:
+                record.pop("audio", None)
+                record.setdefault("_v6_config", config or "default")
+            rows.extend(part)
+    return rows[:limit]
+
+
 def _load_hf_streaming(entry, limit):
-    """Ordinary Hub datasets that already ship data files, not a loading script."""
+    """Ordinary Hub datasets that already ship data files, not a loading script. The parquet
+    revision is read first (rows spread over the split); streaming the head of the split is the
+    fallback, and it decodes ClassLabels from the dataset features."""
     from datasets import Audio, get_dataset_config_names, get_dataset_split_names, load_dataset
 
     original = entry["id"]
@@ -745,6 +884,12 @@ def _load_hf_streaming(entry, limit):
             configs = get_dataset_config_names(dataset_id)
         else:
             configs = [config]
+    try:
+        rows = _load_hf_parquet(entry, limit, dataset_id, configs)
+    except Exception:  # listing or download failed: fall back to streaming
+        rows = None
+    if rows:
+        return rows, []
     rows, failures = [], []
     per_config = max(1, limit // max(1, len(configs)))
     for config in configs:
@@ -763,10 +908,13 @@ def _load_hf_streaming(entry, limit):
                     ds = ds.cast_column("audio", Audio(decode=False))
                     ds = ds.remove_columns(["audio"])
                 take = min(per_config, limit - len(rows))
+                features = getattr(ds, "features", None) or {}
+                names = {k: list(v.names) for k, v in features.items() if type(v).__name__ == "ClassLabel"}
                 for i, row in enumerate(ds):
                     if i >= take:
                         break
                     record = {k: v for k, v in dict(row).items() if k != "audio"}
+                    decode_class_labels([record], names)
                     record.setdefault("_v6_config", config or "default")
                     rows.append(record)
         except Exception as exc:
@@ -776,6 +924,54 @@ def _load_hf_streaming(entry, limit):
     return rows, failures
 
 
+# Integer labels that are plain ints (not ClassLabel), named on the dataset card.
+CARD_LABELS = {
+    # "0 表示负面，1 表示正面"
+    "YiMeng-SYSU/chinese-logic-sentiment-dataset": {"label": ["negative", "positive"]},
+    # card table: 0 very_negative ... 4 very_positive
+    "tanaos/synthetic-sentiment-analysis-dataset-v1": {
+        "labels": ["very negative", "negative", "neutral", "positive", "very positive"]},
+    # card table: 0 joy, 1 anger, 2 fear, 3 sadness, 4 surprise, 5 disgust, 6 excitement, 7 neutral
+    "tanaos/synthetic-emotion-detection-dataset-v1": {
+        "labels": ["joy", "anger", "fear", "sadness", "surprise", "disgust", "excitement", "neutral"]},
+}
+
+
+def _explode_casino(rows):
+    """One row per annotated utterance: annotations = [[utterance, "strategy,strategy"], ...]. The
+    first strategy is the label; the whole dialogue is not the decision text."""
+    out = []
+    for row in rows:
+        annotations = row.get("annotations")
+        if isinstance(annotations, str):
+            try:
+                import ast
+                annotations = ast.literal_eval(annotations)
+            except (ValueError, SyntaxError):
+                continue
+        for pair in annotations or []:
+            if isinstance(pair, (list, tuple)) and len(pair) >= 2 and str(pair[0]).strip() and str(pair[1]).strip():
+                out.append({"utterance": str(pair[0]).strip(), "annotations": str(pair[1]).split(",")[0].strip(),
+                            "_v6_lang": "en", "_v6_config": row.get("_v6_config", "default")})
+    return out
+
+
+ROW_TRANSFORMS = {"kchawla123/casino": _explode_casino}
+
+
+def _postprocess(sid, rows):
+    for col, names in CARD_LABELS.get(sid, {}).items():
+        for row in rows:
+            value = row.get(col)
+            if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+                value = int(value)
+            if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < len(names):
+                row[col] = names[value]
+    if sid in ROW_TRANSFORMS:
+        rows = ROW_TRANSFORMS[sid](rows)
+    return rows
+
+
 def load_rows(entry, limit):
     """Load at most ``limit`` rows. Returns ``(rows, warnings)``."""
     sid = entry["id"]
@@ -783,7 +979,8 @@ def load_rows(entry, limit):
         rows = _DISPATCH[sid](entry, limit)
         if not rows:
             raise RuntimeError("loader returned no rows")
-        return rows, []
+        return _postprocess(sid, rows), []
     if sid.startswith(("github:", "zenodo:")) or "|" in sid:
         raise RuntimeError("non-Hugging-Face source needs a pinned raw-file loader")
-    return _load_hf_streaming(entry, limit)
+    rows, warnings = _load_hf_streaming(entry, limit)
+    return _postprocess(sid, rows), warnings

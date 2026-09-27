@@ -147,6 +147,19 @@ _MINDS14 = [
 ]
 
 
+def _parse_structured(text):
+    """JSON, or a Python literal such as "['Theft']" (several sources store lists that way)."""
+    import ast
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return text
+
+
 def canon(label):
     text = human(label)
     return _CANON.get(text.lower(), text)
@@ -169,9 +182,8 @@ def _coerce_labels(value):
         if not value:
             return []
         if value[:1] in "[{":
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
+            value = _parse_structured(value)
+            if isinstance(value, str):
                 return [canon(value)]
     if isinstance(value, dict):
         return [canon(k) for k, v in value.items() if v is True or isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0.5]
@@ -207,7 +219,7 @@ def task_for(entry):
     if "4-nli" in cat:
         return "nli"
     if "7-similarity" in cat:
-        if any(token in fields for token in ("query", "passage", "product_title")):
+        if any(token in fields for token in ("query", "passage", "product_title", "answer")):
             return "relevance"
         return "similarity"
     if "8-topic" in cat:
@@ -245,10 +257,16 @@ def task_for_field(entry, path):
         return "dialogue_act"
     if "intent" in name:
         return "intent"
-    if name == "domain":
+    if name in ("domain", "topic"):
         return "topic"
+    if name == "style" and entry["id"] == "leonvanbokhorst/synthetic-complaints-v2":
+        return "emotion"  # the tone the complaint was written in (annoyed, bitter, ...)
     if "hate" in name or "toxic" in name:
         return "toxicity"
+    if "3-complaint" in entry.get("category", ""):
+        # "3-complaint; 1-sentiment" sources: only a sentiment field asks for sentiment (above);
+        # a category field is the kind of issue.
+        return "complaint_category"
     return task_for(entry)
 
 
@@ -286,8 +304,43 @@ def _label_fields(entry, row):
     return [(path, _get(row, path)) for path in candidates if _get(row, path) is not None]
 
 
+AEGIS1_SAFE = {"safe", "needs caution"}
+
+
+def _safety_labels(sid, row):
+    """Labels for safety sources whose label columns the generic parser cannot read. Returns None
+    for any other source. "safe" is a negative word in safety_adapter."""
+    if sid == "nvidia/Aegis-AI-Content-Safety-Dataset-1.0":
+        # labels_0..labels_4: one annotation each ("None" = no annotator). Majority vote; a tie or a
+        # "Needs Caution" majority is ambiguous and yields no label (the row is dropped).
+        votes = [str(row.get("labels_%d" % i) or "").strip() for i in range(5)]
+        votes = [v for v in votes if v and v != "None"]
+        safe = sum(v.lower() == "safe" for v in votes)
+        unsafe = [v for v in votes if v.lower() not in AEGIS1_SAFE]
+        if safe * 2 > len(votes):
+            return ["safe"]
+        if len(unsafe) * 2 > len(votes):
+            return [max(set(unsafe), key=unsafe.count)]
+        return []
+    if sid == "OpenAssistant/oasst2":
+        # labels = {"name": [...], "value": [...], "count": [...]}, value = mean crowd vote in [0, 1]
+        labels = row.get("labels")
+        if isinstance(labels, str):
+            labels = _parse_structured(labels)
+        if not isinstance(labels, dict) or not labels.get("name"):
+            return []
+        scores = dict(zip(labels.get("name") or [], labels.get("value") or []))
+        harmful = ("toxicity", "hate_speech", "not_appropriate", "sexual_content", "violence")
+        worst = max(harmful, key=lambda k: scores.get(k) or 0.0)
+        return [human(worst)] if (scores.get(worst) or 0.0) >= 0.5 else ["safe"]
+    return None
+
+
 def labels_from(entry, row):
     sid = entry["id"]
+    safety = _safety_labels(sid, row)
+    if safety is not None:
+        return safety
     if sid == "community-datasets/re_dial":
         qs = row.get("respondentQuestions") or row.get("initiatorQuestions") or []
         liked = [q.get("liked") for q in qs if isinstance(q, dict) and q.get("liked") in (0, 1)]
@@ -322,10 +375,7 @@ def labels_from(entry, row):
         if not v:
             return []
         if v[:1] in "[{":
-            try:
-                value = json.loads(v)
-            except json.JSONDecodeError:
-                pass
+            value = _parse_structured(v)
     if isinstance(value, dict):
         return [human(k) for k, v in value.items() if v is True or isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0.5]
     if isinstance(value, (list, tuple, set)):
@@ -345,8 +395,86 @@ def _sentiment_scheme(rows):
     return {}
 
 
+# arXiv archives (the part of the primary category before the dot) as readable topics.
+ARXIV_ARCHIVES = {
+    "astro-ph": "astrophysics", "cond-mat": "condensed matter physics", "cs": "computer science",
+    "econ": "economics", "eess": "electrical engineering and systems science", "gr-qc": "general relativity",
+    "hep-ex": "particle physics", "hep-lat": "particle physics", "hep-ph": "particle physics",
+    "hep-th": "particle physics", "math": "mathematics", "math-ph": "mathematical physics",
+    "nlin": "nonlinear sciences", "nucl-ex": "nuclear physics", "nucl-th": "nuclear physics",
+    "physics": "physics", "q-bio": "quantitative biology", "q-fin": "quantitative finance",
+    "quant-ph": "quantum physics", "stat": "statistics",
+}
+# English Wikinews top-level topic categories. The other categories of an article are people,
+# places and maintenance tags, so a row is used only when exactly one of these is present.
+WIKINEWS_TOPICS = {
+    "Crime and law", "Culture and entertainment", "Disasters and accidents", "Economy and business",
+    "Education", "Environment", "Health", "Obituaries", "Politics and conflicts", "Science and technology",
+    "Sports", "Weather",
+}
+
+
+def _polarity(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return "negative" if value < -0.1 else ("positive" if value > 0.1 else "neutral")
+
+
+def _stars(value):
+    """A 1-5 star rating as sentiment; the digits are not options a reader can interpret."""
+    try:
+        stars = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not 1 <= stars <= 5:
+        return None
+    return "negative" if stars <= 2 else ("neutral" if stars < 4 else "positive")
+
+
+def _special_field_labels(sid, row):
+    """(path, label) pairs for sources whose documented label field needs interpretation. None for
+    every other source."""
+    if sid == "IDinsight/urgency_detection_maternal_health_synthetic":
+        # matching_rule names one of 35 warning signs or NOT URGENT; the decision is urgent or not.
+        rule = str(row.get("matching_rule") or "").strip()
+        return [("urgency", "not urgent" if rule.upper() == "NOT URGENT" else "urgent")] if rule else []
+    if sid == "leonvanbokhorst/synthetic-complaints-v2":
+        found = []
+        if row.get("topic"):
+            found.append(("topic", human(row["topic"])))
+        if row.get("style"):
+            found.append(("style", human(row["style"])))
+        polarity = _polarity(row.get("sentiment"))  # TextBlob polarity in [-1, 1]
+        if polarity:
+            found.append(("sentiment", polarity))
+        return found
+    if sid == "gfissore/arxiv-abstracts-2021":
+        cats = row.get("categories")
+        if isinstance(cats, str):
+            cats = _parse_structured(cats) if cats[:1] == "[" else cats
+        first = (cats[0] if isinstance(cats, list) and cats else cats) or ""
+        primary = str(first).split()[0] if str(first).split() else ""
+        archive = ARXIV_ARCHIVES.get(primary.split(".")[0])
+        return [("categories", archive)] if archive else []
+    if sid == "Fumika/Wikinews-multilingual":
+        cats = row.get("categories")
+        if isinstance(cats, str):
+            cats = _parse_structured(cats)
+        topics = [c for c in (cats or []) if c in WIKINEWS_TOPICS] if isinstance(cats, list) else []
+        return [("categories", topics[0])] if len(topics) == 1 else []
+    if sid == "vic35get/nhtsa_complaints_dataset":
+        components = str(row.get("components") or "").strip()
+        return [("components", components)] if components and "," not in components else []
+    return None
+
+
 def field_labels(entry, row, scheme):
     sid = entry["id"]
+    special = _special_field_labels(sid, row)
+    if special is not None:
+        return special
     if sid == "PolyAI/minds14" and isinstance(row.get("intent_class"), (int, float)) and not isinstance(row.get("intent_class"), bool):
         index = int(row["intent_class"])
         if 0 <= index < len(_MINDS14):
@@ -375,7 +503,7 @@ def field_labels(entry, row, scheme):
                 found.append(("intent", label))
         if found:
             return found
-    found = []
+    found, ambiguous, stars = [], False, None
     for path in _documented_paths(entry):
         value = _get(row, path)
         if value is None:
@@ -385,20 +513,28 @@ def field_labels(entry, row, scheme):
             if mapped:
                 found.append((path, mapped))
                 continue
-        labels = _coerce_labels(value)
-        if labels:
+        if "rating" in path.lower() and "1-sentiment" in entry.get("category", ""):
+            stars = stars or _stars(value)  # used only when the row has no sentiment field
+            continue
+        labels = list(dict.fromkeys(_coerce_labels(value)))
+        if len(labels) == 1:
             found.append((path, labels[0]))
-    if found:
+        elif labels:
+            ambiguous = True  # several labels on one row: no single gold option for this field
+    if stars and not any("sentiment" in path.lower() for path, _label in found):
+        found.append(("sentiment", stars))
+    if found or ambiguous:
         return found
-    labels = labels_from(entry, row)
-    if labels:
-        return [("", canon(labels[0]))]
+    labels = list(dict.fromkeys(canon(x) for x in labels_from(entry, row)))
+    if len(labels) == 1:
+        return [("", labels[0])]
     return []
 
 
-def _base(entry, row, state, q, target, lang, texts):
+def _base(entry, row, state, q, target, lang, texts, task=None):
+    # _task (the adapter task) is internal like _texts: build.py removes both before writing.
     return {"state": state, "q": q, "target": target, "src": source_name(entry),
-            "lang": lang, "_texts": texts}
+            "lang": lang, "_texts": texts, "_task": task}
 
 
 def _choice(entry, row, state, options, gold, lang, rng, texts, task=None, prompt=None):
@@ -411,13 +547,13 @@ def _choice(entry, row, state, options, gold, lang, rng, texts, task=None, promp
     text, ilang = _render("choice", lang, rng, task)
     q = {"type": "choice", "instructions": prompt or text,
          "criteria": {x: describe(task, x, ilang) for x in options}}
-    return _base(entry, row, state, q, target, lang, texts)
+    return _base(entry, row, state, q, target, lang, texts, task)
 
 
 def _noul(entry, row, state, truth, lang, rng, texts, task=None, fmt=None, statement=None):
     text, _ilang = _render("noul", lang, rng, task, fmt)
     q = {"type": "noul", "instructions": statement or text}
-    return _base(entry, row, state, q, [0.0, 1.0] if truth else [1.0, 0.0], lang, texts)
+    return _base(entry, row, state, q, [0.0, 1.0] if truth else [1.0, 0.0], lang, texts, task)
 
 
 def _score(entry, row, state, levels, gold, lang, rng, texts, task=None, fmt=None, prompt=None):
@@ -426,7 +562,7 @@ def _score(entry, row, state, levels, gold, lang, rng, texts, task=None, fmt=Non
     text, ilang = _render("score", lang, rng, task, fmt)
     levels = score_levels(task, ilang, levels)
     q = {"type": "score", "instructions": prompt or text, "criteria": list(levels)}
-    return _base(entry, row, state, q, [1.0 if i == gold else 0.0 for i in range(len(levels))], lang, texts)
+    return _base(entry, row, state, q, [1.0 if i == gold else 0.0 for i in range(len(levels))], lang, texts, task)
 
 
 def _vocabulary(entry, rows, limit=80):
@@ -474,7 +610,9 @@ def emotion_adapter(entry, rows, seed):
             continue
         lang, state = infer_lang(entry, row, text=texts[0]), state_from(entry, row, texts)
         rng = seeded(seed, source_key(entry), i, state)
-        item = _choice(entry, row, state, vocab, labels[0], lang, rng, texts, task="emotion")
+        # A multi-label row has no single gold emotion; it still answers the yes/no probe below.
+        item = (_choice(entry, row, state, vocab, labels[0], lang, rng, texts, task="emotion")
+                if len(set(labels)) == 1 else None)
         if item:
             yield item
         if vocab:
@@ -535,11 +673,61 @@ def _tapaco_pairs(rows):
     return made or None
 
 
+# Graded relevance labels (ESCI: Exact/Substitute/Complement/Irrelevant; WANDS: Exact/Partial/Irrelevant)
+# on the SIM_LEVELS scale.
+RELEVANCE_LEVELS = {"exact": 4, "substitute": 2, "partial": 2, "complement": 1, "irrelevant": 0}
+
+
+def _group_pairs(rows, group_key, text_key):
+    """Pairs from a grouped source: neighbours in one group are related (1.0); each text is also
+    paired with a text of another group (0.0)."""
+    groups = {}
+    for row in rows:
+        text = row.get(text_key)
+        if isinstance(text, str) and text.strip() and row.get(group_key) not in (None, ""):
+            groups.setdefault(str(row[group_key]), []).append(row)
+    keys = sorted(groups)
+    made = []
+    for n, key in enumerate(keys):
+        members = groups[key]
+        other = groups[keys[(n + max(1, len(keys) // 2)) % len(keys)]] if len(keys) > 1 else []
+        for i, row in enumerate(members):
+            base = {k: v for k, v in row.items() if k.startswith("_v6_")}
+            if i + 1 < len(members) and members[i + 1][text_key] != row[text_key]:
+                made.append({**base, "sentence1": row[text_key], "sentence2": members[i + 1][text_key],
+                             "relatedness_score": 1.0})
+            if other and other[i % len(other)][text_key] != row[text_key]:
+                made.append({**base, "sentence1": row[text_key], "sentence2": other[i % len(other)][text_key],
+                             "relatedness_score": 0.0})
+    return made
+
+
+def _qa_pairs(rows, question_key, answer_key):
+    """A question with its own answer is relevant (1.0); with the answer of another row, not (0.0)."""
+    usable = [r for r in rows if isinstance(r.get(question_key), str) and isinstance(r.get(answer_key), str)
+              and r[question_key].strip() and r[answer_key].strip()]
+    made = []
+    for i, row in enumerate(usable):
+        base = {k: v for k, v in row.items() if k.startswith("_v6_")}
+        made.append({**base, "sentence1": row[question_key], "sentence2": row[answer_key], "relatedness_score": 1.0})
+        other = usable[(i + max(1, len(usable) // 2)) % len(usable)]
+        if other[answer_key] != row[answer_key]:
+            made.append({**base, "sentence1": row[question_key], "sentence2": other[answer_key],
+                         "relatedness_score": 0.0})
+    return made
+
+
 def similarity_adapter(entry, rows, seed):
     rows = list(rows)
+    derived = entry.get("label_field", "")
     paired = _tapaco_pairs(rows)
     if paired:
         rows = paired
+    elif derived.startswith("derived: same group_id"):
+        rows = _group_pairs(rows, "group_id", (_paths(entry, "text_fields") or ["text"])[0])
+    elif derived.startswith("derived: question-answer pair"):
+        fields = _paths(entry, "text_fields")
+        rows = _qa_pairs(rows, fields[0], fields[1])
     task = task_for(entry) or "similarity"
     for i, row in enumerate(rows):
         texts = row_texts(entry, row)
@@ -557,8 +745,12 @@ def similarity_adapter(entry, rows, seed):
             raw = row["relatedness_score"]
         if raw is None:
             label = (labels_from(entry, row) or [""])[0].lower()
-            same = label in {"1", "true", "yes", "relevant", "duplicate", "paraphrase", "same"}
-            score = 4 if same else 0
+            if label in RELEVANCE_LEVELS:
+                score = RELEVANCE_LEVELS[label]
+                same = score == 4
+            else:
+                same = label in {"1", "true", "yes", "relevant", "duplicate", "paraphrase", "same"}
+                score = 4 if same else 0
         else:
             value = float(raw)
             value = value / 5.0 if value > 1 else value
@@ -574,19 +766,16 @@ def similarity_adapter(entry, rows, seed):
 
 
 def complaint_adapter(entry, rows, seed):
+    # No "is the writer reporting a problem?" item: every row of a complaint source is a complaint,
+    # so that question would always be answered yes.
     yield from classification_adapter(entry, rows, seed)
-    for i, row in enumerate(rows):
-        texts = row_texts(entry, row)
-        if not texts:
-            continue
-        lang, state = infer_lang(entry, row, text=texts[0]), state_from(entry, row, texts)
-        rng = seeded(seed, source_key(entry), "complaint", i, state)
-        yield _noul(entry, row, state, True, lang, rng, texts, task="complaint_detection")
 
 
 def safety_adapter(entry, rows, seed):
     rows = list(rows)
-    negative_words = {"safe", "valid", "benign", "not hate", "nothate", "non hateful", "0", "false"}
+    # "not toxic": mteb/toxic_conversations_50k; "casual": prosocial-dialog's __casual__ label.
+    negative_words = {"safe", "valid", "benign", "not hate", "nothate", "non hateful", "not toxic", "non toxic",
+                      "casual", "0", "false"}
     task = task_for(entry) or "moderation"
     vocab_counts = {}
     prepared = []
@@ -601,10 +790,13 @@ def safety_adapter(entry, rows, seed):
         if not texts:
             continue
         labels = prepared[i]
+        if not labels and _safety_labels(entry["id"], row) is not None:
+            continue  # a source with explicit labels, and this row's are ambiguous
         truth = not labels or not any(x in negative_words for x in labels)
         lang, state = infer_lang(entry, row, text=texts[0]), state_from(entry, row, texts)
         rng = seeded(seed, source_key(entry), i, state)
-        if labels and len(vocab) >= 2 and labels[0] in vocab and not all(str(x).isdigit() for x in vocab):
+        if (len(set(labels)) == 1 and len(vocab) >= 2 and labels[0] in vocab
+                and not all(str(x).isdigit() for x in vocab)):
             item = _choice(entry, row, state, vocab, labels[0], lang, rng, texts, task=task)
             if item:
                 yield item
@@ -667,26 +859,76 @@ def language_adapter(entry, rows, seed):
                 yield item
 
 
+WINDOW = 1600  # characters of a long context kept around the evidence
+
+
 def _window_context(row):
+    """A WINDOW-character slice of a long context. Rows with and without an answer get slices of the
+    same length at a pseudo-random offset (seeded by the question), so neither the length nor the
+    position of the slice reveals whether the question can be answered."""
     context = row.get("context")
-    if not isinstance(context, str) or len(context) <= 1800:
+    if not isinstance(context, str) or len(context) <= WINDOW:
         return row
     cloned = dict(row)
     answers = row.get("answers") if isinstance(row.get("answers"), dict) else {}
     starts = answers.get("answer_start") or []
+    texts = answers.get("text") or []
+    rng = seeded("window", row.get("question") or "", len(context))
     if starts:
         try:
             start = int(starts[0])
         except (TypeError, ValueError):
             start = 0
-        cloned["context"] = context[max(0, start - 700):start + 900]
+        length = len(str(texts[0])) if texts else 0
+        lead = rng.randint(0, max(0, WINDOW - length - 1))  # answer anywhere inside the slice
+        begin = min(max(0, start - lead), len(context) - WINDOW)
     else:
-        cloned["context"] = context[:1500]
+        begin = rng.randint(0, len(context) - WINDOW)
+    cloned["context"] = context[begin:begin + WINDOW]
     return cloned
 
 
+MAUD_MAX_OPTION = 120
+
+
+def _maud_options(rows):
+    """MAUD rows carry the answer text only; the options are the answers seen for the same
+    (question, subquestion) in the loaded rows."""
+    groups = {}
+    for row in rows:
+        answer = str(row.get("answer") or "").strip()
+        if answer and len(answer) <= MAUD_MAX_OPTION:  # longer answers are lists of several clauses
+            groups.setdefault((row.get("question"), row.get("subquestion")), set()).add(answer)
+    return {key: sorted(values) for key, values in groups.items() if len(values) >= 2}
+
+
+def _unanswerable_pairs(rows):
+    """For a source where every question has an answer (FairytaleQA): the same question against a
+    section of a different story, which cannot answer it."""
+    made = []
+    usable = [r for r in rows if r.get("context") and r.get("question")]
+    for i, row in enumerate(usable):
+        for step in range(1, len(usable)):
+            other = usable[(i + step * max(1, len(usable) // 7)) % len(usable)]
+            if other.get("story_name") != row.get("story_name") and other["context"] != row["context"]:
+                made.append({**row, "context": other["context"], "answers": {"text": []}})
+                break
+    return made
+
+
 def reading_adapter(entry, rows, seed):
+    rows = list(rows)
+    maud = _maud_options(rows) if entry["id"] == "theatticusproject/maud" else None
+    if entry["id"] == "WorkInTheDark/FairytaleQA":
+        rows = rows + _unanswerable_pairs(rows)
     for i, row in enumerate(rows):
+        if maud is not None:
+            options = maud.get((row.get("question"), row.get("subquestion")))
+            answer = str(row.get("answer") or "").strip()
+            if options and answer in options:
+                row = dict(row, options=options, gold_label=answer)
+            else:
+                continue  # MAUD has no answerability label; without options there is no item
         row = _window_context(row)
         texts = row_texts(entry, row)
         if not texts:
@@ -820,31 +1062,71 @@ def fact_adapter(entry, rows, seed):
             yield _noul(entry, row, state, truth, lang, rng, [question, answer], task="fact_check")
 
 
+PII_SPAN_KEYS = ("pii_spans", "spans", "entities", "privacy_mask", "span_labels")
+
+
+def _span_kind(span):
+    """PII type of one span: [start, end, type] lists or dicts with label / type / types."""
+    if isinstance(span, (list, tuple)) and len(span) >= 3:
+        return str(span[2]).strip()
+    if isinstance(span, dict):
+        for key in ("label", "type", "entity_type"):
+            if span.get(key):
+                return str(span[key]).strip()
+        types = span.get("types")
+        if isinstance(types, list) and types:
+            return str(types[0]).strip()
+    return ""
+
+
+def _pii_row(entry, row):
+    """(text, [pii types]) for a span-annotated row, or None when the row has no span column. The
+    types come from the spans; a document-level field such as document_type is not a PII type."""
+    if isinstance(row.get("tokenized_text"), list):
+        text = " ".join(str(tok) for tok in row["tokenized_text"]).strip()
+        spans = row.get("ner") or []
+    else:
+        key = next((k for k in PII_SPAN_KEYS if k in row), None)
+        if key is None:
+            return None
+        spans = row.get(key)
+        if isinstance(spans, str):
+            spans = _parse_structured(spans) if spans.strip() else []
+        if not isinstance(spans, list):
+            return None
+        texts = row_texts(entry, row)
+        text = texts[0] if texts else ""
+    kinds = [human(k) for k in (_span_kind(s) for s in spans) if k]
+    return text, kinds
+
+
 def pii_adapter(entry, rows, seed):
     rows = list(rows)
-    if not any(isinstance(row.get("tokenized_text"), list) for row in rows):
-        yield from classification_adapter(entry, rows, seed)
-        return
     prepared, counts = [], {}
     for row in rows:
-        tokens = [str(tok) for tok in (row.get("tokenized_text") or [])]
-        text = " ".join(tokens).strip()
-        kinds = []
-        for span in row.get("ner") or []:
-            if isinstance(span, (list, tuple)) and len(span) >= 3 and str(span[2]).strip():
-                kinds.append(human(span[2]))
-        prepared.append((text, kinds))
-        for kind in kinds:
+        parsed = _pii_row(entry, row)
+        prepared.append(parsed)
+        for kind in (parsed or ("", []))[1]:
             counts[kind] = counts.get(kind, 0) + 1
     vocab = [x for x, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:40]]
-    for i, (text, kinds) in enumerate(prepared):
-        if not text:
+    for i, parsed in enumerate(prepared):
+        if not parsed or not parsed[0]:
             continue
+        text, kinds = parsed
         lang = infer_lang(entry, rows[i], text=text)
         rng = seeded(seed, source_key(entry), i, text[:80])
         yield _noul(entry, rows[i], text, bool(kinds), lang, rng, [text], task="pii")
-        if kinds and len(vocab) >= 2 and kinds[0] in vocab:
-            item = _choice(entry, rows[i], text, vocab, kinds[0], lang, rng, [text], task="pii")
+        # Is one given type present? Unambiguous also when a text holds several types (most do).
+        # Half the probes name a type the text holds, half one it does not, so the answer is balanced.
+        absent = [k for k in vocab if k not in kinds]
+        if kinds and absent:
+            probe = rng.choice(kinds) if rng.random() < 0.5 else rng.choice(absent)
+            yield _noul(entry, rows[i], text, probe in kinds, lang, rng, [text], task="pii_type",
+                        statement="Does this text contain personal data of the type '%s'?" % probe)
+        # Which type of personal data: only when the text holds exactly one type, so the gold is unique.
+        distinct = list(dict.fromkeys(kinds))
+        if len(distinct) == 1 and len(vocab) >= 2 and distinct[0] in vocab:
+            item = _choice(entry, rows[i], text, vocab, distinct[0], lang, rng, [text], task="pii")
             if item:
                 yield item
 
@@ -855,7 +1137,7 @@ def adapter_for(entry):
         return redial_adapter
     if sid == "Eurolingua/truthfulqax":
         return fact_adapter
-    if sid == "urchade/synthetic-pii-ner-mistral-v1":
+    if sid == "urchade/synthetic-pii-ner-mistral-v1" or "10-pii" in cat:
         return pii_adapter
     if "typed-decisions" in cat:
         return typed_adapter
@@ -887,5 +1169,25 @@ def adapter_for(entry):
 ADAPTERS = {source_key(entry): adapter_for(entry) for entry in ENTRIES}
 
 
+CONSTANT_SHARE = 0.97  # a yes/no question answered the same way this often within a source is dropped
+CONSTANT_MIN = 20      # ... once the source yields at least this many of them
+
+
+def drop_constant_yes_no(items):
+    """Remove the yes/no items of a task whose answer is (nearly) constant within one source: a
+    harmful-only safety set asked "does this violate a policy?", a PII set where every text has
+    PII. Training on them teaches the answer, not the decision. Choice items are kept."""
+    counts = {}
+    for item in items:
+        if item["q"]["type"] == "noul":
+            yes = item["target"][1] == 1.0
+            c = counts.setdefault(item.get("_task"), [0, 0])
+            c[yes] += 1
+    constant = {task for task, (no, yes) in counts.items()
+                if no + yes >= CONSTANT_MIN and max(no, yes) >= CONSTANT_SHARE * (no + yes)}
+    return [item for item in items if not (item["q"]["type"] == "noul" and item.get("_task") in constant)]
+
+
 def adapt(entry, rows, seed):
-    yield from ADAPTERS[source_key(entry)](entry, list(rows), seed)
+    items = [item for item in ADAPTERS[source_key(entry)](entry, list(rows), seed) if item]
+    yield from drop_constant_yes_no(items)
