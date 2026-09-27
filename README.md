@@ -44,18 +44,10 @@ curl -s localhost:8080/v1/systemone -d '{
 
 ## How it works
 
-```
-state + questions ──► prompt builder (byte-exact with laya.common.build_sequence)
-                          │  [CLS] <type> question: … [SEP] [MASK] opt₀ [MASK] opt₁ … [SEP] state [SEP]
-                          ▼
-                 native BPE tokenizer (Metaspace/byte-fallback + GPT-2 ByteLevel)
-                          ▼
-   ggml graph: ModernBERT / mmBERT encoder (RoPE, alternating global / sliding-window attention,
-               GeGLU, fused flash attention) ─► type embedding ─► 2-layer decision head
-               ─► scorer on each [MASK] ─► temperature-calibrated softmax
-                          ▼
-     {"answers": {"department": {"choice": "billing", "probabilities": …, "confidence": …}, …}}
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/architecture-dark.svg">
+  <img alt="State and questions become one token sequence with a [MASK] per option; one forward pass of the encoder and decision head scores every option and returns calibrated answers." src="assets/diagrams/architecture-light.svg" width="100%">
+</picture>
 
 All three Laya checkpoints share this graph; the converter stores architecture, calibration and the
 tokenizer in the GGUF file, so a model is a single self-describing artifact.
@@ -134,6 +126,11 @@ ctest --test-dir build-vk                      # CPU gates + the same gates on t
 `--device` takes `cpu` (default), `gpu`, `vulkan` or a device name such as `Vulkan0`
 (`STATIM_DEVICE` sets the default). Weights are copied to VRAM once; both f32 checkpoints use ~3.3 GB.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/gpu-dark.svg">
+  <img alt="RTX 3070 vs. Ryzen 7 5800X: 7.7x (multilingual) and 8.9x (English) HTTP throughput, median latency 45 vs 353 ms and 119 vs 1,039 ms, same answers." src="assets/diagrams/gpu-light.svg" width="100%">
+</picture>
+
 Measured on an RTX 3070 (8 GB) vs. the same machine's Ryzen 7 5800X (16 threads), f32, the 30 × 8
 golden workload:
 
@@ -208,6 +205,11 @@ python -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 dat
 .venv/bin/python tools/convert_laya.py models/laya-multilingual-banking77 -o models/laya-multilingual-banking77-f32.gguf --type f32 --embd-type f16
 .venv-train/bin/python tools/finetune/eval_laya.py models/laya-multilingual-banking77 --n 2000 --head-max-len 512
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/finetune-dark.svg">
+  <img alt="Banking77 accuracy rises from 0.4885 to 0.8655 while held-out AG News and Emotion stay flat; calibration error falls from 0.372 to 0.043." src="assets/diagrams/finetune-light.svg" width="100%">
+</picture>
 
 First 2,000 test rows per suite (never trained on; ±1.1 pt standard error around 0.5), plus the
 2,000 decisions of the `typed-decisions` test split:

@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 816" width="960" height="816" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" style="font-variant-numeric: tabular-nums">
+<title id="t">Fine-tuning results: Banking77 accuracy up 37.7 points, held-out suites flat</title>
+<desc id="d">Slope chart of accuracy (axis 0.4 to 1.0) on the first 2,000 test rows per suite, across four models: multilingual (base), + option budget 512, v1: fine-tuned, v3: + distillation. Banking77, the fine-tuning target: 0.4885, 0.5175, 0.8435, 0.8655. Held-out suites, never trained on: Emotion 0.532, 0.532, 0.502, 0.528; AG News 0.938, 0.938, 0.941, 0.9385. v1 dips 3.0 points on Emotion; v3 adds distillation and is back to 0.528 (base 0.532), so at v3 both held-out suites are within 0.5 points of base. Banking77 expected calibration error (ECE, lower is better): 0.372, 0.352, 0.052, 0.043.</desc>
+<rect x="0" y="0" width="960" height="816" rx="16" fill="#12151B"/>
+<text x="32" y="56" font-size="20" font-weight="600" fill="#E7EAEF">Fine-tuning lifts Banking77 by 37.7 points; held-out suites stay flat</text>
+<text x="32" y="82" font-size="14" fill="#C2C8D1">Accuracy on the first 2,000 test rows per suite. Emotion and AG News were never trained on; at v3 both are within 0.5 points of base.</text>
+<text x="32" y="116" font-size="14" font-weight="600" fill="#E7EAEF">Accuracy <tspan font-weight="400" fill="#C2C8D1">(higher is better; axis 0.4 to 1.0)</tspan></text>
+<line x1="80" y1="568" x2="744" y2="568" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="572.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.4</text>
+<line x1="80" y1="496" x2="744" y2="496" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="500.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.5</text>
+<line x1="80" y1="424" x2="744" y2="424" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="428.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.6</text>
+<line x1="80" y1="352" x2="744" y2="352" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="356.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.7</text>
+<line x1="80" y1="280" x2="744" y2="280" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="284.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.8</text>
+<line x1="80" y1="208" x2="744" y2="208" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="212.5" font-size="12.5" text-anchor="end" fill="#8A93A1">0.9</text>
+<line x1="80" y1="136" x2="744" y2="136" stroke="#2B323D" stroke-width="1"/>
+<text x="68" y="140.5" font-size="12.5" text-anchor="end" fill="#8A93A1">1.0</text>
+<line x1="80" y1="568" x2="744" y2="568" stroke="#8A93A1" stroke-width="1"/>
+<line x1="176" y1="568" x2="176" y2="574" stroke="#8A93A1" stroke-width="1"/>
+<line x1="360" y1="568" x2="360" y2="574" stroke="#8A93A1" stroke-width="1"/>
+<line x1="544" y1="568" x2="544" y2="574" stroke="#8A93A1" stroke-width="1"/>
+<line x1="728" y1="568" x2="728" y2="574" stroke="#8A93A1" stroke-width="1"/>
+<path d="M176 180.64 L360 180.64 L544 178.48 L728 180.28" fill="none" stroke="#8A93A1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M176 472.96 L360 472.96 L544 494.56 L728 475.84" fill="none" stroke="#8A93A1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M176 504.28 L360 483.40 L544 248.68 L728 232.84" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="176" cy="180.64" r="6" fill="#12151B"/>
+<circle cx="176" cy="180.64" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="360" cy="180.64" r="6" fill="#12151B"/>
+<circle cx="360" cy="180.64" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="544" cy="178.48" r="6" fill="#12151B"/>
+<circle cx="544" cy="178.48" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="728" cy="180.28" r="6" fill="#12151B"/>
+<circle cx="728" cy="180.28" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="176" cy="472.96" r="6" fill="#12151B"/>
+<circle cx="176" cy="472.96" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="360" cy="472.96" r="6" fill="#12151B"/>
+<circle cx="360" cy="472.96" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="544" cy="494.56" r="6" fill="#12151B"/>
+<circle cx="544" cy="494.56" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="728" cy="475.84" r="6" fill="#12151B"/>
+<circle cx="728" cy="475.84" r="4" fill="#171B22" stroke="#8A93A1" stroke-width="1.5"/>
+<circle cx="176" cy="504.28" r="4.5" fill="#34D399" stroke="#12151B" stroke-width="2" paint-order="stroke"/>
+<circle cx="360" cy="483.40" r="4.5" fill="#34D399" stroke="#12151B" stroke-width="2" paint-order="stroke"/>
+<circle cx="544" cy="248.68" r="4.5" fill="#34D399" stroke="#12151B" stroke-width="2" paint-order="stroke"/>
+<circle cx="728" cy="232.84" r="4.5" fill="#34D399" stroke="#12151B" stroke-width="2" paint-order="stroke"/>
+<text x="162" y="185.6" font-size="14" font-weight="400" text-anchor="end" fill="#C2C8D1" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.938</text>
+<text x="162" y="478.0" font-size="14" font-weight="400" text-anchor="end" fill="#C2C8D1" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.532</text>
+<text x="162" y="511.5" font-size="14" font-weight="600" text-anchor="end" fill="#E7EAEF" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.4885</text>
+<text x="360" y="511.5" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.5175</text>
+<text x="544" y="234.7" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.8435</text>
+<text x="744" y="185.3" font-size="14" font-weight="400" fill="#C2C8D1" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.9385</text>
+<text x="808" y="185.3" font-size="14" font-weight="600" fill="#E7EAEF">AG News</text>
+<text x="808" y="201.8" font-size="12.5" fill="#C2C8D1">held-out</text>
+<text x="744" y="237.8" font-size="14" font-weight="600" fill="#E7EAEF" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.8655</text>
+<text x="808" y="237.8" font-size="14" font-weight="600" fill="#E7EAEF">Banking77</text>
+<text x="808" y="254.3" font-size="12.5" fill="#C2C8D1">fine-tuning target</text>
+<text x="744" y="480.8" font-size="14" font-weight="400" fill="#C2C8D1" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">0.528</text>
+<text x="808" y="480.8" font-size="14" font-weight="600" fill="#E7EAEF">Emotion</text>
+<text x="808" y="497.3" font-size="12.5" fill="#C2C8D1">held-out</text>
+<circle cx="544" cy="494.56" r="10" fill="none" stroke="#F0B454" stroke-width="2"/>
+<line x1="544" y1="504.6" x2="544" y2="512.6" stroke="#F0B454" stroke-width="2" stroke-linecap="round"/>
+<text x="544" y="530" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">v1 dips to 0.502 on Emotion (−3.0 points)</text>
+<text x="544" y="548" font-size="12.5" text-anchor="middle" fill="#C2C8D1" stroke="#12151B" stroke-width="4" stroke-linejoin="round" paint-order="stroke">v3 adds distillation: back to 0.528 (base 0.532)</text>
+<text x="176" y="596" font-size="14" font-weight="400" text-anchor="middle" fill="#E7EAEF">multilingual (base)</text>
+<text x="360" y="596" font-size="14" font-weight="400" text-anchor="middle" fill="#E7EAEF">+ option budget 512</text>
+<text x="544" y="596" font-size="14" font-weight="400" text-anchor="middle" fill="#E7EAEF">v1: fine-tuned</text>
+<text x="728" y="596" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF">v3: + distillation</text>
+<line x1="32" y1="624" x2="928" y2="624" stroke="#2B323D" stroke-width="1"/>
+<text x="32" y="652" font-size="14" font-weight="600" fill="#E7EAEF">Banking77 calibration error <tspan font-weight="400" fill="#C2C8D1">(ECE, lower is better; bars start at 0)</tspan></text>
+<line x1="80" y1="728" x2="744" y2="728" stroke="#8A93A1" stroke-width="1"/>
+<path d="M164 728V687.36Q164 683.36 168.00 683.36H184.00Q188 683.36 188 687.36V728Z" fill="#8A93A1"/>
+<text x="176" y="675.4" font-size="14" font-weight="400" text-anchor="middle" fill="#C2C8D1">0.372</text>
+<path d="M348 728V689.76Q348 685.76 352.00 685.76H368.00Q372 685.76 372 689.76V728Z" fill="#8A93A1"/>
+<text x="360" y="677.8" font-size="14" font-weight="400" text-anchor="middle" fill="#C2C8D1">0.352</text>
+<path d="M532 728V724.88Q532 721.76 535.12 721.76H552.88Q556 721.76 556 724.88V728Z" fill="#34D399"/>
+<text x="544" y="713.8" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF">0.052</text>
+<path d="M716 728V725.42Q716 722.84 718.58 722.84H737.42Q740 722.84 740 725.42V728Z" fill="#34D399"/>
+<text x="728" y="714.8" font-size="14" font-weight="600" text-anchor="middle" fill="#E7EAEF">0.043</text>
+<text x="176" y="748" font-size="12.5" text-anchor="middle" fill="#8A93A1">multilingual (base)</text>
+<text x="360" y="748" font-size="12.5" text-anchor="middle" fill="#8A93A1">+ option budget 512</text>
+<text x="544" y="748" font-size="12.5" text-anchor="middle" fill="#8A93A1">v1: fine-tuned</text>
+<text x="728" y="748" font-size="12.5" font-weight="600" text-anchor="middle" fill="#8A93A1">v3: + distillation</text>
+<text x="32" y="788" font-size="12.5" fill="#C2C8D1">n = 2,000 test rows per suite (the first 2,000 of each test split), same rows for every model.</text>
+</svg>

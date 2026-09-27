@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="496" viewBox="0 0 960 496" role="img" aria-labelledby="gpu-light-title gpu-light-desc">
+  <title id="gpu-light-title">GPU (Vulkan): RTX 3070 vs. Ryzen 7 5800X, same model, same answers</title>
+  <desc id="gpu-light-desc">Horizontal bar chart comparing Statim on an NVIDIA RTX 3070 GPU (Vulkan) with an AMD Ryzen 7 5800X CPU on the same machine, f32 weights, 30 x 8 golden workload, HTTP with 1 client. Throughput in requests per second: multilingual checkpoint CPU 2.68, GPU 20.5 (7.7x); English checkpoint CPU 0.91, GPU 8.1 (8.9x). Median latency p50 in milliseconds: multilingual CPU 353, GPU 45; English CPU 1,039, GPU 119. Parity against Laya on GPU: max absolute logit delta 8.8e-5 multilingual and 1.6e-4 English, argmax identical 240 of 240.</desc>
+  <rect x="0" y="0" width="960" height="496" rx="16" fill="#F6F7F9"/>
+  <g aria-hidden="true">
+    <path d="M41 44H50.5" stroke="#161B22" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="57" cy="36" r="2.2" fill="none" stroke="#6B7482" stroke-width="1.25"/>
+    <circle cx="57" cy="44" r="4" fill="#0F9F6E"/>
+    <circle cx="57" cy="52" r="2.2" fill="none" stroke="#6B7482" stroke-width="1.25"/>
+  </g>
+  <text x="73" y="48.5" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="500" fill="#3A4350">GPU backend (Vulkan)</text>
+  <text x="40" y="88" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="600" fill="#161B22">RTX 3070 vs. Ryzen 7 5800X: same model, same answers</text>
+  <text x="40" y="116" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#3A4350">Same machine, f32 weights, 30 × 8 golden workload, HTTP with 1 client.</text>
+  <text x="232" y="160" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="600" fill="#161B22">Throughput</text>
+  <text x="232" y="180" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#3A4350">requests/s, higher is better</text>
+  <text x="648" y="160" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="15" font-weight="600" fill="#161B22">Median latency (p50)</text>
+  <text x="648" y="180" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#3A4350">milliseconds, lower is better</text>
+  <path d="M231.25 228V292" stroke="#D3D8DF" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M647.25 228V292" stroke="#D3D8DF" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="40" y="216" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">Multilingual checkpoint</text>
+  <text x="40" y="249" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#3A4350"><tspan font-weight="600" fill="#161B22">GPU</tspan><tspan fill="#6B7482"> · </tspan>RTX 3070</text>
+  <path d="M232 234H436a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H232Z" fill="#0F9F6E"/>
+  <text x="448" y="249" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">20.5</text>
+  <rect x="492" y="232" width="104" height="24" rx="12" fill="#E3F6EE" stroke="#0F9F6E" stroke-width="1"/>
+  <text x="544" y="249" text-anchor="middle" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">7.7× faster</text>
+  <path d="M648 234H652.7a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H648Z" fill="#0F9F6E"/>
+  <text x="664.7" y="249" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">45</text>
+  <text x="40" y="281" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#3A4350"><tspan font-weight="400" fill="#3A4350">CPU</tspan><tspan fill="#6B7482"> · </tspan>Ryzen 7 5800X</text>
+  <path d="M232 266H255.2a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H232Z" fill="#6B7482"/>
+  <text x="267.2" y="281" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#3A4350">2.68</text>
+  <path d="M648 266H711.9a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H648Z" fill="#6B7482"/>
+  <text x="723.9" y="281" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#3A4350">353</text>
+  <path d="M40 304H920" stroke="#D3D8DF" stroke-width="1"/>
+  <path d="M231.25 340V404" stroke="#D3D8DF" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M647.25 340V404" stroke="#D3D8DF" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="40" y="328" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">English checkpoint</text>
+  <text x="40" y="361" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#3A4350"><tspan font-weight="600" fill="#161B22">GPU</tspan><tspan fill="#6B7482"> · </tspan>RTX 3070</text>
+  <path d="M232 346H310.2a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H232Z" fill="#0F9F6E"/>
+  <text x="322.2" y="361" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">8.1</text>
+  <rect x="358" y="344" width="104" height="24" rx="12" fill="#E3F6EE" stroke="#0F9F6E" stroke-width="1"/>
+  <text x="410" y="361" text-anchor="middle" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">8.9× faster</text>
+  <path d="M648 346H666.9a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H648Z" fill="#0F9F6E"/>
+  <text x="678.9" y="361" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#161B22">119</text>
+  <text x="40" y="393" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#3A4350"><tspan font-weight="400" fill="#3A4350">CPU</tspan><tspan fill="#6B7482"> · </tspan>Ryzen 7 5800X</text>
+  <path d="M232 378H237.2a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H232Z" fill="#6B7482"/>
+  <text x="249.2" y="393" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#3A4350">0.91</text>
+  <path d="M648 378H844a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4H648Z" fill="#6B7482"/>
+  <text x="856" y="393" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#3A4350">1,039</text>
+  <path d="M40 424H920" stroke="#D3D8DF" stroke-width="1"/>
+  <g aria-hidden="true">
+    <circle cx="45" cy="451.5" r="4" fill="#0F9F6E"/>
+  </g>
+  <text x="58" y="456" font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" style="font-variant-numeric:tabular-nums" fill="#3A4350"><tspan font-weight="600" fill="#161B22">Same answers:</tspan> GPU vs. Laya, max |Δ logit| 8.8e-5 multilingual, 1.6e-4 English; argmax identical on 240/240.</text>
+</svg>
