@@ -7,6 +7,10 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- Selective prediction via the `min_confidence` decision option and `--min-confidence` server default;
+  responses annotate answers below an active threshold with `escalate: true`.
+
 ## [0.4.0] - 2026-09-27
 
 A stronger licence-clean model trained on five times more audited data, official client SDKs,

@@ -49,6 +49,7 @@ _DECISION_OPTIONS = frozenset(
         "ensemble_margin",
         "calibrate",
         "return_logits",
+        "min_confidence",
         "max_len",
         "head_max_len",
         "request_id",
@@ -215,7 +216,8 @@ class Client:
         (``choice``, ``score``, or ``noul``) and ``instructions``. Choice and
         score questions also need ``criteria``. Optional keyword arguments are
         ``model``, ``lang``, ``ensemble``, ``ensemble_margin``, ``calibrate``,
-        ``return_logits``, ``max_len``, ``head_max_len``, and ``request_id``.
+        ``return_logits``, ``min_confidence``, ``max_len``, ``head_max_len``,
+        and ``request_id``.
         ``None`` omits an optional field. An unknown keyword raises ``TypeError``.
 
         ``request_id`` is sent as ``X-Request-Id``. When omitted, the client

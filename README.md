@@ -78,7 +78,7 @@ See [accuracy](#accuracy) before choosing 4-bit.
 
 | endpoint | |
 |---|---|
-| `POST /v1/systemone` | `{state, questions, model?, lang?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). Extras: `return_logits`, `calibrate`, `ensemble` |
+| `POST /v1/systemone` | `{state, questions, model?, lang?, min_confidence?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). Extras: `return_logits`, `calibrate`, `ensemble`; a positive `min_confidence` adds `escalate` to each answer |
 | `POST /v1/systemone/batch` | `{states: [...], questions, ...}` → `{results: [...]}` packed into shared forward passes |
 | `GET /v1/models` | loaded models |
 | `GET /health`, `GET /ready` | liveness / readiness |
@@ -121,6 +121,7 @@ state object fields remain supported. Limits count UTF-8 **bytes** unless stated
 | Criterion / label value | 4,096 bytes | Per value, including structured score legends; object label keys: 1,024 bytes |
 | `max_len`, `head_max_len` / `--max-len`, `--head-max-len` | Checkpoint defaults | Explicit nonzero budgets: integers 32–8,192, checked before narrowing. Effective length is `max(max_len, head_max_len + 128)` and must fit model capacity. CLI `0` selects checkpoint defaults |
 | `ensemble` / `--ensemble` | 1 | Integer 1–8 |
+| `min_confidence` / `--min-confidence` | unset | Number 0–1; answers below a positive threshold get `escalate: true` |
 | `--max-request-work` | 4,096 | State × question × view evaluations, including consensus models and three calibration views on every potential cache miss |
 | `--max-request-tokens` | 1,048,576 | Conservative total: evaluated rows × effective sequence budget, including ensembles/calibration/consensus |
 | `--max-attention-mib` | 1,024 MiB | Conservative per-graph estimate: `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes, covering all shorter packed rows too |
