@@ -7,14 +7,14 @@ claim reproducible from this repository, shipped as a polished product.
 zero-shot results against zero-shot systems (Jev, GLiClass, NLI classifiers, LLMs), fine-tuned
 results against supervised baselines (MASSIVE paper, Banking77 literature).
 
-## Where we stand (0.3.0)
+## Where we stand (0.4.0)
 
 | Field | Statim | Best published, same protocol |
 |---|---|---|
 | AG News, zero-shot (never trained) | 0.9385 | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
-| typed-decisions test | 0.6905 (licence-clean model) | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
-| Banking77, trained on train split | 0.891 (licence-clean model) | 94.1 MPNet (supervised) |
-| MASSIVE, 12 languages, trained | 0.733 (licence-clean model, 800 rows per language) | 85.7 XLM-R base (supervised, MASSIVE paper, full data) |
+| typed-decisions test | 0.7585 (licence-clean model) | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
+| Banking77, trained on train split | 0.903 (licence-clean model) | 94.1 MPNet (supervised) |
+| MASSIVE, 12 languages, trained | 0.772 (licence-clean model, 2,000 rows per language) | 85.7 XLM-R base (supervised, MASSIVE paper, full data) |
 | Emotion, zero-shot (never trained) | 0.600 consensus, first 400 rows (`bench/results/acc_consensus.json`); 0.528 fine-tuned v3, first 2,000 | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
 
 ## Milestones

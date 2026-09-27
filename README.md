@@ -286,27 +286,28 @@ What did **not** help, measured and kept out of the defaults:
 - **4-bit weights** (`q4_0`, `q4_K`): flip 1–2 of 16 parity answers. f32 is the reference; `q8_0`
   halves memory with small logit drift (see benchmarks).
 
-## Results (0.3.0)
+## Results (0.4.0)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.3.0-dark.svg">
-  <img alt="Statim 0.3.0 vs. the base checkpoint: MASSIVE 0.340 to 0.733, Banking77 0.517 to 0.891, typed decisions 0.351 to 0.691, zero-shot suites within noise or better." src="assets/diagrams/results-0.3.0-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.4.0-dark.svg">
+  <img alt="Statim 0.4.0 vs. the base checkpoint: MASSIVE 0.340 to 0.772, Banking77 0.517 to 0.903, typed decisions 0.351 to 0.758, zero-shot suites within noise." src="assets/diagrams/results-0.4.0-light.svg" width="100%">
 </picture>
 
-The 0.3.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
-(`train_multitask.py --clean`; every source in [DATA_LICENSES.md](DATA_LICENSES.md)). A new model
-replaces the current one only through `tools/finetune/gate.py`: its validation mean must improve,
-and none of 54 held-out suites (test splits, 12 languages, eight zero-shot suites never trained
-on) may drop by more than two standard errors. Training runs use early stopping on validation, so
-longer schedules and more data are only kept when they help. Reproduce:
+The 0.4.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
+(`train_multitask.py --clean`; every source in [DATA_LICENSES.md](DATA_LICENSES.md)). typed-decisions
+0.7585 is above Jev (0.727) and the dataset's teacher agreement ceiling (0.735). A new model replaces
+the current one only through `tools/finetune/gate.py`: its validation mean must improve, no held-out
+suite may drop by more than two standard errors, and no suite family (trained, zero-shot, sentiment)
+may drift down significantly when pooled. Training uses early stopping on validation. Reproduce:
 
 ```bash
-.venv-train/bin/python tools/finetune/build_mixture.py --out data/mixture-v3.jsonl.gz --per-source 250 --audit tools/finetune/licence_audit.json
-.venv-train/bin/python tools/finetune/train_multitask.py models/laya-multilingual models/laya-multilingual-clean --clean \
-    --mixture data/mixture-v3.jsonl.gz --massive-per-lang 800 --epochs 8 \
-    --budget banking77=12000,massive=14000,mixture=12000,typed=4000,distill=3000 --warmup 0.06 --ema 0.999
-.venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-clean
-.venv-train/bin/python tools/finetune/gate.py compare models/laya-multilingual models/laya-multilingual-clean
+.venv-train/bin/python tools/finetune/build_mixture.py --out data/mixture-v4.jsonl.gz --per-source 2000 --audit tools/finetune/licence_audit.json
+.venv-train/bin/python tools/finetune/build_extra.py --out data/extra-v1.jsonl.gz   # then merge v4 + extra into data/mixture-v5.jsonl.gz
+.venv-train/bin/python tools/finetune/train_multitask.py models/laya-multilingual models/laya-multilingual-big1 --clean \
+    --mixture data/mixture-v5.jsonl.gz --massive-per-lang 2000 --epochs 20 --patience 3 \
+    --budget banking77=12000,massive=16000,mixture=20000,typed=4000,distill=3000 --warmup 0.06 --ema 0.999
+.venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-big1
+.venv-train/bin/python tools/finetune/gate.py compare models/laya-multilingual-clean models/laya-multilingual-big1
 ```
 
 ## Many options and fine-tuning (Banking77)
@@ -360,7 +361,7 @@ The weights are not in this repository; the script reproduces them.
 
 ## Status
 
-v0.3 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
+v0.4 — CPU backend (x86-64 AVX2, ARM NEON via ggml) and an optional Vulkan GPU backend. See
 [CHANGELOG.md](CHANGELOG.md) for releases and [docs/ROADMAP.md](docs/ROADMAP.md) for the path to 1.0. CUDA and
 Metal builds are on the roadmap. Language routing is a light heuristic (English text →
 English checkpoint, everything else → multilingual); Laya's full `Router` language detection and the

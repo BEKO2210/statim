@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Statim HTTP API
-  version: 0.3.0
+  version: 0.4.0
   description: 'HTTP API of the Statim decision server. See docs/API.md for the narrative guide and
     complete limit formulas. JSON error bodies are objects with a single string field, detail. GET /ready
     instead returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. Unknown
