@@ -757,6 +757,8 @@ def typed_adapter(entry, rows, seed):
                 gold = int(target)
             except (TypeError, ValueError):
                 continue
+        if not 0 <= gold < len(choices):
+            continue  # a negative index would pick a wrong option silently
         lang, rng = infer_lang(entry, row, text=state), seeded(seed, source_key(entry), i, state)
         item = _choice(entry, row, state, choices, choices[gold], lang, rng, [state], prompt=str(question) if question else None)
         if item:

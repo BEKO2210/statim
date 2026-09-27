@@ -60,8 +60,15 @@ def _add_flores(out):
     url = "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz"
     archive = Path(tempfile.gettempdir()) / "statim-flores200_dataset.tar.gz"
     if not archive.exists():
-        urllib.request.urlretrieve(url, archive)
-    with tarfile.open(archive, "r:gz") as tf:
+        partial = archive.with_suffix(".part")
+        urllib.request.urlretrieve(url, partial)
+        partial.replace(archive)  # only a complete download gets the final name
+    try:
+        tf = tarfile.open(archive, "r:gz")
+    except (tarfile.TarError, EOFError, OSError):
+        archive.unlink(missing_ok=True)  # never reuse a broken archive
+        raise
+    with tf:
         for member in tf:
             name = member.name
             if not member.isfile() or not ("/dev/" in name or "/devtest/" in name):

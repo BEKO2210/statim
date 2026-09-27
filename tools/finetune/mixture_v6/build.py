@@ -128,7 +128,11 @@ def clean_items(entry, raw_items, banned, cap, seed):
     return clean, stats
 
 
-def split_source(items, n_dev, seed):
+def split_source(items, n_dev, seed, assigned=None):
+    """Split one source's items into dev and train by state. ``assigned`` maps a normalised state
+    to "dev" or "train" across ALL sources: a state that an earlier source already placed keeps
+    that side, so the same text can never be in dev for one source and in train for another."""
+    assigned = {} if assigned is None else assigned
     by_state = collections.defaultdict(list)
     for item in items:
         by_state[norm(item["state"])].append(item)
@@ -136,8 +140,11 @@ def split_source(items, n_dev, seed):
     random.Random(seed).shuffle(keys)
     dev, train = [], []
     for key in keys:
-        group = by_state[key]
-        (dev if len(dev) < n_dev else train).extend(group)
+        side = assigned.get(key)
+        if side is None:
+            side = "dev" if len(dev) < n_dev else "train"
+            assigned[key] = side
+        (dev if side == "dev" else train).extend(by_state[key])
     return dev, train
 
 
@@ -203,6 +210,7 @@ def main(argv=None):
     out_path, manifest_path, report_path = paths_for(a.out, a.smoke)
     cap = a.smoke or (a.per_source + a.dev_per_source)
     all_dev, all_train, records = [], [], []
+    assigned = {}  # normalised state -> "dev" / "train", shared by all sources
     for number, entry in enumerate(selected):
         key, meta = source_key(entry), metadata(entry)
         rec = {"id": entry["id"], "config": entry.get("config", "default"), "key": key, **meta,
@@ -213,7 +221,7 @@ def main(argv=None):
             rec["rows_loaded"] = len(rows)
             items, dropped = clean_items(entry, adapt(entry, rows, a.seed), banned, cap, a.seed + number)
             dev_n = min(a.dev_per_source, max(0, len(items) // 5)) if a.smoke else min(a.dev_per_source, len(items))
-            dev, train = split_source(items, dev_n, a.seed + number)
+            dev, train = split_source(items, dev_n, a.seed + number, assigned)
             all_dev.extend(dev)
             all_train.extend(train)
             rec.update(kept=len(items), dev=len(dev), train=len(train), dropped=dict(dropped))

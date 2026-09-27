@@ -160,3 +160,15 @@ def test_category_templates_cover_every_task_and_language():
         for kind, by_lang in CATEGORY_TEMPLATES[task].items():
             for lang in LANGUAGES:
                 assert len(by_lang[lang]) >= 4, (task, kind, lang, len(by_lang.get(lang, [])))
+
+
+def test_split_is_global_across_sources():
+    from tools.finetune.mixture_v6.build import split_source
+    a = [{"state": "shared text", "q": {}, "target": [1.0, 0.0]}, {"state": "only in a", "q": {}, "target": [1.0, 0.0]}]
+    b = [{"state": "Shared  text", "q": {}, "target": [0.0, 1.0]}, {"state": "only in b", "q": {}, "target": [0.0, 1.0]}]
+    assigned = {}
+    dev_a, train_a = split_source(a, 1, 1, assigned)
+    dev_b, train_b = split_source(b, 0, 2, assigned)
+    side_a = "dev" if any(x["state"] == "shared text" for x in dev_a) else "train"
+    side_b = "dev" if any(x["state"] == "Shared  text" for x in dev_b) else "train"
+    assert side_a == side_b  # the same normalised state lands on the same side in every source

@@ -100,6 +100,23 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+def _fetch_verified(url, dest, digest):
+    """Download ``url`` to ``dest`` unless a copy with the right SHA-256 is cached. A cached or
+    fresh file with the wrong digest (tampered, truncated, partial) is deleted, so the next build
+    fetches it again instead of failing on the same file forever."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and sha256_file(dest) == digest:
+        return dest
+    dest.unlink(missing_ok=True)
+    partial = dest.with_name(dest.name + ".part")
+    urllib.request.urlretrieve(url, partial)
+    if sha256_file(partial) != digest:
+        partial.unlink(missing_ok=True)
+        raise RuntimeError("SHA-256 mismatch for %s" % dest.name)
+    partial.replace(dest)
+    return dest
+
+
 def pinned_path(spec):
     """Download a pinned URL into ``data/raw/<cache>/`` and verify its SHA-256."""
     dest_dir = RAW_ROOT / spec["cache"]
@@ -596,14 +613,9 @@ def _load_nlupp(limit):
         dest = root / name
         domain, fold = name.split("-fold")
         fold = fold.replace(".json", "")
-        if not dest.exists():
-            url = ("https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/%s/nlupp/data/%s/fold%s.json"
-                   % (commit, domain, fold))
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(url, dest)
-        got = sha256_file(dest)
-        if got != digest:
-            raise RuntimeError("SHA-256 mismatch for %s" % name)
+        url = ("https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/%s/nlupp/data/%s/fold%s.json"
+               % (commit, domain, fold))
+        _fetch_verified(url, dest, digest)
         data = json.loads(dest.read_text(encoding="utf-8"))
         for row in data:
             intents = row.get("intents")
@@ -637,10 +649,7 @@ def _load_taskmaster(limit):
     dialogs = []
     for name, (url, digest) in files.items():
         dest = root / name
-        if not dest.exists():
-            urllib.request.urlretrieve(url, dest)
-        if sha256_file(dest) != digest:
-            raise RuntimeError("SHA-256 mismatch for %s" % name)
+        _fetch_verified(url, dest, digest)
         dialogs.extend(json.loads(dest.read_text(encoding="utf-8")))
     rows = []
     for dialog in dialogs:
