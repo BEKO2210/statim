@@ -7,6 +7,15 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-27
+
+### Changed
+- Playground: the review threshold defaults to 0.6, so answers the model is unsure about show
+  "Needs review" out of the box (the demo's German ticket splits urgency between "soon" and
+  "critical"); it can still be switched off.
+- `docs/API.md` states that `action.act_probability` saturates at 1.0 on the published
+  checkpoints and points to `min_confidence` / `escalate` as the abstain mechanism.
+
 ## [0.5.1] - 2026-09-27
 
 ### Added
