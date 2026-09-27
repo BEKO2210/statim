@@ -1,6 +1,7 @@
 // Statim — typed decisions (choice / score / noul) over any state, Laya/Jev-compatible output.
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -29,6 +30,8 @@ struct DecideOptions {
     // produces on content-free versions of the state. Label-free; the content-free scores are
     // computed once per question and state shape, then cached.
     bool calibrate = false;
+    // Cooperative request deadline; disabled for ordinary in-process inference.
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
 };
 
 // Python json.dumps(ensure_ascii=False) with the given separators; key order preserved.
@@ -59,8 +62,7 @@ public:
 
 private:
     std::vector<ItemResult> run_packed(const std::vector<Item>& items);
-    const std::vector<double>& null_logp(const Question& q, const ojson& qdef, const ojson& state, int max_len,
-                                         int head_max_len);
+    std::vector<double> null_logp(const Question& q, const ojson& state, int max_len, int head_max_len);
 
     struct Impl;
     std::shared_ptr<Model> model_;

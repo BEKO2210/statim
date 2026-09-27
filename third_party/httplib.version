@@ -1,0 +1,5 @@
+cpp-httplib v0.58.0
+Source: https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.58.0/httplib.h
+Release: https://github.com/yhirose/cpp-httplib/releases/tag/v0.58.0
+SHA-256: aa14e7e7bd2703694e0a6b6855af3b8c406102ab1fc56ac905fe33619b31faa5
+Unmodified upstream header. Statim policies/adapters live in include/statim/http_security.h.

@@ -1,4 +1,5 @@
 #include "statim/model.h"
+#include "statim/security.h"
 
 #include "kernels.h"
 
@@ -382,6 +383,7 @@ ggml_tensor* attention(ggml_context* c, ggml_tensor* q, ggml_tensor* k, ggml_ten
 }  // namespace
 
 struct Runner::Impl {
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
     RunOptions opts;
     ggml_backend_t backend = nullptr;
     ggml_gallocr_t galloc = nullptr;
@@ -408,6 +410,13 @@ Runner::Runner(std::shared_ptr<Model> model, RunOptions opts) : model_(std::move
 
 Runner::~Runner() = default;
 
+void Runner::set_deadline(std::chrono::steady_clock::time_point deadline) {
+    impl_->deadline = deadline;
+    if (model_->impl()->on_cpu()) ggml_backend_cpu_set_abort_callback(impl_->backend, [](void* p) {
+        return std::chrono::steady_clock::now() >= static_cast<Impl*>(p)->deadline;
+    }, impl_.get());
+}
+
 static void build_masks(const std::vector<const std::vector<int32_t>*>& seqs, int L, int window,
                         std::vector<ggml_fp16_t>& global, std::vector<ggml_fp16_t>& local) {
     const int B = static_cast<int>(seqs.size());
@@ -431,6 +440,7 @@ static void build_masks(const std::vector<const std::vector<int32_t>*>& seqs, in
 }
 
 std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
+    if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
     if (items.empty()) return {};
     const Model::Impl& M = *model_->impl();
     const HParams& h = M.hp;
@@ -619,13 +629,21 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     if (!rows.empty()) ggml_backend_tensor_set(io.gather_rows, rows.data(), 0, ggml_nbytes(io.gather_rows));
     ggml_backend_tensor_set(io.pool_rows, pool.data(), 0, ggml_nbytes(io.pool_rows));
 
+    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+        ggml_free(c);
+        throw HttpError(422, "inference deadline exceeded");
+    }
     if (std::getenv("STATIM_PROFILE")) {
         // per-op timing: evaluate the graph one node at a time
         std::map<std::string, double> by_op;
         for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
             ggml_cgraph gv = ggml_graph_view(gf, i, i + 1);
             auto t0 = std::chrono::steady_clock::now();
-            ggml_backend_graph_compute(impl_->backend, &gv);
+            if (ggml_backend_graph_compute(impl_->backend, &gv) != GGML_STATUS_SUCCESS) {
+                ggml_free(c);
+                if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+                fail("graph compute failed");
+            }
             ggml_tensor* n = ggml_graph_node(gf, i);
             std::string k = ggml_op_desc(n);
             if (n->op == GGML_OP_MUL_MAT)
@@ -636,9 +654,14 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         for (auto& [k, v] : by_op) std::fprintf(stderr, "  %-22s %9.1f ms\n", k.c_str(), v);
     } else if (ggml_backend_graph_compute(impl_->backend, gf) != GGML_STATUS_SUCCESS) {
         ggml_free(c);
+        if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
         fail("graph compute failed");
     }
 
+    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+        ggml_free(c);
+        throw HttpError(422, "inference deadline exceeded");
+    }
     std::vector<float> logits(n_markers), pooled(static_cast<size_t>(d) * B);
     if (n_markers) ggml_backend_tensor_get(io.logits, logits.data(), 0, ggml_nbytes(io.logits));
     ggml_backend_tensor_get(io.pooled, pooled.data(), 0, ggml_nbytes(io.pooled));
