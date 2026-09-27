@@ -7,7 +7,26 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-27
+
+A licence-clean multi-task model that passes a no-harm gate, a licensing model for commercial use,
+enterprise security hardening, a zero-shot benchmark and full API documentation.
+
+### Results
+- The 0.3.0 model (multilingual checkpoint fine-tuned with `train_multitask.py --clean` on
+  licence-audited data only) against the base checkpoint, evaluated by `tools/finetune/gate.py` on
+  54 held-out suites: MASSIVE intents over 12 languages 0.340 → 0.733 (Arabic 0.200 → 0.613,
+  Hindi 0.267 → 0.673), Banking77 0.5175 → 0.891, typed-decisions 0.351 → 0.6905, HWU64 (sibling
+  of MASSIVE, overlapping rows removed) 0.500 → 0.760; zero-shot suites never trained on stay
+  within noise or improve (GoEmotions +6.0, SIB-200 +2.5, SemRel +2.9, Belebele +2.7, FarsTail
+  −2.0, DAIR Emotion −1.5, AG News +0.1 points). 16 significant gains, 0 significant
+  regressions; calibration error roughly halves. Chart: `assets/diagrams/results-0.3.0-*.svg`.
+  Weights are reproducible with the scripts and not yet published.
+
 ### Added
+- Release results chart generated from gate evaluations (`tools/diagrams/gate_chart.py`).
+- Updated `docs/API.md` and `docs/openapi.yaml` for the hardened server (Codex, checked against a
+  running server).
 - Licensing model: source code stays Apache-2.0; model weights published by Statim are licensed
   under PolyForm Noncommercial 1.0.0 (`LICENSE-MODEL.md`, verbatim official text), commercial use
   needs a paid licence (`COMMERCIAL.md`).
@@ -121,7 +140,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/BEKO2210/statim/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/BEKO2210/statim/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/BEKO2210/statim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/BEKO2210/statim/releases/tag/v0.1.0

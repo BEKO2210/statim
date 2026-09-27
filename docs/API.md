@@ -1,10 +1,10 @@
 # Statim HTTP API
 
-Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and one or more questions. Each question has type `choice`, `score`, or `noul`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object.
+Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and zero or more questions. Each question has type `choice`, `score`, or `noul`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object.
 
-The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 with an empty body.
+The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 `{"detail":"HTTP request failed"}`. When authentication is configured, a nonpublic unknown path is rejected with 401 before route lookup unless it has a valid bearer key.
 
-`GET /health` reports the version compiled into the binary. The samples in this document were taken from a binary that reports `0.2.0`.
+`GET /health` reports the version compiled into the binary. In this tree that version is `0.2.1`.
 
 Successful JSON bodies are compact. The field order shown here is the order the server writes. Read fields by name.
 
@@ -187,12 +187,12 @@ The response headers on that call are:
 
 | Header | When |
 |---|---|
-| `X-Request-Id` | Every response produced by the decision handler, including errors. The server echoes a client value as sent. If the header is absent, the server generates 16 hexadecimal characters. |
+| `X-Request-Id` | Every response produced by the decision handler, including errors. A supplied value is echoed only if it is 1–128 ASCII letters, digits, `.`, `_`, or `-`; otherwise the server replaces it with 16 generated hexadecimal characters. |
 | `X-Inference-Time-Ms` | Successful `POST /v1/systemone` and `POST /v1/systemone/batch` only. Milliseconds with two decimal places. |
 | `Server-Timing` | Same responses. The value is `inference;dur=` followed by the same number. |
 | `Retry-After` | `503` from the decision handler only. The value is `1`. |
 
-A body larger than 2 MiB, and a request to an unknown path, are rejected before the handler. Those responses have no `X-Request-Id`.
+HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
 
 ## Endpoints
 
@@ -203,10 +203,10 @@ A body larger than 2 MiB, and a request to an unknown path, are rejected before 
 | `GET /v1/models` | bearer, if keys are configured | loaded checkpoints |
 | `GET /health` | no | process is up |
 | `GET /ready` | no | admission control has room |
-| `GET /metrics` | no | Prometheus text |
+| `GET /metrics` | bearer, if keys are configured | Prometheus text |
 | `GET /` | no | playground HTML, unless `--no-playground` |
 
-With no API keys configured, the bearer check is skipped and every path is open. `GET /health`, `GET /ready`, `GET /metrics`, and `GET /` never require a key.
+With no API keys configured, the bearer check is skipped and every path is open. `GET /health`, `GET /ready`, and `GET /` never require a key. When authentication is configured, `/metrics` and `/v1/models` return 401 unless the request has a configured bearer key.
 
 ## Decision request
 
@@ -218,7 +218,7 @@ With no API keys configured, the bearer check is skipped and every path is open.
 | `questions` | yes | Object. Each key is the question id returned in `answers`. At most 64 questions. |
 | `model` | no | `english`, `multilingual`, `consensus`, an alias `convaiinnovations/laya-<id>`, or omitted. Any other string is ignored and routing runs as if `model` were omitted. See [Model routing and consensus](#model-routing-and-consensus). |
 | `lang` | no | String. Selects a per-language temperature when the checkpoint has one for that language (the part before `-`, compared case-insensitively). It does not select the checkpoint. The English and multilingual GGUF files shipped with this tree store an empty language-temperature table, so this field does not change scores on those files. |
-| `ensemble` | no | Integer. Clamped to 1..8. A non-integer is ignored and the server default is used (1, unless `--ensemble` was set). Values above 1 re-score choice questions under extra cyclic option orders and average them. Score and noul questions are not rotated. |
+| `ensemble` | no | Integer from 1 to 8 inclusive. Any other present value is HTTP 422 with `ensemble must be an integer between 1 and 8`. Omitting it uses the server default (1, unless `--ensemble` was set). Values above 1 re-score choice questions under extra cyclic option orders and average them. Score and noul questions are not rotated. |
 | `ensemble_margin` | no | Number, clamped to 0..1. A non-number is ignored. The default is 1. Extra option orders run only when the gap between the top probability and the second is below this margin. A margin of 0 runs no extra orders. |
 | `calibrate` | no | Boolean. A non-boolean is ignored. The server default is false unless `--calibrate` was set. When true, each choice question with at least two options is adjusted by the distribution that question produces on content-free copies of the state (empty string, `N/A`, and `[MASK]`). |
 | `return_logits` | no | Boolean. A non-boolean is ignored. When true, each answer gains a `logits` array, in option order, before temperature scaling. Under consensus the field is `logits_by_model` instead. See below. |
@@ -227,7 +227,7 @@ With no API keys configured, the bearer check is skipped and every path is open.
 
 The effective state budget inside the engine is `max(max_len, head_max_len + 128)`, using the checkpoint default for a limit you omitted. Sending `max_len: 32` therefore does not cut the sequence to 32 tokens when `head_max_len` is 192.
 
-Unknown fields are ignored.
+Unknown top-level request fields are ignored for compatibility with `laya.serve`.
 
 Each question is an object:
 
@@ -237,6 +237,8 @@ Each question is an object:
 | `instructions` | yes | The text to answer. A non-string is serialized as JSON and used as text. |
 | `criteria` | depends on type | Options. See the next section. |
 | `labels` | no | Only valid on `noul`. Maps `false` and `true` to two different non-empty strings. |
+
+Unknown fields in a question definition are also ignored. They do not affect inference or calibration-cache keys.
 
 How criteria become option text:
 
@@ -726,13 +728,13 @@ for ensemble in (1, 3):
 200
 ```
 
-Integers outside 1..8 are clamped. Non-integers, and a non-boolean `calibrate`, are ignored. This request asks for ensemble 99 and a margin of 5 with `calibrate` set to a string. The server accepts it and returns the empty-question response.
+`ensemble` is validated as an integer from 1 through 8; values outside that range and non-integers return 422. A non-boolean `calibrate` is ignored. This request uses the largest valid ensemble, a margin that is clamped to 1, and a string `calibrate` value that is ignored. It returns the empty-question response.
 
 ```bash
 curl -sS -w '\n%{http_code}\n' \
   -H 'Content-Type: application/json' \
   http://127.0.0.1:8080/v1/systemone \
-  --data-binary "{\"state\":\"hi there\",\"questions\":{},\"ensemble\":99,\"ensemble_margin\":5,\"calibrate\":\"yes\"}"
+  --data-binary "{\"state\":\"hi there\",\"questions\":{},\"ensemble\":8,\"ensemble_margin\":5,\"calibrate\":\"yes\"}"
 ```
 
 ```text
@@ -775,7 +777,9 @@ for flag in (False, True):
 
 ## Authentication
 
-Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line, `#` starts a comment, empty lines are skipped). Spaces around a comma are part of the key. They are not trimmed.
+Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line). Comma-separated values and file lines are trimmed and blank values are skipped; in files, trimmed lines beginning with `#` are also skipped. A key must contain 1–4096 printable ASCII characters and no whitespace.
+
+Authentication is fail-closed per configured source. If `STATIM_API_KEY` is present but empty or contains no valid key, startup aborts. Each `--api-key-file` must be readable and contain at least one valid key; a missing, unreadable, empty, or comment-only file aborts startup even if another source supplied a valid key. With neither source configured, authentication is off and the startup log says `"auth":false,"auth_status":"off"`.
 
 The client sends `Authorization: Bearer <key>`. The comparison is constant-time over the full header. A missing header, a wrong scheme, or a wrong key is:
 
@@ -783,33 +787,58 @@ The client sends `Authorization: Bearer <key>`. The comparison is constant-time 
 {"detail":"invalid or missing bearer token"}
 ```
 
-That response is HTTP 401, with `X-Request-Id` set. The samples in this document were taken with no keys configured, so a live call cannot produce 401. The body above is the string the handler returns when keys are set.
+That response is HTTP 401. It is produced before the route handler and therefore has no `X-Request-Id`.
 
-`GET /health`, `GET /ready`, `GET /metrics`, and `GET /` do not check the header.
+The check covers both decision endpoints, `GET /metrics`, and `GET /v1/models`. `GET /health`, `GET /ready`, and `GET /` remain public. Exactly one `Authorization` header is required when auth is on.
 
 ## Errors
 
-Handler errors are JSON objects with one string field, `detail`. The status depends on which check fails. Checks run in this order: authentication, the concurrency cap, JSON parsing, the `questions` field, `max_len` and `head_max_len`, the batch `states` array, per-state limits, then question validation during inference.
+Handler errors are JSON objects with one string field, `detail`. HTTP framing, declared body size, bearer authentication, and body prohibition on operational endpoints are checked before routing. Decision checks then run in this order: authentication, the concurrency cap, body reception and JSON preflight, request-field sizes and question shape, integer budgets, states and per-state limits, aggregate work/capacity estimates, engine queueing, and inference.
 
 | Status | Trigger | Body |
 |---|---|---|
 | 400 | body is not JSON | `{"detail":"request body must be valid JSON"}` |
-| 400 | JSON is not an object, or `questions` is missing | `{"detail":"request body must be an object with a 'questions' field"}` |
-| 400 | `questions` is not an object | `{"detail":"'questions' must be an object"}` |
+| 400 | request body reception fails before an oversize condition is identified | `{"detail":"request body incomplete or exceeds limit"}` |
+| 400 | duplicate key in any JSON object | `{"detail":"duplicate JSON object key"}` |
+| 400 | multiple `Content-Length` headers, or both `Content-Length` and `Transfer-Encoding` | `{"detail":"ambiguous HTTP body framing"}` |
+| 400 | empty or non-decimal `Content-Length` | `{"detail":"invalid Content-Length"}` |
+| 400 | a public/operational endpoint receives a nonempty or transfer-encoded body | `{"detail":"this endpoint does not accept a request body"}` |
+| 400 | top-level JSON or a question definition is not an object | `{"detail":"expected JSON object"}` |
+| 400 | `questions` is missing or is not an object | `{"detail":"'questions' must be an object"}` |
 | 400 | `state` is missing or null | `{"detail":"'state' is required"}` |
 | 400 | batch request has no `states` array | `{"detail":"request body must contain a 'states' array"}` |
 | 401 | a key is configured and `Authorization` does not match `Bearer <key>` | `{"detail":"invalid or missing bearer token"}` |
+| 413 | body is larger than 2 MiB | `{"detail":"request body exceeds 2 MiB"}` for a declared oversize body; `{"detail":"request body incomplete or exceeds limit"}` when streaming crosses the limit |
+| 413 | JSON nesting exceeds `--max-json-depth` (default 64; hard maximum 128) | `{"detail":"JSON nesting too deep"}` |
+| 413 | JSON nodes exceed `--max-json-nodes` (default 100,000) | `{"detail":"too many JSON nodes"}` |
+| 413 | one object exceeds `--max-object-members` (default 1,024) | `{"detail":"too many JSON object members"}` |
+| 413 | a JSON object key exceeds 4,096 bytes | `{"detail":"JSON key exceeds 4096 bytes"}` |
 | 413 | more than 64 questions | `{"detail":"too many questions (65 > 64)"}` |
 | 413 | more than 100 choice options in one question | `{"detail":"too many choice options for 'q' (101 > 100)"}` |
 | 413 | more than 32 score levels in one question | `{"detail":"too many score levels for 'q' (33 > 32)"}` |
 | 413 | choice options plus score levels across questions exceed 512 | `{"detail":"too many answer options across questions (540 > 512)"}` |
 | 413 | state is longer than 50,000 Unicode code points | `{"detail":"state too large (50001 > 50000 chars)"}` |
 | 413 | batch has more than 256 states | `{"detail":"too many states (257 > 256)"}` |
-| 413 | body is larger than 2,097,152 bytes | empty body, no `X-Request-Id` |
-| 422 | `max_len` or `head_max_len` is present and is not an integer from 32 to 8192 | `{"detail":"'max_len' must be an integer between 32 and 8192"}` (the field name changes) |
+| 413 | question ID exceeds 256 bytes | `{"detail":"question ID exceeds 256 bytes"}` |
+| 413 | instructions exceed 16,384 bytes | `{"detail":"instructions exceed 16384 bytes"}` |
+| 413 | an object option/label key exceeds 1,024 bytes | `{"detail":"label exceeds 1024 bytes"}` |
+| 413 | a criterion or label value exceeds 4,096 bytes | `{"detail":"criterion or label exceeds 4096 bytes"}` |
+| 413 | aggregate evaluated rows exceed `--max-request-work` (default 4,096) | `{"detail":"request exceeds state/question/view work limit"}` |
+| 413 | rows × effective sequence length exceed `--max-request-tokens` (default 1,048,576) | `{"detail":"request exceeds aggregate token budget"}` |
+| 413 | the conservative attention estimate exceeds `--max-attention-mib` (default 1,024 MiB) | `{"detail":"request exceeds attention memory budget"}` |
+| 413 | the conservative response estimate exceeds `--max-response-bytes` (default 16,777,216) | `{"detail":"request exceeds response byte budget"}` |
+| 413 | the final serialized response exceeds `--max-response-bytes` | `{"detail":"response exceeds byte budget"}` |
+| 413 | a defensive state/question/model cardinality check fails | `{"detail":"request exceeds state/question/model limits"}` |
+| 422 | `model` or `lang` is not a string of at most 256 bytes | `{"detail":"model must be a string of at most 256 bytes"}` (the field name changes) |
+| 422 | `max_len` or `head_max_len` is not an integer from 32 to 8192 | `{"detail":"max_len must be an integer between 32 and 8192"}` (the field name changes) |
+| 422 | `ensemble` is not an integer from 1 to 8 | `{"detail":"ensemble must be an integer between 1 and 8"}` |
+| 422 | effective `max(max_len, head_max_len + 128)` exceeds the selected model's capacity | `{"detail":"effective max_len exceeds model capacity (head_max_len needs 128 state tokens)"}` |
 | 422 | a question definition is invalid, or its options do not fit the token budget | `{"detail":"question '<id>': ..."}` or `{"detail":"question '<id>' options exceed head_max_len=<n>"}` |
-| 500 | an unexpected exception during the handler | `{"detail":"inference failed"}` |
+| 422 | the cooperative inference deadline expires (default 120 seconds from admission) | `{"detail":"inference deadline exceeded"}` |
+| 500 | an unexpected exception during the decision handler | `{"detail":"inference failed"}` |
+| 500 | an unexpected exception outside the decision handler | `{"detail":"internal server error"}` |
 | 503 | more than `--max-concurrent` requests (default 16) are already in the handler | `{"detail":"server busy, try again later"}` plus `Retry-After: 1` |
+| 503 | no model worker becomes available before the inference deadline | `{"detail":"inference queue deadline exceeded"}` |
 
 `GET /ready` uses a different 503 body, `{"ready":false}`, and does not set `Retry-After`. See [Metrics and other operations](#metrics-and-other-operations).
 
@@ -817,9 +846,9 @@ Question validation messages:
 
 | `detail` | Trigger |
 |---|---|
-| `question '<id>': definition must be an object` | the value is not an object |
-| `question '<id>': unknown type; use one of ['choice', 'noul', 'score']` | `type` is missing or not one of those three |
-| `question '<id>': no 'instructions'; add the text the model should answer` | `instructions` is missing |
+| `expected JSON object` (HTTP 400) | the question value is not an object |
+| `unknown question type; use choice, score or noul` | `type` is missing, not a string, or not one of those three |
+| `question requires instructions` | `instructions` is missing |
 | `question '<id>': a choice question takes 'criteria' as a dict of label -> description, or a list of labels` | choice `criteria` is missing or not an object or list |
 | `question '<id>': a choice question needs at least one criterion` | the object or list is empty |
 | `question '<id>': choice label <i> must be a scalar (a string, number or null)` | a list entry is an object or array |
@@ -836,7 +865,7 @@ HTTP 500 is the handler's catch-all. The samples below did not hit an unexpected
 
 The calls below are the bodies in the tables.
 
-An error still echoes `X-Request-Id`. It does not set `Server-Timing` or `Retry-After`.
+An error produced inside the decision handler still echoes `X-Request-Id`. Pre-routing framing, declared-size, authentication, body-prohibition, and route errors do not. Errors do not set `Server-Timing`; only the admission-saturation 503 sets `Retry-After: 1`.
 
 ```python
 import requests
@@ -880,7 +909,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"request body must be an object with a 'questions' field"}
+{"detail":"expected JSON object"}
 400
 ```
 
@@ -892,7 +921,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"request body must be an object with a 'questions' field"}
+{"detail":"'questions' must be an object"}
 400
 ```
 
@@ -952,7 +981,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"'max_len' must be an integer between 32 and 8192"}
+{"detail":"max_len must be an integer between 32 and 8192"}
 422
 ```
 
@@ -964,7 +993,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"'max_len' must be an integer between 32 and 8192"}
+{"detail":"max_len must be an integer between 32 and 8192"}
 422
 ```
 
@@ -976,7 +1005,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"'head_max_len' must be an integer between 32 and 8192"}
+{"detail":"head_max_len must be an integer between 32 and 8192"}
 422
 ```
 
@@ -988,7 +1017,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"question 'q': unknown type; use one of ['choice', 'noul', 'score']"}
+{"detail":"unknown question type; use choice, score or noul"}
 422
 ```
 
@@ -1000,7 +1029,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"question 'q': no 'instructions'; add the text the model should answer"}
+{"detail":"question requires instructions"}
 422
 ```
 
@@ -1012,8 +1041,8 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"question 'q': definition must be an object"}
-422
+{"detail":"expected JSON object"}
+400
 ```
 
 ```bash
@@ -1168,8 +1197,7 @@ show(requests.post(batch, json={"states": ["x"] * 257, "questions": {}}, timeout
 blob = '{"state":"' + ("a" * (2 * 1024 * 1024)) + '","questions":{}}'
 response = requests.post(url, data=blob.encode(), headers={"Content-Type": "application/json"}, timeout=30)
 print(response.status_code)
-print(repr(response.text))
-print(response.headers.get("X-Request-Id"))
+print(response.text)
 ```
 
 ```text
@@ -1186,8 +1214,7 @@ print(response.headers.get("X-Request-Id"))
 413
 {"detail":"too many states (257 > 256)"}
 413
-''
-None
+{"detail":"request body exceeds 2 MiB"}
 ```
 
 Noul questions do not add to the 512-option total. Only choice entries and score levels do. A question that is missing `type` or `criteria` is not counted toward those option caps. It still fails later with 422 if the definition is invalid. The state limit counts Unicode code points, not bytes. For a non-string state the count is the code points of the serialized JSON.
@@ -1252,24 +1279,39 @@ retry
 503
 ```
 
-## Limits
+## Limits and server controls
 
-| Limit | Value |
-|---|---|
-| Questions per request | 64 |
-| Choice options in one question | 100 |
-| Score levels in one question | 32 |
-| Choice options plus score levels in the request | 512 |
-| State length | 50,000 Unicode code points |
-| States in one batch | 256 |
-| Body size | 2,097,152 bytes |
-| `max_len`, `head_max_len` | integer 32..8192, or omit |
-| `ensemble` | integer clamped to 1..8 |
-| Requests in the handler at once | 16 (`--max-concurrent`) |
-| Read and write timeout | 30 seconds |
-| Keep-alive | timeout 5 seconds, at most 1000 requests |
+Limits count UTF-8 bytes unless the table says Unicode code points. Unknown request and question fields are ignored, but still count toward the body, JSON-node, object-member, and key-size limits.
 
-Option-count limits run before inference. A request that only exceeds a count does not load the model into the worker beyond the handler's admission check. Invalid questions are parsed after a worker is acquired, so they wait behind in-flight decisions and then return 422.
+| Limit or flag | Default | Meaning |
+|---|---:|---|
+| Request body | 2 MiB | Length-framed and chunked bodies |
+| `--max-json-depth` | 64 | Nested containers including the root; configurable only up to 128 |
+| `--max-json-nodes` | 100,000 | Containers, scalar values, and object keys |
+| `--max-object-members` | 1,024 | Members in any one object |
+| JSON object key | 4,096 bytes | Includes arbitrary state keys |
+| States / questions | 256 / 64 | Per batch / per request |
+| State | 50,000 code points | String value, or Python-compatible serialization of a structured state |
+| Choice / score / total options | 100 / 32 / 512 | Per choice / per score / across choice and score questions |
+| Question ID / `model` / `lang` | 256 bytes each | `model` and `lang` must also be strings |
+| Instructions | 16,384 bytes | String bytes, or compact rendered JSON size |
+| Criterion or label value | 4,096 bytes | Object label keys are limited to 1,024 bytes |
+| `max_len`, `head_max_len` | checkpoint defaults | Explicit request values and nonzero CLI defaults must be integers 32–8,192; CLI 0 selects checkpoint defaults |
+| `ensemble` / `--ensemble` | 1 | Integer 1–8 |
+| `--max-request-work` | 4,096 | `states × views × models`; choice ensembles, three calibration views, and two consensus models count |
+| `--max-request-tokens` | 1,048,576 | Work rows × effective sequence length |
+| `--max-attention-mib` | 1,024 MiB | Conservative packed-graph attention estimate |
+| `--max-response-bytes` | 16,777,216 | Conservative preflight estimate and final serialized response |
+| `--max-concurrent` | 16 | Admitted decision requests; valid range 1–256 |
+| `--workers` | 1 | Inference workers per model; valid range 1–64 |
+| `--http-queue` | 32 | Pending sockets beyond the fixed `max-concurrent + 4` HTTP workers |
+| `--request-timeout` | 30 seconds | Absolute combined header/body read deadline |
+| Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
+| `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
+
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--threads`, `--calibrate`, `--consensus`, `--no-access-log`, `--no-playground`, and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+
+Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 
 ## Metrics and other operations
 
@@ -1280,7 +1322,7 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/health
 ```
 
 ```text
-{"status":"ok","engine":"statim","version":"0.2.0","loaded":["english","multilingual"],"device":"cpu"}
+{"status":"ok","version":"0.2.1"}
 200
 ```
 
@@ -1295,14 +1337,14 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/ready
 200
 ```
 
-`GET /v1/models` lists checkpoints in load order. `id` is the `-m` name. `source` is the GGUF `general.name`. `max_len` is the checkpoint default. `head_max_len` is not in this object. On these files it is 192 for English and 256 for multilingual.
+`GET /v1/models` lists checkpoints in load order. `id` is the `-m` name. `source` is the GGUF `general.name`. `max_len` is the checkpoint default. `head_max_len` is not in this object. `device` is the actual compute device used by that model. This endpoint requires the bearer key when authentication is configured.
 
 ```bash
 curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/v1/models
 ```
 
 ```text
-{"object":"list","data":[{"id":"english","object":"model","owned_by":"statim","source":"laya","weights":"f32","layers":28,"hidden":1024,"max_len":512,"vocab":50368},{"id":"multilingual","object":"model","owned_by":"statim","source":"laya-multilingual","weights":"f32","layers":22,"hidden":768,"max_len":1024,"vocab":256000}]}
+{"object":"list","data":[{"id":"english","object":"model","owned_by":"statim","source":"laya","weights":"f32","layers":28,"hidden":1024,"max_len":512,"vocab":50368,"device":"cpu"},{"id":"multilingual","object":"model","owned_by":"statim","source":"laya-multilingual","weights":"f32","layers":22,"hidden":768,"max_len":1024,"vocab":256000,"device":"cpu"}]}
 200
 ```
 
@@ -1329,7 +1371,7 @@ text/html; charset=utf-8
 playground-ok
 ```
 
-`GET /metrics` is Prometheus text, `Content-Type: text/plain; version=0.0.4`. Counters move. The lines that are always present:
+`GET /metrics` is Prometheus text, `Content-Type: text/plain; version=0.0.4`. It requires the bearer key when authentication is configured. Counters move. The lines that are always present:
 
 | Line | Meaning |
 |---|---|
@@ -1361,7 +1403,7 @@ statim_in_flight N
 # TYPE statim_uptime_seconds gauge
 statim_uptime_seconds N
 statim_workers_busy{model="english"} N
-statim_model_info{model="english",weights="f32",version="0.2.0"} 1
+statim_model_info{model="english",weights="f32",version="0.2.1"} 1
 ```
 
 `N` stands for a live number. The check below reads the endpoint and requires those names.
@@ -1400,8 +1442,8 @@ required = [
     "statim_uptime_seconds ",
     'statim_workers_busy{model="english"}',
     'statim_workers_busy{model="multilingual"}',
-    'statim_model_info{model="english",weights="f32",version="0.2.0"} 1',
-    'statim_model_info{model="multilingual",weights="f32",version="0.2.0"} 1',
+    'statim_model_info{model="english",weights="f32",version="0.2.1"} 1',
+    'statim_model_info{model="multilingual",weights="f32",version="0.2.1"} 1',
 ]
 missing = [line for line in required if line not in text]
 if response.status_code != 200 or response.headers["Content-Type"] != "text/plain; version=0.0.4":
@@ -1419,29 +1461,23 @@ text/plain; version=0.0.4
 metrics-ok
 ```
 
-An unknown path, and the wrong method on a known path, are an empty 404.
+An unknown path, and the wrong method on a known path, are JSON 404 responses. With authentication enabled, nonpublic paths require a valid key before this route lookup.
 
 ```bash
-curl -sS -D - -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/no-such
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/no-such
 ```
 
 ```text
-HTTP/1.1 404 Not Found
-Content-Length: 0
-Keep-Alive: timeout=5, max=1000
-
+{"detail":"HTTP request failed"}
 404
 ```
 
 ```bash
-curl -sS -D - -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/v1/systemone
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/v1/systemone
 ```
 
 ```text
-HTTP/1.1 404 Not Found
-Content-Length: 0
-Keep-Alive: timeout=5, max=1000
-
+{"detail":"HTTP request failed"}
 404
 ```
 
@@ -1457,4 +1493,3 @@ The files used for the samples are converted Laya checkpoints. Their GGUF metada
 | `laya-multilingual-f32.gguf` | `laya-multilingual` | [convaiinnovations/laya-multilingual](https://huggingface.co/convaiinnovations/laya-multilingual) | Apache-2.0 | [jhu-clsp/mmBERT-base](https://huggingface.co/jhu-clsp/mmBERT-base), MIT |
 
 `general.license` in both GGUF files is `apache-2.0`. `general.source.url` points at the Hugging Face repositories above. Token budgets in those files match the upstream `rl_agent_config.json` documents: English `max_len` 512 and `head_max_len` 192, multilingual `max_len` 1024 and `head_max_len` 256.
-

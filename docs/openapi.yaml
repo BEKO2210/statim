@@ -1,19 +1,84 @@
 openapi: 3.1.0
 info:
   title: Statim HTTP API
-  version: 0.2.0
-  description: 'HTTP API of the Statim decision server. Samples were captured from a binary whose GET
-    /health version is 0.2.0. See docs/API.md for the narrative guide. JSON error bodies are objects with
-    a single string field, detail. A body over 2 MiB is HTTP 413 with an empty body and no X-Request-Id.
-    GET /ready returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. 401
-    and 500 bodies are produced by the handler when a key is configured or an unexpected exception is
-    thrown. The server that produced the live samples had no API key and did not throw, so those two bodies
-    are the handler strings rather than captured responses.'
+  version: 0.2.1
+  description: 'HTTP API of the Statim decision server. See docs/API.md for the narrative guide and
+    complete limit formulas. JSON error bodies are objects with a single string field, detail. GET /ready
+    instead returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. Unknown
+    top-level request fields and question-definition fields are ignored for laya.serve compatibility;
+    duplicate JSON object keys are rejected.'
   license:
     name: Apache-2.0
 servers:
 - url: http://127.0.0.1:8080
   description: Default listen address (--host 127.0.0.1 --port 8080).
+x-server-configuration:
+  authentication:
+    env: STATIM_API_KEY=key1,key2
+    flag: --api-key-file FILE (repeatable; one key per line)
+    behavior: Each explicitly configured source must independently yield a valid key or startup aborts.
+      Keys are trimmed 1-4096 byte printable ASCII strings without whitespace. With no source configured,
+      authentication is off and the listening log records auth=false and auth_status=off.
+  environment:
+    STATIM_DEVICE: Default compute device.
+    STATIM_GPU_FAST: Set to 1 for --gpu-fast.
+    STATIM_LOG: Set to debug to retain ggml debug logging.
+  limits:
+    --max-json-depth: 64 (hard maximum 128)
+    --max-json-nodes: 100000
+    --max-object-members: 1024
+    --max-request-work: 4096
+    --max-request-tokens: 1048576
+    --max-attention-mib: 1024
+    --max-response-bytes: 16777216
+    --max-concurrent: 16 (valid range 1-256)
+    --workers: 1 (valid range 1-64)
+    --http-queue: 32
+    --request-timeout: 30 seconds, absolute header plus body deadline
+    --inference-timeout: 120 seconds from admission through queue and inference
+    --max-len: 0 selects checkpoint default; nonzero values must be 32-8192 and fit model capacity
+    --head-max-len: 0 selects checkpoint default; nonzero values must be 32-8192
+    --ensemble: 1 (valid range 1-8)
+  other-flags:
+  - --host
+  - --port
+  - --device
+  - --gpu-fast
+  - --threads
+  - --calibrate
+  - --consensus
+  - --no-access-log
+  - --no-playground
+x-request-limits:
+  body-bytes: 2097152
+  json-depth: 64 (configurable with --max-json-depth; hard ceiling 128)
+  json-nodes: 100000 (configurable with --max-json-nodes)
+  object-members: 1024 per object (configurable with --max-object-members)
+  json-key-bytes: 4096
+  duplicate-object-keys: rejected with 400
+  unknown-request-and-question-fields: ignored
+  batch-states: 256
+  questions: 64
+  state-codepoints: 50000 after Python-compatible serialization when structured
+  choice-options: 100 per question
+  score-levels: 32 per question
+  choice-plus-score-options: 512 per request
+  question-id-bytes: 256
+  model-and-lang-bytes: 256
+  instructions-rendered-bytes: 16384
+  object-label-key-bytes: 1024
+  criterion-or-label-rendered-bytes: 4096
+  max_len-and-head_max_len: Strict integers 32-8192. Effective length is max(max_len, head_max_len + 128)
+    and must fit every selected model.
+  ensemble: Strict integer 1-8.
+  aggregate-work: Default 4096 states x question views x models; includes ensemble views, three
+    calibration views per choice, and consensus models.
+  aggregate-tokens: Default 1048576 work rows x effective sequence length.
+  attention-bytes: Default 1073741824; estimate is 2 x min(32 x length, 8192) x length x
+    max(encoder_heads, head_heads) x 4.
+  response-bytes: Default 16777216, enforced by a conservative preflight estimate and final serialization.
+  inference-deadline-seconds: 120 from admission by default; expiry in inference is 422 and expiry in
+    the worker queue is 503.
 tags:
 - name: decisions
   description: Typed decisions.
@@ -25,8 +90,9 @@ components:
       type: http
       scheme: bearer
       description: Required only when STATIM_API_KEY or --api-key-file configures at least one key. The
-        header must be exactly 'Bearer ' followed by one configured key. Health, ready, metrics, and the
-        playground never require it.
+        header must be exactly 'Bearer ' followed by one configured key. Decision endpoints, metrics,
+        and models require it; health, ready, and the playground remain public. Explicitly configured
+        empty, invalid, missing, or unreadable key sources abort startup.
   parameters:
     RequestId:
       name: X-Request-Id
@@ -34,7 +100,8 @@ components:
       required: false
       schema:
         type: string
-      description: Echoed on handler responses. If omitted, the server generates 16 hexadecimal characters.
+      description: Echoed on handler responses when it is 1-128 ASCII letters, digits, dot, underscore,
+        or hyphen. An absent or invalid value is replaced with 16 generated hexadecimal characters.
   schemas:
     Error:
       type: object
@@ -196,6 +263,7 @@ components:
           $ref: '#/components/schemas/Routing'
     Question:
       type: object
+      description: Unknown properties are ignored.
       required:
       - type
       - instructions
@@ -208,6 +276,7 @@ components:
           - noul
         instructions:
           description: Text the model answers. A non-string is serialized as JSON.
+          x-max-rendered-bytes: 16384
         criteria:
           description: 'Choice: object of label to description, or a list of scalars. Score: list of level
             descriptions. Noul: optional object keyed true and false.'
@@ -221,30 +290,39 @@ components:
               type: string
     SystemOneRequest:
       type: object
+      description: Unknown properties are ignored for laya.serve compatibility.
       required:
       - state
       - questions
       properties:
         state:
           description: Any JSON value except null.
+          not:
+            type: 'null'
         questions:
           type: object
+          maxProperties: 64
+          propertyNames:
+            x-maxBytes: 256
           additionalProperties:
             $ref: '#/components/schemas/Question'
         model:
           type: string
+          x-maxBytes: 256
         lang:
           type: string
+          x-maxBytes: 256
         ensemble:
           type: integer
-          description: Clamped to 1..8. Non-integers are ignored.
+          minimum: 1
+          maximum: 8
+          description: Strict integer range; invalid present values return 422.
         ensemble_margin:
-          type: number
-          description: Clamped to 0..1. Non-numbers are ignored.
+          description: Numbers are clamped to 0..1; any other JSON type is accepted and ignored.
         calibrate:
-          type: boolean
+          description: A boolean override; any other JSON type is accepted and ignored.
         return_logits:
-          type: boolean
+          description: A boolean override; any other JSON type is accepted and ignored.
         max_len:
           type: integer
           minimum: 32
@@ -255,6 +333,7 @@ components:
           maximum: 8192
     BatchRequest:
       type: object
+      description: Unknown properties are ignored for laya.serve compatibility.
       required:
       - states
       - questions
@@ -264,22 +343,32 @@ components:
           maxItems: 256
           items:
             description: Same values as state.
+            not:
+              type: 'null'
         questions:
           type: object
+          maxProperties: 64
+          propertyNames:
+            x-maxBytes: 256
           additionalProperties:
             $ref: '#/components/schemas/Question'
         model:
           type: string
+          x-maxBytes: 256
         lang:
           type: string
+          x-maxBytes: 256
         ensemble:
           type: integer
+          minimum: 1
+          maximum: 8
+          description: Strict integer range; invalid present values return 422.
         ensemble_margin:
-          type: number
+          description: Numbers are clamped to 0..1; any other JSON type is accepted and ignored.
         calibrate:
-          type: boolean
+          description: A boolean override; any other JSON type is accepted and ignored.
         return_logits:
-          type: boolean
+          description: A boolean override; any other JSON type is accepted and ignored.
         max_len:
           type: integer
           minimum: 32
@@ -303,22 +392,11 @@ components:
       additionalProperties: false
       required:
       - status
-      - engine
       - version
-      - loaded
-      - device
       properties:
         status:
           const: ok
-        engine:
-          const: statim
         version:
-          type: string
-        loaded:
-          type: array
-          items:
-            type: string
-        device:
           type: string
     Ready:
       type: object
@@ -341,6 +419,7 @@ components:
       - hidden
       - max_len
       - vocab
+      - device
       properties:
         id:
           type: string
@@ -360,6 +439,8 @@ components:
           type: integer
         vocab:
           type: integer
+        device:
+          type: string
     ModelList:
       type: object
       additionalProperties: false
@@ -373,6 +454,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Model'
+  responses:
+    NoRequestBody:
+      description: This endpoint received a nonempty Content-Length body or any Transfer-Encoding body,
+        or the request had ambiguous/invalid body framing. Framing checks run before authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: this endpoint does not accept a request body
+    BodyTooLarge:
+      description: Declared Content-Length exceeds 2097152 bytes. Checked before authentication or routing.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: request body exceeds 2 MiB
 paths:
   /v1/systemone:
     post:
@@ -542,12 +641,12 @@ paths:
                   ensemble: 3
                   ensemble_margin: 1
                 x-expect-status: 200
-              clampedEnsemble:
-                summary: Out-of-range ensemble is clamped, bad types ignored
+              maxEnsemble:
+                summary: Largest valid ensemble; non-boolean calibrate is ignored
                 value:
                   state: hi there
                   questions: {}
-                  ensemble: 99
+                  ensemble: 8
                   ensemble_margin: 5
                   calibrate: 'yes'
                 x-expect-status: 200
@@ -649,7 +748,7 @@ paths:
                   state: x
                   questions:
                     q: noul
-                x-expect-status: 422
+                x-expect-status: 400
               choiceEmpty:
                 summary: Choice with no criteria
                 value:
@@ -2083,7 +2182,7 @@ paths:
                       reason: requested
                       engine: statim
                       weights: f32
-                clampedEnsemble:
+                maxEnsemble:
                   value:
                     model: laya
                     answers: {}
@@ -2153,7 +2252,8 @@ paths:
               schema:
                 type: string
         '400':
-          description: The body is not a JSON object with the fields this path requires.
+          description: Invalid HTTP body framing, invalid or duplicate-key JSON, a non-object request or
+            question, or missing/invalid required request structure.
           content:
             application/json:
               schema:
@@ -2164,10 +2264,10 @@ paths:
                     detail: request body must be valid JSON
                 jsonArray:
                   value:
-                    detail: request body must be an object with a 'questions' field
+                    detail: expected JSON object
                 missingQuestions:
                   value:
-                    detail: request body must be an object with a 'questions' field
+                    detail: '''questions'' must be an object'
                 missingState:
                   value:
                     detail: '''state'' is required'
@@ -2177,6 +2277,18 @@ paths:
                 questionsNotObject:
                   value:
                     detail: '''questions'' must be an object'
+                questionNotObject:
+                  value:
+                    detail: expected JSON object
+                duplicateKey:
+                  value:
+                    detail: duplicate JSON object key
+                ambiguousFraming:
+                  value:
+                    detail: ambiguous HTTP body framing
+                invalidContentLength:
+                  value:
+                    detail: invalid Content-Length
           headers:
             X-Request-Id:
               description: Echoed client value, or 16 generated hexadecimal characters.
@@ -2194,14 +2306,11 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
-          headers:
-            X-Request-Id:
-              description: Echoed client value, or 16 generated hexadecimal characters.
-              schema:
-                type: string
         '413':
-          description: 'A count or size limit failed. A body larger than 2097152 bytes never reaches this
-            JSON form: the HTTP stack returns 413 with an empty body and no X-Request-Id.'
+          description: A body, JSON-structure, field, count, aggregate work/token/attention, or response-size
+            limit failed. Defaults are 2 MiB body, depth 64, 100000 nodes, 1024 members/object, 4096-byte
+            keys, 4096 work rows, 1048576 aggregate tokens, 1024 MiB estimated attention, and 16777216
+            response bytes. See docs/API.md for formulas and configurable flags.
           content:
             application/json:
               schema:
@@ -2222,14 +2331,45 @@ paths:
                 stateTooLarge:
                   value:
                     detail: state too large (50001 > 50000 chars)
+                bodyTooLarge:
+                  value:
+                    detail: request body exceeds 2 MiB
+                jsonDepth:
+                  value:
+                    detail: JSON nesting too deep
+                jsonNodes:
+                  value:
+                    detail: too many JSON nodes
+                objectMembers:
+                  value:
+                    detail: too many JSON object members
+                jsonKey:
+                  value:
+                    detail: JSON key exceeds 4096 bytes
+                work:
+                  value:
+                    detail: request exceeds state/question/view work limit
+                tokens:
+                  value:
+                    detail: request exceeds aggregate token budget
+                attention:
+                  value:
+                    detail: request exceeds attention memory budget
+                responseEstimate:
+                  value:
+                    detail: request exceeds response byte budget
+                responseFinal:
+                  value:
+                    detail: response exceeds byte budget
           headers:
             X-Request-Id:
               description: Echoed client value, or 16 generated hexadecimal characters.
               schema:
                 type: string
         '422':
-          description: max_len or head_max_len is present and outside 32..8192, or a question definition
-            is invalid, or option markers do not fit the token budget.
+          description: model/lang field validation; strict integer validation of ensemble (1..8), max_len,
+            or head_max_len (32..8192); effective sequence capacity; question validation; option-marker
+            budget; or expiry of the cooperative inference deadline.
           content:
             application/json:
               schema:
@@ -2241,22 +2381,28 @@ paths:
                       non-empty strings'
                 maxLenLow:
                   value:
-                    detail: '''max_len'' must be an integer between 32 and 8192'
+                    detail: max_len must be an integer between 32 and 8192
                 maxLenHigh:
                   value:
-                    detail: '''max_len'' must be an integer between 32 and 8192'
+                    detail: max_len must be an integer between 32 and 8192
                 headLenFloat:
                   value:
-                    detail: '''head_max_len'' must be an integer between 32 and 8192'
+                    detail: head_max_len must be an integer between 32 and 8192
+                ensemble:
+                  value:
+                    detail: ensemble must be an integer between 1 and 8
+                capacity:
+                  value:
+                    detail: effective max_len exceeds model capacity (head_max_len needs 128 state tokens)
+                inferenceDeadline:
+                  value:
+                    detail: inference deadline exceeded
                 badType:
                   value:
-                    detail: 'question ''q'': unknown type; use one of [''choice'', ''noul'', ''score'']'
+                    detail: unknown question type; use choice, score or noul
                 noInstructions:
                   value:
-                    detail: 'question ''q'': no ''instructions''; add the text the model should answer'
-                notObject:
-                  value:
-                    detail: 'question ''q'': definition must be an object'
+                    detail: question requires instructions
                 choiceEmpty:
                   value:
                     detail: 'question ''q'': a choice question needs at least one criterion'
@@ -2313,7 +2459,8 @@ paths:
               schema:
                 type: string
         '503':
-          description: in_flight was already at max_concurrent (default 16). Retry-After is 1.
+          description: Admission is at max_concurrent (default 16), or the model-worker queue deadline
+            expired. Retry-After is 1 only for admission saturation.
           content:
             application/json:
               schema:
@@ -2323,6 +2470,9 @@ paths:
                   value:
                     detail: server busy, try again later
                   x-live: saturation
+                queueDeadline:
+                  value:
+                    detail: inference queue deadline exceeded
           headers:
             X-Request-Id:
               description: Echoed client value, or 16 generated hexadecimal characters.
@@ -2708,7 +2858,8 @@ paths:
               schema:
                 type: string
         '400':
-          description: The body is not a JSON object with the fields this path requires.
+          description: Invalid HTTP body framing, invalid or duplicate-key JSON, a non-object request or
+            question, or missing/invalid required request structure.
           content:
             application/json:
               schema:
@@ -2734,14 +2885,9 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
-          headers:
-            X-Request-Id:
-              description: Echoed client value, or 16 generated hexadecimal characters.
-              schema:
-                type: string
         '413':
-          description: 'A count or size limit failed. A body larger than 2097152 bytes never reaches this
-            JSON form: the HTTP stack returns 413 with an empty body and no X-Request-Id.'
+          description: A body, JSON-structure, field, count, aggregate work/token/attention, or response-size
+            limit failed. Defaults and formulas are documented in docs/API.md.
           content:
             application/json:
               schema:
@@ -2756,8 +2902,9 @@ paths:
               schema:
                 type: string
         '422':
-          description: max_len or head_max_len is present and outside 32..8192, or a question definition
-            is invalid, or option markers do not fit the token budget.
+          description: model/lang field validation; strict integer validation of ensemble (1..8), max_len,
+            or head_max_len (32..8192); effective sequence capacity; question validation; option-marker
+            budget; or expiry of the cooperative inference deadline.
           content:
             application/json:
               schema:
@@ -2785,7 +2932,8 @@ paths:
               schema:
                 type: string
         '503':
-          description: in_flight was already at max_concurrent (default 16). Retry-After is 1.
+          description: Admission is at max_concurrent (default 16), or the model-worker queue deadline
+            expired. Retry-After is 1 only for admission saturation.
           content:
             application/json:
               schema:
@@ -2795,6 +2943,9 @@ paths:
                   value:
                     detail: server busy, try again later
                   x-live: saturation
+                queueDeadline:
+                  value:
+                    detail: inference queue deadline exceeded
           headers:
             X-Request-Id:
               description: Echoed client value, or 16 generated hexadecimal characters.
@@ -2822,12 +2973,11 @@ paths:
                 ok:
                   value:
                     status: ok
-                    engine: statim
-                    version: 0.2.0
-                    loaded:
-                    - english
-                    - multilingual
-                    device: cpu
+                    version: 0.2.1
+        '400':
+          $ref: '#/components/responses/NoRequestBody'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
   /ready:
     get:
       tags:
@@ -2858,6 +3008,10 @@ paths:
                   value:
                     ready: false
                   x-live: saturation
+        '400':
+          $ref: '#/components/responses/NoRequestBody'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
   /v1/models:
     get:
       tags:
@@ -2887,6 +3041,7 @@ paths:
                       hidden: 1024
                       max_len: 512
                       vocab: 50368
+                      device: cpu
                     - id: multilingual
                       object: model
                       owned_by: statim
@@ -2896,6 +3051,7 @@ paths:
                       hidden: 768
                       max_len: 1024
                       vocab: 256000
+                      device: cpu
         '401':
           description: Keys are configured and the bearer token does not match.
           content:
@@ -2907,12 +3063,18 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
+        '400':
+          $ref: '#/components/responses/NoRequestBody'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
   /metrics:
     get:
       tags:
       - operations
       summary: Prometheus metrics.
       operationId: metrics
+      security:
+      - bearerAuth: []
       responses:
         '200':
           description: Prometheus exposition, version 0.0.4. Counter values change. See docs/API.md for
@@ -2955,10 +3117,24 @@ paths:
 
                 statim_workers_busy{model="english"} 0
 
-                statim_model_info{model="english",weights="f32",version="0.2.0"} 1
+                statim_model_info{model="english",weights="f32",version="0.2.1"} 1
 
                 '
               x-verify: metrics
+        '401':
+          description: Keys are configured and the bearer token does not match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  value:
+                    detail: invalid or missing bearer token
+        '400':
+          $ref: '#/components/responses/NoRequestBody'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
   /:
     get:
       tags:
@@ -2981,9 +3157,14 @@ paths:
 
                 <title>Statim Playground</title>'
               x-verify: playground
+        '400':
+          $ref: '#/components/responses/NoRequestBody'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
         '404':
           description: Returned for GET / when the server was started with --no-playground. Other unknown
-            paths return 404 with an empty body instead.
+            paths and wrong methods return 404 with detail HTTP request failed (after bearer auth for
+            nonpublic paths).
           content:
             application/json:
               schema:
