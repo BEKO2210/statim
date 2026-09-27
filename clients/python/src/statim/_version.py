@@ -1,3 +1,3 @@
 """Package version. Tracks the Statim HTTP API this client was written against."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

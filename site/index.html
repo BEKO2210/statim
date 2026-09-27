@@ -27,7 +27,7 @@
 <script type="application/ld+json">
 {"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Statim",
  "applicationCategory": "DeveloperApplication", "operatingSystem": "Linux",
- "softwareVersion": "0.4.0", "url": "https://beko2210.github.io/statim/",
+ "softwareVersion": "0.5.0", "url": "https://beko2210.github.io/statim/",
  "description": "A native C++ engine for decision models: choice, score and yes/no answers with calibrated confidence in one forward pass, on CPU or GPU.",
  "license": "https://www.apache.org/licenses/LICENSE-2.0",
  "author": {"@type": "Person", "name": "Belkis Aslani"},
@@ -46,6 +46,7 @@
       <svg class="word" viewBox="0 -2 204 64" aria-hidden="true"><g fill="none" stroke="#E7EAEF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M27 25C24 21 19 20 15.5 20C9 20 5 23 5 28C5 33 10 35 16 37C22 39 28 41 28 47C28 53 23 56 16 56C11 56 7 54 5 51"/><path d="M44 8V48C44 54 47 56 51 56C53 56 55 55.5 56 55M38 20H51"/><circle cx="80" cy="38" r="18"/><path d="M98 20V56"/><path d="M115 8V48C115 54 118 56 122 56C124 56 126 55.5 127 55M109 20H122"/><path d="M141 20V56"/><path d="M158 20V56M158 30C158 24 162 20 168 20C174 20 178 24 178 30V56M178 30C178 24 182 20 188 20C194 20 198 24 198 30V56"/></g><circle cx="141" cy="6" r="5.5" fill="#34D399"/></svg>
     </a>
     <nav class="nav" aria-label="Main">
+      <a href="#models">Models</a>
       <a href="#accuracy">Accuracy</a>
       <a href="#performance">Performance</a>
       <a href="#how">How it works</a>
@@ -57,6 +58,7 @@
     <details class="menu">
       <summary aria-label="Menu"><svg class="i-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><svg class="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></summary>
       <nav aria-label="Main">
+        <a href="#models">Models</a>
         <a href="#accuracy">Accuracy</a>
         <a href="#performance">Performance</a>
         <a href="#how">How it works</a>
@@ -78,8 +80,8 @@
       <h1 id="hero-title">Typed decisions.<br>Immediately.</h1>
       <p class="lead">Statim runs decision models as a native C++ engine. Ask any text a choice, a score or a yes/no question, and get calibrated answers from one forward pass on your own CPU or GPU.</p>
       <div class="cta">
-        <a class="btn primary" href="#start">Get started</a>
-        <a class="btn" href="https://github.com/BEKO2210/statim">View on GitHub</a>
+        <a class="btn primary" href="https://huggingface.co/spaces/Beko2210/statim">Try the live demo</a>
+        <a class="btn" href="#start">Get started</a>
       </div>
       <ul class="facts">
         <li>3.3 MB static binary</li>
@@ -134,28 +136,52 @@
   </div>
 </section>
 
+<section id="models" aria-labelledby="models-title">
+  <div class="container">
+    <div class="section-head">
+      <h2 id="models-title">Two models, one engine</h2>
+      <p>The engine runs any Laya checkpoint. The Statim Decide models are fine-tuned on licence-audited data and released only after the no-harm gate below. Both are on Hugging Face as f32 and q8_0 files.</p>
+    </div>
+    <ul class="models">
+      <li class="model">
+        <h3>Statim Decide EN Large</h3>
+        <p class="spec">ModernBERT-large, 395M parameters, English. Release 0.5.0.</p>
+        <dl><div><dt>typed-decisions</dt><dd class="num">0.768</dd></div><div><dt>Banking77</dt><dd class="num">0.928</dd></div><div><dt>MASSIVE, English</dt><dd class="num">0.867</dd></div></dl>
+        <a class="link" href="https://huggingface.co/Beko2210/statim-decide-en-large">Model card and files</a>
+      </li>
+      <li class="model">
+        <h3>Statim Decide Multilingual Base</h3>
+        <p class="spec">mmBERT-base, evaluated in 12 languages. Release 0.4.0.</p>
+        <dl><div><dt>typed-decisions</dt><dd class="num">0.7585</dd></div><div><dt>Banking77</dt><dd class="num">0.903</dd></div><div><dt>MASSIVE, 12 languages</dt><dd class="num">0.772</dd></div></dl>
+        <a class="link" href="https://huggingface.co/Beko2210/statim-decide-multilingual-base">Model card and files</a>
+      </li>
+    </ul>
+    <p class="note" style="margin-top:16px">Try both without installing anything in the <a href="https://huggingface.co/spaces/Beko2210/statim">live demo</a>, or route real support tickets in ten minutes with the <a href="https://github.com/BEKO2210/statim/tree/main/examples/ticket-triage">ticket triage example</a>.</p>
+  </div>
+</section>
+
 <section id="accuracy" aria-labelledby="acc-title">
   <div class="container">
     <div class="section-head">
       <h2 id="acc-title">Accuracy you can check</h2>
-      <p>Every number here comes from a script in the repository. Release 0.4.0 next to published systems under the same protocol, and against the 54 held-out suites every release has to pass.</p>
+      <p>Every number here comes from a script in the repository. The best Statim Decide model on each benchmark next to published systems under the same protocol, and the 54 held-out suites every release has to pass.</p>
     </div>
 
     <div class="strips">
       <figure class="strip">
         <figcaption>
           <h3>typed-decisions</h3>
-          <span class="score">0.7585</span>
+          <span class="score">0.768</span>
           <span class="proto">Test split, 2,000 decisions. In-domain: its train split is replay data.</span>
         </figcaption>
         <div class="axis" style="--min:.70;--max:.78" aria-hidden="true">
-          <span class="dot" style="--v:.727"></span><span class="dot" style="--v:.766"></span><span class="dot" style="--v:.768"></span><span class="dot us" style="--v:.7585"></span>
+          <span class="dot" style="--v:.727"></span><span class="dot" style="--v:.766"></span><span class="dot" style="--v:.768"></span><span class="dot us" style="--v:.768"></span>
           <small class="tick" style="left:0">0.70</small><small class="tick" style="left:50%">0.74</small><small class="tick" style="left:100%">0.78</small>
         </div>
         <ul class="who">
+          <li class="us">Statim Decide EN Large<span class="num">0.768</span></li>
           <li>meraGPT<span class="num">0.768</span></li>
           <li>laya-typed-decisions<span class="num">0.766</span></li>
-          <li class="us">Statim 0.4.0<span class="num">0.7585</span></li>
           <li>Jev<span class="num">0.727</span></li>
         </ul>
       </figure>
@@ -163,16 +189,16 @@
       <figure class="strip">
         <figcaption>
           <h3>AG News, zero-shot</h3>
-          <span class="score">0.9315</span>
+          <span class="score">0.939</span>
           <span class="proto">Never trained on. First 2,000 test rows, four topics.</span>
         </figcaption>
         <div class="axis" style="--min:.86;--max:.96" aria-hidden="true">
-          <span class="dot" style="--v:.881"></span><span class="dot" style="--v:.926"></span><span class="dot" style="--v:.950"></span><span class="dot us" style="--v:.9315"></span>
+          <span class="dot" style="--v:.881"></span><span class="dot" style="--v:.926"></span><span class="dot" style="--v:.950"></span><span class="dot us" style="--v:.939"></span>
           <small class="tick" style="left:0">0.86</small><small class="tick" style="left:50%">0.91</small><small class="tick" style="left:100%">0.96</small>
         </div>
         <ul class="who">
           <li>Laya<span class="num">0.950</span></li>
-          <li class="us">Statim 0.4.0<span class="num">0.9315</span></li>
+          <li class="us">Statim Decide EN Large<span class="num">0.939</span></li>
           <li>GPT-3 (CARP)<span class="num">0.926</span></li>
           <li>Jev<span class="num">0.881</span></li>
         </ul>
@@ -181,16 +207,16 @@
       <figure class="strip">
         <figcaption>
           <h3>Banking77</h3>
-          <span class="score">0.903</span>
+          <span class="score">0.928</span>
           <span class="proto">Trained on the train split, all 77 intents in one question.</span>
         </figcaption>
         <div class="axis" style="--min:.85;--max:.95" aria-hidden="true">
-          <span class="dot" style="--v:.941"></span><span class="dot us" style="--v:.903"></span>
+          <span class="dot" style="--v:.941"></span><span class="dot us" style="--v:.928"></span>
           <small class="tick" style="left:0">0.85</small><small class="tick" style="left:50%">0.90</small><small class="tick" style="left:100%">0.95</small>
         </div>
         <ul class="who">
           <li>MPNet, supervised classifier<span class="num">0.941</span></li>
-          <li class="us">Statim 0.4.0<span class="num">0.903</span></li>
+          <li class="us">Statim Decide EN Large<span class="num">0.928</span></li>
         </ul>
       </figure>
 
@@ -206,7 +232,7 @@
         </div>
         <ul class="who">
           <li>XLM-R base, MASSIVE paper<span class="num">0.857</span></li>
-          <li class="us">Statim 0.4.0<span class="num">0.772</span></li>
+          <li class="us">Statim Decide Multilingual<span class="num">0.772</span></li>
         </ul>
       </figure>
     </div>
@@ -215,7 +241,7 @@
     <div class="gate">
       <div class="gate-intro">
         <h3>No release without the no-harm gate</h3>
-        <p>A new model replaces the old one only if validation improves and no held-out suite drops by more than two standard errors. Here is release 0.4.0 against the checkpoint it was trained from, one square per suite, change in accuracy points.</p>
+        <p>A new model replaces the old one only if validation improves and no held-out suite drops by more than two standard errors. Here is Statim Decide Multilingual against the checkpoint it was trained from, one square per suite, change in accuracy points. The English model passed the same gate: 11 significant gains, 0 regressions.</p>
       </div>
       <div class="gate-grid">
 <!-- gate-grid:start --><div class="gate-group"><h4>Trained tasks <span>14 suites</span></h4><ul class="cells" role="list"><li class="cell gain" title="Banking77: 0.517 to 0.903"><span class="sr">Banking77: 0.517 to 0.903</span><b>+39</b></li><li class="cell gain" title="typed-decisions: 0.351 to 0.758"><span class="sr">typed-decisions: 0.351 to 0.758</span><b>+41</b></li><li class="cell gain" title="MASSIVE intents ar: 0.200 to 0.660"><span class="sr">MASSIVE intents ar: 0.200 to 0.660</span><b>+46</b></li><li class="cell gain" title="MASSIVE intents de: 0.327 to 0.767"><span class="sr">MASSIVE intents de: 0.327 to 0.767</span><b>+44</b></li><li class="cell gain" title="MASSIVE intents en: 0.467 to 0.813"><span class="sr">MASSIVE intents en: 0.467 to 0.813</span><b>+35</b></li><li class="cell gain" title="MASSIVE intents es: 0.347 to 0.773"><span class="sr">MASSIVE intents es: 0.347 to 0.773</span><b>+43</b></li><li class="cell gain" title="MASSIVE intents fr: 0.353 to 0.760"><span class="sr">MASSIVE intents fr: 0.353 to 0.760</span><b>+41</b></li><li class="cell gain" title="MASSIVE intents hi: 0.267 to 0.760"><span class="sr">MASSIVE intents hi: 0.267 to 0.760</span><b>+49</b></li><li class="cell gain" title="MASSIVE intents it: 0.340 to 0.767"><span class="sr">MASSIVE intents it: 0.340 to 0.767</span><b>+43</b></li><li class="cell gain" title="MASSIVE intents ja: 0.420 to 0.780"><span class="sr">MASSIVE intents ja: 0.420 to 0.780</span><b>+36</b></li><li class="cell gain" title="MASSIVE intents pl: 0.333 to 0.800"><span class="sr">MASSIVE intents pl: 0.333 to 0.800</span><b>+47</b></li><li class="cell gain" title="MASSIVE intents ru: 0.360 to 0.820"><span class="sr">MASSIVE intents ru: 0.360 to 0.820</span><b>+46</b></li><li class="cell gain" title="MASSIVE intents tr: 0.313 to 0.760"><span class="sr">MASSIVE intents tr: 0.313 to 0.760</span><b>+45</b></li><li class="cell gain" title="MASSIVE intents zh-CN: 0.353 to 0.800"><span class="sr">MASSIVE intents zh-CN: 0.353 to 0.800</span><b>+45</b></li></ul></div><div class="gate-group"><h4>Never trained on <span>40 suites</span></h4><ul class="cells" role="list"><li class="cell noise" title="AG News: 0.938 to 0.931"><span class="sr">AG News: 0.938 to 0.931</span><b>−1</b></li><li class="cell noise" title="DAIR Emotion: 0.532 to 0.526"><span class="sr">DAIR Emotion: 0.532 to 0.526</span><b>−1</b></li><li class="cell noise" title="Belebele reading ar: 0.253 to 0.247"><span class="sr">Belebele reading ar: 0.253 to 0.247</span><b>−1</b></li><li class="cell gain" title="Belebele reading de: 0.227 to 0.340"><span class="sr">Belebele reading de: 0.227 to 0.340</span><b>+11</b></li><li class="cell noise" title="Belebele reading en: 0.307 to 0.347"><span class="sr">Belebele reading en: 0.307 to 0.347</span><b>+4</b></li><li class="cell gain" title="Belebele reading hi: 0.200 to 0.307"><span class="sr">Belebele reading hi: 0.200 to 0.307</span><b>+11</b></li><li class="cell noise" title="FarsTail NLI fa: 0.687 to 0.633"><span class="sr">FarsTail NLI fa: 0.687 to 0.633</span><b>−5</b></li><li class="cell noise" title="GoEmotions en: 0.453 to 0.467"><span class="sr">GoEmotions en: 0.453 to 0.467</span><b>+1</b></li><li class="cell gain" title="HWU64 intents en: 0.500 to 0.820"><span class="sr">HWU64 intents en: 0.500 to 0.820</span><b>+32</b></li><li class="cell noise" title="IndoNLI id: 0.740 to 0.700"><span class="sr">IndoNLI id: 0.740 to 0.700</span><b>−4</b></li><li class="cell noise" title="HateCheck ar: 0.540 to 0.580"><span class="sr">HateCheck ar: 0.540 to 0.580</span><b>+4</b></li><li class="cell noise" title="HateCheck de: 0.653 to 0.667"><span class="sr">HateCheck de: 0.653 to 0.667</span><b>+1</b></li><li class="cell noise" title="HateCheck en: 0.660 to 0.633"><span class="sr">HateCheck en: 0.660 to 0.633</span><b>−3</b></li><li class="cell noise" title="HateCheck es: 0.600 to 0.673"><span class="sr">HateCheck es: 0.600 to 0.673</span><b>+7</b></li><li class="cell noise" title="HateCheck fr: 0.607 to 0.667"><span class="sr">HateCheck fr: 0.607 to 0.667</span><b>+6</b></li><li class="cell noise" title="HateCheck hi: 0.547 to 0.560"><span class="sr">HateCheck hi: 0.547 to 0.560</span><b>+1</b></li><li class="cell noise" title="HateCheck it: 0.653 to 0.687"><span class="sr">HateCheck it: 0.653 to 0.687</span><b>+3</b></li><li class="cell noise" title="HateCheck nl: 0.667 to 0.600"><span class="sr">HateCheck nl: 0.667 to 0.600</span><b>−7</b></li><li class="cell noise" title="HateCheck pl: 0.627 to 0.640"><span class="sr">HateCheck pl: 0.627 to 0.640</span><b>+1</b></li><li class="cell noise" title="HateCheck pt: 0.667 to 0.707"><span class="sr">HateCheck pt: 0.667 to 0.707</span><b>+4</b></li><li class="cell noise" title="HateCheck zh: 0.713 to 0.700"><span class="sr">HateCheck zh: 0.713 to 0.700</span><b>−1</b></li><li class="cell noise" title="Sentiment ar: 0.500 to 0.553"><span class="sr">Sentiment ar: 0.500 to 0.553</span><b>+5</b></li><li class="cell noise" title="Sentiment de: 0.487 to 0.560"><span class="sr">Sentiment de: 0.487 to 0.560</span><b>+7</b></li><li class="cell noise" title="Sentiment en: 0.620 to 0.640"><span class="sr">Sentiment en: 0.620 to 0.640</span><b>+2</b></li><li class="cell gain" title="Sentiment es: 0.420 to 0.547"><span class="sr">Sentiment es: 0.420 to 0.547</span><b>+13</b></li><li class="cell noise" title="Sentiment fr: 0.560 to 0.553"><span class="sr">Sentiment fr: 0.560 to 0.553</span><b>−1</b></li><li class="cell noise" title="Sentiment hi: 0.520 to 0.460"><span class="sr">Sentiment hi: 0.520 to 0.460</span><b>−6</b></li><li class="cell noise" title="Sentiment id: 0.720 to 0.713"><span class="sr">Sentiment id: 0.720 to 0.713</span><b>−1</b></li><li class="cell noise" title="Sentiment it: 0.527 to 0.600"><span class="sr">Sentiment it: 0.527 to 0.600</span><b>+7</b></li><li class="cell noise" title="Sentiment ja: 0.613 to 0.673"><span class="sr">Sentiment ja: 0.613 to 0.673</span><b>+6</b></li><li class="cell noise" title="Sentiment ms: 0.527 to 0.527"><span class="sr">Sentiment ms: 0.527 to 0.527</span><b>+0</b></li><li class="cell noise" title="Sentiment pt: 0.580 to 0.660"><span class="sr">Sentiment pt: 0.580 to 0.660</span><b>+8</b></li><li class="cell noise" title="Sentiment zh: 0.640 to 0.633"><span class="sr">Sentiment zh: 0.640 to 0.633</span><b>−1</b></li><li class="cell noise" title="SemRel similarity ar: 0.213 to 0.240"><span class="sr">SemRel similarity ar: 0.213 to 0.240</span><b>+3</b></li><li class="cell noise" title="SemRel similarity en: 0.247 to 0.220"><span class="sr">SemRel similarity en: 0.247 to 0.220</span><b>−3</b></li><li class="cell noise" title="SemRel similarity hi: 0.180 to 0.220"><span class="sr">SemRel similarity hi: 0.180 to 0.220</span><b>+4</b></li><li class="cell noise" title="SIB-200 topics ar: 0.753 to 0.707"><span class="sr">SIB-200 topics ar: 0.753 to 0.707</span><b>−5</b></li><li class="cell noise" title="SIB-200 topics de: 0.767 to 0.727"><span class="sr">SIB-200 topics de: 0.767 to 0.727</span><b>−4</b></li><li class="cell noise" title="SIB-200 topics en: 0.767 to 0.747"><span class="sr">SIB-200 topics en: 0.767 to 0.747</span><b>−2</b></li><li class="cell noise" title="SIB-200 topics hi: 0.707 to 0.707"><span class="sr">SIB-200 topics hi: 0.707 to 0.707</span><b>+0</b></li></ul></div><p class="gate-sum" data-gain="18" data-noise="36" data-loss="0"><span class="item"><span class="k gain"></span>18 significant gains</span><span class="item"><span class="k noise"></span>36 within noise</span><span class="item"><span class="k loss"></span>0 regressions</span></p><!-- gate-grid:end -->
@@ -278,7 +304,7 @@
       <figure class="media"><img src="images/gpu.jpg" alt="A graphics card and a small server on a desk, lit in green" width="1400" height="787" loading="lazy"></figure>
       <div>
         <h3>On a GPU, still exact</h3>
-        <p>Statim on an RTX 3070 against the same machine's Ryzen 7 5800X, both in f32. The usual f16 shortcut stays off unless you pass <code>--gpu-fast</code>, so every answer stays identical.</p>
+        <p>Statim on an RTX 3070 against the same machine's Ryzen 7 5800X, both in f32, with Vulkan or CUDA. The usual f16 shortcut stays off unless you pass <code>--gpu-fast</code>, so every answer stays identical. With <code>--gpu-fast</code> the English model serves 16.4 requests per second on Vulkan; q8_0 weights on CUDA reach 15.7.</p>
         <ul class="factors">
           <li class="factor"><span class="what">English model, per request</span><span class="x">12×</span><span class="track"><span class="fill" style="--v:1"></span></span><span class="abs">1,683 ms on CPU, 137 ms on GPU</span></li>
           <li class="factor"><span class="what">Multilingual model, per request</span><span class="x">10×</span><span class="track"><span class="fill" style="--v:.81"></span></span><span class="abs">535 ms on CPU, 54 ms on GPU</span></li>
@@ -309,7 +335,7 @@
 
     <dl class="features">
       <div><dt>A model is one file</dt><dd>The converter stores architecture, calibration and tokenizer in a single GGUF file. No sidecar vocabulary, no Python package.</dd></div>
-      <div><dt>CPU first, GPU optional</dt><dd>AVX2 and ARM NEON out of the box. The Vulkan backend is opt-in and exact by default.</dd></div>
+      <div><dt>CPU first, GPU optional</dt><dd>AVX2 and ARM NEON out of the box. Vulkan and CUDA backends are opt-in and exact by default.</dd></div>
       <div><dt>Two models, one answer</dt><dd>Serve the English and the multilingual model together: route each request by language, or let both vote.</dd></div>
       <div><dt>Built for production</dt><dd>Worker pool, admission control, bearer auth, Prometheus metrics, JSON logs, request IDs and graceful shutdown.</dd></div>
       <div><dt>Drop-in protocol</dt><dd>Speaks the Jev/Laya <code>POST /v1/systemone</code> API. Existing clients switch by changing the base URL.</dd></div>
@@ -440,12 +466,13 @@ tools/fetch_models.sh multilingual english
   <div class="container">
     <div class="section-head">
       <h2 id="lic-title">The engine is free. The weights have a commercial path.</h2>
-      <p>The source is Apache-2.0, including for commercial products. Model weights published by Statim are free for research and noncommercial use, and licensed per organisation for production.</p>
+      <p>The source is Apache-2.0, including for commercial products. Model weights published by Statim are free for noncommercial use, for small companies and for a 32-day trial, and licensed per organisation beyond that.</p>
     </div>
     <ul class="tiers">
       <li class="tier"><h3>Source code</h3><span class="price">Free for any use</span><span class="lic">Apache License 2.0</span><p>Engine, server and tools, in products, internal tools and SaaS.</p></li>
       <li class="tier"><h3>Weights, noncommercial</h3><span class="price">Free</span><span class="lic">PolyForm Noncommercial 1.0.0</span><p>Research, study, hobby projects, education, charities and public institutions.</p></li>
-      <li class="tier paid"><h3>Weights, commercial</h3><span class="price">Per organisation</span><span class="lic">Statim commercial licence</span><p>Products, SaaS, paid APIs, internal tools and client work, with volume tiers for self-hosting.</p><a class="link" href="license/">See licensing</a></li>
+      <li class="tier"><h3>Weights, small companies and trials</h3><span class="price">Free, including commercial use</span><span class="lic">PolyForm Small Business 1.0.0, Free Trial 1.0.0</span><p>Companies below 100 people and 1 M USD revenue use them in production for free; any company may evaluate them for 32 days.</p></li>
+      <li class="tier paid"><h3>Weights, commercial</h3><span class="price">Per organisation</span><span class="lic">Statim commercial licence</span><p>Larger companies in products, SaaS, paid APIs, internal tools and client work, with volume tiers for self-hosting.</p><a class="link" href="license/">See licensing</a></li>
     </ul>
   </div>
 </section>
@@ -470,7 +497,7 @@ tools/fetch_models.sh multilingual english
         <div><h2>Legal</h2><ul><li><a href="impressum/">Impressum</a></li><li><a href="datenschutz/">Datenschutz</a></li></ul></div>
       </div>
     </div>
-    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.4.0. Engine Apache-2.0, weights PolyForm Noncommercial or commercial licence.</span></div>
+    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.5.0. Engine Apache-2.0; weights PolyForm Noncommercial, Small Business or Free Trial, or a commercial licence.</span></div>
   </div>
 </footer>
 </body>

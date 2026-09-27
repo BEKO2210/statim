@@ -7,15 +7,62 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-27
+
+The first English Statim Decide model, published weights on Hugging Face, a public demo, a CUDA
+backend, and a playground anyone can use without writing JSON.
+
+### Results
+- `statim-decide-en-large` (ModernBERT-large encoder, fine-tuned from the English Laya checkpoint
+  with `train_multitask.py --clean` and 8-bit AdamW; best epoch 11 of 12, chosen on validation data
+  only). The gate reports PROMOTE against the English base checkpoint on 54 held-out suites: 11
+  significant gains, 0 regressions. typed-decisions 0.361 → 0.768, on par with the best published
+  result (meraGPT 0.768; laya-typed-decisions 0.766, Jev 0.727); Banking77 0.550 → 0.928
+  (supervised MPNet 0.941); MASSIVE English 0.533 → 0.867; HWU64 0.607 → 0.833. Suites never trained
+  on stay within noise: pooled zero-shot +1.25 points (rows) / +0.76 (suites), AG News
+  0.9425 → 0.939, DAIR Emotion 0.5945 → 0.588.
+- Correction: the 0.4.0 model scores 0.9315 on AG News zero-shot, not 0.9385 as the 0.4.0 notes,
+  roadmap and site said; 0.9385 belonged to the earlier Banking77 fine-tune.
+- Known weakness, measured: sentiment is deliberately never trained (it serves as a zero-shot
+  suite), and the models rarely choose a "mixed" sentiment even for explicitly mixed reviews.
+
+### Added
+- CUDA backend (`-DSTATIM_CUDA=ON`) with an exact f32 mode by default (TF32 disabled, non-flash
+  attention, because CUDA flash attention converts K/V to f16); the four `*_cuda` parity tests pass
+  like the CPU and Vulkan gates. `--gpu-fast` enables the fast f16 paths.
+- Selective prediction via the `min_confidence` decision option and `--min-confidence` server default;
+  responses annotate answers below an active threshold with `escalate: true`. Python and TypeScript
+  clients send it and parse `escalate`.
+- Published weights on Hugging Face under professional names: `Beko2210/statim-decide-multilingual-base`
+  (the 0.4.0 weights) and `Beko2210/statim-decide-en-large` (this release), each as f32 and q8_0
+  GGUF plus the checkpoint, with model cards generated from the gate evaluation
+  (`tools/release/hf_publish.py`); the API reports these names.
+- Public demo: a Hugging Face Docker Space (`deploy/hf-space`) that runs the release binary and the
+  published model with public-demo limits.
+- Playground rebuilt for people who do not write JSON: text on one side, questions as cards with
+  a type switch and option inputs, each answer shown inside its question with bars that resolve
+  together, a review threshold, a developer view (request, response, cURL, Python, history), four
+  worked examples including German, and the brand design with embedded font subsets.
+- `examples/ticket-triage`: real Banking77 tickets routed with three questions in one request; the
+  published q8_0 model measures 0.896 on a seeded 500-ticket sample and 0.915 on the 96 % answered
+  at a 0.9 review threshold.
+- Synthetic training data pipeline (`tools/synth`) that uses only a local Apache-2.0 generator
+  (qwen3:8b via Ollama), with attribute-driven seeds, balanced answer targets, an independent
+  verify pass, near-duplicate and test-overlap filters, and a quality report with a scale-up verdict
+  (`tools/synth/report.py`).
+- `train_multitask.py --optim adamw8bit` (ModernBERT-large now trains on an 8 GB GPU) and int32
+  token id storage.
+
 ### Changed
 - Model weights can now be used under PolyForm Small Business 1.0.0 (free commercial use for
   companies below 100 people and 1 M USD revenue) and PolyForm Free Trial 1.0.0 (any company may
   evaluate them for fewer than 32 days), in addition to PolyForm Noncommercial 1.0.0 and the
   commercial licence. Licence texts are embedded verbatim in `LICENSE-MODEL.md`.
+- The website moved into the repository (`site/`) with a QA suite and deployment from `main`.
 
-### Added
-- Selective prediction via the `min_confidence` decision option and `--min-confidence` server default;
-  responses annotate answers below an active threshold with `escalate: true`.
+### Fixed
+- The release workflow's upload job sets `GH_REPO`, so release binaries attach without a checkout.
+- The SDK integration tests no longer pin the server version.
 
 ## [0.4.0] - 2026-09-27
 

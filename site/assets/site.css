@@ -213,6 +213,18 @@ h3 { font-size: 1.25rem; letter-spacing: -.015em; }
 @keyframes slide { from { left: 0; } }
 @keyframes appear { from { opacity: 0; } }
 
+/* ---------- models ---------- */
+.models { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.model { display: grid; align-content: start; gap: 10px; padding: 24px 22px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); min-width: 0; }
+.model h3 { font-size: 1.25rem; }
+.model .spec { margin: 0; color: var(--fg-3); font-size: .875rem; }
+.model dl { display: grid; gap: 0; margin: 6px 0 4px; border-top: 1px solid var(--line); }
+.model dl div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.model dt { color: var(--fg-2); font-size: .9375rem; }
+.model dd { margin: 0; color: var(--signal); font-size: 1rem; }
+.model .link { font-size: .9375rem; justify-self: start; }
+@media (min-width: 760px) { .models { grid-template-columns: repeat(2, 1fr); } }
+
 /* ---------- accuracy: benchmark strips ---------- */
 .strips { display: grid; gap: 18px; }
 .strip { margin: 0; padding: 22px 20px 20px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); min-width: 0; }
@@ -374,7 +386,8 @@ h3 { font-size: 1.25rem; letter-spacing: -.015em; }
 .tier .lic { font-family: var(--mono); font-size: .75rem; color: var(--fg-3); }
 .tier p { margin: 6px 0 0; color: var(--fg-2); font-size: .9375rem; }
 .tier a { margin-top: 10px; font-size: .875rem; }
-@media (min-width: 860px) { .tiers { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 760px) { .tiers { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .tiers { grid-template-columns: repeat(4, 1fr); } }
 
 /* ---------- footer ---------- */
 .site-footer { border-top: 1px solid var(--line); background: #0a0d10; padding: 56px 0 28px; font-size: .9375rem; }

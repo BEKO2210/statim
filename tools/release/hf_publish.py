@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,21 +29,32 @@ MODELS = {
         "encoder": "mmBERT-base", "encoder_id": "jhu-clsp/mmBERT-base", "encoder_licence": "MIT",
         "base_model": "convaiinnovations/laya-multilingual",
         "serve_key": "multilingual",
+        "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "pl", "ru", "tr", "zh", "id", "ms", "pt", "nl", "fa"],
+        "massive": ("amazon_massive_intent", "MASSIVE intents", "mean over 12 languages, 150 seeded stratified test rows each"),
     },
     "statim-decide-en-large": {
         "display": "Statim Decide EN Large",
         "encoder": "ModernBERT-large", "encoder_id": "answerdotai/ModernBERT-large", "encoder_licence": "Apache-2.0",
         "base_model": "convaiinnovations/laya",
         "serve_key": "english",
+        "languages": ["en"],
+        "massive": ("amazon_massive_intent/en", "MASSIVE intents (English)", "150 seeded stratified English test rows"),
     },
 }
 DATASETS = ["PolyAI/banking77", "AmazonScience/massive", "LocalLLaMA/typed-decisions",
             "tasksource/tasksource-jev-typed-decisions", "nvidia/Nemotron-Safety-Guard-Dataset-v3",
             "l3cube-pune/IndicGuard", "PolyAI/minds14", "benayas/snips"]
+DATASET_IDS = {  # Hugging Face ids for model-index metadata
+    "test/typed_decisions": "LocalLLaMA/typed-decisions", "test/banking77": "PolyAI/banking77",
+    "amazon_massive_intent": "AmazonScience/massive", "test/ag_news": "fancyzhx/ag_news",
+    "test/emotion": "dair-ai/emotion", "sib200": "Davlan/sib200", "belebele": "facebook/belebele",
+    "multi_hatecheck": "mteb/multi-hatecheck", "multilingual_sentiments": "tyqiangz/multilingual-sentiments",
+    "hwu64": "hwu64",
+}
 SUITES = {  # held-out key prefix -> (display name, protocol, trained on its train split?)
     "test/typed_decisions": ("typed-decisions", "test split, first 2,000 decisions; its train split is replay data", True),
     "test/banking77": ("Banking77", "test split, first 2,000 rows, all 77 intents in one question", True),
-    "amazon_massive_intent": ("MASSIVE intents", "mean over 12 languages, 150 seeded stratified test rows each", True),
+    "@massive": None,  # per model, see MODELS[...]["massive"]
     "test/ag_news": ("AG News", "zero-shot (never trained on), first 2,000 test rows", False),
     "test/emotion": ("DAIR Emotion", "zero-shot, first 2,000 test rows", False),
     "hwu64": ("HWU64 intents", "English, 150 rows; rows overlapping MASSIVE removed", False),
@@ -51,7 +63,6 @@ SUITES = {  # held-out key prefix -> (display name, protocol, trained on its tra
     "multi_hatecheck": ("HateCheck", "zero-shot, mean over 11 languages, 150 rows each", False),
     "belebele": ("Belebele reading", "zero-shot, mean over 4 languages, 150 rows each", False),
 }
-LANGS = ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "pl", "ru", "tr", "zh", "id", "ms", "pt", "nl", "fa"]
 
 
 def sh(cmd):
@@ -87,14 +98,24 @@ def gate_counts(base, model):
 def card(a, meta, ev, base_ev, files):
     held, bheld = ev["heldout"], (base_ev or {}).get("heldout", {})
     rows, index = [], []
-    for key, (name, proto, trained) in SUITES.items():
+    for key, spec in SUITES.items():
+        if key == "@massive":
+            key, name, proto = a.info["massive"]
+            trained = True
+        else:
+            name, proto, trained = spec
+            if a.info["serve_key"] == "english" and not key.startswith("test/") and "/" not in key and key != "hwu64":
+                # an English model is judged on the English variant of each multilingual suite
+                key, proto = key + "/en", "English, 150 rows" + ("; zero-shot" if not trained else "")
         s, n = suite_score(held, key)
         if s is None:
             continue
         b, _ = suite_score(bheld, key) if bheld else (None, 0)
         rows.append(f"| {name} | {'trained' if trained else 'held out'} | **{s:.4f}** | {'' if b is None else f'{b:.4f}'} | {proto} |")
+        family = key.split("/")[0] if not key.startswith("test/") else key
+        dtype = DATASET_IDS.get(family) or re.sub(r"[^\w-]+", "_", name.lower()).strip("_")
         index.append({"task": {"type": "text-classification"},
-                      "dataset": {"name": f"{name} ({proto})", "type": name.lower().replace(' ', '_')},
+                      "dataset": {"name": f"{name} ({proto})", "type": dtype},
                       "metrics": [{"type": "accuracy", "value": round(s, 4)}]})
     g = gate_counts(bheld, held) if bheld else None
     tm = meta.get("training_multitask", {})
@@ -103,7 +124,7 @@ def card(a, meta, ev, base_ev, files):
     front = {
         "license": "other", "license_name": "statim-weights",
         "license_link": f"https://huggingface.co/{a.upload or 'Beko2210/' + a.name}/blob/main/LICENSE-MODEL.md",
-        "language": LANGS, "library_name": "gguf", "pipeline_tag": "zero-shot-classification",
+        "language": a.info["languages"], "library_name": "gguf", "pipeline_tag": "zero-shot-classification",
         "base_model": a.info["base_model"], "datasets": DATASETS,
         "tags": ["statim", "gguf", "decision-making", "text-classification", "zero-shot-classification", a.info["encoder"]],
         "model-index": [{"name": a.name, "results": index}],
@@ -159,7 +180,7 @@ def card(a, meta, ev, base_ev, files):
 
     Published systems under the same protocol, for orientation: typed-decisions meraGPT 0.768,
     laya-typed-decisions 0.766, Jev 0.727; AG News zero-shot Laya 0.950, GPT-3 (CARP) 0.926, Jev 0.881;
-    Banking77 supervised MPNet 0.941; MASSIVE XLM-R base 0.857 (full train set). Sources:
+    Banking77 supervised MPNet 0.941{'' if a.info['serve_key'] == 'english' else '; MASSIVE XLM-R base 0.857 over 12 languages (full train set)'}. Sources:
     [docs/ROADMAP.md]({GITHUB}/blob/main/docs/ROADMAP.md).
 
     <details><summary>All {len(held)} held-out suites</summary>
