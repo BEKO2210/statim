@@ -147,6 +147,7 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=4096)
     ap.add_argument("--accum", type=int, default=4)
     ap.add_argument("--massive-per-lang", type=int, default=400)
+    ap.add_argument("--optim", choices=["adamw", "adamw8bit"], default="adamw")
     ap.add_argument("--max-len", type=int, default=0, help="override the checkpoint's max_len (e.g. 1024 for ModernBERT)")
     ap.add_argument("--massive-langs", default=None, help="comma-separated MASSIVE languages (default: all 51)")
     ap.add_argument("--sentiment-per-lang", type=int, default=1200)
@@ -249,8 +250,14 @@ def main():
             enc_params.append(p)
         else:
             head_params.append(p)
-    opt = torch.optim.AdamW([{"params": enc_params, "lr": a.lr_encoder},
-                             {"params": head_params, "lr": a.lr_head}], weight_decay=0.01)
+    groups = [{"params": enc_params, "lr": a.lr_encoder}, {"params": head_params, "lr": a.lr_head}]
+    if a.optim == "adamw8bit":
+        # 8-bit optimizer states (Dettmers et al., 2022): ~2 GB less for ModernBERT-large, which
+        # otherwise does not fit an 8 GB GPU; same training quality reported as 32-bit AdamW
+        import bitsandbytes as bnb
+        opt = bnb.optim.AdamW8bit(groups, weight_decay=0.01)
+    else:
+        opt = torch.optim.AdamW(groups, weight_decay=0.01)
     by_src = {}
     for i, it in enumerate(train):
         by_src.setdefault(it["src"], []).append(i)
@@ -398,7 +405,7 @@ def main():
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
                                        "massive_per_lang": a.massive_per_lang, "massive_langs": a.massive_langs, "sentiment_per_lang": a.sentiment_per_lang,
                                        "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
-                                       "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience,
+                                       "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience, "optim": a.optim,
                                        "mixture": a.mixture and os.path.basename(a.mixture), "clean": a.clean}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)
     print(f"saved {a.out} (best epoch {best_epoch}, dev mean {best:.4f})", flush=True)
