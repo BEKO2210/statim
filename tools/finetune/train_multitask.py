@@ -27,6 +27,7 @@ import shutil
 import sys
 import time
 
+import numpy as np
 import torch
 from safetensors.torch import load_file, save_file
 
@@ -58,7 +59,7 @@ def choice_item(tok, state, instr, keys, gold, max_len, head_max_len, src):
     seq, markers = build_sequence(tok, state, q, max_len, head_max_len)
     if len(markers) != len(keys):
         return None
-    return {"ids": seq, "markers": markers, "qtype": QTYPES["choice"],
+    return {"ids": np.asarray(seq, dtype=np.int32), "markers": markers, "qtype": QTYPES["choice"],
             "target": [1.0 if k == gold else 0.0 for k in keys], "src": src}
 
 
@@ -84,7 +85,8 @@ def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
         seq, markers = build_sequence(tok, r["state"], q, max_len, head_max_len)
         if len(markers) != len(render_options(q)) or len(markers) != len(r["target"]):
             continue
-        it = {"ids": seq, "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"], "src": "mixture"}
+        it = {"ids": np.asarray(seq, dtype=np.int32), "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"],
+              "src": "mixture"}
         if in_dev:
             dev.append(it)
             dev_states.add(key(r["state"]))
@@ -232,6 +234,9 @@ def main():
         for it, z in zip(dist, zs):
             it["target"] = torch.softmax(torch.tensor(z), -1).tolist()
         train += dist
+    for it in train:  # int32 token arrays: ~8x less RAM than Python int lists (full MASSIVE is ~576k items)
+        if not isinstance(it["ids"], np.ndarray):
+            it["ids"] = np.asarray(it["ids"], dtype=np.int32)
     counts = {}
     for it in train:
         counts[it["src"]] = counts.get(it["src"], 0) + 1
