@@ -7,6 +7,13 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- Opt-in server-side micro-batching for concurrent `POST /v1/systemone` calls via
+  `--batch-window-ms` (default 0/off) and `--max-batch` (default 16). Compatible requests share the
+  existing packed batch execution path while retaining independent responses, deadlines, admission
+  accounting and request IDs. Prometheus exposes `statim_batch_size` and `statim_batch_wait_ms`
+  summaries, and a CPU live-server test gates packed/unpacked answers at 1e-4.
+
 ## [0.5.2] - 2026-09-27
 
 ### Changed

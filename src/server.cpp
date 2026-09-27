@@ -9,9 +9,13 @@
 #include <cstdio>
 #include <deque>
 #include <fstream>
+#include <functional>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <random>
 #include <sstream>
+#include <thread>
 
 #include "statim/http_security.h"
 #include "playground.inc"
@@ -77,6 +81,15 @@ struct Histogram {
     }
 };
 
+struct Summary {
+    std::atomic<uint64_t> count{0};
+    std::atomic<uint64_t> sum_milli{0};
+    void observe(double value) {
+        count++;
+        sum_milli += static_cast<uint64_t>(std::max(0.0, value) * 1000.0);
+    }
+};
+
 // A fixed set of engines (each owns its compute buffers; weights are shared). Requests borrow
 // one; when all are busy and the wait queue is full the caller gets 503 instead of piling up.
 class EnginePool {
@@ -129,6 +142,190 @@ struct LoadedModel {
     std::unique_ptr<EnginePool> pool;
 };
 
+// Validated single requests wait here before any engine is leased.  Each route has its own
+// coordinator, so an incompatible group or a busy checkpoint cannot hold another model's window.
+class MicroBatcher {
+public:
+    using Clock = std::chrono::steady_clock;
+    using Run = std::function<std::vector<ojson>(const std::vector<ojson>&, const ojson&, DecideOptions)>;
+
+    struct Item {
+        ojson state;
+        ojson questions;
+        DecideOptions opts;
+        Clock::time_point deadline;
+        Clock::time_point queued_at;
+        std::mutex mu;
+        std::condition_variable cv;
+        bool cancelled = false;
+        bool done = false;
+        ojson result;
+        std::exception_ptr error;
+        double infer_ms = 0;
+    };
+
+    MicroBatcher(int window_ms, int max_batch, int dispatchers, Run run, Summary& sizes, Summary& waits)
+        : window_(window_ms), max_batch_(max_batch), run_(std::move(run)), sizes_(sizes), waits_(waits) {
+        collector_ = std::thread([this] { collect(); });
+        for (int i = 0; i < dispatchers; ++i) workers_.emplace_back([this] { execute(); });
+    }
+
+    ~MicroBatcher() {
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            stopping_ = true;
+        }
+        cv_.notify_all();
+        collector_.join();
+        for (auto& t : workers_) t.join();
+    }
+
+    std::pair<ojson, double> submit(std::string key, ojson state, ojson questions, DecideOptions opts,
+                                    Clock::time_point deadline, const std::function<bool()>& disconnected) {
+        auto item = std::make_shared<Item>();
+        item->state = std::move(state);
+        item->questions = std::move(questions);
+        item->opts = std::move(opts);
+        item->deadline = deadline;
+        item->queued_at = Clock::now();
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            auto& group = groups_[std::move(key)];
+            if (group.items.empty()) group.first = item->queued_at;
+            group.items.push_back(item);
+        }
+        cv_.notify_all();
+
+        std::unique_lock<std::mutex> lk(item->mu);
+        while (!item->done) {
+            const auto poll = std::min(deadline, Clock::now() + std::chrono::milliseconds(10));
+            item->cv.wait_until(lk, poll);
+            if (!item->done && (Clock::now() >= deadline || disconnected())) {
+                item->cancelled = true;
+                throw HttpError(422, Clock::now() >= deadline ? "inference deadline exceeded" : "inference cancelled");
+            }
+        }
+        if (Clock::now() >= deadline) throw HttpError(422, "inference deadline exceeded");
+        if (item->error) std::rethrow_exception(item->error);
+        return {std::move(item->result), item->infer_ms};
+    }
+
+private:
+    struct Group {
+        Clock::time_point first;
+        std::deque<std::shared_ptr<Item>> items;
+    };
+
+    void collect() {
+        for (;;) {
+            std::vector<std::shared_ptr<Item>> batch;
+            {
+                std::unique_lock<std::mutex> lk(mu_);
+                for (;;) {
+                    if (stopping_) return;
+                    auto ready = groups_.end();
+                    auto wake = Clock::time_point::max();
+                    const auto now = Clock::now();
+                    for (auto it = groups_.begin(); it != groups_.end(); ++it) {
+                        const auto due = it->second.first + std::chrono::milliseconds(window_);
+                        if (static_cast<int>(it->second.items.size()) >= max_batch_ || now >= due) {
+                            ready = it;
+                            break;
+                        }
+                        wake = std::min(wake, due);
+                    }
+                    if (ready != groups_.end()) {
+                        auto& q = ready->second.items;
+                        while (!q.empty() && static_cast<int>(batch.size()) < max_batch_) {
+                            batch.push_back(std::move(q.front()));
+                            q.pop_front();
+                        }
+                        if (q.empty()) groups_.erase(ready);
+                        else ready->second.first = q.front()->queued_at;
+                        break;
+                    }
+                    if (wake == Clock::time_point::max()) cv_.wait(lk);
+                    else cv_.wait_until(lk, wake);
+                }
+            }
+            const auto collected = Clock::now();
+            for (auto& item : batch)
+                waits_.observe(std::chrono::duration<double, std::milli>(collected - item->queued_at).count());
+            {
+                std::lock_guard<std::mutex> lk(mu_);
+                ready_.push_back(std::move(batch));
+            }
+            cv_.notify_all();
+        }
+    }
+
+    void execute() {
+        for (;;) {
+            std::vector<std::shared_ptr<Item>> batch;
+            {
+                std::unique_lock<std::mutex> lk(mu_);
+                cv_.wait(lk, [&] { return stopping_ || !ready_.empty(); });
+                if (ready_.empty()) return;
+                batch = std::move(ready_.front());
+                ready_.pop_front();
+            }
+            std::vector<std::shared_ptr<Item>> active;
+            const auto started = Clock::now();
+            for (auto& item : batch) {
+                std::lock_guard<std::mutex> lk(item->mu);
+                if (!item->cancelled && started < item->deadline) active.push_back(item);
+            }
+            if (active.empty()) continue;
+            sizes_.observe(static_cast<double>(active.size()));
+
+            std::vector<ojson> states;
+            states.reserve(active.size());
+            auto deadline = active.front()->deadline;
+            for (auto& item : active) {
+                states.push_back(item->state);
+                deadline = std::max(deadline, item->deadline);
+            }
+            DecideOptions opts = active.front()->opts;
+            opts.deadline = deadline;
+            std::vector<ojson> results;
+            std::exception_ptr error;
+            const auto ti = Clock::now();
+            try {
+                results = run_(states, active.front()->questions, std::move(opts));
+            } catch (...) {
+                error = std::current_exception();
+            }
+            const double infer_ms = std::chrono::duration<double, std::milli>(Clock::now() - ti).count();
+            for (size_t i = 0; i < active.size(); ++i) {
+                auto& item = active[i];
+                {
+                    std::lock_guard<std::mutex> lk(item->mu);
+                    if (!item->cancelled) {
+                        item->error = error;
+                        if (!error) item->result = std::move(results[i]);
+                        item->infer_ms = infer_ms;
+                        item->done = true;
+                    }
+                }
+                item->cv.notify_one();
+            }
+        }
+    }
+
+    int window_;
+    int max_batch_;
+    Run run_;
+    Summary& sizes_;
+    Summary& waits_;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    std::map<std::string, Group> groups_;
+    std::deque<std::vector<std::shared_ptr<Item>>> ready_;
+    bool stopping_ = false;
+    std::thread collector_;
+    std::vector<std::thread> workers_;
+};
+
 httplib::Server* g_server = nullptr;
 
 void on_signal(int) {
@@ -139,7 +336,8 @@ void on_signal(int) {
 
 int run_server(const ServerConfig& cfg) {
     if (cfg.max_concurrent < 1 || cfg.max_concurrent > 256 || cfg.workers < 1 || cfg.workers > 64 ||
-        cfg.ensemble < 1 || cfg.ensemble > 8 || cfg.max_len < 0 || cfg.head_max_len < 0 || cfg.port < 1 || cfg.port > 65535)
+        cfg.ensemble < 1 || cfg.ensemble > 8 || cfg.max_len < 0 || cfg.head_max_len < 0 || cfg.port < 1 || cfg.port > 65535 ||
+        cfg.batch_window_ms < 0 || cfg.max_batch < 1 || cfg.max_batch > static_cast<int>(kMaxBatchStates))
         throw std::runtime_error("invalid server worker, concurrency, ensemble, port or token budget configuration");
     std::vector<LoadedModel> models;
     const int workers = std::max(1, cfg.workers);
@@ -172,6 +370,7 @@ int run_server(const ServerConfig& cfg) {
     std::mutex status_mu;
     std::map<int, uint64_t> status_counts;
     Histogram latency;
+    Summary batch_size, batch_wait_ms;
     const auto started = std::chrono::steady_clock::now();
 
     SecureServer srv(cfg.request_timeout);
@@ -218,6 +417,47 @@ int run_server(const ServerConfig& cfg) {
         reason = "default";
         return models.front();
     };
+
+    auto run_one_model = [](LoadedModel& lm, const std::vector<ojson>& states, const ojson& questions,
+                            DecideOptions opts) {
+        auto lease = lm.pool->acquire(opts.deadline);
+        return lease->engine->decide_batch(states, questions, opts);
+    };
+    LoadedModel* consensus_en = by_name("english");
+    LoadedModel* consensus_ml = by_name("multilingual");
+    auto run_consensus = [&](const std::vector<ojson>& states, const ojson& questions, DecideOptions opts) {
+        const bool keep_logits = opts.return_logits;
+        opts.return_logits = true;
+        std::vector<ojson> re = run_one_model(*consensus_en, states, questions, opts);
+        std::vector<ojson> rm = run_one_model(*consensus_ml, states, questions, opts);
+        std::vector<ojson> results;
+        results.reserve(re.size());
+        for (size_t i = 0; i < re.size(); ++i) {
+            ojson f = fuse_answers(questions, {&re[i], &rm[i]}, {0.5, 0.5});
+            f["model"] = "consensus";
+            if (keep_logits)
+                for (auto it = f["answers"].begin(); it != f["answers"].end(); ++it) {
+                    it.value()["logits_by_model"] = {{"english", re[i]["answers"][it.key()]["logits"]},
+                                                       {"multilingual", rm[i]["answers"][it.key()]["logits"]}};
+                }
+            results.push_back(std::move(f));
+        }
+        return results;
+    };
+
+    std::map<LoadedModel*, std::unique_ptr<MicroBatcher>> batchers;
+    std::unique_ptr<MicroBatcher> consensus_batcher;
+    if (cfg.batch_window_ms > 0) {
+        for (auto& m : models)
+            batchers[&m] = std::make_unique<MicroBatcher>(
+                cfg.batch_window_ms, cfg.max_batch, workers,
+                [&m, &run_one_model](const std::vector<ojson>& states, const ojson& questions, DecideOptions opts) {
+                    return run_one_model(m, states, questions, std::move(opts));
+                }, batch_size, batch_wait_ms);
+        if (consensus_en && consensus_ml)
+            consensus_batcher = std::make_unique<MicroBatcher>(cfg.batch_window_ms, cfg.max_batch, workers,
+                                                               run_consensus, batch_size, batch_wait_ms);
+    }
 
     auto handle = [&](const httplib::Request& req, httplib::Response& res, bool batch, const httplib::ContentReader& reader) {
         const auto t0 = std::chrono::steady_clock::now();
@@ -312,36 +552,32 @@ int run_server(const ServerConfig& cfg) {
             if (want_consensus) check_work(questions, states.size(), ml->model->hparams(), opts, cfg.limits, 2);
             opts.deadline = t0 + std::chrono::seconds(cfg.inference_timeout);
             model_name = want_consensus ? "consensus" : lm.name;
-            const auto ti = std::chrono::steady_clock::now();
             std::vector<ojson> results;
-            if (want_consensus) {
-                const bool keep_logits = opts.return_logits;
-                opts.return_logits = true;
-                std::vector<ojson> re, rm;
-                {
-                    auto lease = en->pool->acquire(opts.deadline);
-                    re = lease->engine->decide_batch(states, questions, opts);
-                }
-                {
-                    auto lease = ml->pool->acquire(opts.deadline);
-                    rm = lease->engine->decide_batch(states, questions, opts);
-                }
-                for (size_t i = 0; i < re.size(); ++i) {
-                    ojson f = fuse_answers(questions, {&re[i], &rm[i]}, {0.5, 0.5});
-                    f["model"] = "consensus";
-                    if (keep_logits)
-                        for (auto it = f["answers"].begin(); it != f["answers"].end(); ++it) {
-                            it.value()["logits_by_model"] = {{"english", re[i]["answers"][it.key()]["logits"]},
-                                                             {"multilingual", rm[i]["answers"][it.key()]["logits"]}};
-                        }
-                    results.push_back(std::move(f));
-                }
-                reason = "consensus";
+            double infer_ms = 0;
+            if (!batch && cfg.batch_window_ms > 0) {
+                // dump() preserves validated object order.  Include language because multilingual
+                // checkpoints may select a different temperature even when every listed option matches.
+                ojson budgets = ojson::array({effective_max_len(lm.model->hparams(), opts),
+                                              opts.head_max_len.value_or(lm.model->hparams().head_max_len)});
+                if (want_consensus)
+                    budgets.push_back({effective_max_len(ml->model->hparams(), opts),
+                                       opts.head_max_len.value_or(ml->model->hparams().head_max_len)});
+                ojson compatible = {questions, budgets, opts.ensemble, opts.ensemble_margin,
+                                    opts.calibrate, opts.return_logits, min_confidence,
+                                    opts.lang ? ojson(*opts.lang) : ojson(nullptr)};
+                MicroBatcher* batcher = want_consensus ? consensus_batcher.get() : batchers.at(&lm).get();
+                auto [result, shared_ms] = batcher->submit(compatible.dump(), states.front(), questions, opts,
+                                                           opts.deadline, req.is_connection_closed);
+                results.push_back(std::move(result));
+                infer_ms = shared_ms;
+                if (want_consensus) reason = "consensus";
             } else {
-                auto lease = lm.pool->acquire(opts.deadline);
-                results = lease->engine->decide_batch(states, questions, opts);
+                const auto ti = std::chrono::steady_clock::now();
+                results = want_consensus ? run_consensus(states, questions, opts)
+                                         : run_one_model(lm, states, questions, opts);
+                infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
+                if (want_consensus) reason = "consensus";
             }
-            const double infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
             for (auto& r : results) {
                 n_tokens += r["usage"]["input_tokens"].get<size_t>();
                 r["routing"] = {{"model", model_name}, {"reason", reason}, {"engine", "statim"},
@@ -434,6 +670,12 @@ int run_server(const ServerConfig& cfg) {
         o << "statim_request_duration_ms_count " << latency.count << "\n";
         o << "# TYPE statim_input_tokens_total counter\nstatim_input_tokens_total " << tokens_total << "\n";
         o << "# TYPE statim_rejected_busy_total counter\nstatim_rejected_busy_total " << rejected_busy << "\n";
+        o << "# HELP statim_batch_size States executed in server-created micro-batches.\n"
+             "# TYPE statim_batch_size summary\nstatim_batch_size_sum " << batch_size.sum_milli / 1000.0
+          << "\nstatim_batch_size_count " << batch_size.count << "\n";
+        o << "# HELP statim_batch_wait_ms Time an admitted request waited for compatible peers.\n"
+             "# TYPE statim_batch_wait_ms summary\nstatim_batch_wait_ms_sum " << batch_wait_ms.sum_milli / 1000.0
+          << "\nstatim_batch_wait_ms_count " << batch_wait_ms.count << "\n";
         o << "# TYPE statim_in_flight gauge\nstatim_in_flight " << in_flight << "\n";
         o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
           << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
