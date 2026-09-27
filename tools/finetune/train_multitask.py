@@ -97,31 +97,33 @@ def mixture_data(tok, path, max_len, head_max_len, n_dev, limit, rng):
     are held out (v6 writes its dev slice first), and every later item whose state also occurs in the
     held-out slice is dropped (several questions of one source can share a document)."""
     import gzip
+    import itertools
     train, dev, dev_states, leaked = [], [], set(), 0
     cats = v6_categories()
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        rows = [json.loads(line) for line in f]
 
     def key(state):
         return " ".join(json.dumps(state, sort_keys=True, ensure_ascii=False).split()).lower()
 
-    for r in rows[:n_dev + limit] if limit else rows:
-        in_dev = len(dev) < n_dev
-        if not in_dev and key(r["state"]) in dev_states:
-            leaked += 1
-            continue
-        qd = r["q"]
-        q = {"t": qd["type"], "ins": qd["instructions"], "crit": qd.get("criteria") or ({} if qd["type"] == "noul" else None)}
-        seq, markers = build_sequence(tok, r["state"], q, max_len, head_max_len)
-        if len(markers) != len(render_options(q)) or len(markers) != len(r["target"]):
-            continue
-        it = {"ids": np.asarray(seq, dtype=np.int32), "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"],
-              "src": mixture_src(r, cats)}
-        if in_dev:
-            dev.append(it)
-            dev_states.add(key(r["state"]))
-        else:
-            train.append(it)
+    # Streamed: mixture v7 has ~1M rows, which as parsed dicts alone would take ~2 GB of RAM.
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        for line in itertools.islice(f, n_dev + limit) if limit else f:
+            r = json.loads(line)
+            in_dev = len(dev) < n_dev
+            if not in_dev and key(r["state"]) in dev_states:
+                leaked += 1
+                continue
+            qd = r["q"]
+            q = {"t": qd["type"], "ins": qd["instructions"], "crit": qd.get("criteria") or ({} if qd["type"] == "noul" else None)}
+            seq, markers = build_sequence(tok, r["state"], q, max_len, head_max_len)
+            if len(markers) != len(render_options(q)) or len(markers) != len(r["target"]):
+                continue
+            it = {"ids": np.asarray(seq, dtype=np.int32), "markers": markers, "qtype": QTYPES[q["t"]], "target": r["target"],
+                  "src": mixture_src(r, cats)}
+            if in_dev:
+                dev.append(it)
+                dev_states.add(key(r["state"]))
+            else:
+                train.append(it)
     by_cat = {}
     for it in train:
         by_cat[it["src"]] = by_cat.get(it["src"], 0) + 1
@@ -256,8 +258,10 @@ def main():
         tb.DISTILL_QUESTIONS[:] = [q for q in DISTILL_QUESTIONS if "sentiment" not in q[1]]
         if a.clean:
             import gzip
-            with gzip.open(a.mixture, "rt", encoding="utf-8") as f:
-                texts = [t for t in (json.loads(line)["state"] for line in f) if isinstance(t, str) and 20 < len(t) < 2000]
+            import itertools
+            with gzip.open(a.mixture, "rt", encoding="utf-8") as f:  # never the held-out dev prefix
+                texts = [t for t in (json.loads(line)["state"] for line in itertools.islice(f, a.mixture_dev, None))
+                         if isinstance(t, str) and 20 < len(t) < 2000]
             rng.shuffle(texts)
             texts = texts[:a.distill]
         else:
