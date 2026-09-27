@@ -81,11 +81,8 @@ def v6_categories():
 
 
 def mixture_src(row, cats):
-    """Budget key of a mixture row: "mixture" for v5 rows, "mixture:<category>" for v6 rows,
-    "mixture:synth" for synthetic gap data."""
+    """Budget key of a mixture row: "mixture" for v5 files, "mixture:<category>" for v6 rows."""
     src = row.get("src", "")
-    if src.startswith("synth"):
-        return "mixture:synth"  # local-generator gap data gets its own share of the mixture budget
     if not src.startswith("v6/"):
         return "mixture"
     sid = src[3:].rsplit("/", 1)[0]

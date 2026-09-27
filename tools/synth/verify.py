@@ -203,85 +203,13 @@ def _rej(reason, rationale=""):
             "rationale": rationale, "gold": None}
 
 
-def _paraphrase_index(seed, n):
-    ident = str(seed.get("id") or seed.get("i") or 0)
-    try:
-        return int(ident[:8], 16) % n
-    except ValueError:
-        return sum(ord(ch) for ch in ident) % n
-
-
-def _paraphrase_rejects_emotion(seed):
-    task = seed.get("task")
-    if task in {"sentiment", "emotion"}:
-        return False
-    if task == "complaint" and seed.get("form") == "choice":
-        return False
-    return True
-
-
-def _paraphrase_banned(seed, item):
-    """Strings that must not appear in the replacement question."""
-    q = item["q"]
-    kind = q["type"]
-    criteria = q["criteria"]
-    index = item["target"].index(1.0)
-    task = seed.get("task")
-    if kind == "score":
-        if task == "urgency":
-            return list(criteria)
-        return [criteria[index]]
-    if kind == "noul":
-        if task in {"complaint", "sarcasm"}:
-            key = "true" if index == 1 else "false"
-            return [criteria.get(key) or ""]
-        return []
-    if isinstance(criteria, dict):
-        key = list(criteria)[index]
-        return [key, criteria[key]]
-    return []
-
-
-def _apply_paraphrase(seed, item, view):
-    """Replace the generated question with a seeded paraphrase. Levels and labels stay."""
-    from prompts import paraphrase_candidates
-    lines = paraphrase_candidates(seed)
-    generated = item["q"]["instructions"]
-    if not lines:
-        return generated
-    start = _paraphrase_index(seed, len(lines))
-    banned = _paraphrase_banned(seed, item)
-    reject_emotion = _paraphrase_rejects_emotion(seed)
-    chosen = None
-    for offset in range(len(lines)):
-        cand = lines[(start + offset) % len(lines)]
-        if reject_emotion and _emotion(cand):
-            continue
-        if banned and _leaked(cand, banned):
-            continue
-        if not language_ok(cand, seed.get("lang") or "en"):
-            continue
-        chosen = cand
-        break
-    if chosen:
-        item["q"]["instructions"] = chosen
-        view["instructions"] = chosen
-    return generated
-
-
-def _finish(item, view, rationale, gold, seed=None):
+def _finish(item, view, rationale, gold):
     if has_key(item, "rationale"):
         return _rej("rationale_in_item", rationale)
     if rationale and len(rationale) >= 40 and norm(rationale) in norm(item["state"] + "\n" + item["q"]["instructions"]):
         return _rej("rationale_leaked", rationale)
-    generated = None
-    if seed is not None:
-        generated = _apply_paraphrase(seed, item, view)
-    result = {"status": "ok", "reason": None, "item": training_item(item), "view": view,
-              "rationale": rationale, "gold": gold}
-    if generated is not None:
-        result["generated_instructions"] = generated
-    return result
+    return {"status": "ok", "reason": None, "item": training_item(item), "view": view,
+            "rationale": rationale, "gold": gold}
 
 
 def _build_choice(seed, parsed, rationale, lang, reading):
@@ -352,7 +280,7 @@ def _build_choice(seed, parsed, rationale, lang, reading):
     }
     view = {"type": "choice", "state": state, "instructions": instructions, "options": [
         {"key": o["key"], "description": o["description"]} for o in options]}
-    return _finish(item, view, rationale, gold, seed)
+    return _finish(item, view, rationale, gold)
 
 
 def _build_closed_choice(seed, parsed, rationale, lang, allowed):
@@ -400,7 +328,7 @@ def _build_closed_choice(seed, parsed, rationale, lang, allowed):
     }
     view = {"type": "choice", "state": state, "instructions": instructions, "options": [
         {"key": opt["key"], "description": opt["description"]} for opt in options]}
-    return _finish(item, view, rationale, gold, seed)
+    return _finish(item, view, rationale, gold)
 
 
 def _build_noul(seed, parsed, rationale, lang):
@@ -444,7 +372,7 @@ def _build_noul(seed, parsed, rationale, lang):
     view = {"type": "noul", "state": state, "instructions": instructions, "options": [
         {"key": "false", "description": false_d},
         {"key": "true", "description": true_d}]}
-    return _finish(item, view, rationale, gold, seed)
+    return _finish(item, view, rationale, gold)
 
 
 def _build_score(seed, parsed, rationale, lang):
@@ -482,7 +410,7 @@ def _build_score(seed, parsed, rationale, lang):
         "src": "synth-v1/score/%s" % lang,
     }
     view = {"type": "score", "state": state, "instructions": instructions, "levels": list(levels)}
-    return _finish(item, view, rationale, gold, seed)
+    return _finish(item, view, rationale, gold)
 
 
 def _build_urgency(seed, parsed, rationale, lang):
@@ -526,7 +454,7 @@ def _build_urgency(seed, parsed, rationale, lang):
         "src": "synth-v1/urgency/%s" % lang,
     }
     view = {"type": "score", "state": state, "instructions": instructions, "levels": list(levels)}
-    return _finish(item, view, rationale, gold, seed)
+    return _finish(item, view, rationale, gold)
 
 
 def agrees(item, answer):
@@ -684,7 +612,7 @@ def run_checks():
     assert "gold" not in messages[1]["content"] or "gold (" in messages[1]["content"]
     assert ngot["item"]["src"] == "synth-v1/business/en"
     assert build_item(seed, dict(parsed, instructions="Which emotion is expressed by the caller in this note?"))["reason"] == "emotion"
-    assert PROMPT_VERSION == "synth-prompts-7"
+    assert PROMPT_VERSION == "synth-prompts-5"
     assert GEN_SYSTEM != GEN_SYSTEM_CLASS
     assert "Do not write an emotion, sentiment, or feeling classification." in GEN_SYSTEM
     assert "Do not write an emotion" not in GEN_SYSTEM_CLASS
@@ -878,111 +806,6 @@ def run_checks():
     sar_text = generate_request(sar_row)[0][1]["content"]
     assert "praise wording" in sar_text and "emoji" in sar_text and "letter s" in sar_text
     assert "full text to classify" in generate_request(mixed)[0][0]["content"]
-
-    from prompts import paraphrase_candidates, paraphrase_coverage_gaps
-    from seeds import (
-        DETAIL_KINDS, OPENING_KINDS, STATIC_TARGET_ACCEPTANCE, acceptance_to_weight,
-        iter_weight_strata, load_target_weights, normalized_weight_sum, weights_from_acceptance,
-    )
-    from filter import cap_classes, cap_prefixes, first_prefix, semantic_dedup
-
-    gaps = paraphrase_coverage_gaps()
-    assert not gaps, gaps
-    sent_lines = paraphrase_candidates(dict(sent_seed, variant="overall", focus=""))
-    assert len(sent_lines) >= 6
-    assert sgot["generated_instructions"] == sent["instructions"]
-    assert sgot["item"]["q"]["instructions"] in paraphrase_candidates(sent_seed)
-    assert sgot["view"]["instructions"] == sgot["item"]["q"]["instructions"]
-    aspect_seed = dict(sent_seed, variant="aspect", focus="price", lang="de", id="abc12345")
-    aspect_lines = paraphrase_candidates(aspect_seed)
-    assert aspect_lines and all("Preis" in line for line in aspect_lines)
-    assert "{focus}" not in aspect_lines[0]
-
-    assert acceptance_to_weight(1) == 1.0
-    assert acceptance_to_weight(0.5) == 2.0
-    assert acceptance_to_weight(0.25) == 4.0
-    assert acceptance_to_weight(0.1) == 4.0
-    assert acceptance_to_weight(0) == 4.0
-    assert abs(acceptance_to_weight(0.8) - 1.25) < 1e-9
-    static_weights = weights_from_acceptance(STATIC_TARGET_ACCEPTANCE)
-    strata = list(iter_weight_strata(static_weights))
-    assert strata, "static weights produced no stratum"
-    for stratum in strata:
-        assert all(1.0 <= float(value) <= 4.0 for value in stratum.values()), stratum
-        assert abs(normalized_weight_sum(stratum) - 1.0) < 1e-9, stratum
-    heavy = {"neutral": 4.0, "positive": 1.0, "negative": 1.0, "mixed": 1.0}
-    weighted_rows = plan("sentiment", 280, 11, weights=heavy)
-    weighted_counts = Counter(row["target"] for row in weighted_rows)
-    assert weighted_counts["neutral"] > weighted_counts["positive"] * 2, weighted_counts
-    assert plan("sentiment", 15, 11, weights=heavy) == weighted_rows[:15]
-    manifest = os.path.join(os.path.dirname(__file__), "..", "..", "data", "synth-pilot2.manifest.json")
-    loaded = load_target_weights(manifest)
-    loaded_strata = list(iter_weight_strata(loaded))
-    assert loaded_strata
-    for stratum in loaded_strata:
-        assert all(1.0 - 1e-9 <= float(value) <= 4.0 + 1e-9 for value in stratum.values()), stratum
-        assert abs(normalized_weight_sum(stratum) - 1.0) < 1e-9
-    assert len(OPENING_KINDS) >= 8
-    opened = plan("emotion", 400, 3)
-    markers = (
-        "quoted sentence", "date or time", "order number", "person's name",
-        "Start with a question", "middle of the situation", "Start with this place",
-        "number or amount",
-    )
-    assert len({marker for marker in markers if any(marker in row["opening"] for row in opened)}) == 8
-    assert {row["detail"].split(":", 1)[0] for row in opened} == set(DETAIL_KINDS)
-    assert "opening" not in plan("business", 1, 1)[0]
-    assert opened[0]["opening"] in generate_request(opened[0])[0][1]["content"]
-    assert opened[0]["detail"] in generate_request(opened[0])[0][1]["content"]
-
-    def _cap_item(i, state, instructions, gold_true, lang="en"):
-        return {
-            "_id": "c%04d" % i,
-            "state": state,
-            "q": {"type": "noul", "instructions": instructions,
-                  "criteria": {"false": "no", "true": "yes"}},
-            "target": [0.0, 1.0] if gold_true else [1.0, 0.0],
-            "src": "synth-v1/sarcasm/%s" % lang,
-        }
-
-    prefix_items = []
-    for i in range(20):
-        prefix_items.append(_cap_item(
-            i, "alpha beta gamma shared tail number %d today" % i,
-            "how soon does someone need to act on item %d please" % i, False))
-    for i in range(20, 100):
-        prefix_items.append(_cap_item(
-            i, "unique%04d zeta theta lambda extra words for the desk today" % i,
-            "question %04d about a separate handling decision in the note" % i, i % 2 == 0))
-    capped, prefix_info = cap_prefixes(prefix_items, 0.03, 7, field="state")
-    remain = sum(1 for item in capped if first_prefix(item["state"], "en") == "alpha beta gamma")
-    assert remain == 3, (remain, prefix_info)
-    assert prefix_info["total"] == 17
-    class_items = []
-    for i in range(70):
-        class_items.append(_cap_item(i, "state alpha %d with enough words here today" % i,
-                                     "question alpha %d for the desk today please" % i, True, "de"))
-    for i in range(70, 100):
-        class_items.append(_cap_item(i, "state beta %d with enough words here today" % i,
-                                     "question beta %d for the desk today please" % i, False, "de"))
-    classed, class_info = cap_classes(class_items, 0.45, 7)
-    true_left = sum(1 for item in classed if item["target"][1] == 1.0)
-    false_left = len(classed) - true_left
-    assert true_left == 45, (true_left, class_info)
-    assert false_left == 30
-    assert true_left <= int(0.45 * len(class_items))
-    same_prefix = [_cap_item(i, "same same same tail %d" % i, "only one question form here %d" % i, True)
-                   for i in range(10)]
-    trimmed, trim_info = cap_prefixes(same_prefix, 0.03, 3, field="state")
-    assert len(trimmed) == 1, (len(trimmed), trim_info)
-    near = [
-        _cap_item(0, "left state about a parcel", "is this a complaint in the note", True, "fr"),
-        _cap_item(1, "middle state about a parcel", "does the writer complain in the note", True, "fr"),
-        _cap_item(2, "right state about a kettle", "should this text be read as a complaint", False, "fr"),
-    ]
-    deduped, sem_info = semantic_dedup(near, [[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]], seed=9)
-    assert sem_info["total"] == 1 and len(deduped) == 2
-    assert sem_info["by_cell"].get("sarcasm/fr") == 1
     print("verify checks ok")
 
 
