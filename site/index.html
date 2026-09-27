@@ -93,7 +93,7 @@
     <div class="trace" role="group" aria-label="A real request and its answers">
       <div class="trace-bar">
         <span class="verb">POST /v1/systemone</span>
-        <span class="model">Statim Decide Multilingual, release 0.4.0</span>
+        <span class="model">Statim Decide EN Large, release 0.5.0</span>
       </div>
       <div class="trace-state">
         <div><b>subject</b> Duplicate charge on invoice #4411</div>
@@ -104,9 +104,9 @@
           <p class="a-head">department <span class="type">choice</span></p>
           <p class="q">Which department should handle this?</p>
           <ul class="opts">
-            <li class="opt top"><span class="name">billing</span><span class="track"><span class="fill" style="--v:.9977"></span></span><span class="p">0.998</span></li>
-            <li class="opt"><span class="name">sales</span><span class="track"><span class="fill" style="--v:.002"></span></span><span class="p">0.002</span></li>
-            <li class="opt"><span class="name">technical</span><span class="track"><span class="fill" style="--v:.0003"></span></span><span class="p">&lt;0.001</span></li>
+            <li class="opt top"><span class="name">billing</span><span class="track"><span class="fill" style="--v:.9784"></span></span><span class="p">0.978</span></li>
+            <li class="opt"><span class="name">sales</span><span class="track"><span class="fill" style="--v:.0155"></span></span><span class="p">0.016</span></li>
+            <li class="opt"><span class="name">technical</span><span class="track"><span class="fill" style="--v:.0061"></span></span><span class="p">0.006</span></li>
           </ul>
           <p class="verdict">Answer <strong>billing</strong></p>
         </div>
@@ -114,24 +114,24 @@
           <p class="a-head">urgency <span class="type">score</span></p>
           <p class="q">How urgent is this request?</p>
           <div class="scale" aria-hidden="true">
-            <span class="track"><span class="fill" style="--v:.761"></span></span>
-            <span class="marker" style="--v:.761"></span>
+            <span class="track"><span class="fill" style="--v:.641"></span></span>
+            <span class="marker" style="--v:.641"></span>
           </div>
           <div class="scale-labels" aria-hidden="true"><span>not urgent</span><span>soon</span><span>critical</span></div>
-          <p class="sr">Probabilities: not urgent 0.09, soon 0.29, critical 0.61.</p>
-          <p class="verdict">Score <strong>1.52</strong> of 2</p>
+          <p class="sr">Probabilities: not urgent 0.24, soon 0.24, critical 0.52.</p>
+          <p class="verdict">Score <strong>1.28</strong> of 2</p>
         </div>
         <div class="answer">
           <p class="a-head">refund <span class="type">yes / no</span></p>
           <p class="q">Does the user explicitly request a refund?</p>
           <ul class="opts">
-            <li class="opt top"><span class="name">yes</span><span class="track"><span class="fill" style="--v:.9011"></span></span><span class="p">0.901</span></li>
-            <li class="opt"><span class="name">no</span><span class="track"><span class="fill" style="--v:.0989"></span></span><span class="p">0.099</span></li>
+            <li class="opt top"><span class="name">yes</span><span class="track"><span class="fill" style="--v:.9146"></span></span><span class="p">0.915</span></li>
+            <li class="opt"><span class="name">no</span><span class="track"><span class="fill" style="--v:.0854"></span></span><span class="p">0.085</span></li>
           </ul>
           <p class="verdict">Answer <strong>yes</strong></p>
         </div>
       </div>
-      <p class="trace-foot">All three questions in one forward pass: 193 tokens, about 0.15 s on a Ryzen 7 5800X CPU. Real output, not a mock-up.</p>
+      <p class="trace-foot">All three questions in one forward pass: 190 tokens, about 0.3 s on a Ryzen 7 5800X CPU for the 395M-parameter model. Real output, not a mock-up.</p>
     </div>
   </div>
 </section>
