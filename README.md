@@ -38,7 +38,7 @@ pass the no-harm gate (below) before release:
 | [statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) 0.4.0 | mmBERT-base | 12 evaluated | 0.7585 | 0.903 | 0.772 (12 languages) | f32 0.91 GB · q8_0 0.36 GB |
 
 ```bash
-huggingface-cli download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --local-dir models
+hf download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --local-dir models   # pip install huggingface_hub
 ./statim serve -m english=models/statim-decide-en-large-q8_0.gguf
 ```
 
@@ -91,7 +91,7 @@ git clone --recursive https://github.com/BEKO2210/statim && cd statim
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 pip install numpy safetensors gguf            # converter only; not needed at runtime
 tools/fetch_models.sh multilingual english    # download from Hugging Face + convert to GGUF
-ctest --test-dir build                        # parity gates against the official package
+ctest --test-dir build                        # parity gates against the official package (as a regular user, see REPRODUCE.md)
 ./build/statim serve -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf --consensus
 # open http://127.0.0.1:8080/ for the playground
 ```
