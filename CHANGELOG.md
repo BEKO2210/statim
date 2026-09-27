@@ -7,6 +7,13 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- Official client SDKs for the HTTP API: Python package `statim` in `clients/python`
+  (standard library only) and TypeScript package `@statim/client` in `clients/js`
+  (`fetch`, no runtime dependencies). Both expose `decide`, `decide_batch`, `models`,
+  `health`, and `ready`, typed choice, score, and yes/no answers, request IDs, and
+  retries with backoff for HTTP 503.
+
 ## [0.3.0] - 2026-09-27
 
 A licence-clean multi-task model that passes a no-harm gate, a licensing model for commercial use,
