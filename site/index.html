@@ -20,6 +20,10 @@
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
 <meta property="og:image:alt" content="Statim wordmark on graphite">
+<meta property="og:video" content="https://beko2210.github.io/statim/video/statim-flagship-60s-16x9.mp4">
+<meta property="og:video:type" content="video/mp4">
+<meta property="og:video:width" content="1920">
+<meta property="og:video:height" content="1080">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="assets/fonts/Sora-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/Sora-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -27,7 +31,7 @@
 <script type="application/ld+json">
 {"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Statim",
  "applicationCategory": "DeveloperApplication", "operatingSystem": "Linux",
- "softwareVersion": "0.6.1", "url": "https://beko2210.github.io/statim/",
+ "softwareVersion": "0.6.2", "url": "https://beko2210.github.io/statim/",
  "description": "A native C++ engine for decision models: choice, score and yes/no answers with calibrated confidence in one forward pass, on CPU or GPU.",
  "license": "https://www.apache.org/licenses/LICENSE-2.0",
  "author": {"@type": "Person", "name": "Belkis Aslani"},
@@ -132,6 +136,36 @@
         </div>
       </div>
       <p class="trace-foot">All three questions in one forward pass: 190 tokens, about 0.3 s on a Ryzen 7 5800X CPU for the 395M-parameter model. Real output, not a mock-up.</p>
+    </div>
+  </div>
+</section>
+
+<section id="film" aria-labelledby="film-title">
+  <div class="container">
+    <div class="section-head">
+      <h2 id="film-title">Watch it decide</h2>
+      <p>One support ticket, three typed answers, one forward pass: that is the film. The story shows where typed decisions replace rule trees.</p>
+    </div>
+    <div class="films">
+      <figure class="film film-main">
+        <div class="frame">
+          <video controls playsinline preload="none" poster="images/film-16x9.webp" data-poster-portrait="images/film-9x16.webp" aria-describedby="film-desc">
+            <source src="video/statim-flagship-60s-9x16.mp4" type="video/mp4" media="(orientation: portrait)">
+            <source src="video/statim-flagship-60s-16x9.mp4" type="video/mp4">
+          </video>
+          <button class="play" type="button" aria-label="Play the film, 60 seconds"><span aria-hidden="true"></span></button>
+        </div>
+        <figcaption>Film, 60 seconds<span class="sr" id="film-desc">. With music. A ticket arrives as text and JSON; Statim answers department, urgency and refund at once: billing 0.978, urgency 1.28, refund yes at 0.915.</span></figcaption>
+      </figure>
+      <figure class="film film-story">
+        <div class="frame">
+          <video controls playsinline preload="none" poster="images/story-9x16.webp" aria-describedby="story-desc">
+            <source src="video/statim-story-45s-9x16.mp4" type="video/mp4">
+          </video>
+          <button class="play" type="button" aria-label="Play the story, 45 seconds"><span aria-hidden="true"></span></button>
+        </div>
+        <figcaption>Story, 45 seconds<span class="sr" id="story-desc">. With music. Rules and dependencies multiply; one model instead answers support routing, moderation, fraud detection, sensor, agent and vision-derived decisions.</span></figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -330,7 +364,15 @@
           <li><div><h3>Read typed answers</h3><p>Choice, score and yes/no answers come back calibrated, with confidence, token usage and routing.</p></div></li>
         </ol>
       </div>
-      <figure class="media"><img src="images/pass.jpg" alt="A glowing pipeline: one input, one pass, several outputs" width="1600" height="900" loading="lazy"></figure>
+      <figure class="reel">
+        <div class="frame">
+          <video controls playsinline preload="none" poster="images/pass.jpg" data-poster-portrait="images/showreel-9x16.webp" aria-label="Showreel, 30 seconds, with music: one state, three questions, answered in one forward pass">
+            <source src="video/statim-showreel-30s-9x16.mp4" type="video/mp4" media="(orientation: portrait)">
+            <source src="video/statim-showreel-30s-16x9.mp4" type="video/mp4">
+          </video>
+          <button class="play" type="button" aria-label="Play the showreel, 30 seconds"><span aria-hidden="true"></span></button>
+        </div>
+      </figure>
     </div>
 
     <dl class="features">
@@ -497,7 +539,7 @@ tools/fetch_models.sh multilingual english
         <div><h2>Legal</h2><ul><li><a href="impressum/">Impressum</a></li><li><a href="datenschutz/">Datenschutz</a></li></ul></div>
       </div>
     </div>
-    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.6.1. Engine Apache-2.0; weights PolyForm Noncommercial, Small Business or Free Trial, or a commercial licence.</span></div>
+    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.6.2. Engine Apache-2.0; weights PolyForm Noncommercial, Small Business or Free Trial, or a commercial licence.</span></div>
   </div>
 </footer>
 </body>
