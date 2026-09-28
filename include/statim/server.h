@@ -22,7 +22,7 @@ struct AdapterSpec {
 struct ServerConfig {
     std::vector<std::pair<std::string, std::string>> models;  // name -> gguf path; first is the default
     std::vector<AdapterSpec> adapters;
-    bool adapter_runtime = false;  // --adapter-mode runtime: B·(A·x) in the graph instead of merged weights
+    std::string adapter_mode;  // --adapter-mode merge|runtime; empty: default_adapter_mode() per base model
     std::string host = "127.0.0.1";
     int port = 8080;
     int threads = 0;          // total compute threads (0 = all cores)

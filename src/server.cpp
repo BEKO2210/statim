@@ -93,15 +93,17 @@ struct Summary {
 
 // A fixed number of compute slots per base model (each engine owns its compute buffers; weights
 // are shared). The base model and its adapter views share the slots, so adapters never add
-// compute threads. Engines for a view are created the first time it runs and then kept.
-// Requests borrow one; when all slots are busy and the wait queue is full the caller gets 503
-// instead of piling up.
+// compute threads, and they share the engines too: the pool never holds more engines than slots.
+// An engine serves one view; a view gets one when it first runs, and when every engine is taken,
+// an idle engine of another view is dropped for it. Compute buffers only grow, so without the cap
+// every adapter would keep its own set of peak-sized buffers. Requests borrow an engine; when all
+// slots are busy and the wait queue is full the caller gets 503 instead of piling up.
 class EnginePool {
 public:
     EnginePool(const std::shared_ptr<Model>& model, int workers, int threads_per_worker) {
         ro_.n_threads = threads_per_worker;
         for (int i = 0; i < workers; ++i) free_[model.get()].push_back(std::make_unique<Engine>(model, ro_));
-        size_ = workers;
+        size_ = engines_ = workers;
     }
     struct Lease {
         EnginePool* pool;
@@ -124,12 +126,28 @@ public:
             list.pop_back();
             return l;
         }
+        // At the cap, some engine is idle: engines_ counts the idle ones and those of the other busy
+        // slots, and busy_ (this request included) is at most size_. This view has none idle, so it
+        // belongs to another view; take it from the view with the most idle engines.
+        std::vector<std::unique_ptr<Engine>>* from = nullptr;
+        if (engines_ >= size_)
+            for (auto& [key, idle] : free_)
+                if (key != model.get() && !idle.empty() && (!from || idle.size() > from->size())) from = &idle;
+        std::unique_ptr<Engine> evicted;
+        if (from) {
+            evicted = std::move(from->back());
+            from->pop_back();
+        } else {
+            ++engines_;
+        }
         lk.unlock();
+        evicted.reset();  // frees its compute buffers before the new engine allocates its own
         try {
             l->engine = std::make_unique<Engine>(model, ro_);
         } catch (...) {
             l->engine.reset();
             lk.lock();
+            --engines_;
             --busy_;
             cv_.notify_one();
             throw;
@@ -141,6 +159,10 @@ public:
         return busy_;
     }
     int size() const { return size_; }
+    int engines() {
+        std::lock_guard<std::mutex> lk(mu_);
+        return engines_;
+    }
 
 private:
     void release(const Model* key, std::unique_ptr<Engine> e) {
@@ -156,6 +178,7 @@ private:
     std::condition_variable cv_;
     std::map<const Model*, std::vector<std::unique_ptr<Engine>>> free_;
     int size_ = 0;
+    int engines_ = 0;  // idle engines plus one per busy slot that holds or is building one; <= size_
     int busy_ = 0;
 };
 
@@ -424,10 +447,12 @@ int run_server(const ServerConfig& cfg) {
         if (lm->adapter(spec.name)) throw std::runtime_error("--adapter " + spec.model + ":" + spec.name + " given twice");
         LoadedAdapter la;
         la.name = spec.name;
-        la.model = Model::with_adapter(lm->model, spec.path, cfg.adapter_runtime ? AdapterMode::runtime : AdapterMode::merge, threads);
+        std::optional<AdapterMode> mode;
+        if (!cfg.adapter_mode.empty()) mode = cfg.adapter_mode == "runtime" ? AdapterMode::runtime : AdapterMode::merge;
+        la.model = Model::with_adapter(lm->model, spec.path, mode, threads);
         const AdapterInfo& ai = *la.model->adapter();
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "adapter_loaded"},
-            {"model", lm->name}, {"adapter", la.name}, {"path", spec.path}, {"mode", cfg.adapter_runtime ? "runtime" : "merge"},
+            {"model", lm->name}, {"adapter", la.name}, {"path", spec.path}, {"mode", ai.mode == AdapterMode::merge ? "merge" : "runtime"},
             {"rank", ai.rank}, {"pairs", ai.n_pairs}, {"pairs_applied", ai.n_applied}, {"categories", ai.categories},
             {"bytes", ai.bytes}, {"ms", ai.load_ms}}.dump().c_str());
         lm->adapters.push_back(std::move(la));
@@ -627,32 +652,35 @@ int run_server(const ServerConfig& cfg) {
                 states.push_back(state);
             }
 
-            // Consensus: both English and multilingual checkpoints answer, their option
-            // log-probabilities are averaged. Opt in per request ("model": "consensus") or by default
-            // with --consensus.
-            LoadedModel* en = by_name("english");
-            LoadedModel* ml = by_name("multilingual");
-            const bool want_consensus =
-                en && ml && ((body.contains("model") && body["model"] == "consensus") || (cfg.consensus && !body.contains("model")));
-            std::string reason;
-            LoadedModel& lm = want_consensus ? *en : find_model(body, states, reason);
-
             // LoRA adapter: absent, null or "none" = the base weights; "auto" = the adapter that
             // serves the request's question family (request_family); otherwise a loaded adapter name.
             const std::string want_adapter =
                 body.contains("adapter") && body["adapter"].is_string() ? body["adapter"].get<std::string>() : "none";
+            const bool named_adapter = want_adapter != "none" && want_adapter != "auto";
+
+            // Consensus: both English and multilingual checkpoints answer, their option
+            // log-probabilities are averaged. Opt in per request ("model": "consensus") or by default
+            // with --consensus; the default does not apply to a request that names an adapter, which
+            // selects its model itself.
+            LoadedModel* en = by_name("english");
+            LoadedModel* ml = by_name("multilingual");
+            const bool want_consensus =
+                en && ml && ((body.contains("model") && body["model"] == "consensus") ||
+                             (cfg.consensus && !body.contains("model") && !named_adapter));
+            std::string reason;
+            LoadedModel& lm = want_consensus ? *en : find_model(body, states, reason);
+
             const LoadedAdapter* adapter = nullptr;
             std::string adapter_reason = "none";
             if (want_consensus) {
-                if (want_adapter != "none" && want_adapter != "auto")
-                    throw HttpError{422, "adapter '" + want_adapter + "' cannot be combined with consensus"};
+                if (named_adapter) throw HttpError{422, "adapter '" + want_adapter + "' cannot be combined with consensus"};
                 if (want_adapter == "auto") adapter_reason = "auto:consensus";
             } else if (want_adapter == "auto") {
                 const auto family = request_family(questions);
                 if (!family) adapter_reason = "auto:no-family";
                 else if ((adapter = lm.adapter_for(*family))) adapter_reason = "auto:" + *family;
                 else adapter_reason = "auto:" + *family + ":no-adapter";
-            } else if (want_adapter != "none") {
+            } else if (named_adapter) {
                 adapter = lm.adapter(want_adapter);
                 if (!adapter) {
                     std::string others;
@@ -813,10 +841,22 @@ int run_server(const ServerConfig& cfg) {
             o << "statim_workers_busy{model=\"" << m.name << "\"} " << m.pool->busy() << "\n";
             o << "statim_model_info{model=\"" << m.name << "\",weights=\"" << m.model->hparams().weight_type
               << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
-            for (auto& a : m.adapters)
-                o << "statim_adapter_info{model=\"" << m.name << "\",adapter=\"" << a.name << "\",mode=\""
-                  << (a.model->adapter()->mode == AdapterMode::merge ? "merge" : "runtime") << "\",bytes=\""
-                  << a.model->adapter()->bytes << "\"} 1\n";
+        }
+        if (any_adapters) {
+            o << "# HELP statim_engines Engines (compute buffers) alive for a model and its adapters; at most --workers.\n"
+                 "# TYPE statim_engines gauge\n";
+            for (auto& m : models) o << "statim_engines{model=\"" << m.name << "\"} " << m.pool->engines() << "\n";
+            o << "# TYPE statim_adapter_info gauge\n";
+            for (auto& m : models)
+                for (auto& a : m.adapters)
+                    o << "statim_adapter_info{model=\"" << m.name << "\",adapter=\"" << a.name << "\",mode=\""
+                      << (a.model->adapter()->mode == AdapterMode::merge ? "merge" : "runtime") << "\"} 1\n";
+            o << "# HELP statim_adapter_bytes Memory an adapter adds on top of the shared base weights.\n"
+                 "# TYPE statim_adapter_bytes gauge\n";
+            for (auto& m : models)
+                for (auto& a : m.adapters)
+                    o << "statim_adapter_bytes{model=\"" << m.name << "\",adapter=\"" << a.name << "\"} "
+                      << a.model->adapter()->bytes << "\n";
         }
         res.set_content(o.str(), "text/plain; version=0.0.4");
     });

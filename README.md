@@ -133,13 +133,18 @@ curl -s localhost:8080/v1/systemone -d '{"state": "...", "adapter": "emotion", "
 ```
 
 The converter takes LoRA on the encoder's attention and MLP projections and rejects anything it
-cannot represent (DoRA, head or embedding LoRA, `modules_to_save`). By default adapters are merged
-into a copy of the adapted weights at load (`W + B·A`, computed with ggml), so a request costs
-exactly the base latency; each adapter then holds its own copy of those weights (116 MB for the
-multilingual model at q8_0). `--adapter-mode runtime` keeps only the LoRA factors (a few MB) and
-evaluates `B·(A·x)` in the graph, at 17-28 % more latency on CPU. `"adapter": "auto"` picks the
-adapter whose category matches every question's family (keywords in the question ID, then the
-instructions). Details, measurements and the exact rule: [docs/API.md](docs/API.md#lora-adapters).
+cannot represent (DoRA and the other LoRA variants, head or embedding LoRA, `modules_to_save`,
+initialisations that change the base weights). It binds the adapter to its base checkpoint by a
+fingerprint of the normalisation weights, which the f32 and quantized files of one checkpoint
+share. On f32 weights adapters are merged into a copy of the adapted weights at load (`W + B·A`,
+computed with ggml), so a request costs exactly the base latency; each adapter then holds its own
+copy of those weights (438 MB for the multilingual model). On quantized weights they run as runtime
+LoRA: only the factors (a few MB) are kept and `B·(A·x)` is evaluated in the graph, at 17-28 % more
+latency on CPU, because merging would round the adapter's delta to the quantization grid (on q4_0
+the test adapter loses 91 % of its effect). `--adapter-mode merge|runtime` overrides the choice.
+`"adapter": "auto"` picks the adapter whose category matches every question's family (keywords in
+the question ID, then the instructions). Details, measurements and the exact rule:
+[docs/API.md](docs/API.md#lora-adapters).
 
 Errors retain FastAPI's `{"detail": "..."}` shape: 400 malformed input, 401 auth,
 413 resource limits, 422 invalid questions/budgets or an expired inference deadline,

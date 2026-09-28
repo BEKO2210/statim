@@ -36,7 +36,7 @@ add_library(statim_tokenizer STATIC src/tokenizer.cpp)
 target_include_directories(statim_tokenizer PUBLIC include PRIVATE third_party src)
 
 # ---- core runtime
-add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp)
+add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp src/sha256.cpp)
 set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml)
@@ -57,6 +57,7 @@ if(STATIM_BUILD_TESTS)
   target_link_libraries(test_batch_parity PRIVATE statim_core)
 
   add_executable(test_lora tests/test_lora.cpp)
+  target_include_directories(test_lora PRIVATE src)
   target_link_libraries(test_lora PRIVATE statim_core)
   add_executable(test_security tests/test_security.cpp)
   target_link_libraries(test_security PRIVATE statim_core)
@@ -77,12 +78,21 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME lora_fixtures COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/build_fixtures.py
       --base ${LORA_BASE} --out ${LORA})
     set_tests_properties(lora_fixtures PROPERTIES FIXTURES_SETUP lora TIMEOUT 120)
-    add_test(NAME lora_convert COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_convert_lora.py --base ${LORA_BASE})
+    add_test(NAME lora_convert COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_convert_lora.py --base ${LORA_BASE}
+      --binary $<TARGET_FILE:statim>)
     set_tests_properties(lora_convert PROPERTIES TIMEOUT 120)
     add_test(NAME lora_parity COMMAND test_lora ${LORA_BASE} ${LORA}/zero.gguf ${LORA}/random.gguf
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_laya-multilingual.jsonl
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_lora_random.jsonl ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/lora_random_weights.json)
     set_tests_properties(lora_parity PROPERTIES FIXTURES_REQUIRED lora TIMEOUT 600)
+    # merge into quantized base weights: the base quantized with statim-quantize, q4_0 repacked on AVX2
+    foreach(qt q8_0 q4_0)
+      add_test(NAME lora_quantize_${qt} COMMAND statim-quantize ${LORA_BASE} ${LORA}/base-${qt}.gguf ${qt})
+      set_tests_properties(lora_quantize_${qt} PROPERTIES FIXTURES_REQUIRED lora FIXTURES_SETUP lora_quantized TIMEOUT 120)
+    endforeach()
+    add_test(NAME lora_quantized COMMAND test_lora --quantized ${LORA_BASE} ${LORA}/random.gguf
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_lora_random.jsonl ${LORA}/base-q8_0.gguf ${LORA}/base-q4_0.gguf)
+    set_tests_properties(lora_quantized PROPERTIES FIXTURES_REQUIRED "lora;lora_quantized" TIMEOUT 600)
     add_test(NAME server_lora COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lora.py
       --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
     set_tests_properties(server_lora PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)

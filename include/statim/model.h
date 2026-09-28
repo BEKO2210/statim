@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -78,15 +79,19 @@ public:
     // The base model with a LoRA adapter (tools/convert_lora.py) applied. Shares the tokenizer and
     // every tensor the adapter does not touch with `base` and keeps `base` alive. Pairs whose
     // delta is exactly zero leave the base tensor in place, so a zero adapter is bit-identical to
-    // the base. Throws if the adapter was converted for another model or its shapes do not match.
+    // the base. Throws if the adapter was converted for another checkpoint (fingerprint()) or its
+    // shapes do not match. Without a mode, default_adapter_mode(*base).
     static std::shared_ptr<Model> with_adapter(std::shared_ptr<Model> base, const std::string& adapter_gguf,
-                                               AdapterMode mode = AdapterMode::merge, int n_threads = 0);
+                                               std::optional<AdapterMode> mode = std::nullopt, int n_threads = 0);
     ~Model();
 
     const HParams& hparams() const;
     const Tokenizer& tokenizer() const;
     size_t weight_bytes() const;
     const std::string& device() const;  // e.g. "cpu", "Vulkan0 (NVIDIA GeForce RTX 3070)"
+    // SHA-256 (hex) of the checkpoint's normalisation weights: the same for every weight type of one
+    // checkpoint, different between fine-tunes. A LoRA adapter records the one it was converted for.
+    const std::string& fingerprint() const;
     const AdapterInfo* adapter() const;  // nullptr for a base model
 
     // f32 copy of a weight as this model evaluates it (tests and tooling). For an adapter view the
@@ -101,6 +106,11 @@ private:
     Model();
     std::unique_ptr<Impl> impl_;
 };
+
+// merge for float base weights (f32, f16, bf16): exact, and requests run at base speed. runtime
+// for quantized ones: merging would round W + B·A to the quantization grid a second time and lose
+// most of a delta smaller than one step (docs/API.md, "Merge at load vs. runtime LoRA").
+AdapterMode default_adapter_mode(const Model& base);
 
 // Per-thread executor: owns the compute allocator. Not thread-safe; use one per worker.
 class Runner {

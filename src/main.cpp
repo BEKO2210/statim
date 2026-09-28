@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
             } else if (a == "--adapter-mode") {
                 const std::string v = next();
                 if (v != "merge" && v != "runtime") throw std::runtime_error("--adapter-mode must be merge or runtime");
-                cfg.adapter_runtime = v == "runtime";
+                cfg.adapter_mode = v;
             } else if (a == "--host") cfg.host = next();
             else if (a == "--port") cfg.port = number();
             else if (a == "--device") cfg.device = next();
@@ -191,12 +191,16 @@ int main(int argc, char** argv) {
         auto model = statim::Model::load(cfg.models.front().second, cfg.device);
         if (cfg.adapters.size() > 1) throw std::runtime_error(cmd + " takes at most one --adapter");
         if (!cfg.adapters.empty())
-            model = statim::Model::with_adapter(model, cfg.adapters.front().path,
-                                                cfg.adapter_runtime ? statim::AdapterMode::runtime : statim::AdapterMode::merge,
-                                                cfg.threads);
+            model = statim::Model::with_adapter(
+                model, cfg.adapters.front().path,
+                cfg.adapter_mode.empty() ? std::nullopt
+                                         : std::optional(cfg.adapter_mode == "runtime" ? statim::AdapterMode::runtime
+                                                                                      : statim::AdapterMode::merge),
+                cfg.threads);
         if (cmd == "info") {
             const auto& h = model->hparams();
-            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"device", model->device()}, {"weight_bytes", model->weight_bytes()},
+            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"fingerprint", model->fingerprint()},
+                          {"device", model->device()}, {"weight_bytes", model->weight_bytes()},
                           {"encoder", {{"layers", h.n_layer}, {"hidden", h.n_embd}, {"heads", h.n_head}, {"ff", h.n_ff},
                                        {"local_window", h.local_window}, {"rope_theta_global", h.rope_theta_global},
                                        {"rope_theta_local", h.rope_theta_local}}},

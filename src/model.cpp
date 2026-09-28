@@ -2,6 +2,7 @@
 #include "statim/security.h"
 
 #include "kernels.h"
+#include "sha256.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -77,6 +78,7 @@ struct Model::Impl {
     ggml_backend_dev_t dev = nullptr;              // device the graphs run on
     ggml_backend_buffer_t weight_buf = nullptr;    // weights copied to a non-CPU device
     std::string device_desc = "cpu";
+    std::string fingerprint;  // norm_fingerprint(); adapter views copy the base's
     // adapter view (Model::with_adapter): the base owns everything above; this owns only its own
     // merged weights or LoRA factors
     std::shared_ptr<Model> base;
@@ -135,6 +137,7 @@ const Tokenizer& Model::tokenizer() const { return *impl_->tok; }
 size_t Model::weight_bytes() const { return impl_->weight_bytes; }
 const std::string& Model::device() const { return impl_->device_desc; }
 const AdapterInfo* Model::adapter() const { return impl_->adapter.get(); }
+const std::string& Model::fingerprint() const { return impl_->fingerprint; }
 
 static std::string lower(std::string s) {
     for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -242,6 +245,32 @@ static void repack_weights(Model::Impl& M) {
     }
 }
 
+// SHA-256 over the checkpoint's normalisation weights: for every tensor whose name contains
+// "norm", in byte order of the names, the name and a NUL byte, the element count (u64
+// little-endian) and the values as little-endian f32. Fine-tuning changes these weights, and
+// quantizing keeps them (tools/quantize.cpp and tools/convert_laya.py never quantize a norm), so the
+// value tells apart fine-tunes that share a name and is the same for every weight type of one
+// checkpoint. tools/convert_lora.py computes the same value and records it in the adapter.
+// Called while the tensors still point into the file mapping.
+static std::string norm_fingerprint(const Model::Impl& M) {
+    std::vector<std::string> names;
+    for (int64_t i = 0; i < gguf_get_n_tensors(M.gguf); ++i) {
+        std::string n = gguf_get_tensor_name(M.gguf, i);
+        if (n.find("norm") != std::string::npos) names.push_back(std::move(n));
+    }
+    std::sort(names.begin(), names.end());
+    Sha256 h;
+    for (const std::string& n : names) {
+        const std::vector<float> v = to_f32(ggml_get_tensor(M.ctx_w, n.c_str()));
+        uint8_t count[8];
+        for (int i = 0; i < 8; ++i) count[i] = static_cast<uint8_t>(uint64_t(v.size()) >> (8 * i));
+        h.update(n.c_str(), n.size() + 1);
+        h.update(count, sizeof count);
+        h.update(v.data(), v.size() * sizeof(float));  // ggml, like GGUF, runs on little-endian hosts
+    }
+    return h.hex();
+}
+
 std::shared_ptr<Model> Model::load(const std::string& path, const std::string& device) {
     std::shared_ptr<Model> m(new Model());
     Impl& M = *m->impl_;
@@ -277,6 +306,7 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
         x->data = static_cast<char*>(M.map) + off;
         M.weight_bytes += ggml_nbytes(x);
     }
+    M.fingerprint = norm_fingerprint(M);
 
     if (M.on_cpu()) repack_weights(M);
 
@@ -446,11 +476,17 @@ static std::vector<uint8_t> from_f32(ggml_type type, const std::vector<float>& x
     return dst;
 }
 
-std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, const std::string& path, AdapterMode mode,
-                                           int n_threads) {
+AdapterMode default_adapter_mode(const Model& base) {
+    const std::string& t = base.hparams().weight_type;
+    return t == "f32" || t == "f16" || t == "bf16" ? AdapterMode::merge : AdapterMode::runtime;
+}
+
+std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, const std::string& path,
+                                           std::optional<AdapterMode> requested, int n_threads) {
     const auto t0 = std::chrono::steady_clock::now();
     if (!base_model) fail("with_adapter: no base model");
     const Impl& B = *base_model->impl_;
+    const AdapterMode mode = requested.value_or(default_adapter_mode(*base_model));
     if (B.adapter) fail("cannot stack LoRA adapters: '" + path + "' onto an adapter view");
     if (n_threads <= 0) n_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
 
@@ -473,9 +509,18 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     info->path = path;
     info->mode = mode;
     info->name = get_str(g, "general.name");
+    // The adapter only fits the checkpoint it was trained on. general.name cannot tell: fine-tunes may
+    // share it, and the f32 and q8_0 files of one checkpoint may differ in it. The fingerprint can
+    // (norm_fingerprint).
+    const std::string base_fp = get_str(g, "statim.lora.base_fingerprint");
     const std::string base_name = get_str(g, "statim.lora.base_name");
-    if (!base_name.empty() && base_name != B.hp.name)
-        fail("LoRA adapter '" + path + "' was converted for model '" + base_name + "', not '" + B.hp.name + "'");
+    if (base_fp.empty())
+        fail("LoRA adapter '" + path + "' does not record its base model; convert it again with "
+             "tools/convert_lora.py --base <model.gguf>");
+    if (base_fp != B.fingerprint)
+        fail("LoRA adapter '" + path + "' was converted for another checkpoint ('" + base_name + "', fingerprint " +
+             base_fp.substr(0, 16) + "...), not for this '" + B.hp.name + "' (fingerprint " + B.fingerprint.substr(0, 16) +
+             "...)");
     if (int64_t id = gguf_find_key(g, "statim.lora.rank"); id >= 0) info->rank = static_cast<int>(gguf_get_val_u32(g, id));
     if (int64_t id = gguf_find_key(g, "statim.lora.alpha"); id >= 0) info->alpha = gguf_get_val_f32(g, id);
     if (int64_t id = gguf_find_key(g, "statim.lora.categories"); id >= 0 && gguf_get_arr_type(g, id) == GGUF_TYPE_STRING)
@@ -488,6 +533,7 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     M.weight_bytes = B.weight_bytes;
     M.dev = B.dev;
     M.device_desc = B.device_desc;
+    M.fingerprint = B.fingerprint;
     M.tok_embd = B.tok_embd;
     M.embd_norm = B.embd_norm;
     M.final_norm = B.final_norm;

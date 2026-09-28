@@ -674,11 +674,16 @@ python tools/convert_lora.py runs/emotion-lora -o models/emotion.lora.gguf \
 
 - Targets: the encoder's attention (`attn.Wqkv`, `attn.Wo`) and MLP (`mlp.Wi`, `mlp.Wo`) projections, any subset of layers. Keys may carry the `base_model.model.` prefix and an adapter name (`lora_A.default.weight`).
 - Scale: `lora_alpha / r`, or `lora_alpha / sqrt(r)` with `use_rslora`; `rank_pattern` and `alpha_pattern` are matched per module the way PEFT matches them. The scale is folded into `lora_b`, so the file stores `W' = W + lora_b · lora_a`.
-- Rejected with an error: LoRA on any other module (decision head, embeddings, classifier), DoRA, `bias` other than `none`, `modules_to_save`, a missing `lora_A` or `lora_B`, a rank that disagrees with the config. These cannot be expressed as a delta on the encoder, and dropping them would serve a different model than the one that was evaluated.
-- `--base` checks every shape against the model and records its `general.name`; the server refuses to load the adapter onto a model with another name. Without `--base` the shapes are checked at load time only.
+- Factors may be f32, f16 or bf16 (the dtype PEFT saves when the model was trained in bf16); f16 and bf16 are widened to f32 exactly.
+- Rejected with an error, because Statim cannot represent them and dropping them would serve a different model than the one that was evaluated:
+  - LoRA on any other module (decision head, embeddings, classifier), `bias` other than `none`, `lora_bias`, `modules_to_save`, `trainable_token_indices`, `layer_replication`, `target_parameters`, a missing `lora_A` or `lora_B`, a rank that disagrees with the config;
+  - `fan_in_fan_out`, which PEFT sets for Conv1D weights stored as (in, out), not for the encoder's `nn.Linear` projections;
+  - the LoRA variants that compute something other than `W + B·A`: DoRA, aLoRA (`alora_invocation_tokens`), QALoRA, BD-LoRA, VeLoRA, MonteCLoRA, KaSA, Arrow and MiCA;
+  - `init_lora_weights` PiSSA, OLoRA, CorDA or LoRA-GA, which change the base weights at initialisation, so the saved adapter only fits that changed base, and LoftQ, which replaces them with quantized ones. PEFT's `save_pretrained(..., path_initial_model_for_weight_conversion=...)` turns the first four into a plain LoRA (saved with `init_lora_weights: true`), which converts.
+- `--base` (required) is the Statim model the adapter was trained on. Every shape is checked against it, and its `general.name` and fingerprint are recorded. The fingerprint is a SHA-256 over the checkpoint's normalisation weights: every tensor whose name contains `norm`, in byte order of the names, each as its name and a NUL byte, the element count (u64 little-endian) and the values as little-endian f32. Fine-tuning changes these weights and quantizing never touches them, so the fingerprint tells apart two fine-tunes that share a name and is the same for the f32, f16, q8_0 and q4_0 files of one checkpoint (whose names may differ). `statim info -m model.gguf` prints it.
 - `--category` (repeatable) lists the question families the adapter serves in `"adapter": "auto"`; without it the adapter name is used.
 
-File layout (`statim.format` = `statim-lora-v1`): `encoder.layers.<l>.<target>.weight.lora_a` (f32, ggml ne `[in, r]`) and `.lora_b` (f32, ne `[r, out]`, pre-scaled), plus `statim.lora.rank`, `statim.lora.alpha`, `statim.lora.rslora`, `statim.lora.categories` and, with `--base`, `statim.lora.base_name`.
+File layout (`statim.format` = `statim-lora-v1`): `encoder.layers.<l>.<target>.weight.lora_a` (f32, ggml ne `[in, r]`) and `.lora_b` (f32, ne `[r, out]`, pre-scaled), plus `statim.lora.rank`, `statim.lora.alpha`, `statim.lora.rslora`, `statim.lora.categories`, `statim.lora.base_name` and `statim.lora.base_fingerprint`. The engine loads an adapter only onto a model with the recorded fingerprint, and refuses a file without one.
 
 ### Load
 
@@ -690,9 +695,9 @@ statim serve -m multilingual=models/laya-multilingual-q8_0.gguf \
 
 `--adapter [model:]name=file.gguf` attaches an adapter to the `-m` model called `model` (the first `-m` model when omitted). Names are 1-64 characters of `A-Z a-z 0-9 _ . -`; `auto` and `none` are reserved; a name may repeat across models but not within one. Every adapter is loaded and checked at startup, so a bad file stops the server before it listens. `statim decide`, `bench` and `info` take one `--adapter name=file.gguf` as well.
 
-`--adapter-mode merge|runtime` (default `merge`) chooses how adapters are applied, for all of them; see below.
+`--adapter-mode merge|runtime` chooses how adapters are applied, for all of them. Without it, adapters on f32, f16 or bf16 weights are merged and adapters on quantized weights run as runtime LoRA; see [below](#merge-at-load-vs-runtime-lora).
 
-Adapters share the base model's `--workers` slots: a server with `--workers 2` runs at most two forward passes at once over the base and all its adapters together, so adapters never add compute threads. An adapter's compute buffers are allocated the first time a request uses it. With `--batch-window-ms`, requests are only batched with requests for the same adapter.
+Adapters share the base model's `--workers` slots and engines: a server with `--workers 2` runs at most two forward passes at once over the base and all its adapters together, and holds at most two engines (compute buffers) for them, so adapters add neither compute threads nor compute memory. An engine serves one weight set at a time; when a request needs one for another adapter (or the base) and none is idle for it, an idle engine of another weight set is dropped and a new one is built. `statim_engines` in `/metrics` shows the count. With `--batch-window-ms`, requests are only batched with requests for the same adapter.
 
 ### Select
 
@@ -702,7 +707,7 @@ Adapters share the base model's `--workers` slots: a server with `--workers 2` r
 | a loaded name, e.g. `"emotion"` | that adapter | `"emotion"` | `requested` |
 | `"auto"` | the adapter serving the request's question family, else base | its name or `null` | `auto:<family>`, `auto:<family>:no-adapter` or `auto:no-family` |
 
-Model routing runs first. An explicit `model` must carry the named adapter, otherwise the request fails with 422. Without an explicit `model`, a named adapter that exactly one loaded model carries selects that model (`routing.reason` = `adapter`); otherwise the usual language routing picks the model, and the adapter must exist there. `"model": "consensus"` accepts only `"auto"` (which then uses the base weights, `auto:consensus`) or no adapter.
+Model routing runs first. An explicit `model` must carry the named adapter, otherwise the request fails with 422. Without an explicit `model`, a named adapter that exactly one loaded model carries selects that model (`routing.reason` = `adapter`); otherwise the usual language routing picks the model, and the adapter must exist there. `"model": "consensus"` accepts only `"auto"` (which then uses the base weights, `auto:consensus`) or no adapter. The `--consensus` default applies to requests without a named adapter only: a request that names one runs on that adapter's model.
 
 ```bash
 curl -sS http://127.0.0.1:8080/v1/systemone -H 'Content-Type: application/json' --data-binary @- <<'EOF'
@@ -713,7 +718,7 @@ curl -sS http://127.0.0.1:8080/v1/systemone -H 'Content-Type: application/json' 
 EOF
 ```
 
-The response carries `"routing": {"model": "multilingual", "reason": "adapter", ..., "adapter": "sentiment", "adapter_reason": "auto:sentiment"}` when an adapter with category `sentiment` is loaded. The access log records the adapter per request.
+With one model loaded and an adapter of category `sentiment`, the response carries `"routing": {"model": "multilingual", "reason": "default", ..., "adapter": "sentiment", "adapter_reason": "auto:sentiment"}`. `"auto"` never selects the model: `routing.reason` comes from the usual model routing (`default`, `lang:en`, `lang:other` or `requested`). The access log records the adapter per request.
 
 ### The auto rule
 
@@ -746,7 +751,7 @@ The rule is deliberately literal and keyword-based: it is deterministic, costs n
 
 ### Merge at load vs. runtime LoRA
 
-`merge` (the default) computes `W' = W + B·A` once per adapted projection when the adapter loads: the base weight is dequantized to f32, `B·A` is added with a ggml graph on the CPU, and the result is stored in the base weight's type (quantized types are quantized again; on the CPU, repackable types go to the same repack buffer as the base). Requests then run the unchanged base graph. `runtime` keeps the base weights and adds `B·(A·x)` after each adapted projection in the graph.
+`merge` computes `W' = W + B·A` once per adapted projection when the adapter loads: the base weight is dequantized to f32, `B·A` is added with a ggml graph on the CPU, and the result is stored in the base weight's type (quantized types are quantized again; on the CPU, repackable types go to the same repack buffer as the base). Requests then run the unchanged base graph. `runtime` keeps the base weights and adds `B·(A·x)` after each adapted projection in the graph. Without `--adapter-mode`, adapters on float weights (f32, f16, bf16) are merged and adapters on quantized weights run as runtime LoRA, for the accuracy reason below.
 
 Measured on 4 threads of an Intel Xeon @ 2.10 GHz, `laya-multilingual`, every projection of all 22 layers adapted, 10 short states from `tests/data/golden_inputs.json` with all 8 questions (one request per state, mean of 30):
 
@@ -761,19 +766,35 @@ Measured on 4 threads of an Intel Xeon @ 2.10 GHz, `laya-multilingual`, every pr
 | q8_0 | rank 4 | runtime | 1067 | 3.3 MB | 4 ms |
 | q8_0 | rank 16 | runtime | 934 | 13.5 MB | 10 ms |
 
-- Latency: a merged adapter runs at base speed (the differences above are run-to-run noise). Runtime LoRA costs 17-28 % per request although rank 4 adds under 1 % of the FLOPs: it adds three graph nodes per adapted projection (264 for this model), and on short CPU inputs every node pays a thread barrier and a pass over the activations. For a latency-bound CPU decision engine, merge is the right default.
-- Memory: the price of merge is one copy of the adapted projections per adapter: 438 MB in f32, 116 MB in q8_0, whatever the rank. Runtime stores only the factors (MB). Fourteen category adapters on a q8_0 base cost about 1.6 GB merged; that is when `--adapter-mode runtime` pays off.
-- Accuracy: on f32 weights the two modes agree within 2.4e-5 in the logits. On a quantized base, merge quantizes `W + B·A` again, so it adds a second rounding: against the f32 model with the adapter merged, mean |Δlogit| is 0.078 for q8_0 merge, 0.064 for q8_0 runtime, and 0.068 for the plain q8_0 base against the plain f32 base. For the best quantized result, merge the adapter into the checkpoint in PyTorch and quantize once with `tools/convert_laya.py`, or use runtime mode.
+- Latency: a merged adapter runs at base speed (the differences above are run-to-run noise). Runtime LoRA costs 17-28 % per request although rank 4 adds under 1 % of the FLOPs: it adds three graph nodes per adapted projection (264 for this model), and on short CPU inputs every node pays a thread barrier and a pass over the activations. On float weights merge is exact and costs nothing per request, so it is the default there.
+- Accuracy on float weights: the two modes agree within 2.4e-5 in the logits.
+- Accuracy on quantized weights: merge quantizes `W + B·A` again, so the adapter's delta is rounded to the quantization grid, and a LoRA delta is often smaller than one step of it. `lora_quantized` measures this on the 80 reference items with the random rank-4 test adapter (mean |Δlogit|, CPU):
+
+  | Base | vs. the f32 base | Adapter effect (runtime) | Runtime vs. the f32 PyTorch merge | Merge vs. runtime |
+  |---|---|---|---|---|
+  | q8_0 | 0.085 | 0.480 | 0.081 | 0.070, 14 % of the effect |
+  | q4_0 | 0.641 | 0.549 | 0.674 | 0.502, 91 % of the effect |
+
+  Runtime LoRA keeps a quantized model with the adapter as close to the f32 reference as the quantized base is to the f32 base. Merging loses a seventh of the adapter's effect on q8_0 and nearly all of it on q4_0, where the test adapter's delta (about 0.004 per weight) is smaller than one quantization step; a trained adapter's delta is often smaller still. So runtime is the default on quantized weights, and `--adapter-mode merge` trades that accuracy for base latency. For the best quantized result, merge the adapter into the checkpoint in PyTorch and quantize once with `tools/convert_laya.py`.
+- Memory: the price of merge is one copy of the adapted projections per adapter: 438 MB in f32, 116 MB in q8_0, whatever the rank. Runtime stores only the factors (MB). Fourteen category adapters on an f32 base cost about 6.1 GB merged; that is when `--adapter-mode runtime` pays off there too.
 - Exactness: a LoRA pair whose `lora_a` or `lora_b` is all zeros is skipped in both modes (the base tensor stays in place), so an untrained adapter (PEFT initialises `lora_B` to zero) is bit-identical to the base on every weight type.
-- Types that need an importance matrix to quantize (the IQ types) cannot be merged; use runtime mode for them.
+- Types that need an importance matrix to quantize (the IQ types) cannot be merged; runtime mode, their default, works.
 
 ### Inspect
 
-`GET /v1/models` lists each model's adapters: `id`, `source` (the adapter's `general.name`), `mode`, `rank`, `alpha`, `pairs` (LoRA pairs in the file), `pairs_applied` (non-zero pairs), `categories` and `bytes` (memory added on top of the base). `/metrics` exports `statim_adapter_info{model,adapter,mode,bytes} 1` per adapter. `statim info -m base.gguf --adapter name=file.gguf` prints the same fields.
+`GET /v1/models` lists each model's adapters: `id`, `source` (the adapter's `general.name`), `mode`, `rank`, `alpha`, `pairs` (LoRA pairs in the file), `pairs_applied` (non-zero pairs), `categories` and `bytes` (memory added on top of the base). `/metrics` exports `statim_adapter_info{model,adapter,mode} 1` and `statim_adapter_bytes{model,adapter}` per adapter, and `statim_engines{model}` (engines alive for a model and its adapters, at most `--workers`). `statim info -m base.gguf --adapter name=file.gguf` prints the same fields; `statim info` also prints the model's `fingerprint`.
 
 ### Tests
 
-`ctest -R lora` (CPU): `lora_fixtures` writes a zero and a random rank-4 PEFT adapter from an integer hash (no RNG, identical on every platform) and converts them; `lora_convert` checks scaling and every rejected input of the converter; `lora_parity` checks that the zero adapter's logits and `decide()` output are bit-identical to the base, and that the random adapter's merged weights and logits match a PyTorch reference that merged the same adapter into the official Laya model (`tests/lora/gen_reference.py`, committed as `tests/data/golden_lora_random.jsonl`) within 1e-4, in both modes; `server_lora` covers selection, auto routing, model selection by adapter, the batch endpoint, micro-batching across adapters, `/v1/models`, `/metrics` and the error cases.
+`ctest -R lora` (CPU):
+
+- `lora_fixtures` writes a zero and a random rank-4 PEFT adapter from an integer hash (no RNG, identical on every platform) and converts them.
+- `lora_convert` checks scaling, f16 and bf16 factors, the recorded fingerprint against `statim info`, and every rejected input of the converter.
+- `lora_parity` checks that the zero adapter's logits and `decide()` output are bit-identical to the base, and that the random adapter's merged weights and logits match a PyTorch reference that merged the same adapter into the official Laya model (`tests/lora/gen_reference.py`, committed as `tests/data/golden_lora_random.jsonl`) within 1e-4, in both modes. It also checks SHA-256 against the FIPS 180-2 vectors and that adapters for another checkpoint, without a fingerprint, or with shapes that do not fit are refused.
+- `lora_quantized` quantizes the base to q8_0 and q4_0 (`lora_quantize_*`) and checks the table above: same fingerprint, runtime as the default, runtime within 1.5 times the base's quantization noise of the f32 reference, merged weights equal to `quantize(dequantize(W) + B·A)` bit for bit, and repacked merged weights computing what the file layout computes.
+- `server_lora` covers selection, auto routing, model selection by adapter, the batch endpoint, micro-batching across adapters, `/v1/models`, `/metrics`, authentication before adapter checks, a named adapter under `--consensus`, one engine for the base and two adapters with `--workers 1`, and the error cases.
+
+CI runs them with `ctest -R lora -V`, so the measured differences are in the log.
 
 ## Option budget
 

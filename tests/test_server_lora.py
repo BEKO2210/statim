@@ -10,7 +10,10 @@ Server A: -m multilingual=BASE -m english=BASE, adapters multilingual:zero and m
 Server B: same weights with --adapter-mode runtime and micro-batching; concurrent requests for
 different adapters must each get their own adapter's answers.
 Server C: no adapters; responses keep their pre-adapter shape.
-Startup errors: unknown model, reserved name, bad file.
+Server D: an API key, --consensus and one worker: authentication comes before adapter checks, a
+named adapter is not overridden by the consensus default, and the base and two adapters share one
+engine (statim_engines stays at --workers) without changing any answer.
+Startup errors: unknown model, reserved name, bad file, an adapter converted for another checkpoint.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -53,10 +56,12 @@ def reserve_port():
         probe.close()
 
 
-def call(port, method, path, payload=None):
+def call(port, method, path, payload=None, token=None):
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=300)
-    conn.request(method, path, json.dumps(payload) if payload is not None else None,
-                 {"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    conn.request(method, path, json.dumps(payload) if payload is not None else None, headers)
     res = conn.getresponse()
     body = res.read()
     conn.close()
@@ -66,11 +71,19 @@ def call(port, method, path, payload=None):
         return res.status, body.decode()
 
 
-def decide(port, questions, state=STATE, **extra):
+def decide(port, questions, state=STATE, token=None, **extra):
     payload = dict(state=state, questions=questions, return_logits=True, **extra)
-    status, body = call(port, "POST", "/v1/systemone", payload)
+    status, body = call(port, "POST", "/v1/systemone", payload, token)
     assert status == 200, (status, body)
     return body
+
+
+def metric(text, line_prefix):
+    """The value of the /metrics sample whose line starts with line_prefix (None if absent)."""
+    for line in text.splitlines():
+        if line.startswith(line_prefix + " "):
+            return float(line.split()[-1])
+    return None
 
 
 class Server:
@@ -193,8 +206,10 @@ def test_server_a(binary, model, adapters, tmp):
               "consensus with adapter auto uses the base weights")
 
         status, metrics = call(p, "GET", "/metrics")
-        check('statim_adapter_info{model="multilingual",adapter="random",mode="merge"' in metrics,
-              "/metrics exports statim_adapter_info")
+        check(metric(metrics, 'statim_adapter_info{model="multilingual",adapter="random",mode="merge"}') == 1
+              and metric(metrics, 'statim_adapter_bytes{model="multilingual",adapter="random"}') == ad["random"]["bytes"]
+              and metric(metrics, 'statim_adapter_bytes{model="multilingual",adapter="zero"}') == 0,
+              "/metrics exports statim_adapter_info and statim_adapter_bytes")
         return {"base": base, "zero": zero, "random": rnd}
     finally:
         srv.close()
@@ -241,14 +256,62 @@ def test_server_plain(binary, model, tmp):
         srv.close()
 
 
-def test_startup_errors(binary, model, adapters):
+def test_server_d(binary, model, adapters, tmp, ref):
+    print("server D: API key, --consensus, one worker")
+    key = "lora-test-key-0123456789abcdef"
+    (tmp / "keys").write_text(key + "\n")
+    srv = Server(binary, ["-m", "multilingual=" + model, "-m", "english=" + model, "--consensus", "--workers", "1",
+                          "--api-key-file", str(tmp / "keys"),
+                          "--adapter", "multilingual:zero=" + str(adapters / "zero.gguf"),
+                          "--adapter", "multilingual:random=" + str(adapters / "random.gguf")], tmp / "d.log")
+    try:
+        p = srv.port
+        for payload, what in [({"adapter": "random"}, "a loaded adapter"), ({"adapter": "nope"}, "an unknown adapter"),
+                              ({"adapter": 5}, "an invalid adapter")]:
+            status, _ = call(p, "POST", "/v1/systemone", dict(state=STATE, questions=Q_SENTIMENT, **payload))
+            check(status == 401, "no token, %s -> %d (authentication comes first)" % (what, status))
+        check(all(call(p, "GET", path)[0] == 401 for path in ("/v1/models", "/metrics")), "no token: /v1/models, /metrics -> 401")
+        status, models = call(p, "GET", "/v1/models", token=key)
+        check(status == 200 and [a["id"] for a in models["data"][0]["adapters"]] == ["zero", "random"],
+              "with the token /v1/models lists the adapters")
+
+        r = decide(p, Q_ALL, token=key, adapter="random")
+        check(r["routing"]["model"] == "multilingual" and r["routing"]["reason"] == "adapter"
+              and r["routing"]["adapter"] == "random" and max_logit_diff(r, ref["random"]) <= 1e-4,
+              "a named adapter selects its model despite the --consensus default")
+        r = decide(p, Q_ALL, token=key)
+        check(r["routing"]["model"] == "consensus" and r["routing"]["adapter"] is None, "without an adapter: consensus")
+        r = decide(p, Q_ALL, token=key, adapter="auto")
+        check(r["routing"]["model"] == "consensus" and r["routing"]["adapter_reason"] == "auto:consensus",
+              "adapter auto keeps the consensus default (base weights)")
+
+        # one worker: every switch between the base and the adapters replaces the engine
+        worst = 0.0
+        for kind in ["base", "zero", "random", "base", "random", "zero", "base"]:
+            r = decide(p, Q_ALL, token=key, model="multilingual", adapter=None if kind == "base" else kind)
+            worst = max(worst, max_logit_diff(r, ref[kind]))
+        status, metrics = call(p, "GET", "/metrics", token=key)
+        engines = metric(metrics, 'statim_engines{model="multilingual"}')
+        check(engines == 1, "base and two adapters share --workers 1 engine (statim_engines %s)" % engines)
+        check(worst <= 1e-4, "switching engines changes no answer (max |dlogit| %.2e vs server A)" % worst)
+    finally:
+        srv.close()
+
+
+def test_startup_errors(binary, model, adapters, tmp):
     print("startup errors")
+    raw = (adapters / "random.gguf").read_bytes()
+    fp = raw[raw.index(b"statim.lora.base_fingerprint"):]
+    fp = fp[fp.index(b"@\0\0\0\0\0\0\0") + 8:][:64]  # the value: u64 length 64, then 64 hex digits
+    other = tmp / "other-base.gguf"
+    other.write_bytes(raw.replace(fp, bytes(reversed(fp))))
     for args, needle in [
         (["--adapter", "nosuch:x=" + str(adapters / "zero.gguf")], "no model named 'nosuch'"),
         (["--adapter", "auto=" + str(adapters / "zero.gguf")], "must be 1-64 of"),
         (["--adapter", "a=" + model], "is not a Statim LoRA adapter"),
         (["--adapter", "a"], "--adapter expects"),
         (["--adapter-mode", "fast"], "--adapter-mode must be merge or runtime"),
+        (["--adapter", "a=" + str(other)], "was converted for another checkpoint"),
     ]:
         r = subprocess.run([binary, "serve", "-m", "multilingual=" + model, "--port", str(reserve_port())] + args,
                            capture_output=True, text=True, timeout=120, env=dict(os.environ, STATIM_DEVICE="cpu"))
@@ -270,7 +333,8 @@ def main():
         ref = test_server_a(a.binary, a.model, adapters, tmp)
         test_server_b(a.binary, a.model, adapters, tmp, ref)
         test_server_plain(a.binary, a.model, tmp)
-        test_startup_errors(a.binary, a.model, adapters)
+        test_server_d(a.binary, a.model, adapters, tmp, ref)
+        test_startup_errors(a.binary, a.model, adapters, tmp)
     print("FAIL: %d checks" % len(failures) if failures else "PASS")
     return 1 if failures else 0
 

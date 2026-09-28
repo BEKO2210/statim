@@ -29,28 +29,43 @@ between minor versions; every change is listed here.
 - LoRA adapters: one base model plus small per-category adapters, chosen per request.
   - `tools/convert_lora.py` converts a PEFT adapter (safetensors; LoRA on the encoder's
     `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo`) into a `statim-lora-v1` GGUF. The PEFT scale
-    (`lora_alpha / r`, rsLoRA, `rank_pattern` / `alpha_pattern`) is folded into `lora_b`; DoRA,
-    trained biases, `modules_to_save` and LoRA on other modules are rejected. `--base` checks the
-    shapes and binds the adapter to the model's `general.name`; `--category` sets the question
-    families for auto routing.
+    (`lora_alpha / r`, rsLoRA, `rank_pattern` / `alpha_pattern`) is folded into `lora_b`; f16 and
+    bf16 factors are widened exactly. Rejected: trained biases, `modules_to_save`, LoRA on other
+    modules, `fan_in_fan_out`, the LoRA variants (DoRA, aLoRA, QALoRA, BD-LoRA, VeLoRA,
+    MonteCLoRA, KaSA, Arrow, MiCA) and initialisations that change the base weights (PiSSA, OLoRA,
+    CorDA, LoRA-GA, LoftQ) unless PEFT converted the adapter into a plain LoRA. `--base` is
+    required: it checks the shapes and records the checkpoint's fingerprint, a SHA-256 over its
+    normalisation weights that is the same for its f32 and quantized files and differs between
+    fine-tunes; the engine refuses an adapter whose fingerprint does not match (`statim info`
+    prints a model's). `--category` sets the question families for auto routing.
   - `statim serve --adapter [model:]name=file.gguf` (repeatable) and `--adapter-mode merge|runtime`;
-    `decide`, `bench` and `info` take one `--adapter`. Merge (default) computes `W + B·A` with ggml
-    at load and runs the unchanged base graph: base latency, one copy of the adapted weights per
-    adapter (438 MB f32 / 116 MB q8_0 for the multilingual model). Runtime keeps only the factors
-    (3.3 MB at rank 4) and adds `B·(A·x)` in the graph, 17-28 % slower per request on CPU.
+    `decide`, `bench` and `info` take one `--adapter`. Merge computes `W + B·A` with ggml at load
+    and runs the unchanged base graph: base latency, one copy of the adapted weights per adapter
+    (438 MB f32 / 116 MB q8_0 for the multilingual model). Runtime keeps only the factors (3.3 MB
+    at rank 4) and adds `B·(A·x)` in the graph, 17-28 % slower per request on CPU. The default is
+    merge on f32/f16/bf16 weights and runtime on quantized weights, where merging rounds the delta
+    to the quantization grid: with the test adapter it loses 14 % of the adapter's effect on q8_0
+    and 91 % on q4_0, while runtime stays as close to the f32 reference as the quantized base is.
     Zero-delta pairs are skipped, so an untrained adapter is bit-identical to the base.
   - Request field `adapter`: a loaded name, `"auto"` or `null`/`"none"`. `"auto"` routes by
     question family: keywords of the 14 decision categories in the question ID, then in the
     instructions; a request whose questions do not all share one family uses the base weights.
     A named adapter that only one model carries selects that model (`routing.reason` `adapter`).
   - `routing.adapter` and `routing.adapter_reason` in responses, `adapters` per model in
-    `GET /v1/models` and `statim_adapter_info` in `/metrics`, all only when the server has
-    adapters loaded (or the request sets `adapter`); responses of servers without adapters are
-    unchanged. Adapters share the base model's `--workers` slots; micro-batches never mix adapters.
-  - Tests (CPU): `lora_convert` (converter scaling and rejections), `lora_parity` (a zero adapter
-    is bit-identical to the base; a random rank-4 adapter matches a PyTorch merge of the same
-    adapter into the official Laya model within 1e-4 in weights and logits, in both modes) and
-    `server_lora` (selection, auto routing, errors, batch endpoint, micro-batching across adapters).
+    `GET /v1/models`, and `statim_adapter_info`, `statim_adapter_bytes` and `statim_engines` in
+    `/metrics`, all only when the server has adapters loaded (or the request sets `adapter`);
+    responses of servers without adapters are unchanged. Adapters share the base model's
+    `--workers` slots and engines: the base and all its adapters hold at most `--workers` compute
+    buffers, and an idle engine of another adapter is dropped when one is needed. Micro-batches
+    never mix adapters. The `--consensus` default does not apply to a request that names an
+    adapter.
+  - Tests (CPU): `lora_convert` (converter scaling, dtypes, fingerprint and rejections),
+    `lora_parity` (a zero adapter is bit-identical to the base; a random rank-4 adapter matches a
+    PyTorch merge of the same adapter into the official Laya model within 1e-4 in weights and
+    logits, in both modes; adapters for another checkpoint or with wrong shapes are refused),
+    `lora_quantized` (q8_0 and q4_0 bases: runtime accuracy, bit-exact merged weights, repacked
+    merge) and `server_lora` (selection, auto routing, errors, batch endpoint, micro-batching
+    across adapters, authentication, consensus, one engine per worker). CI runs them verbose.
 
 ## [0.7.0] - 2026-09-28
 
