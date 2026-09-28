@@ -35,6 +35,12 @@ was trained on (exact normalised match, or containment of 40+ characters in eith
 the mixture's hash becomes part of the pool fingerprint in every record. gate.py compares a
 category cell only between two models with the same fingerprint.
 
+--adapter NAME sends "adapter": NAME with every request (a LoRA adapter loaded with
+`statim serve --adapter [model:]NAME=FILE`), checks that each answer was computed with it
+(routing.adapter), and records it in every record ("adapter", and "model" as "<model>:<NAME>"), so a
+base run and an adapter run of the same server stay apart. tools/finetune/lora_experiment.py compares
+the two with gate.adapter_decision.
+
 Cells in GATE_EXCLUDED are reported with "gate": false and a reason, and gate.py keeps them out of
 the "categories" family: zero-shot cells (no training source in that language, or labels the
 training never saw) and suites whose items the registry in use would bias.
@@ -753,8 +759,23 @@ def probabilities(answer, item):
     return [float(pr[k]) for k in option_names(item)]
 
 
-def run_items(url, items, model=None, api_key=None, batch=16, head_max_len=None):
-    """Probabilities per item, in input order. Items are grouped by question (one request = one question)."""
+def request_body(states, questions, model=None, head_max_len=None, adapter=None):
+    """Body of one /v1/systemone/batch request. `adapter` names a LoRA adapter the server loaded
+    (statim serve --adapter); without it the base weights answer and the body has no "adapter" key."""
+    body = {"states": states, "questions": questions, "ensemble": 1}
+    if model:
+        body["model"] = model
+    if head_max_len:
+        body["head_max_len"] = head_max_len
+    if adapter:
+        body["adapter"] = adapter
+    return body
+
+
+def run_items(url, items, model=None, api_key=None, batch=16, head_max_len=None, adapter=None):
+    """Probabilities per item, in input order. Items are grouped by question (one request = one question).
+    With a named adapter every answer must report it in routing.adapter: a server without LoRA support
+    ignores the unknown field and would silently answer with the base weights."""
     groups = collections.OrderedDict()
     for i, item in enumerate(items):
         groups.setdefault(question_id(item["q"]), []).append(i)
@@ -764,17 +785,18 @@ def run_items(url, items, model=None, api_key=None, batch=16, head_max_len=None)
         questions = {"q": q}
         for start in range(0, len(idxs), batch):
             chunk = idxs[start:start + batch]
-            body = {"states": [items[i]["state"][:STATE_CHARS] for i in chunk], "questions": questions, "ensemble": 1}
-            if model:
-                body["model"] = model
-            if head_max_len:
-                body["head_max_len"] = head_max_len
+            body = request_body([items[i]["state"][:STATE_CHARS] for i in chunk], questions, model=model,
+                                head_max_len=head_max_len, adapter=adapter)
             req = urllib.request.Request(url + "/v1/systemone/batch", data=json.dumps(body).encode("utf-8"),
                                          headers={"Content-Type": "application/json"})
             if api_key:
                 req.add_header("Authorization", "Bearer " + api_key)
             res = json.load(urllib.request.urlopen(req, timeout=600))
             for i, r in zip(chunk, res["results"]):
+                routed = (r.get("routing") or {}).get("adapter")
+                if adapter and adapter not in ("auto", "none") and routed != adapter:
+                    raise SystemExit("the server did not apply adapter %r (routing %r): it needs a statim build with "
+                                     "LoRA support started with --adapter [model:]%s=FILE" % (adapter, r.get("routing"), adapter))
                 probs[i] = probabilities(r["answers"]["q"], items[i])
     return probs
 
@@ -838,6 +860,9 @@ def main(argv=None):
     ap.add_argument("--exclude-mixture", default=None, metavar="PATH",
                     help="built mixture (jsonl.gz) the model was trained on: drop pooled items that share a text with it")
     ap.add_argument("--list", action="store_true", help="print the sampled suites and exit (no server needed)")
+    ap.add_argument("--adapter", default=None, metavar="NAME",
+                    help='LoRA adapter sent as "adapter" with every request (statim serve --adapter [model:]NAME=FILE); '
+                         "recorded in each record; default: the base weights")
     a = ap.parse_args(argv)
     if a.n < 1:
         raise SystemExit("--n must be >= 1")
@@ -864,13 +889,15 @@ def main(argv=None):
         os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     out = open(a.out, "w", encoding="utf-8") if a.out else None
     records, by_suite = [], collections.defaultdict(list)
+    label = "%s:%s" % (a.model, a.adapter) if a.adapter else a.model  # base and adapter runs stay apart
+    extra = {"adapter": a.adapter} if a.adapter else {}
     try:
         for suite, lang, items in tasks:
             t0 = time.time()
             probs = run_items(a.url, items, model=a.model, api_key=os.environ.get("STATIM_API_KEY"),
-                              head_max_len=a.head_max_len)
+                              head_max_len=a.head_max_len, adapter=a.adapter)
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
-            row = {"family": "categories", "suite": suite, "lang": lang, "model": a.model, "n": len(items), "seed": a.seed,
+            row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra, "n": len(items), "seed": a.seed,
                    "pool": pool_fp,
                    "sources": dict(collections.Counter(it["source"] for it in items)),
                    "question_types": dict(collections.Counter(it["q"]["type"] for it in items)),
@@ -890,7 +917,7 @@ def main(argv=None):
         for suite, rows in by_suite.items():
             m = {k: round(sum(r[k] for r in rows) / len(rows), 4)
                  for k in ("accuracy", "balanced_accuracy", "ece", "nll", "brier")}
-            rec = {"family": "categories", "suite": suite, "lang": "macro", "model": a.model, "n": sum(r["n"] for r in rows),
+            rec = {"family": "categories", "suite": suite, "lang": "macro", "model": label, **extra, "n": sum(r["n"] for r in rows),
                    "n_langs": len(rows), **m}
             records.append(rec)
             if out:

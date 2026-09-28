@@ -28,6 +28,9 @@ Why Holm-Bonferroni: with 88 suites and a plain 2-SE rule per suite, an unchange
 least one "significant" drop about 87 % of the time (1 - 0.977**88), and a point comparison of the
 validation mean rejects half of all equally good models. Both rules together rejected an equally
 good challenger about 94 % of the time.
+
+LoRA adapters (tools/finetune/lora_experiment.py) are judged by adapter_decision: the held-out part
+of compare() on the adapter's category cells alone, without the validation step (see its docstring).
 """
 import argparse
 import json
@@ -107,16 +110,9 @@ def evaluate(model_dir, mixture=None):
     for r in jsonl(run([PY, "tools/finetune/eval_laya.py", model_dir, "--n", "2000", "--head-max-len", "512"])):
         n = r.get("n", 2000)
         res["heldout"][f"test/{r['suite']}"] = {"acc": r["accuracy"], "n": n, "ece": r.get("ece")}
-    for r in http_suites(model_dir, tmp, mixture):
-        if r.get("lang") == "macro" or "accuracy" not in r:  # macro line, or a skipped language
-            continue
-        row = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
-        if r.get("family") == "categories":
-            row["pool"] = r.get("pool")  # compare() only compares category cells built from the same pool
-            if r.get("gate") is False:  # zero-shot or biased cell: reported, never gated
-                res["reported"][f"{suite_key(r)}/{r['lang']}"] = dict(row, note=r.get("gate_note"))
-                continue
-        res["heldout"][f"{suite_key(r)}/{r['lang']}"] = row
+    heldout, reported = heldout_cells(http_suites(model_dir, tmp, mixture))
+    res["heldout"].update(heldout)
+    res["reported"].update(reported)
     json.dump(res, open(os.path.join(model_dir, "eval.json"), "w"), indent=1)
     print(json.dumps({"validation_mean": round(sum(res["validation"].values()) / len(res["validation"]), 4),
                       "heldout_suites": len(res["heldout"])}))
@@ -128,22 +124,58 @@ def suite_key(record):
     return ("categories:" + record["suite"]) if record.get("family") == "categories" else record["suite"]
 
 
+def heldout_cells(records):
+    """(heldout, reported) from the per-language records of the HTTP benchmark scripts
+    (eval_multilingual.py, eval_zeroshot.py, eval_categories.py): {"<suite key>/<lang>": {"acc", "n",
+    "ece"[, "pool"]}}. Macro lines and skipped languages are left out; category cells with "gate": false
+    (zero-shot or biased) go to `reported` with their note and are never gated."""
+    heldout, reported = {}, {}
+    for r in records:
+        if r.get("lang") == "macro" or "accuracy" not in r:  # macro line, or a skipped language
+            continue
+        row = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
+        if r.get("family") == "categories":
+            row["pool"] = r.get("pool")  # compare() only compares category cells built from the same pool
+            if r.get("gate") is False:  # zero-shot or biased cell: reported, never gated
+                reported[f"{suite_key(r)}/{r['lang']}"] = dict(row, note=r.get("gate_note"))
+                continue
+        heldout[f"{suite_key(r)}/{r['lang']}"] = row
+    return heldout, reported
+
+
 ALPHA = 0.05       # family-wise error rate of the per-suite regression tests
 VAL_MARGIN = 0.01  # the validation mean may fall by at most one point
+
+
+def p_drop(d, se):
+    """One-sided p-value of the z-test that a change d (challenger - champion) with standard error se
+    is a drop: Phi(d / se)."""
+    return 0.5 * math.erfc(-(d / se) / math.sqrt(2)) if se > 0 else (0.0 if d < 0 else 1.0)
 
 
 def holm_regressions(tests, alpha=ALPHA):
     """tests: (name, champion_acc, challenger_acc, d, se) per suite. Returns the suites whose drop is
     significant after Holm-Bonferroni: sort by one-sided p-value, compare the i-th smallest with
     alpha / (m - i), stop at the first one that is not significant."""
-    def p_drop(d, se):
-        return 0.5 * math.erfc(-(d / se) / math.sqrt(2)) if se > 0 else (0.0 if d < 0 else 1.0)
     ranked = sorted(tests, key=lambda t: p_drop(t[3], t[4]))
     out, m = [], len(ranked)
     for i, t in enumerate(ranked):
         if t[3] >= 0 or p_drop(t[3], t[4]) > alpha / (m - i):
             break
         out.append(t)
+    return out
+
+
+def holm_adjusted(tests):
+    """{name: Holm-adjusted p-value of a drop} for the same tests: the running maximum of (m - i) * p
+    over the suites in p-value order, capped at 1. A suite is in holm_regressions(tests, alpha) exactly
+    when its adjusted p-value is at most alpha (drops only; a gain has p >= 0.5). For reports; the
+    decision is holm_regressions."""
+    ranked = sorted(tests, key=lambda t: p_drop(t[3], t[4]))
+    out, running, m = {}, 0.0, len(ranked)
+    for i, t in enumerate(ranked):
+        running = max(running, min(1.0, (m - i) * p_drop(t[3], t[4])))
+        out[t[0]] = running
     return out
 
 
@@ -154,24 +186,34 @@ def _var(x):
     return x["acc"] * (1 - x["acc"]) / x["n"]
 
 
-def compare(champ_dir, chall_dir, z=2.0):
-    a = json.load(open(os.path.join(champ_dir, "eval.json")))
-    b = json.load(open(os.path.join(chall_dir, "eval.json")))
-    keys = sorted(set(a["validation"]) & set(b["validation"]))
-    va = sum(a["validation"][k] for k in keys) / len(keys)
-    vb = sum(b["validation"][k] for k in keys) / len(keys)
+# Families pooled by heldout_decision (suite keys as in eval.json).
+FAMILIES = {
+    "trained": lambda k: k.split("/")[0] == "amazon_massive_intent" or k in ("test/banking77", "test/typed_decisions"),
+    "zero-shot": lambda k: k.split("/")[0] in ZERO_SHOT or k in ("test/ag_news", "test/emotion"),
+    "sentiment": lambda k: k.split("/")[0] == "multilingual_sentiments",
+    "categories": lambda k: k.startswith("categories:"),
+}
+
+
+def heldout_decision(a, b, z=2.0, log=print):
+    """The held-out part of the gate for champion `a` and challenger `b`, two {suite key: {"acc", "n"
+    [, "pool"]}} dicts (eval.json "heldout", or heldout_cells). Per suite a one-sided z-test with
+    Holm-Bonferroni over every compared suite; per family (FAMILIES, pooled by rows and by suites) a
+    pooled drop beyond z SE is a regression and a pooled gain beyond z SE a family gain. Category cells
+    whose pools differ are not compared. Prints the family lines and returns {"compared",
+    "not_compared", "tests", "gains", "harms", "nominal", "families", "family_gains"}; tests are
+    (key, a_acc, b_acc, d, se)."""
     harms, gains = [], []
     # Category cells are comparable only when both models drew them from the same pool (same suite
     # spec, sources, adapters and, with --mixture, the same training mixture excluded).
-    shared = sorted(set(a["heldout"]) & set(b["heldout"]))
-    different = [k for k in shared if k.startswith("categories:")
-                 and a["heldout"][k].get("pool") != b["heldout"][k].get("pool")]
+    shared = sorted(set(a) & set(b))
+    different = [k for k in shared if k.startswith("categories:") and a[k].get("pool") != b[k].get("pool")]
     if different:
-        print(f"categories: {len(different)} cells not compared (their pools differ)")
+        log(f"categories: {len(different)} cells not compared (their pools differ)")
     shared = [k for k in shared if k not in different]
     tests = []
     for k in shared:
-        x, y = a["heldout"][k], b["heldout"][k]
+        x, y = a[k], b[k]
         se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
         d = y["acc"] - x["acc"]
         tests.append((k, x["acc"], y["acc"], d, se))
@@ -179,51 +221,88 @@ def compare(champ_dir, chall_dir, z=2.0):
             gains.append((k, x["acc"], y["acc"], d, se))
     harms += holm_regressions(tests)
     nominal = [t for t in tests if t[3] < -z * t[4] and t not in harms]  # reported, not decisive
-    family_gains = []
+    families, family_gains = {}, []
     # Family-level check: many small suites can each stay inside their noise band while all drifting
     # the same way. Pool each family (row-weighted and suite-weighted) and treat a significant pooled
     # drop as a regression too.
-    families = {
-        "trained": lambda k: k.split("/")[0] == "amazon_massive_intent" or k in ("test/banking77", "test/typed_decisions"),
-        "zero-shot": lambda k: k.split("/")[0] in ZERO_SHOT or k in ("test/ag_news", "test/emotion"),
-        "sentiment": lambda k: k.split("/")[0] == "multilingual_sentiments",
-        "categories": lambda k: k.startswith("categories:"),
-    }
-    common = shared
-    for fam, member in families.items():
-        ks = [k for k in common if member(k)]
+    for fam, member in FAMILIES.items():
+        ks = [k for k in shared if member(k)]
         if not ks:
             continue
         bysuite = {}
         for k in ks:
             bysuite.setdefault(k if k.startswith("test/") else k.split("/")[0], []).append(k)
+
         def pooled(groups):
             ds, var = [], 0.0
             for g in groups:
-                ds.append(sum(b["heldout"][k]["acc"] - a["heldout"][k]["acc"] for k in g) / len(g))
-                var += sum(_var(a["heldout"][k]) + _var(b["heldout"][k]) for k in g) / len(g) ** 2
+                ds.append(sum(b[k]["acc"] - a[k]["acc"] for k in g) / len(g))
+                var += sum(_var(a[k]) + _var(b[k]) for k in g) / len(g) ** 2
             return sum(ds) / len(ds), math.sqrt(var) / len(ds)
         for weighting, groups in (("rows", [[k] for k in ks]), ("suites", list(bysuite.values()))):
             d, se = pooled(groups)
             flag = "REGRESSION" if d < -z * se else ("gain" if d > z * se else "within noise")
-            print(f"family {fam:10s} ({weighting:6s}, {len(groups):2d}): {d * 100:+.2f} pts, 2se {2 * se * 100:.2f} -> {flag}")
+            log(f"family {fam:10s} ({weighting:6s}, {len(groups):2d}): {d * 100:+.2f} pts, 2se {2 * se * 100:.2f} -> {flag}")
+            families.setdefault(fam, {})[weighting] = {"d": d, "se": se, "groups": len(groups), "flag": flag}
             if d < -z * se:
                 harms.append((f"family:{fam}/{weighting}", 0.0, d, d, se))
             elif d > z * se:
                 family_gains.append(fam)
-    print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f})")
-    for name, rows in (("significant gains (2 SE, per suite)", gains),
-                       (f"significant regressions (Holm, FWER {ALPHA:.0%}, or family)", harms),
-                       ("nominal drops beyond 2 SE, not significant after Holm", nominal)):
-        print(f"{name}: {len(rows)}")
+    return {"compared": shared, "not_compared": different, "tests": tests, "gains": gains, "harms": harms,
+            "nominal": nominal, "families": families, "family_gains": family_gains}
+
+
+def report(res, log=print):
+    """Print the gains, regressions and nominal drops of a heldout_decision result."""
+    for name, rows in (("significant gains (2 SE, per suite)", res["gains"]),
+                       (f"significant regressions (Holm, FWER {ALPHA:.0%}, or family)", res["harms"]),
+                       ("nominal drops beyond 2 SE, not significant after Holm", res["nominal"])):
+        log(f"{name}: {len(rows)}")
         for k, x, y, d, se in rows:
-            print(f"  {k:40s} {x:.4f} -> {y:.4f} ({d:+.4f}, 2se {2 * se:.4f})")
-    holds, better = vb >= va - VAL_MARGIN, bool(family_gains)
-    ok = holds and not harms and better
+            log(f"  {k:40s} {x:.4f} -> {y:.4f} ({d:+.4f}, 2se {2 * se:.4f})")
+
+
+def compare(champ_dir, chall_dir, z=2.0):
+    a = json.load(open(os.path.join(champ_dir, "eval.json")))
+    b = json.load(open(os.path.join(chall_dir, "eval.json")))
+    keys = sorted(set(a["validation"]) & set(b["validation"]))
+    if not keys:
+        raise SystemExit("compare: the two eval.json files share no validation suite")
+    va = sum(a["validation"][k] for k in keys) / len(keys)
+    vb = sum(b["validation"][k] for k in keys) / len(keys)
+    res = heldout_decision(a["heldout"], b["heldout"], z)
+    print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f})")
+    report(res)
+    holds, better = vb >= va - VAL_MARGIN, bool(res["family_gains"])
+    ok = holds and not res["harms"] and better
     why = ("" if ok else "(validation fell by more than %.0f point)" % (VAL_MARGIN * 100) if not holds
-           else "(held-out regression)" if harms else "(no family improved significantly)")
+           else "(held-out regression)" if res["harms"] else "(no family improved significantly)")
     print("VERDICT:", "PROMOTE" if ok else "REJECT", why)
     return ok
+
+
+def adapter_decision(base, adapter, z=2.0, log=print):
+    """The "categories" family decision alone, for a LoRA adapter against its own base model: the same
+    GGUF served with and without "adapter" in the request (lora_experiment.py). `base` and `adapter`
+    are heldout dicts (heldout_cells of bench/eval_categories.py records); only "categories:" cells
+    count. The rule is compare()'s held-out rule: promote when the pooled category family gains more
+    than z SE and no cell (language) regresses after Holm-Bonferroni over the compared cells, nor the
+    family. There is no validation step: the adapter exists only as a GGUF delta, which eval_dev.py
+    cannot load, and it only answers requests that name it, so the base's other suites cannot change.
+    Returns heldout_decision's dict plus "promote", "reason" and "p_holm" ({cell: Holm-adjusted
+    p-value of a drop})."""
+    def cats(h):
+        return {k: v for k, v in h.items() if k.startswith("categories:")}
+    res = heldout_decision(cats(base), cats(adapter), z, log)
+    report(res, log)
+    if not res["compared"]:
+        ok, why = False, "(no category cell compared)"
+    else:
+        ok = not res["harms"] and bool(res["family_gains"])
+        why = "" if ok else "(held-out regression)" if res["harms"] else "(no family improved significantly)"
+    log("VERDICT: " + ("PROMOTE" if ok else "REJECT") + (" " + why if why else ""))
+    res.update(promote=ok, reason=why, p_holm=holm_adjusted(res["tests"]))
+    return res
 
 
 def main():
