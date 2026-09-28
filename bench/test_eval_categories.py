@@ -304,3 +304,109 @@ def test_template_fields_stay_in_state_but_not_in_banned_texts():
     assert all(question in it["state"] for it in items)
     assert ec._norm(question) not in banned
     assert ec._norm("This agreement is governed by the laws of Delaware.") in banned
+
+
+# --------------------------------------------------------------------------- review follow-ups
+
+def _item(state, texts=(), suite="s"):
+    return {"state": state, "_texts": list(texts), "suite": suite}
+
+
+def test_mixture_contamination_exact_and_containment():
+    long_a = "the parcel arrived two weeks late and the box was completely crushed on arrival"
+    long_b = "our printer on the third floor keeps dropping off the network every afternoon"
+    pool = [
+        _item("Exact Match Text"),                                  # exact (normalised)
+        _item("premise: %s\n\nhypothesis: late" % long_a, [long_a]),  # its source text sits inside a training state
+        _item("ticket: %s. please help" % long_b),                  # a training state sits inside it
+        _item("a clean text nobody trained on, long enough to be checked by containment"),
+        _item("short"),                                             # short: exact only
+    ]
+    states = ["exact   match text", "complaint: " + long_a + " and nobody answered", long_b, "shor"]
+    assert ec.contaminated(pool, [ec._norm(s) for s in states]) == {0, 1, 2}
+
+
+def test_mixture_contamination_without_spaces():
+    zh = "这家餐厅的服务态度非常差，菜也很难吃，等了一个多小时才上菜，我再也不会来了，真的太失望了"
+    assert len(zh) >= ec.CONTAIN_CHARS
+    pool = [_item(zh), _item("完全不同的一句话，和训练数据没有任何关系，只是用来对照的文本而已")]
+    assert ec.contaminated(pool, [ec._norm("评论：" + zh + "。")]) == {0}
+
+
+def test_exclude_mixture_reads_the_built_file(tmp_path):
+    import gzip
+    import json
+    path = tmp_path / "mixture.jsonl.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write(json.dumps({"state": "Trained Text", "q": {}, "target": []}) + "\n")
+        fh.write(json.dumps({"state": {"text": "structured"}, "q": {}, "target": []}) + "\n")
+    pool = [_item("trained text"), _item("held out text")]
+    kept, fp = ec.exclude_mixture(pool, path, log=lambda m: None)
+    assert [it["state"] for it in kept] == ["held out text"] and len(fp) == 16
+
+
+def test_gate_notes():
+    assert ec.gate_note("emotion", "pt") and ec.gate_note("emotion", "ru")
+    assert ec.gate_note("emotion", "de") is None
+    assert ec.gate_note("nli", "en") is None
+
+    class Old:
+        pass
+
+    class New:
+        WINDOW = 1600
+        CPC_SECTIONS = {}
+
+    assert ec._reading_windows(Old) and ec._reading_windows(New) is None
+    assert ec._topic_labels(Old) and ec._topic_labels(New) is None
+    New._special_field_labels = staticmethod(lambda sid, row: None)
+    assert ec._urgency_labels(Old) and ec._urgency_labels(New) is None
+
+
+def test_balanced_accuracy_does_not_reward_a_constant_answer():
+    items = [{"q": {"type": "noul", "instructions": "?"}, "target": [0.0, 1.0]} for _ in range(8)]
+    items += [{"q": {"type": "noul", "instructions": "?"}, "target": [1.0, 0.0]} for _ in range(2)]
+    always_yes = [[0.1, 0.9]] * 10
+    m = ec.score(items, always_yes)
+    assert m["accuracy"] == 0.8 and m["balanced_accuracy"] == 0.5
+
+
+def test_majority_cap_skips_a_skewed_language():
+    pool = [_fake("src1", "a", i, lang="fr") for i in range(200)] + [_fake("src1", "b", i, lang="fr") for i in range(30)]
+    tasks, skipped = ec.make_tasks(pool, ["s"], None, 150, 1)
+    assert tasks == [] and skipped[0][:2] == ("s", "fr")
+
+
+def test_single_emotion_rows_only():
+    rows = [{"text": "a", "anger": "1", "joy": "0"}, {"text": "b", "anger": "1", "joy": "1"}, {"text": "c"}]
+    kept = ec.PREP["single_emotion"](rows)
+    assert [(r["text"], r["emotions"]) for r in kept] == [("a", ["anger"])]
+
+
+def test_incomplete_pool_is_not_cached(tmp_path, monkeypatch):
+    monkeypatch.setattr(ec, "build_pool", lambda log=print: ([_item("x")], {"src": "HTTPError: 503"}))
+    cache = tmp_path / "pool.jsonl.gz"
+    pool, failures = ec.load_pool(cache=cache, log=lambda m: None)
+    assert failures and not cache.exists()
+
+
+def test_fingerprint_tracks_registry_file(tmp_path, monkeypatch):
+    import shutil
+    for rel in ("tools/finetune/mixture_v6", "tools/finetune/sources"):
+        shutil.copytree(ec.ROOT / rel, tmp_path / rel)
+    monkeypatch.setattr(ec, "ROOT", tmp_path)
+    before = ec.fingerprint()
+    keep = tmp_path / "tools/finetune/sources/v6-keep.json"
+    keep.write_text(keep.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    assert ec.fingerprint() != before
+
+
+def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
+    import json
+    champ, chall = tmp_path / "champ", tmp_path / "chall"
+    for d, acc, pool in ((champ, 0.80, "p1"), (chall, 0.60, "p2")):
+        d.mkdir()
+        heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool}}
+        json.dump({"validation": {"v": 0.5 if d == champ else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
+    assert gate.compare(str(champ), str(chall)) is True  # the 20-point drop is on a different pool
+    assert "1 cells not compared" in capsys.readouterr().out

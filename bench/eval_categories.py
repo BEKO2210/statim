@@ -13,24 +13,35 @@ Items come from the mixture v6 adapters (tools/finetune/mixture_v6/registry.py),
 canonical mode: the first instruction paraphrase in the item's language (the same fallback to
 English as training), no option shuffle, and the options of a choice question sorted
 alphabetically. The question wording therefore matches training, the order is fixed, and a
-re-run sends the same requests. Integer ClassLabel columns are decoded to their names first
-(training sees the ints and offers "0", "1", "2" as options). Three sources get a documented row
+re-run sends the same requests. Integer ClassLabel columns are decoded to their names first, so
+no option is a bare id such as "0", "1", "2". Three sources get a documented row
 repair (PREP) where the adapter would otherwise emit a wrong gold label; sources that cannot be
 repaired that way are listed in EXCLUDED with the reason.
 
 Sample: per suite and language, a seeded stratified draw of --n items (default 150). Buckets are
 (source, gold option); items in a bucket are sorted by text, shuffled with --seed, then drawn
 round-robin over the sorted buckets. A language with fewer than --n pooled items, or where one
-gold class holds more than 90 % of the draw, is skipped and listed in the output. Every pooled
+gold class holds more than 70 % of the draw, is skipped and listed in the output. Every pooled
 item (not only the drawn ones) is part of the banned set in tools/finetune/mixture_v6/eval_texts.py,
 so another --seed or --n can never pick a text training has seen.
 
-Scoring: accuracy (argmax = gold), ECE, NLL and Brier as in bench/eval_accuracy.metrics. A noul
-question scores [1 - p(true), p(true)]; a score question uses its level probabilities. One
-request carries one question, so items are grouped by question.
+Scoring: accuracy (argmax = gold), balanced accuracy (mean recall over gold options), ECE, NLL and
+Brier as in bench/eval_accuracy.metrics. A noul question scores [1 - p(true), p(true)]; a score
+question uses its level probabilities. One request carries one question, so items are grouped
+by question.
+
+--exclude-mixture PATH drops every pooled item that shares a text with the built mixture the model
+was trained on (exact normalised match, or containment of 40+ characters in either direction), and
+the mixture's hash becomes part of the pool fingerprint in every record. gate.py compares a
+category cell only between two models with the same fingerprint.
+
+Cells in GATE_EXCLUDED are reported with "gate": false and a reason, and gate.py keeps them out of
+the "categories" family: zero-shot cells (no training source in that language, or labels the
+training never saw) and suites whose items the registry in use would bias.
 
 The pool is cached in data/category-suites.jsonl.gz, keyed by a fingerprint of HELD_OUT, the pool
-size and the adapter source. Pass --rebuild to fetch the splits again. --list prints the draw
+size, the adapter and loader source and v6-keep.json. A pool with a source that failed to load is
+never cached. Pass --rebuild to fetch the splits again. --list prints the draw
 without a server.
 
 Not covered: sarcasm/humour (no v6 source has a split the mixture does not read) and the
@@ -64,7 +75,7 @@ DEFAULT_SEED = 20260927
 # first max_len tokens (1,024 for the released models); 40,000 characters is far beyond what that
 # window can hold, so the cut never changes what the model sees. Pool and banned set keep the full text.
 STATE_CHARS = 40_000
-MAX_CLASS_SHARE = 0.9     # a sample where one gold class exceeds this is skipped (constant answer scores it)
+MAX_CLASS_SHARE = 0.7     # a sample where one gold class exceeds this is skipped (a constant answer scores it)
 PARQUET_REV = "refs/convert/parquet"
 MODELS = ["english", "multilingual", "consensus", "banking77", "multitask"]
 
@@ -115,7 +126,10 @@ class Source:
 
 
 def _brighter(cfg, lang):
-    return Source("brighter-dataset/BRIGHTER-emotion-categories", "hin", "test", configs=(cfg,), lang=lang)
+    # Multi-label (a third to a half of the rows carry several emotions): single-label rows only,
+    # so the gold is not just the alphabetically first emotion.
+    return Source("brighter-dataset/BRIGHTER-emotion-categories", "hin", "test", configs=(cfg,), lang=lang,
+                  prep="single_emotion")
 
 
 # Suite -> held-out sources. The split is never the one the mixture reads for that entry
@@ -137,10 +151,8 @@ HELD_OUT = {
                                                  ("rus", "ru"), ("chn", "zh"), ("ptbr", "pt"))],
     ],
     "complaint": [
-        Source("hblim/customer-complaints", "default", "test"),
         Source("cngchis/Support-Ticket-Router-12K-Cleaned", "default", "test"),
         Source("liri-uzh/cfpb-complaints-mini", "default", "test"),
-        Source("tasksource/it-support-tickets", "default", "test"),
     ],
     "nli": [
         Source("nyu-mll/multi_nli", "default", "validation_matched"),
@@ -212,7 +224,50 @@ EXCLUDED = {
     "leonvanbokhorst/synthetic-complaints-v2 test": "classification_adapter mixes topic, style and sentiment "
                                                    "values in one option list",
     "sentiment 'mixed'": "only poem_sentiment has a mixed class, and only in its train split",
+    "hblim/customer-complaints, tasksource/it-support-tickets test": "v6 trains these on ClassLabel ids "
+                                                                     "('0', '1', ...); the suite would be zero-shot",
 }
+
+# Cells that are reported but kept out of the gate's "categories" family, and why. A value is a
+# reason, or a callable that returns one (or None) for the registry in use.
+def _reading_windows(reg):
+    if not hasattr(reg, "WINDOW"):
+        return ("this v6 registry cuts answerable contexts around the answer and unanswerable ones from "
+                "the start (1,500 chars): the length gives the label away")
+    return None
+
+
+def _topic_labels(reg):
+    if not hasattr(reg, "CPC_SECTIONS"):
+        return "this v6 registry trains big_patent on the section letters a..y; the suite asks for section titles"
+    return None
+
+
+def _urgency_labels(reg):
+    if not hasattr(reg, "_special_field_labels"):
+        return "this v6 registry asks which of 35 warning signs applies, not whether the message is urgent"
+    return None
+
+
+GATE_EXCLUDED = {
+    ("emotion", "pt"): "no v6 training source has emotion labels in Portuguese: zero-shot",
+    ("emotion", "ru"): "no v6 training source has emotion labels in Russian: zero-shot",
+    ("reading", "*"): _reading_windows,
+    ("topic", "*"): _topic_labels,
+    ("urgency", "*"): _urgency_labels,
+}
+
+
+def gate_note(suite, lang):
+    """Why a cell stays out of the gate family, or None."""
+    for key in ((suite, lang), (suite, "*")):
+        rule = GATE_EXCLUDED.get(key)
+        if rule is None:
+            continue
+        reason = rule(_registry()) if callable(rule) else rule
+        if reason:
+            return reason
+    return None
 
 # --------------------------------------------------------------------------- registry glue
 
@@ -420,7 +475,20 @@ def _prep_pii_spans(rows):
     return out
 
 
-PREP = {"toxic_label": _prep_toxic_label, "cpc_section": _prep_cpc_section, "pii_spans": _prep_pii_spans}
+def _prep_single_emotion(rows):
+    """BRIGHTER rows with exactly one emotion (the `emotions` list, or the 0/1 columns)."""
+    names = ("anger", "disgust", "fear", "joy", "sadness", "surprise")
+    out = []
+    for row in rows:
+        flags = [n for n in names if str(row.get(n, "")).strip() in ("1", "1.0", "True", "true")]
+        if len(flags) == 1:
+            row["emotions"] = flags
+            out.append(row)
+    return out
+
+
+PREP = {"toxic_label": _prep_toxic_label, "cpc_section": _prep_cpc_section, "pii_spans": _prep_pii_spans,
+        "single_emotion": _prep_single_emotion}
 
 
 def load_source_rows(src, limit=None):
@@ -468,7 +536,10 @@ def items_from_rows(src, rows, seed=DEFAULT_SEED):
 def fingerprint():
     spec = {s: [asdict(src) for src in srcs] for s, srcs in HELD_OUT.items()}
     code = ROOT / "tools" / "finetune" / "mixture_v6"
-    adapters = {name: hashlib.sha256((code / name).read_bytes()).hexdigest() for name in ("registry.py", "templates.py")}
+    adapters = {name: hashlib.sha256((code / name).read_bytes()).hexdigest()
+                for name in ("registry.py", "templates.py", "loaders.py")}
+    adapters["v6-keep.json"] = hashlib.sha256(
+        (ROOT / "tools" / "finetune" / "sources" / "v6-keep.json").read_bytes()).hexdigest()
     import inspect
     here = [canonical, sort_options, _class_labels, decode_class_labels, _load_parquet, load_source_rows,
             items_from_rows, *LOADERS.values(), *PREP.values()]
@@ -508,6 +579,8 @@ def load_pool(cache=CACHE, rebuild=False, log=print):
             if header.get("fingerprint") == fp:
                 return [json.loads(line) for line in fh], header.get("failures", {})
     pool, failures = build_pool(log=log)
+    if failures:
+        return pool, failures  # never cache an incomplete pool: the next run retries the sources
     cache.parent.mkdir(parents=True, exist_ok=True)
     tmp = cache.with_name(cache.name + ".part")
     with gzip.open(tmp, "wt", encoding="utf-8") as fh:
@@ -527,6 +600,94 @@ def suite_texts(pool):
             out.add(_norm(text))
     out.discard("")
     return out
+
+
+# --------------------------------------------------------------------------- mixture exclusion
+
+CONTAIN_CHARS = 40   # shorter texts are compared exactly only
+WORD_SHINGLE = 8     # words per anchor for space-separated text
+CHAR_SHINGLE = 20    # characters per anchor for text without spaces (Chinese, Japanese)
+INDEX_CHARS = 4000   # of a pool text, the part indexed for "training text inside a pool text"
+
+
+def _units(text):
+    """Word units for space-separated text, characters otherwise (CJK)."""
+    words = text.split()
+    return (words, WORD_SHINGLE, " ") if len(words) >= WORD_SHINGLE else (list(text), CHAR_SHINGLE, "")
+
+
+def _anchors(text):
+    units, k, sep = _units(text)
+    return [sep.join(units[i:i + k]) for i in range(len(units) - k + 1)]
+
+
+def mixture_states(path):
+    """Normalised states of a built mixture (jsonl.gz, one item per line)."""
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            state = json.loads(line).get("state")
+            if not isinstance(state, str):
+                state = json.dumps(state, ensure_ascii=False, sort_keys=True)
+            yield _norm(state)
+
+
+def contaminated(pool, states):
+    """Indices of pool items that share a text with the mixture: an exact normalised match of the
+    state or any source text, or containment of a text of at least CONTAIN_CHARS characters in either
+    direction (a pool text inside a training state, or a training state inside a pool text).
+    Containment is found through anchors (the first WORD_SHINGLE words or CHAR_SHINGLE characters)
+    and then checked on the full strings."""
+    texts = []  # (item index, normalised text)
+    for i, item in enumerate(pool):
+        for text in [item["state"], *(item.get("_texts") or [])]:
+            t = _norm(text)
+            if t:
+                texts.append((i, t))
+    by_item = collections.defaultdict(list)
+    for i, t in texts:
+        by_item[i].append(t)
+    exact = collections.defaultdict(set)
+    first = collections.defaultdict(list)   # anchor -> pool texts that start with it
+    inner = collections.defaultdict(set)    # every anchor of the start of a pool text -> item indices
+    for i, t in texts:
+        exact[t].add(i)
+        if len(t) >= CONTAIN_CHARS:
+            anchors = _anchors(t)
+            if anchors:
+                first[anchors[0]].append((i, t))
+            for a in _anchors(t[:INDEX_CHARS]):
+                inner[a].add(i)
+    hit = set()
+    for state in states:
+        hit |= exact.get(state, set())
+        if len(state) < CONTAIN_CHARS:
+            continue
+        anchors = _anchors(state)
+        for a in anchors:  # a pool text inside this training state
+            for i, t in first.get(a, ()):
+                if i not in hit and t in state:
+                    hit.add(i)
+        if anchors:        # this training state inside a pool text
+            for i in inner.get(anchors[0], ()):
+                if i not in hit and any(state in t for t in by_item[i]):
+                    hit.add(i)
+    return hit
+
+
+def exclude_mixture(pool, path, log=print):
+    """Pool without the items whose text occurs in the mixture at `path`, and a fingerprint of that file."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    hit = contaminated(pool, mixture_states(path))
+    by_suite = collections.Counter(pool[i]["suite"] for i in hit)
+    log("mixture %s: %d pooled items share a text with it %s" % (path, len(hit), dict(sorted(by_suite.items()))))
+    return [item for i, item in enumerate(pool) if i not in hit], digest.hexdigest()[:16]
 
 
 # --------------------------------------------------------------------------- sampling
@@ -635,6 +796,12 @@ def score(items, probs):
     out = {k: round(v / n, 4) for k, v in total.items() if k != "ece"}
     # ECE only needs max-prob and correctness, which is width independent.
     out["ece"] = metrics(ece_probs, ece_gold)["ece"]
+    # Balanced accuracy: mean recall over gold options, so a skewed sample cannot reward a constant answer.
+    hits = collections.defaultdict(list)
+    for item, p in zip(items, probs):
+        g = gold_index(item)
+        hits[option_names(item)[g]].append(max(range(len(p)), key=p.__getitem__) == g)
+    out["balanced_accuracy"] = round(sum(sum(v) / len(v) for v in hits.values()) / len(hits), 4)
     return out
 
 
@@ -667,6 +834,8 @@ def main(argv=None):
     ap.add_argument("--head-max-len", type=int, default=512)
     ap.add_argument("--out", default=None, help="JSONL, one record per suite/language plus one macro line per suite")
     ap.add_argument("--rebuild", action="store_true", help="fetch the held-out splits again")
+    ap.add_argument("--exclude-mixture", default=None, metavar="PATH",
+                    help="built mixture (jsonl.gz) the model was trained on: drop pooled items that share a text with it")
     ap.add_argument("--list", action="store_true", help="print the sampled suites and exit (no server needed)")
     a = ap.parse_args(argv)
     if a.n < 1:
@@ -674,6 +843,9 @@ def main(argv=None):
 
     pool, failures = load_pool(rebuild=a.rebuild, log=lambda m: print(m, flush=True))
     pool_fp = fingerprint()
+    if a.exclude_mixture:
+        pool, mixture_fp = exclude_mixture(pool, a.exclude_mixture, log=lambda m: print(m, flush=True))
+        pool_fp = "%s+%s" % (pool_fp, mixture_fp)
     for key, why in failures.items():
         print("source unavailable: %s (%s)" % (key, why), flush=True)
     tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed)
@@ -703,14 +875,20 @@ def main(argv=None):
                    "question_types": dict(collections.Counter(it["q"]["type"] for it in items)),
                    "gold_counts": dict(sorted(gold.items())), **score(items, probs),
                    "seconds": round(time.time() - t0, 1)}
+            note = gate_note(suite, lang)
+            row["gate"] = note is None
+            if note:
+                row["gate_note"] = note
             records.append(row)
             by_suite[suite].append(row)
-            print(suite, lang, {k: row[k] for k in ("accuracy", "ece", "nll", "brier", "seconds")}, flush=True)
+            print(suite, lang, {k: row[k] for k in ("accuracy", "balanced_accuracy", "ece", "nll", "brier", "seconds")},
+                  "" if row["gate"] else "(not in the gate family: %s)" % row["gate_note"], flush=True)
             if out:
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out.flush()
         for suite, rows in by_suite.items():
-            m = {k: round(sum(r[k] for r in rows) / len(rows), 4) for k in ("accuracy", "ece", "nll", "brier")}
+            m = {k: round(sum(r[k] for r in rows) / len(rows), 4)
+                 for k in ("accuracy", "balanced_accuracy", "ece", "nll", "brier")}
             rec = {"family": "categories", "suite": suite, "lang": "macro", "model": a.model, "n": sum(r["n"] for r in rows),
                    "n_langs": len(rows), **m}
             records.append(rec)
