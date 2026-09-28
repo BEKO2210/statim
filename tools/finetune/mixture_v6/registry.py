@@ -12,6 +12,7 @@ import json
 import re
 from pathlib import Path
 
+from . import emotion_taxonomy
 from .languages import infer_lang as _infer_lang, to_iso
 from .templates import (aspect_name, describe, instruction, score_levels, seeded, shuffle_choice)
 
@@ -625,11 +626,24 @@ def classification_adapter(entry, rows, seed):
                 yield item
 
 
+def emotion_labels(entry, row):
+    """Emotion labels of one row. A source with "emotion_taxonomy" gets the classes of that taxonomy
+    (emotion_taxonomy.py); a row with a label outside it yields no labels and is skipped."""
+    labels = [canon(x) for x in labels_from(entry, row)]
+    if entry.get("emotion_taxonomy") == emotion_taxonomy.NAME:
+        return emotion_taxonomy.map_labels(labels) or []
+    return labels
+
+
 def emotion_adapter(entry, rows, seed):
     rows = list(rows)
-    vocab = _vocabulary(entry, rows)
+    if entry.get("emotion_taxonomy") == emotion_taxonomy.NAME:
+        counts = collections.Counter(x for row in rows for x in emotion_labels(entry, row))
+        vocab = [x for x, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    else:
+        vocab = _vocabulary(entry, rows)
     for i, row in enumerate(rows):
-        texts, labels = row_texts(entry, row), [canon(x) for x in labels_from(entry, row)]
+        texts, labels = row_texts(entry, row), emotion_labels(entry, row)
         if not texts or not labels:
             continue
         lang, state = infer_lang(entry, row, text=texts[0]), state_from(entry, row, texts)
@@ -1091,6 +1105,28 @@ def fact_adapter(entry, rows, seed):
             yield _noul(entry, row, state, truth, lang, rng, [question, answer], task="fact_check")
 
 
+# agentlans/fact-or-opinion labels -> options (templates.GLOSSES["claim_detection"]).
+CLAIM_TYPES = {"fact": "fact", "opinion": "opinion", "both": "fact and opinion", "neither": "neither"}
+STATES_A_FACT = {"fact", "fact and opinion"}
+
+
+def claim_type_adapter(entry, rows, seed):
+    """Fact vs opinion: which kind of statement (4 options), and does it state a verifiable fact (yes/no).
+    The yes/no side is balanced in the source: fact + both against opinion + neither."""
+    options = list(CLAIM_TYPES.values())
+    for i, row in enumerate(rows):
+        texts = row_texts(entry, row)
+        label = CLAIM_TYPES.get(str(row.get("label") or "").strip().lower())
+        if not texts or not label:
+            continue
+        lang, state = infer_lang(entry, row, text=texts[0]), state_from(entry, row, texts)
+        rng = seeded(seed, source_key(entry), i, state)
+        item = _choice(entry, row, state, options, label, lang, rng, texts, task="claim_detection")
+        if item:
+            yield item
+        yield _noul(entry, row, state, label in STATES_A_FACT, lang, rng, texts, task="claim_detection")
+
+
 PII_SPAN_KEYS = ("pii_spans", "spans", "entities", "privacy_mask", "span_labels")
 
 
@@ -1166,6 +1202,8 @@ def adapter_for(entry):
         return redial_adapter
     if sid == "Eurolingua/truthfulqax":
         return fact_adapter
+    if sid == "agentlans/fact-or-opinion":
+        return claim_type_adapter
     if sid == "urchade/synthetic-pii-ner-mistral-v1" or "10-pii" in cat:
         return pii_adapter
     if "typed-decisions" in cat:

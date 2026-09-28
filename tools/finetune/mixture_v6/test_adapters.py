@@ -56,6 +56,15 @@ SPECIAL_FIXTURES = {
     "Fumika/Wikinews-multilingual": [
         {"title": "Vote held", "text": "A vote was held.", "categories": ["Politics and conflicts", "France"]},
         {"title": "Cup final", "text": "The final was played.", "categories": ["Sports", "Germany"]}],
+    "Horizon-Labs/multilingual-zeroshot-synthetic": [
+        {"text": "Finalmente consegui o emprego que eu queria!", "emotion": "pride", "_v6_lang": "pt"},
+        {"text": "O metrô fechou de novo e ninguém avisou.", "emotion": "anger", "_v6_lang": "pt"}],
+    "sociocom:naist-life-story": [
+        {"text": "友人と温泉旅行に行って楽しかった。", "emotion": "Joy", "_v6_lang": "ja"},
+        {"text": "地震のニュースを見て将来が不安になった。", "emotion": "Anxiety", "_v6_lang": "ja"}],
+    "agentlans/fact-or-opinion": [
+        {"text": "Water boils at 100 degrees Celsius at sea level.", "label": "Fact", "_v6_lang": "en"},
+        {"text": "Rock music is better than pop music.", "label": "Opinion", "_v6_lang": "en"}],
     "gfissore/arxiv-abstracts-2021": [
         {"title": "Primes", "abstract": "On primes.", "categories": ["math.NT cs.CR"]},
         {"title": "Stars", "abstract": "On stars.", "categories": ["astro-ph.GA"]}],
