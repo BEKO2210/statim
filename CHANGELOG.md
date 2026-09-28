@@ -8,6 +8,11 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- `bench/baselines.py` and `docs/BASELINES.md`: Statim against a local LLM (Qwen3-8B, zero-shot)
+  and a zero-shot NLI classifier (mDeBERTa-v3 XNLI) on the gate's 11,550 held-out items, with the
+  same questions and options for every system. Over 14 decision categories: 0.748, 0.704 and 0.488;
+  Banking77: 0.913, 0.650 and 0.224. On the same GPU, Statim answers about 68 decisions per second
+  and the LLM about 6. README section "Against general models".
 - Mixture v6: five licence-checked sources for the three weakest held-out categories (fact-check
   0.313, emotion 0.586, topic 0.607 in 0.7.0). Licence and provenance evidence for each is in
   `tools/finetune/sources/v6-research.md` (Part F), and each is registered in `v6-keep.json`
