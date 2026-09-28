@@ -1,0 +1,56 @@
+name: mixture-audit
+# Content audit of the mixture v6 adapters on a small sample of every enabled source
+# (tools/finetune/mixture_v6/audit.py), plus the offline adapter tests. Runs when the adapters or
+# the source registry change, weekly (upstream datasets change under a fixed revision name), and
+# on demand.
+on:
+  push:
+    paths:
+      - "tools/finetune/mixture_v6/**"
+      - "tools/finetune/sources/**"
+      - ".github/workflows/mixture-audit.yml"
+  pull_request:
+    paths:
+      - "tools/finetune/mixture_v6/**"
+      - "tools/finetune/sources/**"
+      - ".github/workflows/mixture-audit.yml"
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+jobs:
+  offline-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest pyarrow
+      - run: python -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      STATIM_V6_MAX_SHARDS: "1"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install datasets huggingface_hub pyarrow
+      - name: Cache Hub downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            data/raw
+          key: mixture-audit-${{ hashFiles('tools/finetune/sources/v6-keep.json') }}
+          restore-keys: mixture-audit-
+      - name: Audit every enabled source (200 rows each)
+        run: python tools/finetune/mixture_v6/audit.py --rows 200 --out audit/mixture-v6-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mixture-v6-audit
+          path: audit/mixture-v6-audit.json
