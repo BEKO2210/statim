@@ -12,8 +12,10 @@ divisible by 8, so Model::load repacks it (AVX2: q4_0; ARM dotprod/i8mm: q4_0 an
 
     python3 fuzz/make_tiny_model.py fuzz/data
 """
+import hashlib
 import json
 import os
+import struct
 import sys
 
 import numpy as np
@@ -63,7 +65,11 @@ def tokenizer(kind):
     return pieces, merges, normalizer, pre, model, added
 
 
-def write(path, kind, quant=None):
+def write(path, kind, quant=None, matrix_variant=0, record_checkpoint_sha256=False):
+    """quant stores head.layers.*.linear2.weight in that type (the repack seeds); matrix_variant shifts
+    one matrix entry (same vectors, other matrices); record_checkpoint_sha256 adds
+    statim.checkpoint_sha256 as tools/convert_laya.py writes it. The committed seeds use neither of
+    the last two."""
     rng = np.random.default_rng(1234 if kind == "metaspace" else 5678)
     pieces, merges, normalizer, pre, model, added = tokenizer(kind)
     w = GGUFWriter(path, "laya")
@@ -101,15 +107,16 @@ def write(path, kind, quant=None):
     w.add_int32("tokenizer.statim.pad_id", 0)
     w.add_string("tokenizer.statim.mask_token", "<mask>")
 
+    tensors = []  # (name, source array, quantization type or None); added after the optional hash
+
     def t(name, *shape, q=None):
         data = (rng.standard_normal(shape) * 0.2).astype(np.float32)
-        if q is None:
-            w.add_tensor(name, data)
-        else:
-            w.add_tensor(name, np.ascontiguousarray(gguf_quantize(data, q)), raw_dtype=q)
+        if matrix_variant and name == "encoder.layers.0.attn.Wqkv.weight":
+            data.flat[0] += np.float32(matrix_variant)
+        tensors.append((name, data, q))
 
     V = len(pieces)
-    w.add_tensor("encoder.embeddings.tok_embeddings.weight", (rng.standard_normal((V, D)) * 0.2).astype(np.float16))
+    tensors.append(("encoder.embeddings.tok_embeddings.weight", (rng.standard_normal((V, D)) * 0.2).astype(np.float16), None))
     t("encoder.embeddings.norm.weight", D)
     for l in range(N_LAYER):
         p = "encoder.layers.%d." % l
@@ -146,6 +153,17 @@ def write(path, kind, quant=None):
     t("act_head.0.bias", ACT_HIDDEN)
     t("act_head.2.weight", N_ACT, ACT_HIDDEN)
     t("act_head.2.bias", N_ACT)
+    if record_checkpoint_sha256:  # as tools/convert_laya.py: every source tensor as f32, in byte order of the names
+        checkpoint_hash = hashlib.sha256()
+        for name, arr, _ in sorted(tensors, key=lambda x: x[0].encode()):
+            checkpoint_hash.update(name.encode() + b"\0" + struct.pack("<Q", arr.size))
+            checkpoint_hash.update(np.ascontiguousarray(arr.astype("<f4")).tobytes())
+        w.add_string("statim.checkpoint_sha256", checkpoint_hash.hexdigest())
+    for name, arr, q in tensors:
+        if q is None:
+            w.add_tensor(name, arr)
+        else:
+            w.add_tensor(name, np.ascontiguousarray(gguf_quantize(arr, q)), raw_dtype=q)
     w.write_header_to_file()
     w.write_kv_data_to_file()
     w.write_tensors_to_file()

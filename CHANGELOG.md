@@ -8,6 +8,11 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- Checkpoint content binding for LoRA adapters. `tools/convert_laya.py` records a SHA-256 over every
+  source tensor before type conversion, `statim-quantize` preserves it, and `tools/convert_lora.py`
+  copies it into adapters. When both files carry the key, the engine rejects an adapter for a base
+  with equal vectors but different matrices. Older model and adapter files continue to use the
+  existing vector fingerprint.
 - `bench/baselines.py` and `docs/BASELINES.md`: Statim against a local LLM (Qwen3-8B, zero-shot)
   and a zero-shot NLI classifier (mDeBERTa-v3 XNLI) on the gate's 11,550 held-out items, with the
   same questions and options for every system. Over 14 decision categories: 0.748, 0.704 and 0.488;
