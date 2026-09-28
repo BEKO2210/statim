@@ -73,8 +73,9 @@ inline void sanitize_exception(const httplib::Request&, httplib::Response& res, 
     try { if (ep) std::rethrow_exception(ep); }
     catch (const std::exception& e) { detail = e.what(); }
     catch (...) {}
+    // error_handler_t::replace: an exception message with invalid UTF-8 must not throw from here.
     std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "error"},
-        {"event", "http_exception"}, {"error", detail}}.dump().c_str());
+        {"event", "http_exception"}, {"error", detail}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
     res.headers.erase("EXCEPTION_WHAT");
     send_error(res, 500, "internal server error");
 }
@@ -101,10 +102,13 @@ inline bool bearer_authorized(const httplib::Request& req, const std::vector<std
     if (keys.empty()) return true;
     if (req.get_header_value_count("Authorization") != 1) return false;
     const auto auth = req.get_header_value("Authorization");
+    // Every comparison runs over the longest possible header ("Bearer " + a 4096-byte key), so the
+    // time depends on neither the configured keys' lengths nor the supplied header's.
+    constexpr size_t n = 7 + 4096;
+    if (auth.size() > n) return false;
     bool ok = false;
     for (const auto& key : keys) {
         const std::string expected = "Bearer " + key;
-        const size_t n = std::max(expected.size(), auth.size());
         unsigned char diff = static_cast<unsigned char>(expected.size() != auth.size());
         for (size_t i = 0; i < n; ++i)
             diff |= static_cast<unsigned char>((i < expected.size() ? expected[i] : 0) ^ (i < auth.size() ? auth[i] : 0));

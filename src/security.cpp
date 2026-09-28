@@ -147,6 +147,59 @@ void validate_request_fields(const ojson& body) {
         }
     }
 }
+DecideRequest parse_decide_request(const std::string& raw, bool batch, const RequestDefaults& defaults,
+                                   const SecurityLimits& limits) {
+    DecideRequest r;
+    r.body = parse_request(raw, limits);
+    const ojson& body = r.body;
+    validate_request_fields(body);
+    if (!body.is_object() || !body.contains("questions"))
+        throw HttpError{400, "request body must be an object with a 'questions' field"};
+    const ojson& questions = body["questions"];
+    DecideOptions& opts = r.opts;
+    if (body.contains("lang") && body["lang"].is_string()) opts.lang = body["lang"].get<std::string>();
+    opts.ensemble = defaults.ensemble;
+    if (body.contains("ensemble")) opts.ensemble = bounded_integer(body["ensemble"], 1, 8, "ensemble");
+    opts.calibrate = defaults.calibrate;
+    if (body.contains("calibrate") && body["calibrate"].is_boolean()) opts.calibrate = body["calibrate"].get<bool>();
+    if (body.contains("return_logits") && body["return_logits"].is_boolean())
+        opts.return_logits = body["return_logits"].get<bool>();
+    // token budgets, as laya's predict_batch(max_len=, head_max_len=). Many-option choices
+    // (e.g. 77 intents) need head_max_len ~512 or every option is cut to one subword.
+    if (defaults.max_len > 0) opts.max_len = defaults.max_len;
+    if (defaults.head_max_len > 0) opts.head_max_len = defaults.head_max_len;
+    for (const char* k : {"max_len", "head_max_len"}) {
+        if (!body.contains(k)) continue;
+        (std::string(k) == "max_len" ? opts.max_len : opts.head_max_len) = bounded_integer(body[k], 32, 8192, k);
+    }
+    if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
+        opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
+    // Selective prediction: answers below the threshold get "escalate": true so the caller can hand
+    // them to a person or a larger model; without a threshold the response is unchanged.
+    r.min_confidence = defaults.min_confidence;
+    if (body.contains("min_confidence")) {
+        const auto& v = body["min_confidence"];
+        if (!v.is_number() || v.get<double>() < 0.0 || v.get<double>() > 1.0)
+            throw HttpError{422, "min_confidence must be a number from 0 to 1"};
+        r.min_confidence = v.get<double>();
+    }
+    if (batch) {
+        if (!body.contains("states") || !body["states"].is_array())
+            throw HttpError{400, "request body must contain a 'states' array"};
+        if (body["states"].size() > max_batch_states)
+            throw HttpError{413, "too many states (" + std::to_string(body["states"].size()) + " > " +
+                                     std::to_string(max_batch_states) + ")"};
+        for (const auto& s : body["states"]) {
+            check_limits(s, questions);
+            r.states.push_back(s);
+        }
+    } else {
+        ojson state = body.contains("state") ? body["state"] : ojson();
+        check_limits(state, questions);
+        r.states.push_back(std::move(state));
+    }
+    return r;
+}
 int bounded_integer(const ojson& v, int low, int high, const std::string& name) {
     bool ok = v.is_number_integer();
     if (ok && v.is_number_unsigned()) ok = v.get<uint64_t>() >= static_cast<uint64_t>(low) && v.get<uint64_t>() <= static_cast<uint64_t>(high);

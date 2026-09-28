@@ -362,6 +362,9 @@ int main(int argc, char** argv) {
     }
     check(throws([&] { statim::Model::with_adapter(base, edited); }, "encoder.layers.3.mlp.Wi.weight has shapes A 100x4"),
           "an adapter whose shapes do not fit the base is rejected");
+    rewrite_adapter(random_path, edited, [](gguf_context* g) { gguf_set_val_str(g, "statim.lora.rank", "4"); });
+    check(throws([&] { statim::Model::with_adapter(base, edited); }, "has the wrong type"),
+          "adapter metadata of the wrong type is an error, not an abort");
     std::remove(edited.c_str());
 
     std::printf("errors\n");

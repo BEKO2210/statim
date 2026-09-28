@@ -8,6 +8,11 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- `bench/baselines.py` and `docs/BASELINES.md`: Statim against a local LLM (Qwen3-8B, zero-shot)
+  and a zero-shot NLI classifier (mDeBERTa-v3 XNLI) on the gate's 11,550 held-out items, with the
+  same questions and options for every system. Over 14 decision categories: 0.748, 0.704 and 0.488;
+  Banking77: 0.913, 0.650 and 0.224. On the same GPU, Statim answers about 68 decisions per second
+  and the LLM about 6. README section "Against general models".
 - Mixture v6: five licence-checked sources for the three weakest held-out categories (fact-check
   0.313, emotion 0.586, topic 0.607 in 0.7.0). Licence and provenance evidence for each is in
   `tools/finetune/sources/v6-research.md` (Part F), and each is registered in `v6-keep.json`
@@ -66,6 +71,36 @@ between minor versions; every change is listed here.
     `lora_quantized` (q8_0 and q4_0 bases: runtime accuracy, bit-exact merged weights, repacked
     merge) and `server_lora` (selection, auto routing, errors, batch endpoint, micro-batching
     across adapters, authentication, consensus, one engine per worker). CI runs them verbose.
+- libFuzzer harnesses under ASan + UBSan for request bodies (`POST /v1/systemone` and `/batch`,
+  through the handler's own parsing, validation, tokenization, packing, inference and response
+  serialization), the tokenizer (arbitrary bytes, both BPE pipelines, real Laya vocabularies) and
+  GGUF model loading (`fuzz/`, `-DSTATIM_FUZZ=ON`, `fuzz/run.sh`). The hand-written seeds and every
+  crash input are committed and replayed by ctest (`fuzz_regressions_*`) in ordinary builds.
+- CI job `fuzz`: every harness for 60 s per push, continuing from the corpus grown in earlier runs
+  (kept with `actions/cache`); crash inputs are uploaded as an artifact.
+- `tests/test_model_validation.cpp`: 20 malformed-model cases that must be rejected at load.
+- Startup warning `auth_off_on_network` when the server listens beyond loopback without API keys
+  (the Docker images do this by default).
+
+### Fixed
+- A malformed or hostile model file can no longer abort the process. Every GGUF metadata read
+  checks the stored type first (`gguf_get_*` abort on a mismatch), and `Model::load` now rejects,
+  with an error, files whose tensors do not match the hyperparameters (shapes, types), whose
+  special token ids or vocabulary exceed the embedding table, whose hyperparameters are out of
+  range, or whose calibration tables are malformed. Before, such files either aborted at load or
+  loaded and then aborted (`GGML_ASSERT`) or read out of bounds on the first request.
+- `laya.temperature_by_options` and `laya.lang_temperatures` are validated at load. A malformed
+  table used to throw from the engine constructor, and a short per-language `temperature` array was
+  indexed out of bounds for requests that set `lang`.
+- A model whose `general.name` is not valid UTF-8 is rejected at load. It is echoed as `"model"` in
+  every response, whose serialization then threw, so every request answered 500.
+- Bearer-key comparison runs over a fixed length, so its timing no longer depends on the configured
+  keys' lengths.
+- Error logging cannot throw on invalid UTF-8 in an exception message.
+
+### Changed
+- Request parsing and validation moved from the HTTP handler into `parse_decide_request()`
+  (`statim/security.h`) so the fuzzer runs exactly the server's code. Behaviour is unchanged.
 
 ## [0.7.0] - 2026-09-28
 

@@ -71,6 +71,22 @@ curl -s localhost:8080/v1/systemone -d '{
     "refund":     {"type": "noul", "instructions": "Does the user explicitly request a refund?"}}}'
 ```
 
+### Against general models
+
+The same held-out items, questions and options for every system ([protocol and all cells](docs/BASELINES.md)).
+Statim was trained on these decision categories; the baselines answer zero-shot.
+
+| | Statim Decide Multilingual 0.7.0 | Qwen3-8B, zero-shot | mDeBERTa-v3 XNLI, zero-shot |
+|---|---|---|---|
+| Parameters | 307M | 8.2B | 279M |
+| 14 decision categories, macro accuracy | **0.748** | 0.704 | 0.488 |
+| Categories won | **9** | 5 | 0 |
+| Banking77 (77 intents) | **0.913** | 0.650 | 0.224 |
+| AG News | **0.929** | 0.847 | 0.581 |
+| Decisions per second, same RTX 3070 | **68** | ≈6 | 4 |
+
+The LLM is ahead on emotion, fact-check, sentiment, safety and PII.
+
 ## Why Statim
 
 | | Laya (Python) | **Statim** |
@@ -409,7 +425,7 @@ published result (meraGPT 0.768). Reproduce:
 .venv-train/bin/python tools/finetune/gate.py compare models/laya models/laya-english-big1
 ```
 
-### 0.4.0: statim-decide-multilingual-base
+### 0.7.0: statim-decide-multilingual-base
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.4.0-dark.svg">

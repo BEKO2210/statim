@@ -12,6 +12,24 @@ option(STATIM_NATIVE "Optimise for the build machine's CPU" ON)
 option(STATIM_BUILD_TESTS "Build tests" ON)
 option(STATIM_VULKAN "Build the Vulkan GPU backend (--device vulkan)" OFF)
 option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
+option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
+
+if(STATIM_FUZZ)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+  endif()
+  # ASan + UBSan for every object, ggml included, so memory errors our inputs cause inside ggml are
+  # reported; coverage feedback only for statim_core / statim_tokenizer (below), which keeps
+  # the kernels fast enough to run real forward passes per input.
+  # -fno-sanitize=function: ggml calls typed converters through void* function pointers (upstream idiom).
+  # signed-integer-overflow and enum stay recoverable only so fuzz/ubsan.supp can name two upstream
+  # ggml cases; the fuzzers run with UBSAN_OPTIONS=halt_on_error=1, so every other report aborts.
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined
+                      -fsanitize-recover=signed-integer-overflow,enum
+                      -fno-omit-frame-pointer -g)
+  add_link_options(-fsanitize=address,undefined -fno-sanitize=function)
+  set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
+endif()
 
 # ---- ggml (vendored)
 set(GGML_NATIVE ${STATIM_NATIVE} CACHE BOOL "" FORCE)
@@ -40,6 +58,10 @@ add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src
 set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml)
+if(STATIM_FUZZ)
+  target_compile_options(statim_tokenizer PRIVATE -fsanitize=fuzzer-no-link)
+  target_compile_options(statim_core PRIVATE -fsanitize=fuzzer-no-link)
+endif()
 
 if(STATIM_BUILD_TESTS)
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_tokenizer.cpp)
@@ -59,10 +81,17 @@ if(STATIM_BUILD_TESTS)
   add_executable(test_lora tests/test_lora.cpp)
   target_include_directories(test_lora PRIVATE src)
   target_link_libraries(test_lora PRIVATE statim_core)
+
+  include(fuzz/CMakeLists.txt)
+
   add_executable(test_security tests/test_security.cpp)
   target_link_libraries(test_security PRIVATE statim_core)
   enable_testing()
   add_test(NAME security COMMAND test_security)
+  add_executable(test_model_validation tests/test_model_validation.cpp)
+  target_include_directories(test_model_validation PRIVATE third_party/ggml/src)
+  target_link_libraries(test_model_validation PRIVATE statim_core)
+  add_test(NAME model_validation COMMAND test_model_validation ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/data/tiny-metaspace.gguf)
   find_package(Python3 COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
     add_test(NAME security_http COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/security/test_http.py
