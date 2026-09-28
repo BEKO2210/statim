@@ -36,16 +36,27 @@ namespace {
 
 [[noreturn]] void fail(const std::string& msg) { throw std::runtime_error("statim: " + msg); }
 
-int64_t key(const gguf_context* g, const char* k, bool required = true) {
+// gguf_get_val_* / gguf_get_arr_* abort on a type mismatch, so every read checks the stored type first:
+// a malformed model file must be rejected with an exception, never crash the process.
+int64_t key(const gguf_context* g, const char* k, bool required = true, int type = -1) {
     int64_t id = gguf_find_key(g, k);
     if (id < 0 && required) fail(std::string("model file is missing metadata key '") + k + "'");
+    if (id >= 0 && type >= 0 && gguf_get_kv_type(g, id) != static_cast<gguf_type>(type))
+        fail(std::string("model metadata key '") + k + "' has the wrong type");
     return id;
 }
-uint32_t get_u32(const gguf_context* g, const char* k) { return gguf_get_val_u32(g, key(g, k)); }
-float get_f32(const gguf_context* g, const char* k) { return gguf_get_val_f32(g, key(g, k)); }
+uint32_t get_u32(const gguf_context* g, const char* k) { return gguf_get_val_u32(g, key(g, k, true, GGUF_TYPE_UINT32)); }
+float get_f32(const gguf_context* g, const char* k) { return gguf_get_val_f32(g, key(g, k, true, GGUF_TYPE_FLOAT32)); }
+int32_t get_i32(const gguf_context* g, const char* k) { return gguf_get_val_i32(g, key(g, k, true, GGUF_TYPE_INT32)); }
 std::string get_str(const gguf_context* g, const char* k, const std::string& def = "") {
-    int64_t id = key(g, k, false);
+    int64_t id = key(g, k, false, GGUF_TYPE_STRING);
     return id < 0 ? def : std::string(gguf_get_val_str(g, id));
+}
+int64_t arr_key(const gguf_context* g, const char* k, std::initializer_list<gguf_type> types) {
+    int64_t id = key(g, k, true, GGUF_TYPE_ARRAY);
+    for (gguf_type t : types)
+        if (gguf_get_arr_type(g, id) == t) return id;
+    fail(std::string("model metadata array '") + k + "' has the wrong element type");
 }
 
 struct EncLayer {
@@ -217,6 +228,117 @@ static void repack_weights(Model::Impl& M) {
     }
 }
 
+// Everything the graph builder, the tokenizer and the engine assume about a checkpoint. Checked once
+// at load time so an accepted file can never reach a GGML_ASSERT, an out-of-range get_rows or a
+// malformed calibration table at request time.
+static void validate(const Model::Impl& M) {
+    const HParams& h = M.hp;
+    auto in = [](long v, long lo, long hi) { return v >= lo && v <= hi; };
+    if (!in(h.n_embd, 1, 1 << 16) || !in(h.n_layer, 1, 256) || !in(h.n_head, 1, 1024) || !in(h.n_ff, 1, 1 << 18) ||
+        !in(h.head_n_layer, 1, 64) || !in(h.head_n_head, 1, 1024) || !in(h.head_n_ff, 1, 1 << 18) ||
+        !in(h.n_act, 1, 64) || !in(h.local_window, 1, 1 << 16) || !in(h.max_position, 32, 1 << 16) ||
+        !in(h.max_len, 32, 8192) || !in(h.head_max_len, 32, 8192))
+        fail("model hyperparameters out of range");
+    if (h.n_embd % h.n_head || (h.n_embd / h.n_head) % 2 || h.n_embd % h.head_n_head)
+        fail("model head counts do not divide the hidden size");
+    for (float v : {h.norm_eps, h.rope_theta_global, h.rope_theta_local})
+        if (!std::isfinite(v) || v <= 0.f) fail("model norm_eps / rope_theta must be finite and positive");
+    if (h.temperature.empty()) fail("model has no temperatures");
+    if (h.mask_token.empty()) fail("model mask token is empty");
+    // general.name is echoed as "model" in every response and in /v1/models; dump() throws on
+    // invalid UTF-8, which turned every request into a 500.
+    try {
+        (void)ojson(h.name).dump();
+    } catch (const std::exception&) {
+        fail("general.name is not valid UTF-8");
+    }
+
+    // calibration tables, in the shape Engine reads them
+    auto number_map = [](const ojson& j) {
+        if (!j.is_object()) return false;
+        for (const auto& v : j) if (!v.is_number()) return false;
+        return true;
+    };
+    ojson tbo = ojson::parse(h.temperature_by_options_json, nullptr, false);
+    if (!number_map(tbo)) fail("laya.temperature_by_options must be an object of numbers");
+    ojson lang = ojson::parse(h.lang_temperatures_json, nullptr, false);
+    if (!lang.is_object()) fail("laya.lang_temperatures must be an object");
+    for (const auto& c : lang) {
+        if (!c.is_object()) fail("laya.lang_temperatures entries must be objects");
+        if (c.contains("temperature_by_options") && !number_map(c["temperature_by_options"]))
+            fail("laya.lang_temperatures temperature_by_options must be an object of numbers");
+        if (c.contains("temperature")) {
+            const ojson& t = c["temperature"];
+            if (!t.is_array() || t.size() < 3) fail("laya.lang_temperatures temperature must list 3 numbers");
+            for (const auto& v : t) if (!v.is_number()) fail("laya.lang_temperatures temperature must list 3 numbers");
+        }
+    }
+
+    // tensors: exact shapes, and types the CPU and GPU kernels accept for each use
+    auto weight_type = [](ggml_type t) {
+        switch (t) {
+            case GGML_TYPE_F32: case GGML_TYPE_F16: case GGML_TYPE_BF16: case GGML_TYPE_Q4_0: case GGML_TYPE_Q4_1:
+            case GGML_TYPE_Q5_0: case GGML_TYPE_Q5_1: case GGML_TYPE_Q8_0: case GGML_TYPE_Q2_K: case GGML_TYPE_Q3_K:
+            case GGML_TYPE_Q4_K: case GGML_TYPE_Q5_K: case GGML_TYPE_Q6_K: return true;
+            default: return false;
+        }
+    };
+    auto shape = [&](const ggml_tensor* t, int64_t ne0, int64_t ne1, bool matrix) {
+        if (!t) return;
+        if (t->ne[0] != ne0 || t->ne[1] != ne1 || t->ne[2] != 1 || t->ne[3] != 1)
+            fail(std::string("tensor '") + t->name + "' has the wrong shape");
+        if (matrix ? !weight_type(t->type) : t->type != GGML_TYPE_F32)
+            fail(std::string("tensor '") + t->name + "' has an unsupported type");
+    };
+    const int64_t d = h.n_embd;
+    auto vec = [&](const ggml_tensor* t, int64_t n) { shape(t, n, 1, false); };
+    auto mat = [&](const ggml_tensor* t, int64_t in, int64_t out) { shape(t, in, out, true); };
+    const int64_t V = M.tok_embd->ne[1];
+    mat(M.tok_embd, d, V);
+    vec(M.embd_norm, d);
+    vec(M.final_norm, d);
+    shape(M.type_emb, d, 3, false);
+    if (M.enc.size() != static_cast<size_t>(h.n_layer) || M.head.size() != static_cast<size_t>(h.head_n_layer))
+        fail("model layer count mismatch");
+    for (const EncLayer& L : M.enc) {
+        vec(L.attn_norm, d);
+        mat(L.wqkv, d, 3 * d);
+        mat(L.wo, d, d);
+        vec(L.mlp_norm, d);
+        mat(L.wi, d, 2 * static_cast<int64_t>(h.n_ff));
+        mat(L.wo_mlp, h.n_ff, d);
+    }
+    for (const HeadLayer& L : M.head) {
+        vec(L.norm1_w, d);
+        vec(L.norm1_b, d);
+        mat(L.in_w, d, 3 * d);
+        vec(L.in_b, 3 * d);
+        mat(L.out_w, d, d);
+        vec(L.out_b, d);
+        vec(L.norm2_w, d);
+        vec(L.norm2_b, d);
+        mat(L.l1_w, d, h.head_n_ff);
+        vec(L.l1_b, h.head_n_ff);
+        mat(L.l2_w, h.head_n_ff, d);
+        vec(L.l2_b, d);
+    }
+    vec(M.sc_norm_w, d);
+    vec(M.sc_norm_b, d);
+    mat(M.sc1_w, d, d);
+    vec(M.sc1_b, d);
+    mat(M.sc2_w, d, 1);
+    vec(M.sc2_b, 1);
+    const size_t A0 = M.act0_b.size(), NA = M.act2_b.size();
+    if (A0 == 0 || M.act0_w.size() != A0 * static_cast<size_t>(d + 4) || NA != static_cast<size_t>(h.n_act) ||
+        M.act2_w.size() != NA * A0)
+        fail("act head has the wrong shape");
+
+    // every id the tokenizer or the prompt builder can emit must be an embedding row
+    if (static_cast<int64_t>(M.tok->vocab_size()) > V) fail("tokenizer vocabulary exceeds the embedding table");
+    for (int32_t id : {h.cls_id, h.sep_id, h.mask_id, h.pad_id})
+        if (id < 0 || id >= V) fail("special token id outside the embedding table");
+}
+
 std::shared_ptr<Model> Model::load(const std::string& path, const std::string& device) {
     std::shared_ptr<Model> m(new Model());
     Impl& M = *m->impl_;
@@ -236,7 +358,10 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) fail("cannot open '" + path + "'");
     struct stat st{};
-    fstat(fd, &st);
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        fail("cannot stat '" + path + "'");
+    }
     M.map_size = static_cast<size_t>(st.st_size);
     M.map = mmap(nullptr, M.map_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
@@ -247,8 +372,10 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     const size_t data_off = gguf_get_data_offset(M.gguf);
     for (int64_t i = 0; i < gguf_get_n_tensors(M.gguf); ++i) {
         ggml_tensor* x = ggml_get_tensor(M.ctx_w, gguf_get_tensor_name(M.gguf, i));
-        size_t off = data_off + gguf_get_tensor_offset(M.gguf, i);
-        if (off + ggml_nbytes(x) > M.map_size) fail("truncated model file '" + path + "'");
+        const size_t rel = gguf_get_tensor_offset(M.gguf, i);
+        if (data_off > M.map_size || rel > M.map_size - data_off || ggml_nbytes(x) > M.map_size - data_off - rel)
+            fail("truncated model file '" + path + "'");
+        size_t off = data_off + rel;
         x->data = static_cast<char*>(M.map) + off;
         M.weight_bytes += ggml_nbytes(x);
     }
@@ -268,7 +395,7 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     h.norm_eps = get_f32(g, "laya.encoder.norm_eps");
     h.max_position = get_u32(g, "laya.encoder.max_position");
     {
-        int64_t id = key(g, "laya.encoder.layer_is_global");
+        int64_t id = arr_key(g, "laya.encoder.layer_is_global", {GGUF_TYPE_BOOL, GGUF_TYPE_INT8, GGUF_TYPE_UINT8});
         const auto* v = static_cast<const int8_t*>(gguf_get_arr_data(g, id));
         for (size_t i = 0; i < gguf_get_arr_n(g, id); ++i) h.layer_is_global.push_back(v[i] != 0);
         if ((int)h.layer_is_global.size() != h.n_layer) fail("layer_is_global has wrong length");
@@ -280,16 +407,16 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     h.max_len = get_u32(g, "laya.max_len");
     h.head_max_len = get_u32(g, "laya.head_max_len");
     {
-        int64_t id = key(g, "laya.temperature");
+        int64_t id = arr_key(g, "laya.temperature", {GGUF_TYPE_FLOAT32});
         const auto* v = static_cast<const float*>(gguf_get_arr_data(g, id));
         h.temperature.assign(v, v + gguf_get_arr_n(g, id));
     }
     h.temperature_by_options_json = get_str(g, "laya.temperature_by_options", "{}");
     h.lang_temperatures_json = get_str(g, "laya.lang_temperatures", "{}");
-    h.cls_id = gguf_get_val_i32(g, key(g, "tokenizer.statim.cls_id"));
-    h.sep_id = gguf_get_val_i32(g, key(g, "tokenizer.statim.sep_id"));
-    h.mask_id = gguf_get_val_i32(g, key(g, "tokenizer.statim.mask_id"));
-    h.pad_id = gguf_get_val_i32(g, key(g, "tokenizer.statim.pad_id"));
+    h.cls_id = get_i32(g, "tokenizer.statim.cls_id");
+    h.sep_id = get_i32(g, "tokenizer.statim.sep_id");
+    h.mask_id = get_i32(g, "tokenizer.statim.mask_id");
+    h.pad_id = get_i32(g, "tokenizer.statim.pad_id");
     h.mask_token = get_str(g, "tokenizer.statim.mask_token", "<mask>");
 
     M.tok = std::make_unique<Tokenizer>(tokenizer_data_from_gguf(g));
@@ -337,6 +464,7 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     M.act0_b = to_f32(M.t("act_head.0.bias"));
     M.act2_w = to_f32(M.t("act_head.2.weight"));
     M.act2_b = to_f32(M.t("act_head.2.bias"));
+    validate(M);
     if (!M.on_cpu()) upload_weights(M);
     return m;
 }

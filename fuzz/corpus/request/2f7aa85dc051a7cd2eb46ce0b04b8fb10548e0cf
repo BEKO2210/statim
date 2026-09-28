@@ -1,0 +1,1 @@
+{"stata": {"a": [1, 2.5, null, true, {"b": "c"}]}, "questiony": {"q": {"type": "score", "instructions": {"x": 6}, "criteria": ["lo", {"k": "v"}, 6]}}}

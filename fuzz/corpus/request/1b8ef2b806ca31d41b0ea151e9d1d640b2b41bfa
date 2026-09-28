@@ -1,0 +1,1 @@
+{"state": "refund", "questions": {"department": {"type": "choice", "instructions": "Whichto 4.", "criteria": ["none", "low", "medium", "h", "outage", "account_deletion", "shipping", "payment_failure", "schedu;ing", "address_change", "fe:request", "question", "hiring", "invoice.error", "login_issue", "performance", "thanks", "other"]}}, "max_len": 512, "head_max_len": 96}

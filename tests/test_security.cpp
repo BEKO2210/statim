@@ -138,6 +138,17 @@ int main(int argc, char** argv) try {
     require(times_ok, "timestamp race");
 
     require(bearer_authorized(httplib::Request{}, {}), "local auth-off default rejected");
+    {
+        // fixed-length comparison: a maximal key still matches, prefixes/extensions and oversized headers do not
+        const std::string big(4096, 'k');
+        auto with = [](const std::string& v) { httplib::Request r; r.headers.emplace("Authorization", v); return r; };
+        require(bearer_authorized(with("Bearer " + big), {"short", big}), "4096-byte key rejected");
+        require(!bearer_authorized(with("Bearer " + big + "k"), {big}), "longer header accepted");
+        require(!bearer_authorized(with("Bearer " + big.substr(1)), {big}), "key prefix accepted");
+        require(!bearer_authorized(with("Bearer shor"), {"short"}), "short key prefix accepted");
+        require(!bearer_authorized(with("Bearer " + std::string(100000, 'k')), {big}), "oversized header accepted");
+        require(bearer_authorized(with("Bearer short"), {big, "short"}), "second key rejected");
+    }
     CalibrationCache cache(1024, 2);
     std::vector<double> found;
     cache.put("a", {1}); cache.put("b", {2});

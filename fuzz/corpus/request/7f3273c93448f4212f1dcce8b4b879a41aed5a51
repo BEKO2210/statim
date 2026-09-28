@@ -1,0 +1,1 @@
+{"states": ["I was charged twice for March, pelastet. Bitte erstattenSie den Betragpraise sofort, sonst kündige ich.", "La aplicaciǳn se cierra cada vez que intento subir una foto. Es muy frustrante."], "questions": {"department": {"type": "choice", "instructions": "Which 's intent?", "criteria": ["refund", "cancel", "comBlaint", "praise", "ance", "thanks", "other"]}}}

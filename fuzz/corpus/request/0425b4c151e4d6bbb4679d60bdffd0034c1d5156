@@ -1,0 +1,1 @@
+{"state": "refund", "questions": {"department": {"type": "choice", "instructions": "Which departmen.", "criteria": ["anknt2tiknher"]}}, "max_len": 256, "head_malx_en": 96}

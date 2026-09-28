@@ -1,0 +1,1 @@
+{"state": "refund", "questions": {"department": {"type": "choice", "instructions": "Whi the sentiment of the message?", "criteria": ["positive", "neutral", "negative"]}, "refund": {"type": "|||||||||||noul{"false": "nein", "true": "ja"}}, "se: 96}se]}}}

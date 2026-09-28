@@ -1,0 +1,1 @@
+{"state": "refund", "questions": {"department": {"type": "choice", "instructions": "Which dest a refund\\\\\\\\\\\?", "cirteria": {"true³: "the user asks forhanoul", "instructions": "Does the user explicitly request a refund\\\\\\\\\\\?", "cr&iteria": {"true": "the user asks for money back", "false": "no refund request"}},  "hiring", "invx_len": 96}

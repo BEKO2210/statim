@@ -1,0 +1,1 @@
+{"state": {"a": [0, 2.5, null, true, {"b": "c"}]}, "questions": {"q": {"type": "score", "instructions": {"x": 0}, "criteria": ["lo", {"k": "v"}, 6]}}}
