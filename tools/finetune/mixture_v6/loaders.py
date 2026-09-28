@@ -21,7 +21,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from .languages import to_iso
+from .languages import guess_lang, to_iso
 from .templates import LANGUAGES
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -795,6 +795,47 @@ def _load_egov(limit):
     return rows[:limit]
 
 
+
+# --------------------------------------------------------------------------- Part G sources
+# PII in the German, Dutch and English cells: generated from templates and Faker locale providers (no
+# real personal data, no model output). Read at a pinned commit, train split only.
+NOBODY_PII = {"repo": "naeyn/nobody-pii-synth-de", "file": "data/train.parquet",
+              "revision": "f78fcbcad638f5e7f69bfe55a8ebd508e32c3731"}
+NOBODY_PII_LANGS = ("de", "en", "nl")
+
+
+def nobody_pii_rows(records):
+    """(text, entities) rows of naeyn/nobody-pii-synth-de. ``ner`` holds token spans {start, end, label}
+    (a Python-literal string in the parquet file); only the labels are kept, the adapter needs the
+    types, and the untokenised ``text`` is the state. The ``lang`` tag is kept for rows with PII; the
+    PII-free rows (doctype "negative") are partly English under a "de" tag, so their language is
+    guessed from the text and a row whose language cannot be told is dropped."""
+    import ast
+    out = []
+    for rec in records:
+        text = str(rec.get("text") or "").strip()
+        spans = rec.get("ner")
+        if isinstance(spans, str):
+            try:
+                spans = ast.literal_eval(spans) if spans.strip() else []
+            except (ValueError, SyntaxError):
+                continue
+        if not text or not isinstance(spans, list):
+            continue
+        entities = [{"label": str(s.get("label"))} for s in spans if isinstance(s, dict) and s.get("label")]
+        code = to_iso(rec.get("lang")) if entities else guess_lang(text, NOBODY_PII_LANGS)
+        if code not in NOBODY_PII_LANGS:
+            continue
+        out.append({"text": text, "entities": entities, "_v6_lang": code})
+    return out
+
+
+def _load_nobody_pii(limit):
+    import pyarrow.parquet as pq
+    path = _hub(NOBODY_PII["repo"], NOBODY_PII["file"], NOBODY_PII["revision"])
+    records = pq.read_table(path, columns=["text", "ner", "lang"]).to_pylist()
+    return _balanced_by(nobody_pii_rows(records), limit, "_v6_lang", "nobody_pii")
+
 def _spread(rows, limit):
     if len(rows) <= limit:
         return rows
@@ -992,6 +1033,7 @@ _DISPATCH = {
     "agentlans/fact-or-opinion": lambda entry, limit: _load_fact_opinion(limit),
     "hheiden/us-congress-bill-policy-115_117": lambda entry, limit: _load_congress(limit),
     "nlp-waseda/e_gov": lambda entry, limit: _load_egov(limit),
+    "naeyn/nobody-pii-synth-de": lambda entry, limit: _load_nobody_pii(limit),
 }
 
 

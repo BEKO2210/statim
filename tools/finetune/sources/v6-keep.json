@@ -3258,5 +3258,101 @@
   "source_part": "F",
   "use": false,
   "excluded_reason": "generator model not disclosed (built with a hosted service)"
+ },
+ {
+  "id": "naeyn/nobody-pii-synth-de",
+  "config": "default",
+  "split": "train",
+  "licence": "apache-2.0 (card YAML and LICENSE file); generated from templates and Faker locale providers",
+  "languages": [
+   "de",
+   "en",
+   "nl"
+  ],
+  "category": "10-pii",
+  "label_field": "ner (token spans {start, end, label}; labels only)",
+  "text_fields": [
+   "text"
+  ],
+  "licence_evidence": [
+   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/README.md (YAML license: apache-2.0)",
+   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/LICENSE (Apache License, Version 2.0, January 2004)",
+   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/NOTICE ('Nobody PII Synthetic dataset Copyright (c) 2026 naeyn. Apache-2.0 (see LICENSE). This repository contains procedurally generated rows and does not contain records copied from ai4privacy/pii-masking-400k or ai4privacy/pii-masking-openpii-1m. The generation process used Faker locale providers.')"
+  ],
+  "provenance": "README 'Generation provenance': 'This release was generated from templates and Faker locale providers. No source records containing real people's personal data were used to construct' the corpus; generator snapshot gen_v4.1 document-composer (business-document templates, multilingual name forms, structured identifiers). No language model wrote texts or labels. Not gated (dataset_info.gated == False). train.parquet only (9,450 rows: de 5,349, en 2,265, nl 1,836; 705 without PII).",
+  "pinned_commit": "f78fcbcad638f5e7f69bfe55a8ebd508e32c3731",
+  "test_overlap_note": "no eval-suite source; synthetic business documents; 0 exact matches of its 9,450 train texts against the 29,767 pooled items of the sentiment/emotion/safety/fact_check/pii suites; exact-dedup vs all eval texts in build.py",
+  "source_part": "G",
+  "use": true,
+  "excluded_reason": null
+ },
+ {
+  "id": "kakeith406/op-fed",
+  "config": "aggregated",
+  "split": "train",
+  "licence": "cc-by-4.0",
+  "languages": [
+   "en"
+  ],
+  "category": "10-claim-detection",
+  "label_field": "-",
+  "text_fields": [],
+  "test_overlap_note": "-",
+  "source_part": "G",
+  "use": false,
+  "excluded_reason": "labels are opinion yes/no on FOMC transcript sentences; they cannot give the ClaimBuster check-worthy / unimportant factual / non-factual gold without inventing the factual split"
+ },
+ {
+  "id": "Aniemore/resd_annotated",
+  "config": "default",
+  "split": "train",
+  "licence": "mit",
+  "languages": [
+   "ru"
+  ],
+  "category": "2-emotion",
+  "label_field": "-",
+  "text_fields": [],
+  "test_overlap_note": "-",
+  "source_part": "G",
+  "use": false,
+  "excluded_reason": "the emotion was acted in the voice (label = what the actor was told to play); transcripts often carry none of it, e.g. a polite sales greeting labelled anger, so text-only gold labels would be wrong"
+ },
+ {
+  "id": "DataikuNLP/kiji-pii-training-data",
+  "config": "default",
+  "split": "train",
+  "licence": "apache-2.0",
+  "languages": [
+   "de",
+   "en",
+   "es",
+   "fr",
+   "nl",
+   "da"
+  ],
+  "category": "10-pii",
+  "label_field": "-",
+  "text_fields": [],
+  "test_overlap_note": "-",
+  "source_part": "G",
+  "use": false,
+  "excluded_reason": "card: 'synthetically generated using LLMs' with no generator named; an undisclosed generator is not allowed"
+ },
+ {
+  "id": "menamerai/cheer-ekman",
+  "config": "default",
+  "split": "train",
+  "licence": "apache-2.0",
+  "languages": [
+   "en"
+  ],
+  "category": "2-emotion",
+  "label_field": "-",
+  "text_fields": [],
+  "test_overlap_note": "-",
+  "source_part": "G",
+  "use": false,
+  "excluded_reason": "card has only a licence line: no provenance, annotation or generator documented"
  }
 ]
