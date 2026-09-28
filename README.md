@@ -12,6 +12,17 @@
   <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, Small Business, Free Trial or commercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%C2%B7%20Small%20Business%20%C2%B7%20Trial%20%2B%20commercial-161B22"></a>
 </p>
 
+<p align="center">
+  <a href="https://beko2210.github.io/statim/#film">
+    <picture>
+      <source media="(max-width: 640px)" srcset="assets/readme/statim-intro-9x16.webp">
+      <img src="assets/readme/statim-intro-16x9.webp" width="840" alt="Statim in ten seconds: a support ticket in JSON becomes three typed decisions, department, urgency and refund, in one forward pass">
+    </picture>
+  </a>
+  <br>
+  <a href="https://beko2210.github.io/statim/#film"><b>Watch the 60-second film</b></a>
+</p>
+
 **A native C++20 engine for System-1 decision models.** Typed decisions — `choice`, `score`, `noul` —
 over any text or JSON in a single forward pass, served from one static binary. No Python, no PyTorch,
 no GPU required — and ~8× faster when there is one ([GPU](#gpu-vulkan-or-cuda)).

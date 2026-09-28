@@ -35,6 +35,18 @@ between minor versions; every change is listed here.
   source. It flags serialized options, numeric options, constant labels and question/option
   mismatches. The `mixture-audit` workflow runs it together with the offline adapter tests.
 
+## [0.6.2] - 2026-09-28
+
+### Added
+- Films on the site. A new "Watch it decide" section plays the 60-second film (16:9 on landscape
+  screens, 9:16 on portrait screens) next to the 45-second story, and "One pass. Every option scored."
+  plays the 30-second showreel in the same two formats. Nothing loads before the play button: the
+  posters are 12 to 28 kB and the home page stays at 593 kB. Open Graph video tags let chat apps
+  preview the film.
+- README: a ten-second animation (animated WebP, portrait on narrow screens) that links to the film.
+  GitHub removes `<video>` from READMEs, so the film itself plays on the site.
+- Model cards (`tools/release/hf_publish.py`) embed the film as a `<video>` element.
+
 ## [0.6.1] - 2026-09-28
 
 ### Fixed
@@ -328,7 +340,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/BEKO2210/statim/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/BEKO2210/statim/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/BEKO2210/statim/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/BEKO2210/statim/compare/v0.5.1...v0.5.2

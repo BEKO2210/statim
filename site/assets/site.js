@@ -40,6 +40,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Films: the portrait poster on portrait screens, one large play button, one film at a time.
+  const films = [...document.querySelectorAll(".frame video")];
+  const portrait = window.matchMedia("(orientation: portrait)").matches;
+  for (const video of films) {
+    const frame = video.closest(".frame");
+    if (portrait && video.dataset.posterPortrait) video.poster = video.dataset.posterPortrait;
+    const play = frame.querySelector(".play");
+    if (play) {
+      video.controls = false;  // a quiet poster; the native controls appear once the film plays
+      play.addEventListener("click", () => { video.play(); video.focus({ preventScroll: true }); });
+    }
+    video.addEventListener("play", () => {
+      video.controls = true;
+      frame.classList.add("playing");
+      for (const other of films) if (other !== video) other.pause();
+    });
+  }
+
   // Close the mobile menu after choosing a link.
   const menu = document.querySelector(".menu");
   if (menu) menu.addEventListener("click", (e) => { if (e.target.closest("a")) menu.open = false; });
