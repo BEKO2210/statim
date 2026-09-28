@@ -250,8 +250,6 @@ def _urgency_labels(reg):
 
 
 GATE_EXCLUDED = {
-    ("emotion", "pt"): "no v6 training source has emotion labels in Portuguese: zero-shot",
-    ("emotion", "ru"): "no v6 training source has emotion labels in Russian: zero-shot",
     ("reading", "*"): _reading_windows,
     ("topic", "*"): _topic_labels,
     ("urgency", "*"): _urgency_labels,
