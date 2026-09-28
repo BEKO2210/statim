@@ -7,6 +7,12 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-29
+
+Per-category LoRA adapters, a measured comparison with a general LLM, fuzzing and hardened model
+loading, and licence-checked training data for the weakest categories. The published models are
+unchanged.
+
 ### Added
 - `bench/baselines.py` and `docs/BASELINES.md`: Statim against a local LLM (Qwen3-8B, zero-shot)
   and a zero-shot NLI classifier (mDeBERTa-v3 XNLI) on the gate's 11,550 held-out items, with the
@@ -101,6 +107,9 @@ between minor versions; every change is listed here.
 - Error logging cannot throw on invalid UTF-8 in an exception message.
 
 ### Changed
+- README rewritten: results at a glance with their protocol, one results section, CPU and GPU
+  performance together, LoRA adapters, security and robustness. Every number comes from the document
+  it links to.
 - Request parsing and validation moved from the HTTP handler into `parse_decide_request()`
   (`statim/security.h`) so the fuzzer runs exactly the server's code. Behaviour is unchanged.
 
@@ -475,7 +484,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/BEKO2210/statim/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/BEKO2210/statim/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/BEKO2210/statim/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/BEKO2210/statim/compare/v0.6.0...v0.6.1
