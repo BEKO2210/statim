@@ -8,7 +8,6 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
-
 - LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
   encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no
   `modules_to_save`, no DoRA, `init_lora_weights` true or gaussian), decision head and token
