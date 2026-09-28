@@ -79,8 +79,9 @@ public:
     // The base model with a LoRA adapter (tools/convert_lora.py) applied. Shares the tokenizer and
     // every tensor the adapter does not touch with `base` and keeps `base` alive. Pairs whose
     // delta is exactly zero leave the base tensor in place, so a zero adapter is bit-identical to
-    // the base. Throws if the adapter was converted for another checkpoint (fingerprint()) or its
-    // shapes do not match. Without a mode, default_adapter_mode(*base).
+    // the base. Throws if the adapter was converted for another checkpoint (fingerprint() and,
+    // when present, checkpoint_sha256()) or its shapes do not match. Without a mode,
+    // default_adapter_mode(*base).
     static std::shared_ptr<Model> with_adapter(std::shared_ptr<Model> base, const std::string& adapter_gguf,
                                                std::optional<AdapterMode> mode = std::nullopt, int n_threads = 0);
     ~Model();
@@ -93,6 +94,9 @@ public:
     // weight type of one checkpoint, different between fine-tunes that train them (full fine-tuning
     // does). A LoRA adapter records the one it was converted for.
     const std::string& fingerprint() const;
+    // Content identity recorded by tools/convert_laya.py over every source tensor before type
+    // conversion. Empty for checkpoints converted before it was added.
+    const std::string& checkpoint_sha256() const;
     const AdapterInfo* adapter() const;  // nullptr for a base model
 
     // f32 copy of a weight as this model evaluates it (tests and tooling). For an adapter view the

@@ -209,6 +209,7 @@ int main(int argc, char** argv) {
                                        {"rope_theta_local", h.rope_theta_local}}},
                           {"head", {{"layers", h.head_n_layer}, {"heads", h.head_n_head}, {"ff", h.head_n_ff}}},
                           {"max_len", h.max_len}, {"head_max_len", h.head_max_len}, {"vocab", model->tokenizer().vocab_size()}};
+            if (!model->checkpoint_sha256().empty()) info["checkpoint_sha256"] = model->checkpoint_sha256();
             if (const statim::AdapterInfo* ad = model->adapter())
                 info["adapter"] = {{"name", ad->name}, {"path", ad->path}, {"mode", ad->mode == statim::AdapterMode::merge ? "merge" : "runtime"},
                                    {"rank", ad->rank}, {"alpha", ad->alpha}, {"pairs", ad->n_pairs}, {"pairs_applied", ad->n_applied},

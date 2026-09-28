@@ -5,14 +5,22 @@ The files have the exact metadata keys and tensor layout of tools/convert_laya.p
 but a 16-wide, 2-layer encoder and a toy BPE vocabulary, so one forward pass takes
 microseconds. They are the GGUF fuzzer's seeds and the request fuzzer's runtime model.
 
+tiny-metaspace-q4_0.gguf and tiny-metaspace-q8_0.gguf are the same metaspace model with
+head.layers.*.linear2.weight quantized. That matrix is the only one whose row length
+(ne[0] = head_n_ff = 32) is a multiple of the q4_0/q8_0 block, and ne[1] = 16 is
+divisible by 8, so Model::load repacks it (AVX2: q4_0; ARM dotprod/i8mm: q4_0 and q8_0).
+
     python3 fuzz/make_tiny_model.py fuzz/data
 """
+import hashlib
 import json
 import os
+import struct
 import sys
 
 import numpy as np
-from gguf import GGUFWriter
+from gguf import GGMLQuantizationType, GGUFWriter
+from gguf.quants import quantize as gguf_quantize
 
 D, N_HEAD, N_FF, N_LAYER = 16, 2, 16, 2
 HEAD_LAYERS, HEAD_N_HEAD, HEAD_FF, ACT_HIDDEN, N_ACT = 2, 2, 32, 8, 2
@@ -57,11 +65,15 @@ def tokenizer(kind):
     return pieces, merges, normalizer, pre, model, added
 
 
-def write(path, kind):
+def write(path, kind, quant=None, matrix_variant=0, record_checkpoint_sha256=False):
+    """quant stores head.layers.*.linear2.weight in that type (the repack seeds); matrix_variant shifts
+    one matrix entry (same vectors, other matrices); record_checkpoint_sha256 adds
+    statim.checkpoint_sha256 as tools/convert_laya.py writes it. The committed seeds use neither of
+    the last two."""
     rng = np.random.default_rng(1234 if kind == "metaspace" else 5678)
     pieces, merges, normalizer, pre, model, added = tokenizer(kind)
     w = GGUFWriter(path, "laya")
-    w.add_name("tiny-" + kind)
+    w.add_name("tiny-" + kind + ("" if quant is None else "-" + quant.name.lower()))
     w.add_string("statim.format", "statim-decision-v1")
     w.add_uint32("laya.encoder.n_embd", D)
     w.add_uint32("laya.encoder.n_layer", N_LAYER)
@@ -95,11 +107,16 @@ def write(path, kind):
     w.add_int32("tokenizer.statim.pad_id", 0)
     w.add_string("tokenizer.statim.mask_token", "<mask>")
 
-    def t(name, *shape):
-        w.add_tensor(name, (rng.standard_normal(shape) * 0.2).astype(np.float32))
+    tensors = []  # (name, source array, quantization type or None); added after the optional hash
+
+    def t(name, *shape, q=None):
+        data = (rng.standard_normal(shape) * 0.2).astype(np.float32)
+        if matrix_variant and name == "encoder.layers.0.attn.Wqkv.weight":
+            data.flat[0] += np.float32(matrix_variant)
+        tensors.append((name, data, q))
 
     V = len(pieces)
-    w.add_tensor("encoder.embeddings.tok_embeddings.weight", (rng.standard_normal((V, D)) * 0.2).astype(np.float16))
+    tensors.append(("encoder.embeddings.tok_embeddings.weight", (rng.standard_normal((V, D)) * 0.2).astype(np.float16), None))
     t("encoder.embeddings.norm.weight", D)
     for l in range(N_LAYER):
         p = "encoder.layers.%d." % l
@@ -124,7 +141,7 @@ def write(path, kind):
         t(p + "norm2.bias", D)
         t(p + "linear1.weight", HEAD_FF, D)
         t(p + "linear1.bias", HEAD_FF)
-        t(p + "linear2.weight", D, HEAD_FF)
+        t(p + "linear2.weight", D, HEAD_FF, q=quant)  # only matrix with ne[0] % 32 == 0
         t(p + "linear2.bias", D)
     t("scorer.0.weight", D)
     t("scorer.0.bias", D)
@@ -136,6 +153,17 @@ def write(path, kind):
     t("act_head.0.bias", ACT_HIDDEN)
     t("act_head.2.weight", N_ACT, ACT_HIDDEN)
     t("act_head.2.bias", N_ACT)
+    if record_checkpoint_sha256:  # as tools/convert_laya.py: every source tensor as f32, in byte order of the names
+        checkpoint_hash = hashlib.sha256()
+        for name, arr, _ in sorted(tensors, key=lambda x: x[0].encode()):
+            checkpoint_hash.update(name.encode() + b"\0" + struct.pack("<Q", arr.size))
+            checkpoint_hash.update(np.ascontiguousarray(arr.astype("<f4")).tobytes())
+        w.add_string("statim.checkpoint_sha256", checkpoint_hash.hexdigest())
+    for name, arr, q in tensors:
+        if q is None:
+            w.add_tensor(name, arr)
+        else:
+            w.add_tensor(name, np.ascontiguousarray(gguf_quantize(arr, q)), raw_dtype=q)
     w.write_header_to_file()
     w.write_kv_data_to_file()
     w.write_tensors_to_file()
@@ -147,3 +175,6 @@ if __name__ == "__main__":
     os.makedirs(out, exist_ok=True)
     for kind in ("metaspace", "bytelevel"):
         write(os.path.join(out, "tiny-%s.gguf" % kind), kind)
+    for q in (GGMLQuantizationType.Q4_0, GGMLQuantizationType.Q8_0):
+        tag = q.name.lower()
+        write(os.path.join(out, "tiny-metaspace-%s.gguf" % tag), "metaspace", quant=q)

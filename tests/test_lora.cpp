@@ -5,8 +5,9 @@
 //      - merged weights at sampled positions and the per-tensor delta sum, within 1e-4,
 //      - the logits within 1e-4 and the same argmax on every item,
 //      in both merge and runtime mode, and merge vs. runtime within 1e-4;
-//   3. binding to the base: SHA-256 test vectors, the checkpoint fingerprint, and rejection of an
-//      adapter for another checkpoint, one without a fingerprint and one whose shapes do not fit;
+//   3. binding to the base: SHA-256 test vectors, the checkpoint fingerprint and full checkpoint
+//      SHA-256, and rejection of an adapter for another checkpoint, one without a fingerprint and
+//      one whose shapes do not fit;
 //   4. load errors: a model file as adapter, stacked adapters.
 // With --quantized, adapters on quantized base weights instead (q8_0, q4_0; on an AVX2 CPU q4_0
 // lives in the repack buffer): the files share the f32 checkpoint's fingerprint; runtime LoRA, the
@@ -350,6 +351,15 @@ int main(int argc, char** argv) {
     });
     check(throws([&] { statim::Model::with_adapter(base, edited); }, "was converted for another checkpoint"),
           "an adapter converted for another checkpoint is rejected");
+    if (!base->checkpoint_sha256().empty()) {
+        rewrite_adapter(random_path, edited, [](gguf_context* g) {
+            gguf_set_val_str(g, "statim.lora.base_checkpoint_sha256", std::string(64, 'f').c_str());
+        });
+        check(throws([&] { statim::Model::with_adapter(base, edited); }, "the vectors match but the matrices do not"),
+              "an adapter for different checkpoint matrices is rejected");
+    } else {
+        std::printf("  note base model has no statim.checkpoint_sha256; skipping matrix binding check\n");
+    }
     rewrite_adapter(random_path, edited, [](gguf_context* g) { gguf_remove_key(g, "statim.lora.base_fingerprint"); });
     check(throws([&] { statim::Model::with_adapter(base, edited); }, "does not record its base model"),
           "an adapter without a base fingerprint is rejected");

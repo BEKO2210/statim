@@ -1,9 +1,10 @@
 // statim-quantize: re-encode the matmul weights of a Statim GGUF model.
 //
-//   statim-quantize in-f32.gguf out.gguf q4_k [--embd q8_0]
+//   statim-quantize in-f32.gguf out.gguf q4_K [--embd q8_0]
 //
 // Only 2-D projection weights are quantized. Norms, biases, the type embedding and tensors
 // whose row length does not fit the block size keep their precision (or fall back to q8_0).
+// Types are the ones validate() accepts (src/weight_types.h).
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -12,13 +13,15 @@
 #include "ggml-cpu.h"
 #include "ggml.h"
 #include "gguf.h"
+#include "weight_types.h"
 
 static ggml_type parse_type(const std::string& s) {
     for (int t = 0; t < GGML_TYPE_COUNT; ++t) {
-        const char* n = ggml_type_name(static_cast<ggml_type>(t));
-        if (n && s == n) return static_cast<ggml_type>(t);
+        const auto gt = static_cast<ggml_type>(t);
+        const char* n = ggml_type_name(gt);
+        if (n && s == n && statim::matrix_type_ok(gt)) return gt;
     }
-    std::fprintf(stderr, "unknown type '%s' (e.g. f16, q8_0, q5_0, q4_0, q4_K, q5_K, q6_K)\n", s.c_str());
+    std::fprintf(stderr, "unsupported type '%s' (accepted: %s)\n", s.c_str(), statim::matrix_type_names().c_str());
     std::exit(2);
 }
 
@@ -54,6 +57,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     gguf_context* out = gguf_init_empty();
+    // Preserve source-checkpoint identity (including statim.checkpoint_sha256) unchanged.
     gguf_set_kv(out, in);
 
     std::vector<std::vector<uint8_t>> buffers;

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Convert a Laya checkpoint directory (model.safetensors + rl_agent_config.json + encoder/ +
-tokenizer/) into one self-contained Statim GGUF file.
+tokenizer/) into one self-contained Statim GGUF file. The output records
+statim.checkpoint_sha256, a SHA-256 over every source tensor as little-endian f32, so all output
+weight types made from the same checkpoint have the same content identity.
 
     python tools/convert_laya.py models/laya-multilingual -o models/laya-multilingual-q8_0.gguf --type q8_0
 
@@ -8,8 +10,10 @@ tokenizer/) into one self-contained Statim GGUF file.
 tensors stay f32). The token embedding follows --embd-type (default: same as --type).
 """
 import argparse
+import hashlib
 import json
 import os
+import struct
 import sys
 
 import numpy as np
@@ -142,10 +146,14 @@ def main():
     qt = QMAP[a.type]
     et = QMAP[a.embd_type or a.type]
     n_q = 0
-    for tname in sorted(weights):
+    checkpoint_hash = hashlib.sha256()
+    for tname in sorted(weights, key=lambda n: n.encode()):
         if tname == "temperature":
             continue
-        arr = weights[tname].astype(np.float32)
+        arr = np.ascontiguousarray(weights[tname].astype("<f4", copy=False))
+        checkpoint_hash.update(tname.encode() + b"\0")
+        checkpoint_hash.update(struct.pack("<Q", arr.size))
+        checkpoint_hash.update(memoryview(arr).cast("B"))
         if tname == "encoder.embeddings.tok_embeddings.weight":
             target = et
         elif quantizable(tname, arr):
@@ -160,6 +168,7 @@ def main():
             data = quants.quantize(arr, target)
             w.add_tensor(tname, data, raw_shape=data.shape, raw_dtype=target)
             n_q += 1
+    w.add_string("statim.checkpoint_sha256", checkpoint_hash.hexdigest())
     w.write_header_to_file()
     w.write_kv_data_to_file()
     w.write_tensors_to_file()
