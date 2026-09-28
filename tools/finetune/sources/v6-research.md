@@ -319,6 +319,85 @@ is a follow-up to decide with the owners of `bench/eval_categories.py`.
 | Bundestag DIP API (`sachgebiet`, de) | Terms allow commercial reuse with attribution but add a non-standard use restriction (§5); rows not inspected. Follow-up |
 
 
+#### Part G: categories where 0.7.0 trails Qwen3-8B zero-shot, 2026-09-29
+
+Why: in docs/BASELINES.md Statim 0.7.0 trails Qwen3-8B (zero-shot) on emotion (0.586 vs 0.726), fact-check
+(0.313 vs 0.493), sentiment (0.800 vs 0.873), safety (0.727 vs 0.753) and PII (0.856 vs 0.878). Targets per
+category came from the suites: fact-check asks the ClaimBuster three-way verdict on debate sentences; emotion
+asks the six Ekman classes on short first-person posts; PII asks "contains personal data?" and English
+per-type probes in 11 languages (Qwen leads most in de, ar, ja, nl, ru, it).
+
+Rules applied on top of Part F: licence checked on the card **and** in the repository's LICENSE/NOTICE or the
+paper; commit pinned; no gated dataset (the CI audit runs without HF_TOKEN); no text or label from hosted
+OpenAI, Anthropic, Google (Gemma included), xAI, Microsoft Copilot, Perplexity or hosted Mistral models, from
+Llama- or Qwen-research-licensed models, or from an undisclosed generator; no benchmark; no HELD_OUT source or
+derivative. Candidates were also checked for exact text overlap against the 29,767 pooled items of the five
+suites, and 20+ gold labels per source were read by hand.
+
+Coverage: fact-check was searched exhaustively (38 candidates: Hub, Zenodo, OSF, figshare, arXiv, ACL
+Anthology, GitHub). Emotion, sentiment, safety and PII searches were cut short for budget; the candidates they
+had reached are listed below only where they were checked to the end.
+
+### KEEP (source_part G in v6-keep.json)
+
+| Source | Licence and evidence | Provenance | Languages | Rows after filter (items at full size) | Category |
+|---|---|---|---|---|---|
+| `naeyn/nobody-pii-synth-de`, train split, commit f78fcbca | Card YAML `apache-2.0`; repository [LICENSE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/LICENSE) "Apache License, Version 2.0"; [NOTICE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/NOTICE) "Apache-2.0 (see LICENSE). This repository contains procedurally generated rows and does not contain records copied from ai4privacy/…" | README: "generated from templates and Faker locale providers. No source records containing real people's personal data were used"; no language model. Not gated. 0 exact overlap with the pooled suite items | de 4,795, en 2,379, nl 1,792 (8,966 of 9,450 rows; PII-free rows whose language the text does not confirm are dropped) | 9,133 items: pii_type probes de 4,710, en 2,151, nl 1,746; pii choice de 368, en 74, nl 84. The pii yes/no task is dropped (97.6 % yes) | 10-pii |
+
+Honest limits:
+- **PII** gets one source for de and nl, the two cells with the largest gaps among the Latin-script languages.
+  Its types are coarse (person, email, address, phone number, organization, date of birth, iban) and it has too
+  few PII-free texts for the "contains personal data?" question, so it trains the per-type probes only.
+  ar, ja, ru and zh still rely on the nym train split alone.
+- **Fact-check**: no source passed. Outside ClaimBuster, check-worthiness data is either CheckThat!-derived,
+  fact-check-site or social-media text, unlicensed, restricted, or labelled by a hosted model. The one clean
+  human-labelled set (op-fed) labels opinion, not the three-way verdict.
+- **Emotion, sentiment, safety**: nothing kept. The candidates reached are rejected below; the searches were not
+  finished.
+
+### EXCLUDED (examined for Part G)
+
+| Candidate | Category | Reason |
+|---|---|---|
+| `kakeith406/op-fed` | fact-check | CC BY 4.0, human labels on FOMC transcripts (public domain), not gated; but the label is opinion yes/no, which cannot give the ClaimBuster check-worthy / unimportant factual / non-factual gold without inventing the factual split |
+| `Aniemore/resd_annotated` | emotion | MIT, not gated, 0 overlap; but the emotion was acted in the voice and transcripts often carry none of it (a polite sales greeting is labelled anger): wrong gold for a text model |
+| `DataikuNLP/kiji-pii-training-data` | pii | Apache-2.0, but 'synthetically generated using LLMs' with no generator named |
+| `menamerai/cheer-ekman` | emotion | Apache-2.0 card with no provenance, annotation or generator documented |
+| `github:lejafar/FactRank` | fact-check | Text origin is not clean: about 15% politicians' tweets, about 16% newspaper interviews (copyrighted news) and about 8% fact-check-site claims. The CSV has only id,statement,label, so the roughly 61% parliamentary rows cannot be f… |
+| `zenodo:14748539` | fact-check | YouTube text, which the policy rejects. The text is not distributed and would have to be re-transcribed from YouTube. Zenodo access is restricted, which counts as gating. |
+| `zenodo:17482958` | fact-check | No licence and restricted access. Built from rejected and held-out families (CheckThat!, ClaimBuster, which would leak the held-out crowdsourced.csv) and Wikipedia (SA). Presented as a benchmark. |
+| `figshare:10.6084/m9.figshare.28797572 (DebatES)` | fact-check | Claim labels were generated by Google Gemini (banned generator). Manual validation only removed wrong annotations and does not make the labels human. Broadcaster transcript rights are not addressed. |
+| `github:LIAAD/ClaimPT` | fact-check | Full data sits behind a Data Use Agreement (gated or custom terms). The text is copyrighted news with no allowed-licence grant from LUSA. Only a 20-article sample is public. |
+| `zenodo:10802196` | fact-check | The file has no text, only URLs and sentence ids. Reconstructing the text means scraping fact-check sites and news, which the policy rejects. |
+| `zenodo:15449758` | fact-check | Fact-check-site text that the rights holder has not released. The labels are veracity verdicts, not check-worthiness, and every item is by selection check-worthy (positives only). |
+| `michiel/hints_of_truth` | fact-check | NC-SA licence. LLaVA (Llama-derived) generator. Fact-check-site and news text. Multimodal benchmark. |
+| `zenodo:4890950` | fact-check | Social-media and fact-check-site text. Not political speech. |
+| `github:HaifaCLG/Factuality` | fact-check | No licence, and the human-labelled file is not published. The only data is the previously rejected silver HF set (KnessetCorpus card cc-by-sa-4.0; stricter wins). Hebrew only. Israeli Copyright Act s.6 puts Knesset protocols in th… |
+| `arxiv:1809.08193 (Full Fact claim detection, Konstantinovskiy et al.)` | fact-check | The dataset is not publicly released under any licence. The text is broadcaster closed captions (copyrighted). |
+| `github:pgencheva/claim-rank` | fact-check | Held-out family (US presidential debates 1960-2016). No licence. Labels derived from fact-check sites. |
+| `github:petar-iv/audio-checkworthiness-detection` | fact-check | CheckThat! derivative (all years rejected). No licence. |
+| `github:germeval2021toxic/SharedTask` | fact-check | Facebook text. No licence. Shared-task data. |
+| `DFKI-SLT/cdcp` | fact-check | Missing licence. The text is user comments whose authors hold copyright; they were not released CC BY. Only 731 comments (about 4.9k propositions), public-comment domain rather than political speech. |
+| `osf:z6utw (Congressional Record evidence vs intuition)` | fact-check | The deposit has no licence. Only 592 human-rated items. The evidence/intuition axis is only loosely related to factual/non-factual. |
+| `zenodo:3710507` | fact-check | No labelled sentences in the record. Frame schema, not check-worthiness. ClaimBuster-lab data linked to debates and fact-check sites. |
+| `zenodo:3836810` | fact-check | Another version of ClaimBuster (ClaimBuster_Datasets.zip). It contains the held-out crowdsourced.csv, and groundtruth is already in the mixture. |
+| `zenodo:13957177` | fact-check | ChatGPT-generated annotations (banned generator). No factuality or check-worthiness label. |
+| `microsoft/claimify-dataset` | fact-check | CDLA-Permissive-2.0 is not an allowed licence, and the text was generated by Microsoft Copilot / Bing Chat, a forbidden generator. |
+| `chaewanC/MAD2` | fact-check | Non-commercial custom licence; generator undocumented; the card says it is 'not a record of public-release approval'. |
+| `toni5rovic/bcms-claim-sentences` | fact-check | Scraped news text with no provenance; opaque 0/1 labels with no definition (audit rejects opaque options); the card licence cannot cover third-party news. |
+| `Lots-of-LoRAs/task375_classify_type_of_sentence_in_debate` | fact-check | Scraped debate.org user text with no upstream licence (the NI Apache licence covers only the task wrapper); tiny. |
+| `LeTG/congress-psyop-dataset` | fact-check | Labels come from Anthropic Claude (and GPT-5-mini for the multilingual sibling), both forbidden. Propaganda-technique labels do not map to check-worthiness. |
+| `franciellevargas/FactNews` | fact-check | Scraped news text: the card licence conflicts with the publishers' copyright on the underlying text (the stricter wins). |
+| `BenjaminOcampo/wsf_arg_plus` | fact-check | CC BY-SA (ShareAlike); forum text. |
+| `rashmikamath01/claimbuster2Cfrom3C` | fact-check | A ClaimBuster re-upload: likely contains the held-out crowdsourced.csv sentences (US presidential debates 1960-2016 family). The CC0 relicensing of CC BY data is unsupported. |
+| `arxiv:1809.08193 (Full Fact / Konstantinovskiy et al. claim detection)` | fact-check | Not publicly released; BBC broadcast transcripts are copyrighted. |
+| `infinite-dataset-hub/TextClaimsDataset` | fact-check | Wrong semantics ('claim' means an insurance claim), tiny, low quality. The siblings FactualFinder and PreciseClaimsExtraction are also off-task. |
+| `ComplexDataLab/Misinfo_Datasets` | fact-check | Aggregate of rejected sources (LIAR, X-Fact, FEVEROUS, tweets, fact-check sites). The blanket licence conflicts with the upstream licences. Veracity labels, not check-worthiness. |
+| `abhiram4572/VeriSpeak` | fact-check | Veracity, not check-worthiness. Test-only evaluation benchmark. |
+| `gtfintechlab/SubjECTive-QA` | fact-check | Gated (auto); earnings-call transcripts have unclear rights; labels do not map. |
+| `ibm-research/debate_speeches` | fact-check | CDLA-Permissive-2.0 is not allowed; labels unrelated (speech quality). |
+| `tanmayvasvani/hindi-misinfo-taxonomy-800` | fact-check | Social-media platform text (X/Facebook); the licence covers only the annotations. |
+
 # Machine-readable KEEP list
 
 See `part-A.json` (same scratchpad directory).

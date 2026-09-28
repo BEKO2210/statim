@@ -58,6 +58,10 @@ ALLOW = {
     "OpenAssistant/oasst2::default": {
         "constant-choice": "about 5 % of the messages have a harmful crowd vote >= 0.5; " + BUILD_BALANCES,
         "constant-yes-no": "about 5 % of the messages have a harmful crowd vote >= 0.5; " + BUILD_BALANCES},
+    "naeyn/nobody-pii-synth-de::default": {
+        "constant-yes-no": "2-4 % of the documents have no PII span after the loader's language check (219 of "
+                           "8,966 train rows); on the full split drop_constant_yes_no removes the pii yes/no "
+                           "task (97.6 % yes), a 200-row sample can stay just below 97 %; " + BUILD_BALANCES},
     "gretelai/synthetic_pii_finance_multilingual::default": {
         "constant-yes-no": "about 6 % of the documents have no PII span, the only negatives among the PII "
                            "sources; " + BUILD_BALANCES},

@@ -32,6 +32,10 @@ SPECIAL_FIXTURES = {
     "gretelai/gretel-pii-masking-en-v1": [
         {"text": _PII_TEXT, "entities": "[{'entity': 'Anna Berg', 'types': ['name']}]"},
         {"text": "Reach me at a@b.example.", "entities": "[{'entity': 'a@b.example', 'types': ['email']}]"}],
+    "naeyn/nobody-pii-synth-de": [
+        {"text": "Bitte überweisen Sie den Betrag auf DE35703188546038719758, Kontoinhaber Jan Weber.",
+         "entities": [{"label": "iban"}, {"label": "person"}], "_v6_lang": "de"},
+        {"text": "Der Geschäftsführer hält auf der Messe eine Keynote.", "entities": [], "_v6_lang": "de"}],
     "Wismut/nym-pii-multilingual-data": [
         {"text": _PII_TEXT, "entities": [{"start": 5, "end": 14, "label": "NAME"}]},
         {"text": "The meeting is on the third floor.", "entities": []}],
