@@ -19,6 +19,10 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree
+
+from .languages import to_iso
+from .templates import LANGUAGES
 
 ROOT = Path(__file__).resolve().parents[3]
 RAW_ROOT = ROOT / "data" / "raw"
@@ -66,6 +70,32 @@ PINNED = {
         "sha256": "e9cf8c06c572419a127f868bc45d41e00a0c0e04fe35b5f1ad9dc6e514f3703c",
         "filename": "gahd_disaggregated.csv",
         "cache": "gahd",
+    },
+    # NAIST LIFE STORY (sociocom.naist.jp/life-story-data, CC BY 4.0): four quarterly surveys. The URL is
+    # the site's download link (WordPress Download Manager id); the file behind it is checked by SHA-256.
+    "life_story_2023_season4": {
+        "url": "https://sociocom.naist.jp/download/lifestory_2023_season4-xlsx/?wpdmdl=6030",
+        "sha256": "0f3da0bb49336c272050c0ca63fc16fd6312ee87a59203d2aeb166e78da0e3ef",
+        "filename": "LifeStory_2023_season4.xlsx",
+        "cache": "naist_life_story",
+    },
+    "life_story_2024_season1": {
+        "url": "https://sociocom.naist.jp/download/lifestory_2024_season1-xlsx/?wpdmdl=6331",
+        "sha256": "21724cdc520aeb3f1a939772df7892b07b7fb506e197f4d082ac8641e9a040f3",
+        "filename": "LifeStory_2024_season1.xlsx",
+        "cache": "naist_life_story",
+    },
+    "life_story_2024_season2": {
+        "url": "https://sociocom.naist.jp/download/lifestory_2024_season2-xlsx/?wpdmdl=6577",
+        "sha256": "047b73b24078ae24cb7450668797708e8cde072f4a9520c06b6be1b89b0d9f09",
+        "filename": "LifeStory_2024_season2.xlsx",
+        "cache": "naist_life_story",
+    },
+    "life_story_2024_season3": {
+        "url": "https://sociocom.naist.jp/download/lifestory_2024_season3-xlsx/?wpdmdl=6578",
+        "sha256": "7b9c3ea4cd1201a5517e97bfac51b552ce5f32f5ce458af95bfd59e149ca9138",
+        "filename": "LifeStory_2024_season3.xlsx",
+        "cache": "naist_life_story",
     },
     "zenodo:3609356 (ClaimBuster)": {
         "url": "https://zenodo.org/api/records/3609356/files/groundtruth.csv/content",
@@ -561,6 +591,209 @@ def _load_tatoeba(entry, limit):
     return _balanced_take(groups, limit)
 
 
+# --------------------------------------------------------------------------- weak-category sources
+# Hub files below are read at a pinned commit, never from a moving branch, except fact-or-opinion whose
+# data files are zstd JSONL (not in the standard library); it is read from the parquet conversion.
+HORIZON = {"repo": "Horizon-Labs/multilingual-zeroshot-synthetic", "file": "data/train-00000-of-00001.parquet",
+           "revision": "11ed607c3af9fd9d7ba3181df365fd057dfd8696"}
+CONGRESS = {"repo": "hheiden/us-congress-bill-policy-115_117", "revision": "a46b7d3418d0d4614d449593e732ac34e5848812",
+            "files": ["congress_115_bills.parquet", "congress_116_bills.parquet", "congress_117_bills.parquet"]}
+# Policy areas that are not a subject: private bills (relief of one person) and a 4-bill class.
+CONGRESS_SKIP = {"Private Legislation", "Social Sciences and History"}
+EGOV = {"repo": "nlp-waseda/e_gov", "revision": "08e57e367a9f79436e4ce87adcca261f33ece6f9",
+        "files": ["data/train-00000-of-00003.parquet", "data/train-00001-of-00003.parquet",
+                  "data/train-00002-of-00003.parquet"]}
+DOC_CHARS = 1600  # leading characters of a long document (bill summary, statute): name, purpose, contents
+LIFE_STORY_FILES = ["life_story_2023_season4", "life_story_2024_season1", "life_story_2024_season2",
+                    "life_story_2024_season3"]
+# Survey columns = the emotion the respondent was asked to write about. Trust is left out: it has no class in
+# emotion_taxonomy (the adapter would drop it anyway; reading it would only waste the row budget).
+LIFE_STORY_EMOTIONS = ["Sadness", "Anxiety", "Anger", "Disgust", "Surprise", "Joy"]
+LIFE_STORY_MIN_CHARS = 10  # shorter cells are keywords ("家族", "円安") or non-answers ("特になし")
+LIFE_STORY_NON_ANSWERS = ("特にな", "特に無", "思いつか", "思い付か", "思い当たら", "わからな", "分からな",
+                          "覚えていな", "ありません", "記憶にな", "特になし")
+_XLSX = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def _seeded_shuffle(rows, key):
+    import random
+    rows = list(rows)
+    random.Random(key).shuffle(rows)
+    return rows
+
+
+def _balanced_by(rows, limit, field, key):
+    """At most ``limit`` rows, round-robin over the values of ``field`` (language or label), each group in a
+    seeded order, so a capped read keeps every group."""
+    groups = {}
+    for row in rows:
+        groups.setdefault(row[field], []).append(row)
+    groups = {k: _seeded_shuffle(v, "%s|%s" % (key, k)) for k, v in sorted(groups.items())}
+    return _balanced_take(groups, limit)
+
+
+def xlsx_rows(path):
+    """Rows of the first worksheet of an .xlsx file as lists of cell strings (None for empty cells).
+    Standard library only: an xlsx file is a zip of XML parts."""
+    def column(ref):
+        n = 0
+        for ch in ref:
+            if not ch.isalpha():
+                break
+            n = n * 26 + ord(ch.upper()) - 64
+        return n - 1
+    with zipfile.ZipFile(path) as zf:
+        shared = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            for si in ElementTree.fromstring(zf.read("xl/sharedStrings.xml")).iter(_XLSX + "si"):
+                shared.append("".join(t.text or "" for t in si.iter(_XLSX + "t")))
+        sheet = ElementTree.fromstring(zf.read("xl/worksheets/sheet1.xml"))
+    for row in sheet.iter(_XLSX + "row"):
+        cells = {}
+        for cell in row.iter(_XLSX + "c"):
+            value, kind = cell.find(_XLSX + "v"), cell.get("t")
+            if kind == "s" and value is not None:
+                text = shared[int(value.text)]
+            elif kind == "inlineStr":
+                text = "".join(t.text or "" for t in cell.iter(_XLSX + "t"))
+            else:
+                text = value.text if value is not None else None
+            cells[column(cell.get("r"))] = text
+        yield [cells.get(i) for i in range(max(cells) + 1)] if cells else []
+
+
+def life_story_text(cell):
+    """The episode text of one survey cell, or None for a keyword, a non-answer or an empty cell."""
+    text = " ".join(str(cell or "").split()).lstrip("*＊").strip()
+    if len(text) < LIFE_STORY_MIN_CHARS:
+        return None
+    if len(text) < 20 and any(marker in text for marker in LIFE_STORY_NON_ANSWERS):
+        return None
+    return text
+
+
+def life_story_rows(tables):
+    """(text, emotion) rows from parsed survey sheets (header row first). A text given for two emotions
+    (the same event under "sad" and "anxious") has no single gold and is dropped."""
+    labels, order = {}, []
+    for table in tables:
+        header = [str(x or "").strip() for x in (table[0] if table else [])]
+        columns = [(header.index(name), name) for name in LIFE_STORY_EMOTIONS if name in header]
+        for row in table[1:]:
+            for index, name in columns:
+                text = life_story_text(row[index] if index < len(row) else None)
+                if text is None:
+                    continue
+                if text not in labels:
+                    labels[text] = set()
+                    order.append(text)
+                labels[text].add(name)
+    return [{"text": text, "emotion": next(iter(labels[text])), "_v6_lang": "ja"}
+            for text in order if len(labels[text]) == 1]
+
+
+def _load_life_story(limit):
+    tables = [list(xlsx_rows(pinned_path(PINNED[name]))) for name in LIFE_STORY_FILES]
+    return _balanced_by(life_story_rows(tables), limit, "emotion", "life_story")
+
+
+def horizon_emotion_rows(records):
+    """Fixed-taxonomy emotion rows of Horizon-Labs/multilingual-zeroshot-synthetic in the 14 model languages.
+    ``lang`` is a language name ("Portuguese"); gold_labels is a one-element list for this task."""
+    out = []
+    for rec in records:
+        if rec.get("task") != "emotion" or rec.get("kind") != "tax_short" or rec.get("text_origin") != "qwen-generated":
+            continue
+        gold = rec.get("gold_labels") or []
+        code = to_iso(rec.get("lang"))
+        text = str(rec.get("text") or "").strip()
+        if len(gold) != 1 or code not in LANGUAGES or not text:
+            continue
+        out.append({"text": text, "emotion": str(gold[0]), "_v6_lang": code})
+    return out
+
+
+def _load_horizon_emotion(limit):
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+    path = _hub(HORIZON["repo"], HORIZON["file"], HORIZON["revision"])
+    table = pq.read_table(path, columns=["text", "lang", "task", "kind", "gold_labels", "text_origin"])
+    table = table.filter(pc.and_(pc.equal(table["task"], "emotion"), pc.equal(table["kind"], "tax_short")))
+    return _balanced_by(horizon_emotion_rows(table.to_pylist()), limit, "_v6_lang", "horizon_emotion")
+
+
+def fact_opinion_rows(records):
+    """agentlans/fact-or-opinion rows written by DeepSeek only, in the 14 model languages. The other
+    generators of the set are hosted OpenAI, Anthropic, Google, Microsoft Copilot, Perplexity and Mistral
+    services; see tools/finetune/sources/v6-research.md."""
+    out = []
+    for rec in records:
+        code = to_iso(rec.get("language"))
+        text = str(rec.get("text") or "").strip()
+        if rec.get("source") != "DeepSeek" or code not in LANGUAGES or not text or not rec.get("label"):
+            continue
+        out.append({"text": text, "label": str(rec["label"]), "_v6_lang": code})
+    return out
+
+
+def _load_fact_opinion(limit):
+    import pyarrow.parquet as pq
+    path = _hub("agentlans/fact-or-opinion", "default/train/0000.parquet", PARQUET_REV)
+    records = pq.read_table(path, columns=["text", "label", "language", "source"]).to_pylist()
+    return _balanced_by(fact_opinion_rows(records), limit, "_v6_lang", "fact_opinion")
+
+
+def congress_rows(records):
+    out = []
+    for rec in records:
+        area = str(rec.get("policy_area") or "").strip()
+        title, summary = str(rec.get("title") or "").strip(), str(rec.get("summary") or "").strip()
+        if not area or area in CONGRESS_SKIP or not title or not summary:
+            continue
+        out.append({"title": title, "summary": summary[:DOC_CHARS], "policy_area": area, "_v6_lang": "en"})
+    return out
+
+
+def _load_congress(limit):
+    files = CONGRESS["files"][:max(1, MAX_SHARDS)]
+    per = max(1, limit // len(files))
+    rows = []
+    for name in files:
+        path = _hub(CONGRESS["repo"], name, CONGRESS["revision"])
+        rows.extend(congress_rows(sample_parquet(path, per, columns=["title", "summary", "policy_area"])))
+    return rows[:limit]
+
+
+def egov_rows(records, categories):
+    """nlp-waseda/e_gov statutes with their e-Gov law field (法令分野). The text starts with the law's name
+    and table of contents; only the first DOC_CHARS characters are kept."""
+    out = []
+    for rec in records:
+        meta = rec.get("metadata")
+        if isinstance(meta, str):
+            import ast
+            try:
+                meta = ast.literal_eval(meta)
+            except (ValueError, SyntaxError):
+                meta = None
+        category = categories.get(str((meta or {}).get("category_id")))
+        text = str(rec.get("text") or "").strip()
+        if category and text:
+            out.append({"text": text[:DOC_CHARS], "category": category, "_v6_lang": "ja"})
+    return out
+
+
+def _load_egov(limit):
+    categories = json.loads(Path(_hub(EGOV["repo"], "category.json", EGOV["revision"])).read_text(encoding="utf-8"))
+    files = EGOV["files"][:max(1, MAX_SHARDS)]
+    per = max(1, limit // len(files))
+    rows = []
+    for name in files:
+        path = _hub(EGOV["repo"], name, EGOV["revision"])
+        rows.extend(egov_rows(sample_parquet(path, per, columns=["text", "metadata"]), categories))
+    return rows[:limit]
+
+
 def _spread(rows, limit):
     if len(rows) <= limit:
         return rows
@@ -753,6 +986,11 @@ _DISPATCH = {
     "Anthropic/hh-rlhf": lambda entry, limit: _load_hh_redteam(limit),
     "nyu-mll/quality (github; mirror emozilla/quality)": lambda entry, limit: _load_quality(limit),
     "WorkInTheDark/FairytaleQA": lambda entry, limit: _load_fairytale(limit),
+    "Horizon-Labs/multilingual-zeroshot-synthetic": lambda entry, limit: _load_horizon_emotion(limit),
+    "sociocom:naist-life-story": lambda entry, limit: _load_life_story(limit),
+    "agentlans/fact-or-opinion": lambda entry, limit: _load_fact_opinion(limit),
+    "hheiden/us-congress-bill-policy-115_117": lambda entry, limit: _load_congress(limit),
+    "nlp-waseda/e_gov": lambda entry, limit: _load_egov(limit),
 }
 
 
