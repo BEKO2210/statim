@@ -15,12 +15,13 @@ rule (gate.adapter_decision). Writes <work>/summary.json and <work>/summary.md.
         --train-args "--limit-items 64 --dev-items 16 --max-steps 4 --max-tokens 1024"
 
 Per category (default: emotion fact_check sentiment safety pii), in order:
-  train    python tools/finetune/train_lora.py <checkpoint> --mixture ... --category C --out <work>/C
+  train    .venv-train/bin/python tools/finetune/train_lora.py <checkpoint> --mixture ... --category C --out <work>/C
            (a subprocess, so a crash in one category leaves the others running; --train-args are passed
            through; --skip-train reuses an existing <work>/C)
-  convert  python tools/convert_lora.py <work>/C -o <work>/C.lora.gguf --base <gguf> --category C --name C
+  convert  .venv/bin/python tools/convert_lora.py <work>/C -o <work>/C.lora.gguf --base <gguf> --category C --name C
   serve    statim serve -m multilingual=<gguf> --adapter multilingual:C=<work>/C.lora.gguf
-  eval     bench/eval_categories.py --suites C [--exclude-mixture X] --n N --seed S, once without and once
+  eval     .venv/bin/python bench/eval_categories.py --strict --suites C [--exclude-mixture X] --n N --seed S,
+           once without and once
            with --adapter C, into <work>/C.base.jsonl and <work>/C.adapter.jsonl
   decide   gate.adapter_decision on the two files' cells (gate.heldout_cells)
 
@@ -34,7 +35,8 @@ field. The price is one model load per category (seconds).
 --exclude-mixture defaults to --mixture: the adapter is trained on rows of that file, so held-out
 items that share a text with it are dropped for both runs (same file, same pool fingerprint). If the
 base was trained on another mixture, pass one file that holds both (eval_categories takes one path),
-or "none" to exclude nothing.
+or "none" to exclude nothing. With --skip-train, the default is recovered from each adapter's
+train_lora.json and its recorded SHA-256 is verified before evaluation.
 
 The decision per category: PROMOTE when the pooled category gain exceeds 2 standard errors and no
 language cell regresses after Holm-Bonferroni (family-wise 5 %); see gate.adapter_decision. Adapter
@@ -64,14 +66,41 @@ DEFAULT_N = 150          # bench/eval_categories.DEFAULT_N
 DEFAULT_SEED = 20260927  # bench/eval_categories.DEFAULT_SEED
 
 
+def default_python(venv):
+    path = os.path.join(ROOT, venv, "bin", "python")
+    return path if os.path.exists(path) else sys.executable
+
+
+def adapter_mixture(adapter_dir, supplied=None):
+    """Verified training mixture recorded beside an adapter reused with --skip-train."""
+    path = os.path.join(adapter_dir, "train_lora.json")
+    if not os.path.exists(path):
+        raise SystemExit("--skip-train: no training record in %s" % adapter_dir)
+    with open(path, encoding="utf-8") as f:
+        record = json.load(f)
+    expected = record.get("mixture_sha256")
+    mixture = supplied or record.get("mixture")
+    if not mixture or not expected:
+        raise SystemExit("--skip-train: %s does not record the mixture path and SHA-256" % path)
+    mixture = os.path.abspath(mixture)
+    if not os.path.isfile(mixture):
+        raise SystemExit("--skip-train: recorded mixture is missing: %s" % mixture)
+    actual = train_lora.sha256_file(mixture)
+    if actual != expected:
+        raise SystemExit("--skip-train: mixture SHA-256 differs for %s (recorded %s, got %s)" %
+                         (mixture, expected, actual))
+    return mixture
+
+
 def plan(a, category):
     """Paths and commands for one category (lists for subprocess)."""
     work = a.work
     adapter_dir = os.path.join(work, category)
     gguf = os.path.join(work, category + ".lora.gguf")
-    py = a.python
-    exclude = None if (a.exclude_mixture or "").lower() == "none" else (a.exclude_mixture or a.mixture)
-    evaluate = [py, os.path.join(ROOT, "bench", "eval_categories.py"), "--url", "http://127.0.0.1:%d" % a.port,
+    exclude = (None if (a.exclude_mixture or "").lower() == "none" else a.exclude_mixture) if a.exclude_mixture \
+        else (adapter_mixture(adapter_dir, a.mixture) if a.skip_train else a.mixture)
+    evaluate = [a.tools_python, os.path.join(ROOT, "bench", "eval_categories.py"), "--strict", "--url",
+                "http://127.0.0.1:%d" % a.port,
                 "--model", MODEL, "--suites", category, "--n", str(a.n), "--seed", str(a.seed)]
     if exclude:
         evaluate += ["--exclude-mixture", exclude]
@@ -82,10 +111,10 @@ def plan(a, category):
         "train_log": os.path.join(work, category + ".train.log"),
         "server_log": os.path.join(work, category + ".server.log"),
         "exclude_mixture": exclude,
-        "train": [py, os.path.join(HERE, "train_lora.py"), a.base_checkpoint, "--mixture", a.mixture or "",
+        "train": [a.train_python, os.path.join(HERE, "train_lora.py"), a.base_checkpoint, "--mixture", a.mixture or "",
                   "--category", category, "--registry", a.registry, "--out", adapter_dir, "--device", a.device]
         + shlex.split(a.train_args or ""),
-        "convert": [py, os.path.join(ROOT, "tools", "convert_lora.py"), adapter_dir, "-o", gguf,
+        "convert": [a.tools_python, os.path.join(ROOT, "tools", "convert_lora.py"), adapter_dir, "-o", gguf,
                     "--base", a.base_gguf, "--category", category, "--name", category],
         "serve": [a.statim, "serve", "-m", "%s=%s" % (MODEL, a.base_gguf), "--adapter",
                   "%s:%s=%s" % (MODEL, category, gguf), "--device", a.server_device, "--threads", str(a.threads),
@@ -104,8 +133,15 @@ def records(path):
 def decide(base_jsonl, adapter_jsonl, z=2.0, log=print):
     """gate.adapter_decision on two eval_categories.py outputs; a JSON-ready result with one row per
     compared cell (language)."""
-    base, base_reported = gate.heldout_cells(records(base_jsonl))
-    adapter, adapter_reported = gate.heldout_cells(records(adapter_jsonl))
+    base_records, adapter_records = records(base_jsonl), records(adapter_jsonl)
+    def realized(rows):
+        return {(r.get("suite"), r.get("lang")): r.get("pool_items_sha256")
+                for r in rows if "accuracy" in r and r.get("lang") != "macro"}
+
+    if realized(base_records) != realized(adapter_records):
+        raise ValueError("base and adapter evaluations used different realized pool items")
+    base, base_reported = gate.heldout_cells(base_records)
+    adapter, adapter_reported = gate.heldout_cells(adapter_records)
     res = gate.adapter_decision(base, adapter, z=z, log=log)
     regress = {t[0] for t in res["harms"]}
     cells = []
@@ -116,7 +152,7 @@ def decide(base_jsonl, adapter_jsonl, z=2.0, log=print):
                       "z": round(d / se, 2) if se > 0 else None, "p_drop": gate.p_drop(d, se),
                       "p_drop_holm": res["p_holm"][k], "verdict": verdict})
     fam = res["families"].get("categories", {})
-    skipped = [r for r in records(base_jsonl) if r.get("skipped")]
+    skipped = [r for r in base_records if r.get("skipped")]
     return {"promote": res["promote"], "reason": res["reason"] or "", "cells": cells,
             "family": {w: {"delta": round(v["d"], 4), "se": round(v["se"], 4), "groups": v["groups"], "flag": v["flag"]}
                        for w, v in fam.items()},
@@ -180,7 +216,7 @@ def train_record(adapter_dir):
     with open(path, encoding="utf-8") as f:
         r = json.load(f)
     return {k: r.get(k) for k in ("items", "best", "dev_before", "updates", "seconds", "peak_memory_mb", "device",
-                                   "base_sha256", "lora")}
+                                   "base_sha256", "mixture", "mixture_sha256", "lora")}
 
 
 def run_category(a, p):
@@ -220,6 +256,8 @@ def run_category(a, p):
         return out
     print("--- decision for %s" % cat, flush=True)
     out.update(decide(p["base_jsonl"], p["adapter_jsonl"], a.z))
+    if ((out.get("train") or {}).get("best") or {}).get("saved_initial"):
+        out.update(promote=False, reason="(saved adapter is the initial zero-delta adapter: no gain)")
     out.update(status="ok", stage="done")
     return out
 
@@ -259,6 +297,8 @@ def summary_md(summary):
                               (t.get("items") or {}).get("train"), (t.get("items") or {}).get("dev"), t.get("updates"),
                               before.get("dev_acc"), best.get("dev_acc"), best.get("epoch"), best.get("update"),
                               t.get("seconds"), t.get("device"), t.get("peak_memory_mb")), ""]
+                if best.get("saved_initial"):
+                    lines += ["The saved adapter is the initial zero-delta adapter; this category has no gain.", ""]
             lines += ["Converted: %s" % r.get("convert"), "",
                       "| lang | n | base acc | adapter acc | delta (pts) | 2 SE (pts) | p (drop) | Holm p (drop) | verdict |",
                       "|---|---|---|---|---|---|---|---|---|"]
@@ -306,11 +346,24 @@ def parse_args(argv=None):
     ap.add_argument("--z", type=float, default=2.0, help="standard errors for a gain (gate default)")
     ap.add_argument("--skip-train", action="store_true", help="reuse the adapters in <work>/<category>")
     ap.add_argument("--train-args", default="", help="extra train_lora.py arguments, one shell-quoted string")
-    ap.add_argument("--python", default=sys.executable, help="interpreter for the subprocesses")
+    ap.add_argument("--train-python", default=None, help="training interpreter (default: .venv-train/bin/python)")
+    ap.add_argument("--tools-python", default=None, help="conversion and evaluation interpreter (default: .venv/bin/python)")
+    ap.add_argument("--python", default=None, help="deprecated alias that sets --train-python and --tools-python")
     ap.add_argument("--dry-run", action="store_true", help="print the commands and exit")
     a = ap.parse_args(argv)
+    if a.python and (a.train_python or a.tools_python):
+        ap.error("--python cannot be combined with --train-python or --tools-python")
+    if a.python:
+        print("WARNING: --python is deprecated; use --train-python and --tools-python.", file=sys.stderr)
+        a.train_python = a.tools_python = a.python
+    else:
+        a.train_python = a.train_python or default_python(".venv-train")
+        a.tools_python = a.tools_python or default_python(".venv")
     if not a.skip_train and not a.mixture:
         ap.error("--mixture is required unless --skip-train")
+    if (a.exclude_mixture or "").lower() == "none":
+        print("WARNING: --exclude-mixture none disables training-overlap filtering; results are not held out.",
+              file=sys.stderr)
     # the subprocesses run in the repository root: make the user's paths absolute
     for key in ("base_checkpoint", "base_gguf", "mixture", "registry", "work", "statim", "exclude_mixture"):
         value = getattr(a, key)

@@ -748,6 +748,17 @@ def make_tasks(pool, suites, langs, n, seed):
     return tasks, skipped
 
 
+def pool_items_sha256(items, n, seed):
+    """SHA-256 of one realized sample and the sampling inputs, independent of item order."""
+    rows = []
+    for item in items:
+        value = {k: item.get(k) for k in ("suite", "lang", "source", "state", "q", "target")}
+        rows.append(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    raw = json.dumps({"n": n, "seed": seed, "items": sorted(rows)}, ensure_ascii=False,
+                     sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 # --------------------------------------------------------------------------- HTTP
 
 def probabilities(answer, item):
@@ -857,6 +868,7 @@ def main(argv=None):
     ap.add_argument("--head-max-len", type=int, default=512)
     ap.add_argument("--out", default=None, help="JSONL, one record per suite/language plus one macro line per suite")
     ap.add_argument("--rebuild", action="store_true", help="fetch the held-out splits again")
+    ap.add_argument("--strict", action="store_true", help="fail if any configured source is unavailable")
     ap.add_argument("--exclude-mixture", default=None, metavar="PATH",
                     help="built mixture (jsonl.gz) the model was trained on: drop pooled items that share a text with it")
     ap.add_argument("--list", action="store_true", help="print the sampled suites and exit (no server needed)")
@@ -874,6 +886,8 @@ def main(argv=None):
         pool_fp = "%s+%s" % (pool_fp, mixture_fp)
     for key, why in failures.items():
         print("source unavailable: %s (%s)" % (key, why), flush=True)
+    if failures and (a.strict or a.adapter):
+        raise SystemExit("held-out pool is incomplete: %d source(s) unavailable" % len(failures))
     tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed)
     for suite, lang, why in skipped:
         print("skip %s %s: %s" % (suite, lang, why), flush=True)
@@ -898,7 +912,7 @@ def main(argv=None):
                               head_max_len=a.head_max_len, adapter=a.adapter)
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
             row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra, "n": len(items), "seed": a.seed,
-                   "pool": pool_fp,
+                   "pool": pool_fp, "pool_items_sha256": pool_items_sha256(items, a.n, a.seed),
                    "sources": dict(collections.Counter(it["source"] for it in items)),
                    "question_types": dict(collections.Counter(it["q"]["type"] for it in items)),
                    "gold_counts": dict(sorted(gold.items())), **score(items, probs),

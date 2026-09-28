@@ -81,3 +81,12 @@ def test_compare_rejects_when_nothing_improves(tmp_path, capsys):
     _write(tmp_path / "chall", {"a": 0.81}, _suites(0.60))
     assert gate.compare(str(tmp_path / "champ"), str(tmp_path / "chall")) is False
     assert "no family improved" in capsys.readouterr().out
+
+
+def test_pools_differ_realized_hash_only_when_both_have_it():
+    old = {"acc": 0.5, "n": 150, "pool": "p1"}
+    new = {"acc": 0.5, "n": 150, "pool": "p1", "pool_items_sha256": "aa"}
+    assert not gate.pools_differ(old, new)          # an eval.json from before the realized hash
+    assert not gate.pools_differ(new, dict(new))
+    assert gate.pools_differ(new, dict(new, pool_items_sha256="bb"))
+    assert gate.pools_differ(old, dict(old, pool="p2"))

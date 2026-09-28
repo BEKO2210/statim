@@ -6,7 +6,7 @@ tools/convert_lora.py turns into a Statim adapter GGUF (`statim serve --adapter`
     .venv-train/bin/pip install peft    # 0.21.0 tested; not part of the training venv's install line
     .venv-train/bin/python tools/finetune/train_lora.py dist/statim-decide-multilingual-base/checkpoint \\
         --mixture data/mixture-v8.jsonl.gz --category emotion             # writes models/lora/emotion
-    python tools/convert_lora.py models/lora/emotion -o models/lora/emotion.lora.gguf --category emotion \\
+    .venv/bin/python tools/convert_lora.py models/lora/emotion -o models/lora/emotion.lora.gguf --category emotion \\
         --base dist/statim-decide-multilingual-base/statim-decide-multilingual-base-f32.gguf
 
 tools/finetune/lora_experiment.py runs this, the conversion and the held-out evaluation of base and
@@ -86,9 +86,9 @@ Sizing for an RTX 3070 (8 GB):
 
 Output (--out, default models/lora/<category>, so convert_lora's default adapter name and category
 are right): adapter_config.json + adapter_model.safetensors of the best adapter (save_pretrained,
-safetensors) and train_lora.json (category, arguments, base checkpoint path and SHA-256 of its
-model.safetensors, rows per source, dev accuracy per evaluation, best epoch, wall time, peak memory,
-library versions).
+safetensors) and train_lora.json (category, arguments, mixture path and SHA-256, base checkpoint path
+and SHA-256 of its model.safetensors, rows per source, dev accuracy per evaluation, whether the initial
+zero-delta adapter won, best epoch, wall time, peak memory, library versions).
 
 Smoke run: --limit-items 64 --dev-items 16 --max-steps 4 --max-tokens 1024 --device cpu.
 """
@@ -135,7 +135,7 @@ CATEGORY_TESTS = {
     "similarity": lambda c: any(p.startswith("7-") for p in _parts(c)),
     "topic": lambda c: any(p.startswith("8-") for p in _parts(c)),
     "intent": lambda c: any(p.startswith("9-") for p in _parts(c)),
-    "stance": lambda c: "10-stance" in c,
+    "stance": lambda c: "10-stance" in c or "10-argument" in c,
     "formality": lambda c: "10-formality" in c,
     "urgency": lambda c: "10-urgency" in c,
     "fact_check": lambda c: "10-fact-check" in c or "10-claim" in c,
@@ -466,7 +466,8 @@ def train(pm, model, train_items, dev_items, pad_id, device, amp_dtype, a, log=p
         acc, by_lang = dev_eval()
         dev_before = {"dev_acc": acc, "dev_by_lang": by_lang}
         log("dev before training: %.4f %s" % (acc, by_lang), flush=True)
-    best = {"dev_acc": -1.0, "epoch": 0, "update": 0, "state": None}
+    best = {"dev_acc": dev_before["dev_acc"] if dev_before else -1.0, "epoch": 0, "update": 0,
+            "state": snapshot() if dev_before else None, "saved_initial": bool(dev_before)}
     history, state = [], {"updates": 0, "ce": 0.0, "n": 0, "last_eval": -1}
 
     def evaluate(epoch):
@@ -475,7 +476,8 @@ def train(pm, model, train_items, dev_items, pad_id, device, amp_dtype, a, log=p
         if dev_items:
             entry["dev_acc"], entry["dev_by_lang"] = dev_eval()
         if not dev_items or entry["dev_acc"] > best["dev_acc"]:
-            best.update(dev_acc=entry.get("dev_acc"), epoch=epoch, update=state["updates"], state=snapshot())
+            best.update(dev_acc=entry.get("dev_acc"), epoch=epoch, update=state["updates"], state=snapshot(),
+                        saved_initial=False)
         history.append(entry)
         log("=== epoch %d update %d: train ce %.4f | dev %s | %.0fs" % (
             epoch, state["updates"], entry["train_ce"], entry.get("dev_acc"), entry["seconds"]), flush=True)
@@ -687,7 +689,8 @@ def main(argv=None):
     peak = (round(torch.cuda.max_memory_allocated() / 2 ** 20) if device.type == "cuda" else round(peak_rss_mb()))
     record = {
         "category": a.category, "base": base, "base_sha256": sha256_file(os.path.join(base, "model.safetensors")),
-        "mixture": os.path.abspath(a.mixture), "registry": os.path.abspath(a.registry),
+        "mixture": os.path.abspath(a.mixture), "mixture_sha256": sha256_file(a.mixture),
+        "registry": os.path.abspath(a.registry),
         "registry_sha256": sha256_file(a.registry), "sources": per_source,
         "selection": {k: v for k, v in stats.items() if k != "per_source"},
         "items": {"train": len(train_items), "dev": len(dev_items), "dropped_marker_mismatch": drop_t + drop_d},

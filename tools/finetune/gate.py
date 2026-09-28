@@ -127,8 +127,8 @@ def suite_key(record):
 def heldout_cells(records):
     """(heldout, reported) from the per-language records of the HTTP benchmark scripts
     (eval_multilingual.py, eval_zeroshot.py, eval_categories.py): {"<suite key>/<lang>": {"acc", "n",
-    "ece"[, "pool"]}}. Macro lines and skipped languages are left out; category cells with "gate": false
-    (zero-shot or biased) go to `reported` with their note and are never gated."""
+    "ece"[, "pool", "pool_items_sha256"]}}. Macro lines and skipped languages are left out; category
+    cells with "gate": false (zero-shot or biased) go to `reported` with their note and are never gated."""
     heldout, reported = {}, {}
     for r in records:
         if r.get("lang") == "macro" or "accuracy" not in r:  # macro line, or a skipped language
@@ -136,6 +136,8 @@ def heldout_cells(records):
         row = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
         if r.get("family") == "categories":
             row["pool"] = r.get("pool")  # compare() only compares category cells built from the same pool
+            if "pool_items_sha256" in r:
+                row["pool_items_sha256"] = r["pool_items_sha256"]
             if r.get("gate") is False:  # zero-shot or biased cell: reported, never gated
                 reported[f"{suite_key(r)}/{r['lang']}"] = dict(row, note=r.get("gate_note"))
                 continue
@@ -195,19 +197,29 @@ FAMILIES = {
 }
 
 
+def pools_differ(x, y):
+    """Two category cells differ in their pool when the suite specifications do, or when both record
+    the realized sample (pool_items_sha256) and those differ. eval.json files written before the
+    realized hash existed carry only "pool"; they stay comparable on it."""
+    if x.get("pool") != y.get("pool"):
+        return True
+    hx, hy = x.get("pool_items_sha256"), y.get("pool_items_sha256")
+    return hx is not None and hy is not None and hx != hy
+
+
 def heldout_decision(a, b, z=2.0, log=print):
     """The held-out part of the gate for champion `a` and challenger `b`, two {suite key: {"acc", "n"
-    [, "pool"]}} dicts (eval.json "heldout", or heldout_cells). Per suite a one-sided z-test with
+    [, "pool", "pool_items_sha256"]}} dicts (eval.json "heldout", or heldout_cells). Per suite a one-sided z-test with
     Holm-Bonferroni over every compared suite; per family (FAMILIES, pooled by rows and by suites) a
     pooled drop beyond z SE is a regression and a pooled gain beyond z SE a family gain. Category cells
-    whose pools differ are not compared. Prints the family lines and returns {"compared",
+    whose static or realized pools differ are not compared. Prints the family lines and returns {"compared",
     "not_compared", "tests", "gains", "harms", "nominal", "families", "family_gains"}; tests are
     (key, a_acc, b_acc, d, se)."""
     harms, gains = [], []
     # Category cells are comparable only when both models drew them from the same pool (same suite
     # spec, sources, adapters and, with --mixture, the same training mixture excluded).
     shared = sorted(set(a) & set(b))
-    different = [k for k in shared if k.startswith("categories:") and a[k].get("pool") != b[k].get("pool")]
+    different = [k for k in shared if k.startswith("categories:") and pools_differ(a[k], b[k])]
     if different:
         log(f"categories: {len(different)} cells not compared (their pools differ)")
     shared = [k for k in shared if k not in different]
