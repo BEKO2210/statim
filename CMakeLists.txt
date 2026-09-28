@@ -110,6 +110,10 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME lora_convert COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_convert_lora.py --base ${LORA_BASE}
       --binary $<TARGET_FILE:statim>)
     set_tests_properties(lora_convert PROPERTIES TIMEOUT 120)
+    add_test(NAME lora_checkpoint_binding COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_checkpoint_binding.py --binary $<TARGET_FILE:statim>
+      --quantize $<TARGET_FILE:statim-quantize> --work ${CMAKE_CURRENT_BINARY_DIR}/lora-checkpoint-binding)
+    set_tests_properties(lora_checkpoint_binding PROPERTIES TIMEOUT 120)
     add_test(NAME lora_parity COMMAND test_lora ${LORA_BASE} ${LORA}/zero.gguf ${LORA}/random.gguf
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_laya-multilingual.jsonl
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_lora_random.jsonl ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/lora_random_weights.json)

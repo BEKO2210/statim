@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     gguf_context* out = gguf_init_empty();
+    // Preserve source-checkpoint identity (including statim.checkpoint_sha256) unchanged.
     gguf_set_kv(out, in);
 
     std::vector<std::vector<uint8_t>> buffers;
