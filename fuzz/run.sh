@@ -5,7 +5,7 @@
 #   cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
 #         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSTATIM_FUZZ=ON
 #   cmake --build build-fuzz --target fuzz_request fuzz_tokenizer fuzz_gguf
-# New corpus entries go to build-dir/corpus-<name> (the committed seed corpus stays read-only);
+# The corpus grows in build-dir/corpus-<name> (the committed seeds and regressions stay read-only);
 # crashes land in build-dir/artifacts/. Exit status is non-zero when the fuzzer found a bug.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -21,4 +21,6 @@ args=(-max_total_time="$secs" -timeout=25 -rss_limit_mb=4096 -print_final_stats=
       -artifact_prefix="$build/artifacts/$name-")
 [ "$name" = request ] && args+=(-dict=fuzz/request.dict)
 [ "$name" != gguf ] && args+=(-max_len=16384)
-exec "$build/fuzz_$name" "${args[@]}" "$@" "$work" "fuzz/corpus/$name"
+seeds="fuzz/seeds/$name"
+[ "$name" = gguf ] && seeds="fuzz/data"  # the two tiny valid models
+exec "$build/fuzz_$name" "${args[@]}" "$@" "$work" "$seeds" "fuzz/regressions/$name"

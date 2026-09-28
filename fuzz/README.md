@@ -38,10 +38,9 @@ driver of an ordinary build: `build/fuzz_replay_<name> <file-or-dir>...`.
 |---|---|
 | `fuzz_*.cpp` | the harnesses (`LLVMFuzzerTestOneInput`) |
 | `replay_main.cpp` | runs a harness over files without libFuzzer; ctest uses it |
-| `corpus/<name>/` | minimised seed corpus (`-set_cover_merge=1` of the long runs), replayed by ctest `fuzz_regressions_<name>` |
+| `seeds/<name>/` | hand-written starting inputs; with the regressions, replayed by ctest `fuzz_regressions_<name>` |
 | `regressions/<name>/` | every input that once crashed, named after the bug; also replayed by ctest |
-| `seeds/<name>/` | the hand-written starting inputs the corpus grew from |
-| `data/tiny-*.gguf` | two tiny deterministic models (16-wide, 2 layers; Metaspace and ByteLevel BPE), written by `make_tiny_model.py` |
+| `data/tiny-*.gguf` | two tiny deterministic models (16-wide, 2 layers; Metaspace and ByteLevel BPE), written by `make_tiny_model.py`; the gguf seeds |
 | `request.dict` | libFuzzer dictionary of request field names and values |
 | `ubsan.supp` | UBSan suppressions — confirmed upstream ggml issues only, one line each with the reason |
 
@@ -50,16 +49,17 @@ Regenerate the tiny models with `python3 fuzz/make_tiny_model.py fuzz/data` (nee
 `regressions/<name>/<what-it-was>.<ext>`, and add a focused unit test where the invariant is
 semantic (e.g. `tests/test_model_validation.cpp` for model files).
 
-## Minimise the corpus
+## The grown corpus
+
+The corpus the fuzzers grow is not committed: most gguf entries are near-copies of the two tiny
+models (about 15 MB on disk). It lives in `build-fuzz/corpus-<name>/`, and CI keeps it between runs
+with `actions/cache`. Minimise a local corpus with:
 
 ```bash
 for t in request tokenizer gguf; do
+  extra=(); [ $t != gguf ] && extra=(-max_len=16384)   # a max_len would cut the gguf inputs
   mkdir -p /tmp/min-$t
-  build-fuzz/fuzz_$t -set_cover_merge=1 -max_len=16384 /tmp/min-$t fuzz/corpus/$t build-fuzz/corpus-$t
-  rm -rf fuzz/corpus/$t && mv /tmp/min-$t fuzz/corpus/$t
+  build-fuzz/fuzz_$t -set_cover_merge=1 "${extra[@]}" /tmp/min-$t build-fuzz/corpus-$t
+  rm -rf build-fuzz/corpus-$t && mv /tmp/min-$t build-fuzz/corpus-$t
 done
-cp fuzz/data/tiny-*.gguf fuzz/corpus/gguf/   # keep the two valid models as seeds
 ```
-
-The GGUF corpus is ~15 MB on disk but its files are near-duplicates of the two tiny models, so
-Git's delta compression stores it in well under 1 MB.

@@ -25,7 +25,8 @@ jobs:
       - name: Parity gates vs. the official Laya package
         run: ctest --test-dir build --output-on-failure
   fuzz:
-    # 60 s per libFuzzer harness under ASan + UBSan, from the committed seed corpus (fuzz/README.md).
+    # 60 s per libFuzzer harness under ASan + UBSan, from the committed seeds and regressions plus the
+    # corpus grown in earlier runs (actions/cache; fuzz/README.md).
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -48,6 +49,12 @@ jobs:
             [ -s "$dir/tokenizer.json" ] || curl -fL --retry 3 -o "$dir/tokenizer.json" \
               "https://huggingface.co/convaiinnovations/$repo/resolve/main/tokenizer/tokenizer.json"
           done
+      - name: Restore the grown fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: build-fuzz/corpus-*
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
       - name: Build fuzzers
         run: |
           cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \

@@ -1,1 +1,0 @@
-{"state": {"aSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS": [1, 2.5, null, true, {"b": "c"}]}, "questions": {"q": {"type": "score", "instructions": {"x": 1}, "criteria": ["lo", {"k": "v"}, 3]}}}

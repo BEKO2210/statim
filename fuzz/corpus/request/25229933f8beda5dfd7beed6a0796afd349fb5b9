@@ -1,1 +1,0 @@
-{"state": "refund", "questions": {"department": {"type": "choice", "instructionsiteria": ["r\fund", "cancel", "complaint", "praise", "quote", "bug_report", "outage", "account_deletion", "shipping", "payment_failure", "scheduling", "address_change", "feature_LLLLLLLLLLLLLLLLLLother"]}}, "max_len": 512, "head_max_len": 96}

@@ -1,1 +1,0 @@
-{"state": "refund", "questions": {"department": {"type": "choice", "instructions": "Which departmen.", "criteria": ["none", "low", "medi\u0000high", "cri[]tical"]}, "in|ent20": {"type": "choice", "instructions": "What is the user's intent?", "ceirtria": ["refuhiring", "invoice_error", "login_issue", "performance", "thanknt3tiknher"]}}, "max_len": 256, "head_max_len": 96}
