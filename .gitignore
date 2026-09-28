@@ -8,3 +8,6 @@ __pycache__/
 build-*/
 data/
 dist/
+# fuzz models, corpora and crash regressions are part of the tree
+!fuzz/data/
+!fuzz/**/*.gguf

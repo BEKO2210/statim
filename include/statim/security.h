@@ -20,6 +20,7 @@ struct SecurityLimits {
     size_t max_response_bytes = 16 * 1024 * 1024;
 };
 constexpr size_t max_body_bytes = 2 * 1024 * 1024;
+constexpr size_t max_batch_states = 256;
 ojson parse_request(const std::string& text, const SecurityLimits& limits = {});
 void validate_request_fields(const ojson& body);
 void check_limits(const ojson& state, const ojson& questions);
@@ -27,6 +28,24 @@ int bounded_integer(const ojson& value, int low, int high, const std::string& na
 int effective_max_len(const HParams& h, const DecideOptions& opts);
 void check_work(const ojson& questions, size_t states, const HParams& h, const DecideOptions& opts,
                 const SecurityLimits& limits, size_t models = 1);
+// Server-side defaults a request may override (ServerConfig flags).
+struct RequestDefaults {
+    int ensemble = 1;
+    bool calibrate = false;
+    int max_len = 0, head_max_len = 0;  // 0 = the checkpoint's
+    double min_confidence = 0;
+};
+// A parsed, validated POST /v1/systemone (batch=false) or /v1/systemone/batch body.
+struct DecideRequest {
+    ojson body;
+    std::vector<ojson> states;
+    DecideOptions opts;
+    double min_confidence = 0;
+};
+// Everything the HTTP handler does with the raw body before a model is chosen. Throws HttpError
+// (400/413/422) or QuestionError (422) for caller mistakes; anything else is a server bug.
+DecideRequest parse_decide_request(const std::string& raw, bool batch, const RequestDefaults& defaults = {},
+                                   const SecurityLimits& limits = {});
 std::vector<std::string> load_key_file(const std::string& path);
 std::vector<std::string> load_key_env(const std::string& value);
 bool valid_request_id(const std::string& value);

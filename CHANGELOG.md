@@ -31,6 +31,36 @@ between minor versions; every change is listed here.
   unchanged.
 - Offline tests for the new loaders, adapters and taxonomy (`test_label_fixes.py`). A new test
   also checks that no new source is a `bench/eval_categories.py` held-out source.
+- libFuzzer harnesses under ASan + UBSan for request bodies (`POST /v1/systemone` and `/batch`,
+  through the handler's own parsing, validation, tokenization, packing, inference and response
+  serialization), the tokenizer (arbitrary bytes, both BPE pipelines, real Laya vocabularies) and
+  GGUF model loading (`fuzz/`, `-DSTATIM_FUZZ=ON`, `fuzz/run.sh`). The hand-written seeds and every
+  crash input are committed and replayed by ctest (`fuzz_regressions_*`) in ordinary builds.
+- CI job `fuzz`: every harness for 60 s per push, continuing from the corpus grown in earlier runs
+  (kept with `actions/cache`); crash inputs are uploaded as an artifact.
+- `tests/test_model_validation.cpp`: 20 malformed-model cases that must be rejected at load.
+- Startup warning `auth_off_on_network` when the server listens beyond loopback without API keys
+  (the Docker images do this by default).
+
+### Fixed
+- A malformed or hostile model file can no longer abort the process. Every GGUF metadata read
+  checks the stored type first (`gguf_get_*` abort on a mismatch), and `Model::load` now rejects,
+  with an error, files whose tensors do not match the hyperparameters (shapes, types), whose
+  special token ids or vocabulary exceed the embedding table, whose hyperparameters are out of
+  range, or whose calibration tables are malformed. Before, such files either aborted at load or
+  loaded and then aborted (`GGML_ASSERT`) or read out of bounds on the first request.
+- `laya.temperature_by_options` and `laya.lang_temperatures` are validated at load. A malformed
+  table used to throw from the engine constructor, and a short per-language `temperature` array was
+  indexed out of bounds for requests that set `lang`.
+- A model whose `general.name` is not valid UTF-8 is rejected at load. It is echoed as `"model"` in
+  every response, whose serialization then threw, so every request answered 500.
+- Bearer-key comparison runs over a fixed length, so its timing no longer depends on the configured
+  keys' lengths.
+- Error logging cannot throw on invalid UTF-8 in an exception message.
+
+### Changed
+- Request parsing and validation moved from the HTTP handler into `parse_decide_request()`
+  (`statim/security.h`) so the fuzzer runs exactly the server's code. Behaviour is unchanged.
 
 ## [0.7.0] - 2026-09-28
 

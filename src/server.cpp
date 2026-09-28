@@ -25,8 +25,6 @@ namespace statim {
 
 namespace {
 
-constexpr size_t kMaxBatchStates = 256;
-
 std::string new_request_id() {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
     char buf[17];
@@ -337,7 +335,7 @@ void on_signal(int) {
 int run_server(const ServerConfig& cfg) {
     if (cfg.max_concurrent < 1 || cfg.max_concurrent > 256 || cfg.workers < 1 || cfg.workers > 64 ||
         cfg.ensemble < 1 || cfg.ensemble > 8 || cfg.max_len < 0 || cfg.head_max_len < 0 || cfg.port < 1 || cfg.port > 65535 ||
-        cfg.batch_window_ms < 0 || cfg.max_batch < 1 || cfg.max_batch > static_cast<int>(kMaxBatchStates))
+        cfg.batch_window_ms < 0 || cfg.max_batch < 1 || cfg.max_batch > static_cast<int>(max_batch_states))
         throw std::runtime_error("invalid server worker, concurrency, ensemble, port or token budget configuration");
     std::vector<LoadedModel> models;
     const int workers = std::max(1, cfg.workers);
@@ -490,54 +488,18 @@ int run_server(const ServerConfig& cfg) {
                 raw.append(data, n);
                 return true;
             })) throw HttpError(oversized || res.status == 413 ? 413 : 400, "request body incomplete or exceeds limit");
-            ojson body = parse_request(raw, cfg.limits);
-            validate_request_fields(body);
-            if (!body.is_object() || !body.contains("questions"))
-                throw HttpError{400, "request body must be an object with a 'questions' field"};
+            RequestDefaults defaults;
+            defaults.ensemble = cfg.ensemble;
+            defaults.calibrate = cfg.calibrate;
+            defaults.max_len = cfg.max_len;
+            defaults.head_max_len = cfg.head_max_len;
+            defaults.min_confidence = cfg.min_confidence;
+            DecideRequest parsed = parse_decide_request(raw, batch, defaults, cfg.limits);
+            const ojson& body = parsed.body;
             const ojson& questions = body["questions"];
-            DecideOptions opts;
-            if (body.contains("lang") && body["lang"].is_string()) opts.lang = body["lang"].get<std::string>();
-            opts.ensemble = cfg.ensemble;
-            if (body.contains("ensemble")) opts.ensemble = bounded_integer(body["ensemble"], 1, 8, "ensemble");
-            opts.calibrate = cfg.calibrate;
-            if (body.contains("calibrate") && body["calibrate"].is_boolean()) opts.calibrate = body["calibrate"].get<bool>();
-            if (body.contains("return_logits") && body["return_logits"].is_boolean())
-                opts.return_logits = body["return_logits"].get<bool>();
-            // token budgets, as laya's predict_batch(max_len=, head_max_len=). Many-option choices
-            // (e.g. 77 intents) need head_max_len ~512 or every option is cut to one subword.
-            if (cfg.max_len > 0) opts.max_len = cfg.max_len;
-            if (cfg.head_max_len > 0) opts.head_max_len = cfg.head_max_len;
-            for (const char* k : {"max_len", "head_max_len"}) {
-                if (!body.contains(k)) continue;
-                (std::string(k) == "max_len" ? opts.max_len : opts.head_max_len) = bounded_integer(body[k], 32, 8192, k);
-            }
-            if (body.contains("ensemble_margin") && body["ensemble_margin"].is_number())
-                opts.ensemble_margin = std::clamp(body["ensemble_margin"].get<double>(), 0.0, 1.0);
-            // Selective prediction: answers below the threshold get "escalate": true so the caller can hand
-            // them to a person or a larger model; without a threshold the response is unchanged.
-            double min_confidence = cfg.min_confidence;
-            if (body.contains("min_confidence")) {
-                const auto& v = body["min_confidence"];
-                if (!v.is_number() || v.get<double>() < 0.0 || v.get<double>() > 1.0)
-                    throw HttpError{422, "min_confidence must be a number from 0 to 1"};
-                min_confidence = v.get<double>();
-            }
-            std::vector<ojson> states;
-            if (batch) {
-                if (!body.contains("states") || !body["states"].is_array())
-                    throw HttpError{400, "request body must contain a 'states' array"};
-                if (body["states"].size() > kMaxBatchStates)
-                    throw HttpError{413, "too many states (" + std::to_string(body["states"].size()) + " > " +
-                                             std::to_string(kMaxBatchStates) + ")"};
-                for (const auto& s : body["states"]) {
-                    check_limits(s, questions);
-                    states.push_back(s);
-                }
-            } else {
-                ojson state = body.contains("state") ? body["state"] : ojson();
-                check_limits(state, questions);
-                states.push_back(state);
-            }
+            DecideOptions& opts = parsed.opts;
+            const double min_confidence = parsed.min_confidence;
+            std::vector<ojson>& states = parsed.states;
 
             // Consensus: both English and multilingual checkpoints answer, their option
             // log-probabilities are averaged. Opt in per request ("model": "consensus") or by default
@@ -606,7 +568,7 @@ int run_server(const ServerConfig& cfg) {
         } catch (const std::exception& e) {
             status = 500;
             std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "error"}, {"event", "inference_failed"},
-                {"request_id", rid}, {"error", e.what()}}.dump().c_str());
+                {"request_id", rid}, {"error", e.what()}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
             send_json(res, status, {{"detail", "inference failed"}});
         }
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -691,6 +653,10 @@ int run_server(const ServerConfig& cfg) {
     std::signal(SIGTERM, on_signal);
     std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "listening"},
         {"host", cfg.host}, {"port", cfg.port}, {"auth", !api_keys.empty()}, {"auth_status", api_keys.empty() ? "off" : "on"}}.dump().c_str());
+    if (api_keys.empty() && cfg.host != "127.0.0.1" && cfg.host != "::1" && cfg.host != "localhost")
+        std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "warn"}, {"event", "auth_off_on_network"},
+            {"host", cfg.host}, {"detail", "listening beyond loopback without API keys: every endpoint is open; "
+                                           "set STATIM_API_KEY or --api-key-file"}}.dump().c_str());
     if (!srv.listen(cfg.host, cfg.port)) {
         std::fprintf(stderr, "statim serve: cannot listen on %s:%d\n", cfg.host.c_str(), cfg.port);
         return 1;
