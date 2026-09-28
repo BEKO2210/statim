@@ -10,15 +10,24 @@ replace the champion.
 
 Suites and their role:
 - validation (eval_dev.py: Banking77 held-out train rows, MASSIVE validation, sentiment valid,
-  Emotion validation, AG News train rows): the challenger's mean must be higher. Model selection
-  never looks at test splits.
+  Emotion validation, AG News train rows): the challenger's mean may not fall by more than
+  VAL_MARGIN (one point). Model selection never looks at test splits.
 - held-out tests (eval_laya.py on the first 2,000 rows; bench/eval_multilingual.py per language;
   bench/eval_zeroshot.py suites never trained on; bench/eval_categories.py, one suite per decision
-  category from the unused splits of the mixture v6 sources): no suite may drop by more than 2 standard errors
-  (binomial, sqrt(p(1-p)/n) for each model, combined). That margin separates real regressions
-  from sampling noise.
-A challenger that improves validation but harms any held-out suite is rejected: it has started to
-overfit or to forget, which is exactly the sweet spot this gate protects.
+  category from the unused splits of the mixture v6 sources):
+  * per suite, a drop is a regression when a one-sided z-test (binomial standard errors of both
+    models, combined) stays significant after Holm-Bonferroni over all compared suites, at a
+    family-wise error rate of ALPHA = 5 %;
+  * per family (trained, zero-shot, sentiment, categories; pooled by rows and by suites), a pooled
+    drop of more than 2 standard errors is a regression;
+  * at least one family must improve by more than 2 standard errors.
+A challenger is promoted only when validation holds, no held-out regression remains and it is
+measurably better somewhere: no overfitting, no forgetting, and a real gain.
+
+Why Holm-Bonferroni: with 88 suites and a plain 2-SE rule per suite, an unchanged model shows at
+least one "significant" drop about 87 % of the time (1 - 0.977**88), and a point comparison of the
+validation mean rejects half of all equally good models. Both rules together rejected an equally
+good challenger about 94 % of the time.
 """
 import argparse
 import json
@@ -119,6 +128,25 @@ def suite_key(record):
     return ("categories:" + record["suite"]) if record.get("family") == "categories" else record["suite"]
 
 
+ALPHA = 0.05       # family-wise error rate of the per-suite regression tests
+VAL_MARGIN = 0.01  # the validation mean may fall by at most one point
+
+
+def holm_regressions(tests, alpha=ALPHA):
+    """tests: (name, champion_acc, challenger_acc, d, se) per suite. Returns the suites whose drop is
+    significant after Holm-Bonferroni: sort by one-sided p-value, compare the i-th smallest with
+    alpha / (m - i), stop at the first one that is not significant."""
+    def p_drop(d, se):
+        return 0.5 * math.erfc(-(d / se) / math.sqrt(2)) if se > 0 else (0.0 if d < 0 else 1.0)
+    ranked = sorted(tests, key=lambda t: p_drop(t[3], t[4]))
+    out, m = [], len(ranked)
+    for i, t in enumerate(ranked):
+        if t[3] >= 0 or p_drop(t[3], t[4]) > alpha / (m - i):
+            break
+        out.append(t)
+    return out
+
+
 ZERO_SHOT = {"go_emotions", "multi_hatecheck", "sib200", "indonli", "farstail", "belebele", "semrel"}
 
 
@@ -141,14 +169,17 @@ def compare(champ_dir, chall_dir, z=2.0):
     if different:
         print(f"categories: {len(different)} cells not compared (their pools differ)")
     shared = [k for k in shared if k not in different]
+    tests = []
     for k in shared:
         x, y = a["heldout"][k], b["heldout"][k]
         se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
         d = y["acc"] - x["acc"]
-        if d < -z * se:
-            harms.append((k, x["acc"], y["acc"], d, se))
-        elif d > z * se:
+        tests.append((k, x["acc"], y["acc"], d, se))
+        if d > z * se:
             gains.append((k, x["acc"], y["acc"], d, se))
+    harms += holm_regressions(tests)
+    nominal = [t for t in tests if t[3] < -z * t[4] and t not in harms]  # reported, not decisive
+    family_gains = []
     # Family-level check: many small suites can each stay inside their noise band while all drifting
     # the same way. Pool each family (row-weighted and suite-weighted) and treat a significant pooled
     # drop as a regression too.
@@ -178,14 +209,20 @@ def compare(champ_dir, chall_dir, z=2.0):
             print(f"family {fam:10s} ({weighting:6s}, {len(groups):2d}): {d * 100:+.2f} pts, 2se {2 * se * 100:.2f} -> {flag}")
             if d < -z * se:
                 harms.append((f"family:{fam}/{weighting}", 0.0, d, d, se))
+            elif d > z * se:
+                family_gains.append(fam)
     print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f})")
-    for name, rows in (("significant gains", gains), ("significant regressions", harms)):
+    for name, rows in (("significant gains (2 SE, per suite)", gains),
+                       (f"significant regressions (Holm, FWER {ALPHA:.0%}, or family)", harms),
+                       ("nominal drops beyond 2 SE, not significant after Holm", nominal)):
         print(f"{name}: {len(rows)}")
         for k, x, y, d, se in rows:
             print(f"  {k:40s} {x:.4f} -> {y:.4f} ({d:+.4f}, 2se {2 * se:.4f})")
-    ok = vb > va and not harms
-    print("VERDICT:", "PROMOTE" if ok else "REJECT", "" if ok else
-          ("(validation did not improve)" if vb <= va else "(held-out regression)"))
+    holds, better = vb >= va - VAL_MARGIN, bool(family_gains)
+    ok = holds and not harms and better
+    why = ("" if ok else "(validation fell by more than %.0f point)" % (VAL_MARGIN * 100) if not holds
+           else "(held-out regression)" if harms else "(no family improved significantly)")
+    print("VERDICT:", "PROMOTE" if ok else "REJECT", why)
     return ok
 
 
