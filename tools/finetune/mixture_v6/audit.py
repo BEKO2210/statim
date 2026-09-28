@@ -10,8 +10,11 @@ the items. A flag fails the audit (exit 1) unless ALLOW lists it for that source
                      "['hello', 'non strategic']") or longer than 160 characters
   numeric-option     every option of a choice question is a number ("0", "1", "2", "0.18"):
                      a ClassLabel id or a score, not something to choose between
-  constant-yes-no    one answer in >= 97 % of a source's yes/no items for one task
+  constant-yes-no    one answer in >= 90 % of the yes/no items of one task that reach training
+                     (registry.drop_constant_yes_no already removes a task at >= 97 %; the
+                     report lists what it removed, counted on the adapter output before the drop)
   constant-choice    one gold option in >= 90 % of a source's items for one question
+  constant-score     one level in >= 90 % of a source's score items for one question
   option-mismatch    a sentiment or NLI question whose options are not sentiment / NLI labels
   opaque-option      an option that is an id, not a name: "event4", "LABEL_2", a single Latin letter
 
@@ -30,12 +33,12 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from tools.finetune.mixture_v6.registry import ENTRIES, adapt, source_key
+    from tools.finetune.mixture_v6.registry import ADAPTERS, ENTRIES, drop_constant_yes_no, source_key
 else:
-    from .registry import ENTRIES, adapt, source_key
+    from .registry import ADAPTERS, ENTRIES, drop_constant_yes_no, source_key
 
 MIN_ITEMS = 20
-YES_NO_SHARE = 0.97
+YES_NO_SHARE = 0.90
 CHOICE_SHARE = 0.90
 MAX_OPTION_CHARS = 160
 SENTIMENT_OPTIONS = {"positive", "negative", "neutral", "mixed", "very positive", "very negative", "no impact",
@@ -46,13 +49,18 @@ SERIALIZED = re.compile(r"^\s*[\[{]|'\s*:\s*|\"\s*:\s*")
 OPAQUE = re.compile(r"(?i)^(?:[a-z]|(?:label|class|event|cat|category|topic|intent|tag)[ _-]?\d+)$")
 
 # source key -> {flag: reason}. Every entry needs a reason a reviewer can check.
+BUILD_BALANCES = ("build.py draws the per-source cap round-robin over (question type, gold) buckets, so the "
+                  "mixture gets every minority item")
 ALLOW = {
     "mteb/toxic_conversations_50k::default": {
-        "constant-choice": "about 8 % of the rows are toxic, the true rate of the source; build.py draws the "
-                           "per-source cap round-robin over gold buckets, so the mixture gets every toxic row"},
+        "constant-choice": "about 8 % of the rows are toxic, the true rate of the source; " + BUILD_BALANCES,
+        "constant-yes-no": "about 8 % of the rows are toxic, the true rate of the source; " + BUILD_BALANCES},
     "OpenAssistant/oasst2::default": {
-        "constant-choice": "about 4 % of the messages have a harmful crowd vote >= 0.5; build.py balances the "
-                           "gold buckets when it draws the per-source cap"},
+        "constant-choice": "about 5 % of the messages have a harmful crowd vote >= 0.5; " + BUILD_BALANCES,
+        "constant-yes-no": "about 5 % of the messages have a harmful crowd vote >= 0.5; " + BUILD_BALANCES},
+    "gretelai/synthetic_pii_finance_multilingual::default": {
+        "constant-yes-no": "about 6 % of the documents have no PII span, the only negatives among the PII "
+                           "sources; " + BUILD_BALANCES},
 }
 
 
@@ -65,10 +73,14 @@ def audit_items(items):
     flags = collections.defaultdict(list)
     yes_no = collections.defaultdict(collections.Counter)
     choice = collections.defaultdict(collections.Counter)
+    score = collections.defaultdict(collections.Counter)
     for item in items:
         q, task = item["q"], item.get("_task")
         if q["type"] == "noul":
             yes_no[task][item["target"][1] == 1.0] += 1
+            continue
+        if q["type"] == "score":
+            score[(task, tuple(q["criteria"]))][item["target"].index(1.0)] += 1
             continue
         if q["type"] != "choice":
             continue
@@ -96,6 +108,11 @@ def audit_items(items):
         top, count = counts.most_common(1)[0]
         if n >= MIN_ITEMS and count >= CHOICE_SHARE * n:
             flags["constant-choice"].append("%s: %r in %d of %d" % (task, top, count, n))
+    for (task, _levels), counts in score.items():
+        n = sum(counts.values())
+        top, count = counts.most_common(1)[0]
+        if n >= MIN_ITEMS and count >= CHOICE_SHARE * n:
+            flags["constant-score"].append("%s: level %d in %d of %d" % (task, top, count, n))
     return {flag: sorted(set(details))[:5] for flag, details in flags.items()}
 
 
@@ -105,10 +122,14 @@ def audit_source(entry, rows_per_source, seed=20260927):
     key = source_key(entry)
     try:
         rows, _warnings = load_rows(entry, rows_per_source)
-        items = [item for item in adapt(entry, rows, seed) if valid_item(item)]
+        raw = [item for item in ADAPTERS[key](entry, list(rows), seed) if item and valid_item(item)]
+        items = drop_constant_yes_no(raw)  # what adapt() hands to training
     except Exception as exc:  # reported as a warning
         return {"key": key, "error": "%s: %s" % (type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])}
-    result = {"key": key, "rows": len(rows), "items": len(items), "flags": audit_items(items)}
+    dropped = collections.Counter(item.get("_task") for item in raw if item["q"]["type"] == "noul") - \
+        collections.Counter(item.get("_task") for item in items if item["q"]["type"] == "noul")
+    result = {"key": key, "rows": len(rows), "items": len(items), "flags": audit_items(items),
+              "dropped_yes_no": dict(dropped)}  # constant yes/no tasks removed before training
     allowed = ALLOW.get(key, {})
     result["failing"] = sorted(f for f in result["flags"] if f not in allowed)
     return result
@@ -138,6 +159,8 @@ def main(argv=None):
             status = "ok (allowed: %s)" % ", ".join(sorted(r["flags"]))
         else:
             status = "ok"
+        if r.get("dropped_yes_no"):
+            status += " [dropped constant yes/no: %s]" % ", ".join("%s %d" % kv for kv in sorted(r["dropped_yes_no"].items()))
         print("%-100s %s" % (r["key"][:100], status), flush=True)
     print("\n%d sources: %d failing, %d warnings" % (len(results), len(failing), len(warnings)))
     if a.out:

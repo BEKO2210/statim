@@ -2445,9 +2445,8 @@
   "category": "6-reading-comprehension",
   "label_field": "ex-or-im; attribute",
   "text_fields": [
-   "story_section",
-   "question",
-   "answer1"
+   "context",
+   "question"
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",

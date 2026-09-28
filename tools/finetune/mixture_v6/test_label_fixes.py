@@ -160,10 +160,10 @@ def test_urgency_is_binary():
     assert registry.field_labels(e, {"matching_rule": "NOT URGENT"}, {}) == [("urgency", "not urgent")]
 
 
-def test_casino_one_row_per_annotated_utterance():
+def test_casino_one_row_per_single_strategy_utterance():
     rows = loaders._postprocess("kchawla123/casino", [
         {"annotations": "[['Hello!', 'small-talk'], ['I need water', 'self-need,elicit-pref']]"}])
-    assert [(r["utterance"], r["annotations"]) for r in rows] == [("Hello!", "small-talk"), ("I need water", "self-need")]
+    assert [(r["utterance"], r["annotations"]) for r in rows] == [("Hello!", "small-talk")]
 
 
 # --------------------------------------------------------------------------- pii and reading
@@ -254,3 +254,72 @@ def test_allow_entries_have_reasons():
         for flag, reason in flags.items():
             assert flag in {"serialized-option", "numeric-option", "constant-yes-no", "constant-choice",
                             "option-mismatch", "opaque-option"} and len(reason) > 20
+
+
+# --------------------------------------------------------------------------- review of #20
+
+def test_fairytale_state_holds_the_passage():
+    rows = [{"context": "Once upon a time a fox lived in the woods.", "question": "Where did the fox live?",
+             "answers": {"text": ["in the woods"]}, "story_name": "fox"},
+            {"context": "A king had three daughters.", "question": "How many daughters?",
+             "answers": {"text": ["three"]}, "story_name": "king"}]
+    items = list(adapt(entry("WorkInTheDark/FairytaleQA"), rows, 1))
+    assert items and all(it["state"].startswith("context: ") and "\n\nquestion: " in it["state"] for it in items)
+    assert any("fox lived in the woods" in it["state"] and "Where did the fox live?" in it["state"] for it in items)
+
+
+def test_aegis1_category_tie_gives_yes_no_only():
+    e = entry("nvidia/Aegis-AI-Content-Safety-Dataset-1.0")
+    tie = {"text": "tie", "labels_0": "Violence", "labels_1": "Harassment", "labels_2": "Violence",
+           "labels_3": "Harassment", "labels_4": "Safe"}
+    assert registry.labels_from(e, tie) == [registry.UNSAFE_NO_CATEGORY]
+    clear = {"text": "clear", "labels_0": "Violence", "labels_1": "Violence", "labels_2": "Safe"}
+    items = list(adapt(e, [tie, clear], 1))
+    tie_items = [it for it in items if it["state"] == "tie"]
+    assert [it["q"]["type"] for it in tie_items] == ["noul"] and tie_items[0]["target"] == [0.0, 1.0]
+    for item in items:
+        if item["q"]["type"] == "choice":
+            assert registry.UNSAFE_NO_CATEGORY not in item["q"]["criteria"]
+
+
+def test_prosocial_possibly_needs_caution_has_no_yes_no():
+    rows = [{"context": "Maybe I skip work.", "safety_label": "__possibly_needs_caution__"},
+            {"context": "I will bake bread.", "safety_label": "__casual__"}]
+    items = list(adapt(entry("allenai/prosocial-dialog"), rows, 1))
+    assert [it["state"] for it in items if it["q"]["type"] == "noul"] == ["I will bake bread."]
+
+
+def test_emotion_probes_are_balanced():
+    rows = [{"sentence": "text %d" % i, "emotion": e} for i, e in enumerate(["anger", "joy", "fear", "sadness"] * 30)]
+    items = list(adapt(entry("shreyaspullehf/emotion-dataset-20-emotions"), rows, 1))
+    yes = [it["target"][1] for it in items if it["q"]["type"] == "noul"]
+    assert 0.35 < sum(yes) / len(yes) < 0.65
+
+
+def test_audit_constant_score_and_dropped_yes_no():
+    score = [{"state": "s", "q": {"type": "score", "instructions": "?", "criteria": ["a", "b", "c"]},
+              "target": [1.0, 0.0, 0.0], "_task": "similarity"} for _ in range(30)]
+    assert "constant-score" in audit.audit_items(score)
+    skewed = [_noul_item(i < 28) for i in range(30)]  # 93 % yes: survives the 97 % drop, the audit flags it
+    assert registry.drop_constant_yes_no(skewed) == skewed
+    assert "constant-yes-no" in audit.audit_items(skewed)
+
+
+def test_sample_parquet_delivers_the_limit_when_strata_are_thin(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    path = tmp_path / "x.parquet"
+    pq.write_table(pa.table({"i": list(range(1000))}), path)
+    rows = loaders.sample_parquet(path, 700)
+    assert len(rows) == 700 and len({r["i"] for r in rows}) == 700
+    assert rows == loaders.sample_parquet(path, 700)
+
+
+def test_contiguous_parquet_keeps_runs_long_enough(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    path = tmp_path / "x.parquet"
+    pq.write_table(pa.table({"i": list(range(10000))}), path)
+    rows = [r["i"] for r in loaders.contiguous_parquet(path, 60)]
+    runs = sum(1 for a, b in zip(rows, rows[1:]) if b != a + 1) + 1
+    assert len(rows) == 60 and runs <= 2

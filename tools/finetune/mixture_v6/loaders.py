@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 import zipfile
@@ -171,7 +172,10 @@ def sample_parquet(path, limit, columns=None, drop=("audio", "audio_path")):
         import random
         rng = random.Random("%s|%d|%d" % (Path(path).name, total, limit))
         step = total / float(limit)
-        want = sorted({min(total - 1, int(i * step + rng.random() * step)) for i in range(limit)})
+        if step < 2:  # strata of one row collide after int(): draw the rows directly
+            want = sorted(rng.sample(range(total), limit))
+        else:
+            want = sorted({min(total - 1, int(i * step + rng.random() * step)) for i in range(limit)})
     rows, seen = [], 0
     for batch in pf.iter_batches(batch_size=4096, columns=names):
         n = batch.num_rows
@@ -192,6 +196,7 @@ def contiguous_parquet(path, limit, blocks=8):
     total = pf.metadata.num_rows or 0
     if total <= limit:
         return sample_parquet(path, limit)
+    blocks = max(1, min(blocks, limit // 25))  # runs of at least 25 rows, so a set or a day stays together
     run = max(1, limit // blocks)
     spans = [(start, start + run) for start in
              (int(i * (total - run) / max(1, blocks - 1)) for i in range(blocks))]
@@ -884,13 +889,18 @@ def _load_hf_streaming(entry, limit):
             configs = get_dataset_config_names(dataset_id)
         else:
             configs = [config]
+    fallback = None
     try:
         rows = _load_hf_parquet(entry, limit, dataset_id, configs)
-    except Exception:  # listing or download failed: fall back to streaming
+    except Exception as exc:  # listing or download failed: fall back to streaming
         rows = None
+        fallback = "%s: %s" % (type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
     if rows:
         return rows, []
-    rows, failures = [], []
+    # The head of the stream can miss whole classes of a sorted split: say so, never silently.
+    note = "no parquet revision (%s); read the head of the stream" % (fallback or "no converted config")
+    print("WARNING %s: %s" % (original, note), file=sys.stderr, flush=True)
+    rows, failures = [], [note]
     per_config = max(1, limit // max(1, len(configs)))
     for config in configs:
         if len(rows) >= limit:
@@ -938,8 +948,9 @@ CARD_LABELS = {
 
 
 def _explode_casino(rows):
-    """One row per annotated utterance: annotations = [[utterance, "strategy,strategy"], ...]. The
-    first strategy is the label; the whole dialogue is not the decision text."""
+    """One row per annotated utterance with exactly one strategy: annotations = [[utterance,
+    "strategy"], ...]. Utterances with several ("self-need,elicit-pref") have no single gold and are
+    skipped; the whole dialogue is not the decision text."""
     out = []
     for row in rows:
         annotations = row.get("annotations")
@@ -950,8 +961,11 @@ def _explode_casino(rows):
             except (ValueError, SyntaxError):
                 continue
         for pair in annotations or []:
-            if isinstance(pair, (list, tuple)) and len(pair) >= 2 and str(pair[0]).strip() and str(pair[1]).strip():
-                out.append({"utterance": str(pair[0]).strip(), "annotations": str(pair[1]).split(",")[0].strip(),
+            if not (isinstance(pair, (list, tuple)) and len(pair) >= 2):
+                continue
+            text, strategy = str(pair[0]).strip(), str(pair[1]).strip()
+            if text and strategy and "," not in strategy:
+                out.append({"utterance": text, "annotations": strategy,
                             "_v6_lang": "en", "_v6_config": row.get("_v6_config", "default")})
     return out
 

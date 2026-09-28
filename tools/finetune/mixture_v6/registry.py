@@ -7,6 +7,7 @@ the sole loader and therefore the single enforcement point for ``use: true``.
 
 from __future__ import annotations
 
+import collections
 import json
 import re
 from pathlib import Path
@@ -319,14 +320,19 @@ COVID_EVENTS = {
     "event7": "army mobilization", "event8": "government oversight",
 }
 AEGIS1_SAFE = {"safe", "needs caution"}
+# Unsafe, but the annotators disagree on the category: a yes/no item, no category choice.
+UNSAFE_NO_CATEGORY = "unsafe category disputed"  # survives canon() unchanged
+# prosocial-dialog labels that are neither safe nor clearly unsafe: no yes/no item.
+UNDECIDED = {"possibly needs caution"}
 
 
 def _safety_labels(sid, row):
     """Labels for safety sources whose label columns the generic parser cannot read. Returns None
     for any other source. "safe" is a negative word in safety_adapter."""
     if sid == "nvidia/Aegis-AI-Content-Safety-Dataset-1.0":
-        # labels_0..labels_4: one annotation each ("None" = no annotator). Majority vote; a tie or a
-        # "Needs Caution" majority is ambiguous and yields no label (the row is dropped).
+        # labels_0..labels_4: one annotation each ("None" = no annotator). Majority vote; a "Needs
+        # Caution" majority or a safe/unsafe tie yields no label (the row is dropped). An unsafe
+        # majority split between categories is unsafe without a category: the yes/no item only.
         votes = [str(row.get("labels_%d" % i) or "").strip() for i in range(5)]
         votes = [v for v in votes if v and v != "None"]
         safe = sum(v.lower() == "safe" for v in votes)
@@ -334,7 +340,10 @@ def _safety_labels(sid, row):
         if safe * 2 > len(votes):
             return ["safe"]
         if len(unsafe) * 2 > len(votes):
-            return [max(set(unsafe), key=unsafe.count)]
+            counts = collections.Counter(unsafe).most_common()
+            if len(counts) > 1 and counts[0][1] == counts[1][1]:
+                return [UNSAFE_NO_CATEGORY]
+            return [counts[0][0]]
         return []
     if sid == "OpenAssistant/oasst2":
         # labels = {"name": [...], "value": [...], "count": [...]}, value = mean crowd vote in [0, 1]
@@ -631,7 +640,10 @@ def emotion_adapter(entry, rows, seed):
         if item:
             yield item
         if vocab:
-            probe = rng.choice(vocab)
+            # Half the probes name an emotion the row has, half one it has not: with a random probe
+            # over a 20-emotion vocabulary the answer was "no" about 95 % of the time.
+            absent = [x for x in vocab if x not in labels]
+            probe = rng.choice(labels) if (rng.random() < 0.5 or not absent) else rng.choice(absent)
             yield _noul(entry, row, state, probe in labels, lang, rng, texts, task="emotion", fmt={"emotion": probe})
 
 
@@ -798,7 +810,8 @@ def safety_adapter(entry, rows, seed):
         labels = [canon(x).lower() for x in labels_from(entry, row)]
         prepared.append(labels)
         for label in labels:
-            vocab_counts[label] = vocab_counts.get(label, 0) + 1
+            if label != UNSAFE_NO_CATEGORY:
+                vocab_counts[label] = vocab_counts.get(label, 0) + 1
     vocab = [x for x, _ in sorted(vocab_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:40]]
     for i, row in enumerate(rows):
         texts = row_texts(entry, row)
@@ -815,7 +828,8 @@ def safety_adapter(entry, rows, seed):
             item = _choice(entry, row, state, vocab, labels[0], lang, rng, texts, task=task)
             if item:
                 yield item
-        yield _noul(entry, row, state, truth, lang, rng, texts, task=task)
+        if not UNDECIDED & set(labels):
+            yield _noul(entry, row, state, truth, lang, rng, texts, task=task)
 
 
 def positive_adapter(entry, rows, seed):
