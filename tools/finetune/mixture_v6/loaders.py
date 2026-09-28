@@ -738,7 +738,8 @@ def fact_opinion_rows(records):
 
 def _load_fact_opinion(limit):
     import pyarrow.parquet as pq
-    path = _hub("agentlans/fact-or-opinion", "default/train/0000.parquet", PARQUET_REV)
+    # the raw files are zstd; read the parquet conversion at a pinned commit, not the moving ref
+    path = _hub("agentlans/fact-or-opinion", "default/train/0000.parquet", "8558c040b4c30bce8d8d9c990f13c5824a4d7dbe")
     records = pq.read_table(path, columns=["text", "label", "language", "source"]).to_pylist()
     return _balanced_by(fact_opinion_rows(records), limit, "_v6_lang", "fact_opinion")
 

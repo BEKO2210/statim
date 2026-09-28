@@ -349,7 +349,8 @@ def test_exclude_mixture_reads_the_built_file(tmp_path):
 
 
 def test_gate_notes():
-    assert ec.gate_note("emotion", "pt") and ec.gate_note("emotion", "ru")
+    # emotion pt/ru are trained since the weak-category sources (Horizon) and count in the family
+    assert ec.gate_note("emotion", "pt") is None and ec.gate_note("emotion", "ru") is None
     assert ec.gate_note("emotion", "de") is None
     assert ec.gate_note("nli", "en") is None
 
@@ -409,7 +410,9 @@ def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
     champ, chall = tmp_path / "champ", tmp_path / "chall"
     for d, acc, pool in ((champ, 0.80, "p1"), (chall, 0.60, "p2")):
         d.mkdir()
-        heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool}}
+        heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool},
+                   # a trained suite that clearly improves: the gate also asks for one significant family gain
+                   "test/banking77": {"acc": 0.80 if d == champ else 0.90, "n": 2000}}
         json.dump({"validation": {"v": 0.5 if d == champ else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
     assert gate.compare(str(champ), str(chall)) is True  # the 20-point drop is on a different pool
     assert "1 cells not compared" in capsys.readouterr().out

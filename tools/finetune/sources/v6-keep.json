@@ -3119,7 +3119,8 @@
    "text"
   ],
   "licence_evidence": [
-   "https://huggingface.co/datasets/agentlans/fact-or-opinion (YAML license: odc-by; tags: synthetic); no upstream repo or paper"
+   "https://huggingface.co/datasets/agentlans/fact-or-opinion (YAML license: odc-by; tags: synthetic); no upstream repo or paper",
+   "https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html (Terms of Use, 2026-03-27, §4.2(3): \"You may apply the Inputs and Outputs of the Services to a wide range of use cases, including ... training other models (such as model distillation)\"); same clause in the Open Platform Terms of Service (2026-04-22, §4.2) and in the April 2025 Terms in force when the rows were generated"
   ],
   "provenance": "Synthetic statements; the generator is recorded per row in the 'source' column only (ChatGPT, Claude Sonnet 4, Gemini 2.5 Flash, Microsoft Copilot, Perplexity, Le Chat, DeepSeek). The loader keeps source == 'DeepSeek' (4,505 train rows, open-weight model family, not one of the excluded hosted providers) and drops every other generator. Weakest provenance of the new sources: documented by the column, not by a methods section.",
   "test_overlap_note": "no eval-suite overlap (ClaimBuster is US debate sentences); not a benchmark; test split not read",

@@ -6,6 +6,8 @@ name: mixture-audit
 on:
   push:
     paths:
+      - "bench/eval_categories.py"
+      - "bench/test_eval_categories.py"
       - "tools/finetune/gate.py"
       - "tools/finetune/test_gate.py"
       - "tools/finetune/mixture_v6/**"
@@ -13,6 +15,8 @@ on:
       - ".github/workflows/mixture-audit.yml"
   pull_request:
     paths:
+      - "bench/eval_categories.py"
+      - "bench/test_eval_categories.py"
       - "tools/finetune/gate.py"
       - "tools/finetune/test_gate.py"
       - "tools/finetune/mixture_v6/**"
@@ -30,7 +34,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pytest pyarrow
-      - run: python -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py tools/finetune/test_gate.py
+      - run: python -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py tools/finetune/test_gate.py bench/test_eval_categories.py
   audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
