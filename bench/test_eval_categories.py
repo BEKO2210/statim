@@ -405,14 +405,25 @@ def test_fingerprint_tracks_registry_file(tmp_path, monkeypatch):
     assert ec.fingerprint() != before
 
 
-def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
+def _gate_pair(tmp_path, pools):
     import json
-    champ, chall = tmp_path / "champ", tmp_path / "chall"
-    for d, acc, pool in ((champ, 0.80, "p1"), (chall, 0.60, "p2")):
-        d.mkdir()
+    dirs = []
+    for name, acc, pool in (("champ", 0.80, pools[0]), ("chall", 0.60, pools[1])):
+        d = tmp_path / name
+        d.mkdir(parents=True)
         heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool},
                    # a trained suite that clearly improves: the gate also asks for one significant family gain
-                   "test/banking77": {"acc": 0.80 if d == champ else 0.90, "n": 2000}}
-        json.dump({"validation": {"v": 0.5 if d == champ else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
-    assert gate.compare(str(champ), str(chall)) is True  # the 20-point drop is on a different pool
+                   "test/banking77": {"acc": 0.80 if name == "champ" else 0.90, "n": 2000}}
+        json.dump({"validation": {"v": 0.5 if name == "champ" else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
+        dirs.append(str(d))
+    return dirs
+
+
+def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
+    assert gate.compare(*_gate_pair(tmp_path / "different", ("p1", "p2"))) is True  # the 20-point drop is on a different pool
     assert "1 cells not compared" in capsys.readouterr().out
+    # The same drop on the same pool is compared and blocks the promotion.
+    assert gate.compare(*_gate_pair(tmp_path / "same", ("p1", "p1"))) is False
+    out = capsys.readouterr().out
+    assert "cells not compared" not in out
+    assert "categories:nli/en" in out
