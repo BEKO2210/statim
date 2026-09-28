@@ -26,6 +26,19 @@ namespace statim {
 
 namespace {
 
+// A Prometheus label value: backslash, double quote and newline escaped (text exposition format).
+// Model names come from the command line and may contain any of them.
+std::string prom_label(const std::string& v) {
+    std::string out;
+    for (char c : v) {
+        if (c == '\\') out += "\\\\";
+        else if (c == '"') out += "\\\"";
+        else if (c == '\n') out += "\\n";
+        else out += c;
+    }
+    return out;
+}
+
 std::string new_request_id() {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
     char buf[17];
@@ -112,16 +125,15 @@ public:
         }
     };
     std::unique_ptr<Lease> acquire(const std::shared_ptr<Model>& model, std::chrono::steady_clock::time_point deadline) {
+        auto l = std::make_unique<Lease>();  // allocated before a slot is taken: nothing below may throw
+        l->pool = this;                      // until the guarded engine construction
+        l->key = model.get();
         std::unique_lock<std::mutex> lk(mu_);
         if (!cv_.wait_until(lk, deadline, [&] { return busy_ < size_; })) throw HttpError(503, "inference queue deadline exceeded");
         ++busy_;
-        auto l = std::make_unique<Lease>();
-        l->pool = this;
-        l->key = model.get();
-        auto& list = free_[model.get()];
-        if (!list.empty()) {
-            l->engine = std::move(list.back());
-            list.pop_back();
+        if (auto it = free_.find(model.get()); it != free_.end() && !it->second.empty()) {
+            l->engine = std::move(it->second.back());
+            it->second.pop_back();
             return l;
         }
         // At the cap, some engine is idle: engines_ counts the idle ones and those of the other busy
@@ -163,11 +175,15 @@ public:
     }
 
 private:
-    void release(const Model* key, std::unique_ptr<Engine> e) {
+    void release(const Model* key, std::unique_ptr<Engine> e) noexcept {
         {
             std::lock_guard<std::mutex> lk(mu_);
-            free_[key].push_back(std::move(e));
             --busy_;
+            try {
+                free_[key].push_back(std::move(e));
+            } catch (...) {  // out of memory: give up the engine (destroyed on return), never the slot
+                --engines_;
+            }
         }
         cv_.notify_one();
     }
@@ -176,7 +192,7 @@ private:
     std::condition_variable cv_;
     std::map<const Model*, std::vector<std::unique_ptr<Engine>>> free_;
     int size_ = 0;
-    int engines_ = 0;  // idle engines plus one per busy slot that holds or is building one; <= size_
+    int engines_ = 0;  // idle engines plus one per busy slot (holding or building one); <= size_
     int busy_ = 0;
 };
 
@@ -800,24 +816,24 @@ int run_server(const ServerConfig& cfg) {
         o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
           << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
         for (auto& m : models) {
-            o << "statim_workers_busy{model=\"" << m.name << "\"} " << m.pool->busy() << "\n";
-            o << "statim_model_info{model=\"" << m.name << "\",weights=\"" << m.model->hparams().weight_type
+            o << "statim_workers_busy{model=\"" << prom_label(m.name) << "\"} " << m.pool->busy() << "\n";
+            o << "statim_model_info{model=\"" << prom_label(m.name) << "\",weights=\"" << prom_label(m.model->hparams().weight_type)
               << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
         }
         if (any_adapters) {
-            o << "# HELP statim_engines Engines (compute buffers) alive for a model and its adapters; at most --workers.\n"
+            o << "# HELP statim_engines Engines (compute buffers) held or being built for a model and its adapters; at most --workers.\n"
                  "# TYPE statim_engines gauge\n";
-            for (auto& m : models) o << "statim_engines{model=\"" << m.name << "\"} " << m.pool->engines() << "\n";
+            for (auto& m : models) o << "statim_engines{model=\"" << prom_label(m.name) << "\"} " << m.pool->engines() << "\n";
             o << "# TYPE statim_adapter_info gauge\n";
             for (auto& m : models)
                 for (auto& a : m.adapters)
-                    o << "statim_adapter_info{model=\"" << m.name << "\",adapter=\"" << a.name << "\",mode=\""
+                    o << "statim_adapter_info{model=\"" << prom_label(m.name) << "\",adapter=\"" << prom_label(a.name) << "\",mode=\""
                       << (a.model->adapter()->mode == AdapterMode::merge ? "merge" : "runtime") << "\"} 1\n";
             o << "# HELP statim_adapter_bytes Memory an adapter adds on top of the shared base weights.\n"
                  "# TYPE statim_adapter_bytes gauge\n";
             for (auto& m : models)
                 for (auto& a : m.adapters)
-                    o << "statim_adapter_bytes{model=\"" << m.name << "\",adapter=\"" << a.name << "\"} "
+                    o << "statim_adapter_bytes{model=\"" << prom_label(m.name) << "\",adapter=\"" << prom_label(a.name) << "\"} "
                       << a.model->adapter()->bytes << "\n";
         }
         res.set_content(o.str(), "text/plain; version=0.0.4");

@@ -162,6 +162,22 @@ def main():
         ]:
             r = convert(adapter(os.path.join(tmp, name), tensors, **cfg), out, *extra)
             check(r.returncode != 0 and needle in r.stderr, "rejects %s (%s)" % (name, r.stderr.strip().splitlines()[-1] if r.stderr else "no error"))
+        # malformed safetensors headers
+        a16 = np.ones((2, 768), np.float32).tobytes()
+        for name, entries, payload, needle in [
+            ("negative", {wqkv + ".lora_A.weight": ("F32", [2, 768], [-8, len(a16) - 8])}, a16, "invalid shape or data offsets"),
+            ("beyond", {wqkv + ".lora_A.weight": ("F32", [2, 768], [0, len(a16) + 4])}, a16, "invalid shape or data offsets"),
+            ("short", {wqkv + ".lora_A.weight": ("F32", [2, 768], [0, len(a16) - 4])}, a16, "needs 6144"),
+            ("overlap", {wqkv + ".lora_A.weight": ("F32", [2, 768], [0, len(a16)]),
+                         wqkv + ".lora_B.weight": ("F32", [2, 768], [4, len(a16) + 4])}, a16 + b"\0" * 4, "overlap"),
+        ]:
+            d = adapter(os.path.join(tmp, name), {})
+            h = json.dumps({k: {"dtype": t, "shape": sh, "data_offsets": off} for k, (t, sh, off) in entries.items()}).encode()
+            with open(os.path.join(d, "adapter_model.safetensors"), "wb") as f:
+                f.write(struct.pack("<Q", len(h)) + h + payload)
+            r = convert(d, out)
+            check(r.returncode != 0 and needle in r.stderr, "rejects safetensors with %s offsets (%s)" % (
+                name, r.stderr.strip().splitlines()[-1] if r.stderr else "no error"))
         r = convert(os.path.join(tmp, "missing"), out)
         check(r.returncode != 0 and "not found" in r.stderr, "missing adapter directory")
         r = convert(adapter(os.path.join(tmp, "notbase"), pair(wqkv, 2, 768, 2304, 5)), out, "--base",

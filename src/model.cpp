@@ -258,10 +258,12 @@ static void repack_weights(Model::Impl& M) {
 
 // SHA-256 over the checkpoint's normalisation weights: for every tensor whose name contains
 // "norm", in byte order of the names, the name and a NUL byte, the element count (u64
-// little-endian) and the values as little-endian f32. Fine-tuning changes these weights, and
+// little-endian) and the values as little-endian f32. Full fine-tuning changes these weights, and
 // quantizing keeps them (tools/quantize.cpp and tools/convert_laya.py never quantize a norm), so the
 // value tells apart fine-tunes that share a name and is the same for every weight type of one
-// checkpoint. tools/convert_lora.py computes the same value and records it in the adapter.
+// checkpoint. It cannot tell apart checkpoints that differ only in other weights, such as a LoRA
+// merged into the projections or a fine-tune with frozen norms. tools/convert_lora.py computes the
+// same value and records it in the adapter.
 // Called before upload_weights() takes the weights off the file mapping (the CPU repack never
 // moves a norm: they are 1-D f32, which validate() enforces for the ones the graph uses).
 static std::string norm_fingerprint(const Model::Impl& M) {

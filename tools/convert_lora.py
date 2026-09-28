@@ -138,7 +138,8 @@ def norm_fingerprint(path, shapes, where):
 def load_safetensors(path):
     """{name: f32 array} of a .safetensors file (8-byte header length, JSON header, data). Read
     directly because safetensors.numpy cannot load bf16, the dtype PEFT saves an adapter in when the
-    model was trained in bf16. f16 and bf16 widen to f32 exactly."""
+    model was trained in bf16. f16 and bf16 widen to f32 exactly. Offsets are checked: in bounds,
+    exactly dtype x shape bytes, no two tensors overlapping."""
     with open(path, "rb") as f:
         raw = f.read()
     n = struct.unpack("<Q", raw[:8])[0] if len(raw) >= 8 else len(raw)
@@ -148,24 +149,40 @@ def load_safetensors(path):
         header = json.loads(raw[8:8 + n])
     except ValueError:
         fail("%s is not a safetensors file" % path)
+    if not isinstance(header, dict):
+        fail("%s is not a safetensors file" % path)
     data = memoryview(raw)[8 + n:]
-    out = {}
+    width = {"F32": 4, "F16": 2, "BF16": 2}
+    out, spans = {}, []
     for name, info in header.items():
         if name == "__metadata__":
             continue
-        dtype, shape, (begin, end) = info["dtype"], info["shape"], info["data_offsets"]
+        dtype = info.get("dtype") if isinstance(info, dict) else None
+        shape = info.get("shape") if isinstance(info, dict) else None
+        offsets = info.get("data_offsets") if isinstance(info, dict) else None
+        if dtype not in width:
+            fail("%s: tensor %s is %s; LoRA factors must be F32, F16 or BF16" % (path, name, dtype))
+        if not (isinstance(shape, list) and all(type(d) is int and d >= 0 for d in shape)
+                and isinstance(offsets, list) and len(offsets) == 2 and all(type(o) is int for o in offsets)
+                and 0 <= offsets[0] <= offsets[1] <= len(data)):
+            fail("%s: tensor %s has an invalid shape or data offsets" % (path, name))
+        begin, end = offsets
+        if end - begin != width[dtype] * math.prod(shape):
+            fail("%s: tensor %s has %d bytes, but %s %s needs %d" % (path, name, end - begin, dtype, shape,
+                                                                     width[dtype] * math.prod(shape)))
+        spans.append((begin, end, name))
         chunk = data[begin:end]
         if dtype == "F32":
             values = np.frombuffer(chunk, dtype="<f4")
         elif dtype == "F16":
             values = np.frombuffer(chunk, dtype="<f2").astype(np.float32)
-        elif dtype == "BF16":
-            values = (np.frombuffer(chunk, dtype="<u2").astype(np.uint32) << 16).view(np.float32)
         else:
-            fail("%s: tensor %s is %s; LoRA factors must be F32, F16 or BF16" % (path, name, dtype))
-        if values.size != math.prod(shape):
-            fail("%s: tensor %s has %d values for shape %s" % (path, name, values.size, shape))
+            values = (np.frombuffer(chunk, dtype="<u2").astype(np.uint32) << 16).view(np.float32)
         out[name] = values.astype(np.float32).reshape(shape)
+    spans.sort()
+    for (_, end0, name0), (begin1, _, name1) in zip(spans, spans[1:]):
+        if begin1 < end0:
+            fail("%s: tensors %s and %s overlap" % (path, name0, name1))
     return out
 
 

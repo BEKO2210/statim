@@ -90,7 +90,8 @@ public:
     size_t weight_bytes() const;
     const std::string& device() const;  // e.g. "cpu", "Vulkan0 (NVIDIA GeForce RTX 3070)"
     // SHA-256 (hex) of the checkpoint's normalisation weights: the same for every weight type of one
-    // checkpoint, different between fine-tunes. A LoRA adapter records the one it was converted for.
+    // checkpoint, different between fine-tunes that train the norms (full fine-tuning does). A LoRA
+    // adapter records the one it was converted for.
     const std::string& fingerprint() const;
     const AdapterInfo* adapter() const;  // nullptr for a base model
 

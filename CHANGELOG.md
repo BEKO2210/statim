@@ -41,8 +41,9 @@ between minor versions; every change is listed here.
     CorDA, LoRA-GA, LoftQ) unless PEFT converted the adapter into a plain LoRA. `--base` is
     required: it checks the shapes and records the checkpoint's fingerprint, a SHA-256 over its
     normalisation weights that is the same for its f32 and quantized files and differs between
-    fine-tunes; the engine refuses an adapter whose fingerprint does not match (`statim info`
-    prints a model's). `--category` sets the question families for auto routing.
+    fully fine-tuned checkpoints (not for a LoRA merged into the weights, which keeps the norms);
+    the engine refuses an adapter whose fingerprint does not match (`statim info` prints a
+    model's). `--category` sets the question families for auto routing.
   - `statim serve --adapter [model:]name=file.gguf` (repeatable) and `--adapter-mode merge|runtime`;
     `decide`, `bench` and `info` take one `--adapter`. Merge computes `W + B·A` with ggml at load
     and runs the unchanged base graph: base latency, one copy of the adapted weights per adapter
