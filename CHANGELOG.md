@@ -7,6 +7,15 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Changed
+- Promotion gate (`tools/finetune/gate.py`): per-suite regressions are one-sided z-tests with
+  Holm-Bonferroni over all compared suites (family-wise error 5 %); the validation mean may fall by at
+  most one point; at least one family must improve significantly. Family-level pooled regressions
+  still reject. With 88 suites the old rules (any suite beyond 2 SE, validation mean strictly higher)
+  rejected an equally good challenger about 94 % of the time; a null simulation in
+  `tools/finetune/test_gate.py` shows 89 % false rejections for the old per-suite rule and 5 % with
+  Holm.
+
 ### Fixed
 - Mixture v6 labels. Several v6 adapters wrote a constant or wrong gold label, and training
   would have learned it:
