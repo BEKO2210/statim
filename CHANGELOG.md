@@ -26,6 +26,10 @@ fuzzing review (#27).
   `model_loaded` and `adapter_loaded` log lines replace invalid bytes instead of throwing.
 - `docs/API.md` lists the 422 `inference cancelled` response (client gone while waiting in a
   micro-batch).
+- A model file with an empty tensor (e.g. a zero-length `act_head.2.bias`) no longer reaches undefined
+  behaviour (`memcpy` with a null pointer) while `Model::load` converts it, before validation
+  rejects the file; empty inputs to the SHA-256 are skipped for the same reason. Found by the
+  fuzzer with the new q4_0/q8_0 seeds; the input is a regression test.
 
 ### Changed
 - Fuzzing: q4_0 and q8_0 variants of the tiny model are gguf seeds, so the CPU repack path in

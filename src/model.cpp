@@ -130,6 +130,7 @@ struct Model::Impl {
 
 static std::vector<float> to_f32(ggml_type type, const void* data, int64_t n, const char* name) {
     std::vector<float> out(n);
+    if (n == 0) return out;  // an empty tensor: out.data() may be null, and memcpy from/to null is UB
     if (type == GGML_TYPE_F32) {
         std::memcpy(out.data(), data, out.size() * sizeof(float));
     } else if (type == GGML_TYPE_F16) {
