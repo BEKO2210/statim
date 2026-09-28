@@ -1035,6 +1035,7 @@ Handler errors are JSON objects with one string field, `detail`. HTTP framing, d
 | 422 | effective `max(max_len, head_max_len + 128)` exceeds the selected model's capacity | `{"detail":"effective max_len exceeds model capacity (head_max_len needs 128 state tokens)"}` |
 | 422 | a question definition is invalid, or its options do not fit the token budget | `{"detail":"question '<id>': ..."}` or `{"detail":"question '<id>' options exceed head_max_len=<n>"}` |
 | 422 | the cooperative inference deadline expires (default 120 seconds from admission) | `{"detail":"inference deadline exceeded"}` |
+| 422 | the client disconnects while its request waits in a micro-batch (`--batch-window-ms`) | `{"detail":"inference cancelled"}` |
 | 500 | an unexpected exception during the decision handler | `{"detail":"inference failed"}` |
 | 500 | an unexpected exception outside the decision handler | `{"detail":"internal server error"}` |
 | 503 | more than `--max-concurrent` requests (default 16) are already in the handler | `{"detail":"server busy, try again later"}` plus `Retry-After: 1` |

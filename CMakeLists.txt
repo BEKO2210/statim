@@ -157,7 +157,14 @@ endif()
 
 # ---- tools
 add_executable(statim-quantize tools/quantize.cpp)
+target_include_directories(statim-quantize PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(statim-quantize PRIVATE ggml)
+if(STATIM_BUILD_TESTS AND Python3_Interpreter_FOUND)
+  add_test(NAME quantize_types COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_quantize_types.py
+    --binary $<TARGET_FILE:statim-quantize>
+    --model ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/data/tiny-metaspace.gguf)
+  set_tests_properties(quantize_types PROPERTIES TIMEOUT 60)
+endif()
 
 # ---- statim binary (CLI + HTTP server)
 find_package(Threads REQUIRED)

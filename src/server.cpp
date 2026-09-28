@@ -440,7 +440,7 @@ int run_server(const ServerConfig& cfg) {
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "model_loaded"},
             {"model", name}, {"path", path}, {"weights", lm.model->hparams().weight_type}, {"device", lm.model->device()},
             {"bytes", lm.model->weight_bytes()}, {"workers", workers}, {"threads_per_worker", per_worker},
-            {"ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()}}.dump().c_str());
+            {"ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
         models.push_back(std::move(lm));
     }
     if (models.empty()) {
@@ -468,7 +468,7 @@ int run_server(const ServerConfig& cfg) {
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "adapter_loaded"},
             {"model", lm->name}, {"adapter", la.name}, {"path", spec.path}, {"mode", ai.mode == AdapterMode::merge ? "merge" : "runtime"},
             {"rank", ai.rank}, {"pairs", ai.n_pairs}, {"pairs_applied", ai.n_applied}, {"categories", ai.categories},
-            {"bytes", ai.bytes}, {"ms", ai.load_ms}}.dump().c_str());
+            {"bytes", ai.bytes}, {"ms", ai.load_ms}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
         lm->adapters.push_back(std::move(la));
     }
 

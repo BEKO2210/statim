@@ -27,6 +27,7 @@
 #include "ggml.h"
 #include "gguf.h"
 #include "ggml-impl.h"  // ggml_graph_view for STATIM_PROFILE
+#include "weight_types.h"
 
 namespace statim {
 
@@ -333,19 +334,12 @@ static void validate(const Model::Impl& M) {
     }
 
     // tensors: exact shapes, and types the CPU and GPU kernels accept for each use
-    auto weight_type = [](ggml_type t) {
-        switch (t) {
-            case GGML_TYPE_F32: case GGML_TYPE_F16: case GGML_TYPE_BF16: case GGML_TYPE_Q4_0: case GGML_TYPE_Q4_1:
-            case GGML_TYPE_Q5_0: case GGML_TYPE_Q5_1: case GGML_TYPE_Q8_0: case GGML_TYPE_Q2_K: case GGML_TYPE_Q3_K:
-            case GGML_TYPE_Q4_K: case GGML_TYPE_Q5_K: case GGML_TYPE_Q6_K: return true;
-            default: return false;
-        }
-    };
+    // matrices: the types in matrix_type_ok (src/weight_types.h), which statim-quantize uses too
     auto shape = [&](const ggml_tensor* t, int64_t ne0, int64_t ne1, bool matrix) {
         if (!t) return;
         if (t->ne[0] != ne0 || t->ne[1] != ne1 || t->ne[2] != 1 || t->ne[3] != 1)
             fail(std::string("tensor '") + t->name + "' has the wrong shape");
-        if (matrix ? !weight_type(t->type) : t->type != GGML_TYPE_F32)
+        if (matrix ? !matrix_type_ok(t->type) : t->type != GGML_TYPE_F32)
             fail(std::string("tensor '") + t->name + "' has an unsupported type");
     };
     const int64_t d = h.n_embd;
