@@ -8,7 +8,6 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
-
 - Mixture v6, Part G: training data for the categories where 0.7.0 trails Qwen3-8B zero-shot.
   Evidence and every examined candidate are in `tools/finetune/sources/v6-research.md` (Part G),
   and the sources are registered in `v6-keep.json` (`source_part` G):
