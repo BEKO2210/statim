@@ -4,11 +4,18 @@
 """
 
 import collections
+import importlib.util
+import json
+import re
+import sys
+import zipfile
+from pathlib import Path
 
 import pytest
 
-from tools.finetune.mixture_v6 import audit, loaders, registry
-from tools.finetune.mixture_v6.registry import adapt
+from tools.finetune.mixture_v6 import audit, emotion_taxonomy, loaders, registry
+from tools.finetune.mixture_v6.registry import REGISTRY_PATH, adapt
+from tools.finetune.mixture_v6.templates import GLOSSES, LANGUAGES, describe
 
 
 def entry(sid, config=None):
@@ -323,3 +330,261 @@ def test_contiguous_parquet_keeps_runs_long_enough(tmp_path):
     rows = [r["i"] for r in loaders.contiguous_parquet(path, 60)]
     runs = sum(1 for a, b in zip(rows, rows[1:]) if b != a + 1) + 1
     assert len(rows) == 60 and runs <= 2
+
+
+# =========================================================================== weak-category sources
+# Fact-check, emotion and topic sources added for the weakest held-out categories (source_part F in
+# v6-keep.json). Emotion sources that opt in map their labels to emotion_taxonomy.
+
+ROOT = Path(__file__).resolve().parents[3]
+NEW_IDS = {
+    "Horizon-Labs/multilingual-zeroshot-synthetic", "sociocom:naist-life-story", "agentlans/fact-or-opinion",
+    "hheiden/us-congress-bill-policy-115_117", "nlp-waseda/e_gov",
+}
+
+
+def _golds(items, kind):
+    out = collections.Counter()
+    for item in items:
+        if item["q"]["type"] != kind:
+            continue
+        if kind == "choice":
+            out[list(item["q"]["criteria"])[item["target"].index(1.0)]] += 1
+        else:
+            out["yes" if item["target"][1] == 1.0 else "no"] += 1
+    return out
+
+
+# --------------------------------------------------------------------------- registry and held-out splits
+
+def test_new_sources_are_enabled_with_evidence():
+    raw = {e["id"]: e for e in json.loads(REGISTRY_PATH.read_text(encoding="utf-8")) if e.get("use") is True}
+    for sid in NEW_IDS:
+        e = raw[sid]
+        assert e["licence_evidence"] and e["provenance"], sid
+        # commercial use, no ShareAlike / NoDerivatives / NonCommercial
+        assert not re.search(r"(?i)\b(nc|sa|nd)\b|non-?commercial|share-?alike|no-?deriv", e["licence"]), sid
+
+
+def _eval_categories():
+    if "eval_categories" in sys.modules:
+        return sys.modules["eval_categories"]
+    spec = importlib.util.spec_from_file_location("eval_categories", ROOT / "bench" / "eval_categories.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["eval_categories"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_no_new_source_is_a_held_out_source():
+    ec = _eval_categories()
+    held = {src.entry for sources in ec.HELD_OUT.values() for src in sources}
+    held |= {src.repo for sources in ec.HELD_OUT.values() for src in sources if src.repo}
+    assert not NEW_IDS & held
+
+
+def test_new_loaders_read_only_training_files():
+    assert all("/train-" in name for name in loaders.EGOV["files"])  # never validation-/test-
+    for name in loaders.LIFE_STORY_FILES:
+        spec = loaders.PINNED[name]
+        assert re.fullmatch(r"[0-9a-f]{64}", spec["sha256"]) and spec["url"].startswith("https://sociocom.naist.jp/")
+    for spec in (loaders.HORIZON, loaders.CONGRESS, loaders.EGOV):
+        assert re.fullmatch(r"[0-9a-f]{40}", spec["revision"])  # a commit, not a moving branch
+
+
+# --------------------------------------------------------------------------- emotion taxonomy
+
+def test_taxonomy_classes_have_glosses_in_every_language():
+    for label in emotion_taxonomy.CLASSES:
+        for lang in LANGUAGES:
+            assert label in GLOSSES["emotion"][lang], (label, lang)
+
+
+def test_taxonomy_maps_synonyms_and_subordinates():
+    assert emotion_taxonomy.to_class("Joy") == "joy"
+    assert emotion_taxonomy.to_class("pride") == "joy"
+    assert emotion_taxonomy.to_class("Relief") == "joy"
+    assert emotion_taxonomy.to_class("Anxiety") == "fear"
+    assert emotion_taxonomy.to_class("disappointment") == "sadness"
+    assert emotion_taxonomy.to_class("Sadness") == "sadness"
+    for label in emotion_taxonomy.UNMAPPED:
+        assert emotion_taxonomy.to_class(label) is None
+    assert set(emotion_taxonomy._MAP.values()) == set(emotion_taxonomy.CLASSES)
+    assert emotion_taxonomy.map_labels(["joy", "pride"]) == ["joy"]
+    assert emotion_taxonomy.map_labels(["joy", "gratitude"]) is None  # a partly mapped row is dropped
+
+
+def test_every_label_of_the_opted_in_sources_is_mapped_or_documented():
+    horizon = ["anger", "anxiety", "disappointment", "disgust", "fear", "gratitude", "joy", "love", "neutral",
+               "pride", "relief", "sadness", "surprise"]  # the fixed taxonomy of the Horizon emotion task
+    for label in horizon + loaders.LIFE_STORY_EMOTIONS + ["Trust"]:
+        assert emotion_taxonomy.to_class(label) or label.lower() in emotion_taxonomy.UNMAPPED, label
+
+
+def test_emotion_adapter_uses_the_taxonomy():
+    e = entry("Horizon-Labs/multilingual-zeroshot-synthetic")
+    rows = [{"text": "Ich habe die Prüfung bestanden, ich bin so stolz!", "emotion": "pride", "_v6_lang": "de"},
+            {"text": "Der Zug fällt schon wieder aus.", "emotion": "anger", "_v6_lang": "de"},
+            {"text": "Danke, dass du mir geholfen hast.", "emotion": "gratitude", "_v6_lang": "de"},
+            {"text": "Das Paket ist heute angekommen.", "emotion": "neutral", "_v6_lang": "de"}]
+    items = list(adapt(e, rows, 7))
+    options = {o for it in items if it["q"]["type"] == "choice" for o in it["q"]["criteria"]}
+    assert options == {"joy", "anger", "neutral"}  # gratitude has no class: its row is dropped
+    assert not any("Danke" in it["state"] for it in items)
+    assert _golds(items, "choice") == {"joy": 1, "anger": 1, "neutral": 1}
+    first = next(it for it in items if it["q"]["type"] == "choice")
+    assert first["q"]["criteria"]["joy"] in {describe("emotion", "joy", "de"), describe("emotion", "joy", "en")}
+
+
+def test_sources_without_the_taxonomy_keep_their_labels():
+    e = entry("JusteLeo/French-emotion")
+    assert "emotion_taxonomy" not in e
+    assert registry.emotion_labels(e, {"text": "x", "label": "colere"}) == ["colere"]
+
+
+# --------------------------------------------------------------------------- emotion loaders
+
+def test_horizon_rows_keep_generated_emotion_rows_in_model_languages():
+    records = [
+        {"text": "Estou tão orgulhosa de você.", "lang": "Portuguese", "task": "emotion", "kind": "tax_short",
+         "gold_labels": ["pride"], "text_origin": "qwen-generated"},
+        {"text": "Bu haberi duyunca çok şaşırdım.", "lang": "Turkish", "task": "emotion", "kind": "tax_short",
+         "gold_labels": ["surprise"], "text_origin": "qwen-generated"},
+        {"text": "invented label set", "lang": "Italian", "task": "emotion", "kind": "short",
+         "gold_labels": ["wistful"], "text_origin": "qwen-generated"},
+        {"text": "web passage", "lang": "Dutch", "task": "emotion", "kind": "tax_short",
+         "gold_labels": ["joy"], "text_origin": "fineweb"},
+        {"text": "not a model language", "lang": "Swahili", "task": "emotion", "kind": "tax_short",
+         "gold_labels": ["joy"], "text_origin": "qwen-generated"},
+        {"text": "two labels", "lang": "Russian", "task": "emotion", "kind": "tax_short",
+         "gold_labels": ["joy", "love"], "text_origin": "qwen-generated"},
+        {"text": "a topic row", "lang": "Arabic", "task": "customer message topic", "kind": "tax_short",
+         "gold_labels": ["cancellation"], "text_origin": "qwen-generated"},
+    ]
+    rows = loaders.horizon_emotion_rows(records)
+    assert [(r["_v6_lang"], r["emotion"]) for r in rows] == [("pt", "pride"), ("tr", "surprise")]
+
+
+def _xlsx(path, rows):
+    """A minimal xlsx: shared strings for the header, inline strings and an empty cell for the body."""
+    strings = rows[0]
+    shared = "".join("<si><t>%s</t></si>" % s for s in strings)
+    body = []
+    for r, row in enumerate(rows, start=1):
+        cells = []
+        for c, value in enumerate(row):
+            ref = "%s%d" % (chr(65 + c), r)
+            if value is None:
+                continue
+            if r == 1:
+                cells.append('<c r="%s" t="s"><v>%d</v></c>' % (ref, strings.index(value)))
+            else:
+                cells.append('<c r="%s" t="inlineStr"><is><t>%s</t></is></c>' % (ref, value))
+        body.append('<row r="%d">%s</row>' % (r, "".join(cells)))
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("xl/sharedStrings.xml", "<sst %s>%s</sst>" % (ns, shared))
+        zf.writestr("xl/worksheets/sheet1.xml", "<worksheet %s><sheetData>%s</sheetData></worksheet>" % (ns, "".join(body)))
+    return path
+
+
+LIFE_HEADER = ["Gender", "Age", "Sadness", "Anxiety", "Anger", "Disgust", "Trust", "Surprise", "Joy"]
+
+
+def test_xlsx_reader_reads_shared_and_inline_strings(tmp_path):
+    path = _xlsx(tmp_path / "s.xlsx", [LIFE_HEADER, ["male", "40", "飼っていた猫が亡くなって悲しかった。", None]])
+    rows = list(loaders.xlsx_rows(path))
+    assert rows[0] == LIFE_HEADER
+    assert rows[1][:3] == ["male", "40", "飼っていた猫が亡くなって悲しかった。"]
+
+
+def test_life_story_rows_filter_non_answers_and_ambiguous_texts(tmp_path):
+    same = "地震のニュースを見て家族のことが心配になった。"
+    table = [LIFE_HEADER,
+             ["female", "30", "***飼っていた猫が亡くなって悲しかった。", same, "特になし", "家族",
+              "友人はいつも約束を守ってくれるので信頼している。", "宝くじで一万円が当たって驚いた。", "なし"],
+             ["male", "50", same, "来月の手術がうまくいくか不安で仕方がない。", "電車で割り込みをされて本当に腹が立った。",
+              None, None, None, "孫と一緒に公園で遊んでとても楽しかった。"]]
+    rows = loaders.life_story_rows([table])
+    got = {r["text"]: r["emotion"] for r in rows}
+    assert got == {
+        "飼っていた猫が亡くなって悲しかった。": "Sadness",   # leading *** removed
+        "宝くじで一万円が当たって驚いた。": "Surprise",
+        "来月の手術がうまくいくか不安で仕方がない。": "Anxiety",
+        "電車で割り込みをされて本当に腹が立った。": "Anger",
+        "孫と一緒に公園で遊んでとても楽しかった。": "Joy",
+    }  # "特になし", "家族", "なし": no episode; Trust: not read; `same`: under two emotions
+    assert all(r["_v6_lang"] == "ja" for r in rows)
+    items = list(adapt(entry("sociocom:naist-life-story"), rows, 3))
+    assert set(_golds(items, "choice")) == {"sadness", "surprise", "fear", "anger", "joy"}
+
+
+# --------------------------------------------------------------------------- fact-check
+
+def test_fact_opinion_keeps_deepseek_rows_only():
+    records = [
+        {"text": "The Nile is in Africa.", "label": "Fact", "language": "en", "source": "DeepSeek"},
+        {"text": "Le jazz est la meilleure musique.", "label": "Opinion", "language": "fr", "source": "DeepSeek"},
+        {"text": "Brasil é o maior país da América do Sul.", "label": "Fact", "language": "pt-br", "source": "DeepSeek"},
+        {"text": "hosted model text", "label": "Fact", "language": "en", "source": "ChatGPT"},
+        {"text": "hosted model text", "label": "Fact", "language": "en", "source": "Claude Sonnet 4"},
+        {"text": "hosted model text", "label": "Fact", "language": "en", "source": "Gemini 2.5 Flash"},
+        {"text": "hosted model text", "label": "Fact", "language": "en", "source": "Le Chat"},
+        {"text": "not a model language", "label": "Fact", "language": "sw", "source": "DeepSeek"},
+    ]
+    rows = loaders.fact_opinion_rows(records)
+    assert [(r["_v6_lang"], r["label"]) for r in rows] == [("en", "Fact"), ("fr", "Opinion"), ("pt", "Fact")]
+
+
+def test_claim_type_adapter_asks_both_questions_with_both_answers():
+    rows = [{"text": "Water boils at 100 degrees Celsius at sea level.", "label": "Fact", "_v6_lang": "en"},
+            {"text": "Rock music is better than pop music.", "label": "Opinion", "_v6_lang": "en"},
+            {"text": "Paris is the capital of France and the most beautiful city.", "label": "Both", "_v6_lang": "en"},
+            {"text": "Could you send me the report by Friday?", "label": "Neither", "_v6_lang": "en"},
+            {"text": "no gold", "label": "", "_v6_lang": "en"}]
+    items = list(adapt(entry("agentlans/fact-or-opinion"), rows, 5))
+    assert _golds(items, "choice") == {"fact": 1, "opinion": 1, "fact and opinion": 1, "neither": 1}
+    noul = {it["state"]: it["target"].index(1.0) for it in items if it["q"]["type"] == "noul"}
+    assert noul == {rows[0]["text"]: 1, rows[1]["text"]: 0, rows[2]["text"]: 1, rows[3]["text"]: 0}
+    assert all(it["_task"] == "claim_detection" for it in items)
+    for item in items:
+        if item["q"]["type"] == "choice":
+            assert set(item["q"]["criteria"]) == set(registry.CLAIM_TYPES.values())
+
+
+def test_claim_detection_glosses_cover_every_option_and_language():
+    for label in registry.CLAIM_TYPES.values():
+        for lang in LANGUAGES:
+            assert GLOSSES["claim_detection"][lang][label].strip()
+
+
+# --------------------------------------------------------------------------- topic
+
+def test_congress_rows_drop_non_subject_areas_and_cut_the_summary():
+    records = [
+        {"title": "A bill to improve rural hospitals.", "summary": "S" * 5000, "policy_area": "Health"},
+        {"title": "For the relief of John Doe.", "summary": "Grants residency.", "policy_area": "Private Legislation"},
+        {"title": "A bill on archives.", "summary": "Archives.", "policy_area": "Social Sciences and History"},
+        {"title": "A bill without a summary.", "summary": "", "policy_area": "Taxation"},
+    ]
+    rows = loaders.congress_rows(records)
+    assert [r["policy_area"] for r in rows] == ["Health"]
+    assert len(rows[0]["summary"]) == loaders.DOC_CHARS
+    rows.append({"title": "A bill to cut tariffs.", "summary": "Reduces duties.", "policy_area": "Foreign Trade and International Finance",
+                 "_v6_lang": "en"})
+    items = list(adapt(entry("hheiden/us-congress-bill-policy-115_117"), rows, 1))
+    assert _golds(items, "choice") == {"Health": 1, "Foreign Trade and International Finance": 1}
+    assert all(it["_task"] == "topic" and it["state"].startswith("title: ") for it in items)
+
+
+def test_egov_rows_name_the_law_field():
+    categories = {"2": "刑事", "30": "厚生"}
+    records = [{"text": "決闘罪ニ関スル件\n第一条 " + "条" * 3000, "metadata": {"category_id": 2}},
+               {"text": "医療法\n第一条", "metadata": "{'category_id': 30, 'Era': 'Showa'}"},
+               {"text": "unknown field", "metadata": {"category_id": 99}}]
+    rows = loaders.egov_rows(records, categories)
+    assert [r["category"] for r in rows] == ["刑事", "厚生"]
+    assert len(rows[0]["text"]) == loaders.DOC_CHARS
+    items = list(adapt(entry("nlp-waseda/e_gov"), rows, 1))
+    assert _golds(items, "choice") == {"刑事": 1, "厚生": 1}
+    assert all(it["_task"] == "topic" and it["lang"] == "ja" for it in items)

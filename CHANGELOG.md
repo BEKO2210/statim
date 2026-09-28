@@ -8,13 +8,31 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- Mixture v6: five licence-checked sources for the three weakest held-out categories (fact-check
+  0.313, emotion 0.586, topic 0.607 in 0.7.0). Licence and provenance evidence for each is in
+  `tools/finetune/sources/v6-research.md` (Part F), and each is registered in `v6-keep.json`
+  (`source_part` F):
+  - Emotion: Horizon-Labs multilingual-zeroshot-synthetic, the Qwen-generated emotion subset, in
+    all 14 languages, which adds the first emotion data for pt, ru, it, nl, ar and tr; and NAIST
+    LIFE STORY (ja), human-written and CC BY 4.0, from four pinned quarterly files.
+  - Fact-check: agentlans/fact-or-opinion, DeepSeek-written rows only, in 11 languages. It is asked
+    as the new task `claim_detection` (fact / opinion / both / neither, plus "does it state a
+    verifiable fact?"), with templates and glosses in all 14 languages.
+  - Topic: US bills 2017-2023 with their CRS policy area (en), and Japanese statutes with their
+    e-Gov law field (ja). Both have single-label gold.
+- `tools/finetune/mixture_v6/emotion_taxonomy.py`: one emotion taxonomy (Ekman's six emotions plus
+  love and neutral). Emotion sources opt in with `"emotion_taxonomy": "basic8"`. A row whose label
+  has no class is dropped rather than forced into a class. The existing emotion sources are
+  unchanged.
+- Offline tests for the new loaders, adapters and taxonomy (`test_label_fixes.py`). A new test
+  also checks that no new source is a `bench/eval_categories.py` held-out source.
 - libFuzzer harnesses under ASan + UBSan for request bodies (`POST /v1/systemone` and `/batch`,
   through the handler's own parsing, validation, tokenization, packing, inference and response
   serialization), the tokenizer (arbitrary bytes, both BPE pipelines, real Laya vocabularies) and
   GGUF model loading (`fuzz/`, `-DSTATIM_FUZZ=ON`, `fuzz/run.sh`). Minimised seed corpora and every
   crash input are committed and replayed by ctest (`fuzz_regressions_*`) in ordinary builds.
 - CI job `fuzz`: every harness for 60 s per push; crash inputs are uploaded as an artifact.
-- `tests/test_model_validation.cpp`: 19 malformed-model cases that must be rejected at load.
+- `tests/test_model_validation.cpp`: 20 malformed-model cases that must be rejected at load.
 - Startup warning `auth_off_on_network` when the server listens beyond loopback without API keys
   (the Docker images do this by default).
 
