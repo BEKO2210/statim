@@ -12,8 +12,17 @@
 
 namespace statim {
 
+// A LoRA adapter served next to a base model: --adapter [model:]name=adapter.gguf
+struct AdapterSpec {
+    std::string model;  // name of the base model it applies to
+    std::string name;   // selected per request with "adapter": name
+    std::string path;
+};
+
 struct ServerConfig {
     std::vector<std::pair<std::string, std::string>> models;  // name -> gguf path; first is the default
+    std::vector<AdapterSpec> adapters;
+    bool adapter_runtime = false;  // --adapter-mode runtime: B·(A·x) in the graph instead of merged weights
     std::string host = "127.0.0.1";
     int port = 8080;
     int threads = 0;          // total compute threads (0 = all cores)

@@ -56,6 +56,8 @@ if(STATIM_BUILD_TESTS)
   add_executable(test_batch_parity tests/test_batch_parity.cpp)
   target_link_libraries(test_batch_parity PRIVATE statim_core)
 
+  add_executable(test_lora tests/test_lora.cpp)
+  target_link_libraries(test_lora PRIVATE statim_core)
   add_executable(test_security tests/test_security.cpp)
   target_link_libraries(test_security PRIVATE statim_core)
   enable_testing()
@@ -69,6 +71,21 @@ if(STATIM_BUILD_TESTS)
       --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
       --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)
     set_tests_properties(server_microbatch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+    # LoRA adapters: PEFT fixtures (numpy only) -> tools/convert_lora.py -> engine and server gates
+    set(LORA ${CMAKE_CURRENT_BINARY_DIR}/lora)
+    set(LORA_BASE ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf)
+    add_test(NAME lora_fixtures COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/build_fixtures.py
+      --base ${LORA_BASE} --out ${LORA})
+    set_tests_properties(lora_fixtures PROPERTIES FIXTURES_SETUP lora TIMEOUT 120)
+    add_test(NAME lora_convert COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_convert_lora.py --base ${LORA_BASE})
+    set_tests_properties(lora_convert PROPERTIES TIMEOUT 120)
+    add_test(NAME lora_parity COMMAND test_lora ${LORA_BASE} ${LORA}/zero.gguf ${LORA}/random.gguf
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_laya-multilingual.jsonl
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_lora_random.jsonl ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/lora_random_weights.json)
+    set_tests_properties(lora_parity PROPERTIES FIXTURES_REQUIRED lora TIMEOUT 600)
+    add_test(NAME server_lora COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lora.py
+      --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
+    set_tests_properties(server_lora PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
   endif()
   set(M ${CMAKE_CURRENT_SOURCE_DIR}/models)
   set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)

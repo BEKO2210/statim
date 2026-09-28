@@ -48,8 +48,14 @@ std::string get_str(const gguf_context* g, const char* k, const std::string& def
     return id < 0 ? def : std::string(gguf_get_val_str(g, id));
 }
 
+// The projections a LoRA adapter may target, in EncLayer::proj order.
+constexpr const char* kLoraTargets[] = {"attn.Wqkv", "attn.Wo", "mlp.Wi", "mlp.Wo"};
+
 struct EncLayer {
     ggml_tensor *attn_norm = nullptr, *wqkv, *wo, *mlp_norm, *wi, *wo_mlp;
+    // runtime LoRA factors per projection (nullptr: none): A ne [in, r], B ne [r, out], B pre-scaled
+    ggml_tensor *lora_a[4] = {}, *lora_b[4] = {};
+    ggml_tensor*& proj(int i) { return i == 0 ? wqkv : i == 1 ? wo : i == 2 ? wi : wo_mlp; }
 };
 struct HeadLayer {
     ggml_tensor *norm1_w, *norm1_b, *in_w, *in_b, *out_w, *out_b;
@@ -60,7 +66,7 @@ struct HeadLayer {
 
 struct Model::Impl {
     HParams hp;
-    std::unique_ptr<Tokenizer> tok;
+    std::shared_ptr<Tokenizer> tok;
     gguf_context* gguf = nullptr;
     ggml_context* ctx_w = nullptr;
     void* map = nullptr;
@@ -71,6 +77,14 @@ struct Model::Impl {
     ggml_backend_dev_t dev = nullptr;              // device the graphs run on
     ggml_backend_buffer_t weight_buf = nullptr;    // weights copied to a non-CPU device
     std::string device_desc = "cpu";
+    // adapter view (Model::with_adapter): the base owns everything above; this owns only its own
+    // merged weights or LoRA factors
+    std::shared_ptr<Model> base;
+    std::unique_ptr<AdapterInfo> adapter;
+    ggml_context* ctx_adapter = nullptr;
+    ggml_context* ctx_adapter_repack = nullptr;
+    ggml_backend_buffer_t adapter_buf = nullptr;
+    ggml_backend_buffer_t adapter_repack_buf = nullptr;
     bool on_cpu() const { return ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU; }
 
     ggml_tensor *tok_embd, *embd_norm, *final_norm, *type_emb;
@@ -87,6 +101,10 @@ struct Model::Impl {
     }
 
     ~Impl() {
+        if (adapter_buf) ggml_backend_buffer_free(adapter_buf);
+        if (adapter_repack_buf) ggml_backend_buffer_free(adapter_repack_buf);
+        if (ctx_adapter) ggml_free(ctx_adapter);
+        if (ctx_adapter_repack) ggml_free(ctx_adapter_repack);
         if (repack_buf) ggml_backend_buffer_free(repack_buf);
         if (weight_buf) ggml_backend_buffer_free(weight_buf);
         if (ctx_w) ggml_free(ctx_w);
@@ -95,19 +113,20 @@ struct Model::Impl {
     }
 };
 
-static std::vector<float> to_f32(const ggml_tensor* x) {
-    std::vector<float> out(ggml_nelements(x));
-    if (x->type == GGML_TYPE_F32) {
-        std::memcpy(out.data(), x->data, out.size() * sizeof(float));
-    } else if (x->type == GGML_TYPE_F16) {
-        ggml_fp16_to_fp32_row(static_cast<const ggml_fp16_t*>(x->data), out.data(), out.size());
+static std::vector<float> to_f32(ggml_type type, const void* data, int64_t n, const char* name) {
+    std::vector<float> out(n);
+    if (type == GGML_TYPE_F32) {
+        std::memcpy(out.data(), data, out.size() * sizeof(float));
+    } else if (type == GGML_TYPE_F16) {
+        ggml_fp16_to_fp32_row(static_cast<const ggml_fp16_t*>(data), out.data(), out.size());
     } else {
-        const auto* tr = ggml_get_type_traits(x->type);
-        if (!tr->to_float) fail("cannot dequantize tensor " + std::string(x->name));
-        tr->to_float(x->data, out.data(), out.size());
+        const auto* tr = ggml_get_type_traits(type);
+        if (!tr->to_float) fail("cannot dequantize tensor " + std::string(name));
+        tr->to_float(data, out.data(), out.size());
     }
     return out;
 }
+static std::vector<float> to_f32(const ggml_tensor* x) { return to_f32(x->type, x->data, ggml_nelements(x), x->name); }
 
 Model::Model() : impl_(std::make_unique<Impl>()) {}
 Model::~Model() = default;
@@ -115,6 +134,7 @@ const HParams& Model::hparams() const { return impl_->hp; }
 const Tokenizer& Model::tokenizer() const { return *impl_->tok; }
 size_t Model::weight_bytes() const { return impl_->weight_bytes; }
 const std::string& Model::device() const { return impl_->device_desc; }
+const AdapterInfo* Model::adapter() const { return impl_->adapter.get(); }
 
 static std::string lower(std::string s) {
     for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -183,16 +203,21 @@ static bool repack_eligible(const ggml_tensor* t) {
     return false;
 }
 
-static void repack_weights(Model::Impl& M) {
-    if (std::getenv("STATIM_NO_REPACK")) return;
+static ggml_backend_buffer_type_t repack_buft() {
+    if (std::getenv("STATIM_NO_REPACK")) return nullptr;
     ggml_backend_dev_t dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    if (!dev) return;
+    if (!dev) return nullptr;
     auto get_extra = reinterpret_cast<ggml_backend_dev_get_extra_bufts_t>(
         ggml_backend_reg_get_proc_address(ggml_backend_dev_backend_reg(dev), "ggml_backend_dev_get_extra_bufts"));
-    if (!get_extra) return;
+    if (!get_extra) return nullptr;
     ggml_backend_buffer_type_t buft = nullptr;
     for (ggml_backend_buffer_type_t* b = get_extra(dev); b && *b; ++b)
         if (std::strstr(ggml_backend_buft_name(*b), "REPACK")) buft = *b;
+    return buft;
+}
+
+static void repack_weights(Model::Impl& M) {
+    ggml_backend_buffer_type_t buft = repack_buft();
     if (!buft) return;
 
     std::vector<ggml_tensor*> todo;
@@ -342,6 +367,268 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
 }
 
 // ---------------------------------------------------------------------------------------------
+// LoRA adapters
+
+// A base weight in its file layout (the CPU repack buffer and GPU copies cannot be read back
+// as-is), dequantized to f32.
+static std::vector<float> base_weight_f32(const Model::Impl& B, const ggml_tensor* w) {
+    const int64_t id = gguf_find_tensor(B.gguf, ggml_get_name(w));
+    if (id < 0) fail(std::string("base model has no tensor ") + ggml_get_name(w));
+    if (B.map) {
+        const char* src = static_cast<const char*>(B.map) + gguf_get_data_offset(B.gguf) + gguf_get_tensor_offset(B.gguf, id);
+        return to_f32(w->type, src, ggml_nelements(w), ggml_get_name(w));
+    }
+    std::vector<uint8_t> raw(ggml_nbytes(w));
+    ggml_backend_tensor_get(w, raw.data(), 0, raw.size());
+    return to_f32(w->type, raw.data(), ggml_nelements(w), ggml_get_name(w));
+}
+
+// "encoder.layers.<l>.<target>.weight" -> (l, index into kLoraTargets)
+static bool parse_proj_name(const std::string& wname, int n_layer, int& layer, int& target) {
+    const std::string pre = "encoder.layers.";
+    if (wname.rfind(pre, 0) != 0) return false;
+    const size_t dot = wname.find('.', pre.size());
+    if (dot == std::string::npos || dot == pre.size() || dot - pre.size() > 5) return false;
+    const std::string num = wname.substr(pre.size(), dot - pre.size());
+    if (!std::all_of(num.begin(), num.end(), [](char ch) { return ch >= '0' && ch <= '9'; })) return false;
+    layer = std::stoi(num);
+    target = -1;
+    for (int t = 0; t < 4; ++t)
+        if (wname.compare(dot + 1, std::string::npos, std::string(kLoraTargets[t]) + ".weight") == 0) target = t;
+    return layer < n_layer && target >= 0;
+}
+
+// f32 copy of a tensor in any backend buffer (small tensors: LoRA factors)
+static std::vector<float> to_f32_tensor(const ggml_tensor* t) {
+    std::vector<uint8_t> raw(ggml_nbytes(t));
+    ggml_backend_tensor_get(t, raw.data(), 0, raw.size());
+    return to_f32(t->type, raw.data(), ggml_nelements(t), ggml_get_name(t));
+}
+
+// W + B·A with ggml on the CPU, in f32. w: [in*out] f32 (ggml ne [in, out]); a: ne [in, r]; b: ne [r, out].
+static std::vector<float> merge_lora(const std::vector<float>& w, const std::vector<float>& a, const std::vector<float>& b,
+                                     int64_t in, int64_t out, int64_t r, int n_threads) {
+    const size_t bytes = (w.size() * 2 + in * out + a.size() * 2 + b.size()) * sizeof(float);
+    ggml_init_params ip{bytes + 16 * ggml_tensor_overhead() + ggml_graph_overhead() + (1 << 20), nullptr, false};
+    ggml_context* c = ggml_init(ip);
+    if (!c) fail("cannot allocate LoRA merge context");
+    ggml_tensor* W = ggml_new_tensor_2d(c, GGML_TYPE_F32, in, out);
+    ggml_tensor* A = ggml_new_tensor_2d(c, GGML_TYPE_F32, in, r);
+    ggml_tensor* Bt = ggml_new_tensor_2d(c, GGML_TYPE_F32, r, out);
+    std::memcpy(W->data, w.data(), ggml_nbytes(W));
+    std::memcpy(A->data, a.data(), ggml_nbytes(A));
+    std::memcpy(Bt->data, b.data(), ggml_nbytes(Bt));
+    // mul_mat contracts over ne[0]: A^T [r, in] x B [r, out] -> delta [in, out] = (B·A) in ggml layout
+    ggml_tensor* delta = ggml_mul_mat(c, ggml_cont(c, ggml_transpose(c, A)), Bt);
+    ggml_tensor* merged = ggml_add(c, W, delta);
+    ggml_cgraph* gf = ggml_new_graph(c);
+    ggml_build_forward_expand(gf, merged);
+    if (ggml_graph_compute_with_ctx(c, gf, n_threads) != GGML_STATUS_SUCCESS) {
+        ggml_free(c);
+        fail("LoRA merge failed");
+    }
+    std::vector<float> res(static_cast<const float*>(merged->data), static_cast<const float*>(merged->data) + in * out);
+    ggml_free(c);
+    return res;
+}
+
+// f32 -> the base weight's type, in its file layout (ggml_backend_tensor_set repacks if needed)
+static std::vector<uint8_t> from_f32(ggml_type type, const std::vector<float>& x, int64_t in, int64_t out) {
+    std::vector<uint8_t> dst(ggml_row_size(type, in) * out);
+    if (type == GGML_TYPE_F32) std::memcpy(dst.data(), x.data(), dst.size());
+    else if (type == GGML_TYPE_F16) ggml_fp32_to_fp16_row(x.data(), reinterpret_cast<ggml_fp16_t*>(dst.data()), in * out);
+    else if (type == GGML_TYPE_BF16) ggml_fp32_to_bf16_row(x.data(), reinterpret_cast<ggml_bf16_t*>(dst.data()), in * out);
+    else {
+        if (ggml_quantize_requires_imatrix(type)) fail(std::string("cannot merge a LoRA adapter into ") + ggml_type_name(type) +
+                                                      " weights (needs an importance matrix); use --adapter-mode runtime");
+        ggml_quantize_chunk(type, x.data(), dst.data(), 0, out, in, nullptr);
+    }
+    return dst;
+}
+
+std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, const std::string& path, AdapterMode mode,
+                                           int n_threads) {
+    const auto t0 = std::chrono::steady_clock::now();
+    if (!base_model) fail("with_adapter: no base model");
+    const Impl& B = *base_model->impl_;
+    if (B.adapter) fail("cannot stack LoRA adapters: '" + path + "' onto an adapter view");
+    if (n_threads <= 0) n_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+
+    // the adapter file is small: read it fully into memory
+    ggml_context* ctx_file = nullptr;
+    gguf_init_params gp{/*no_alloc=*/false, &ctx_file};
+    gguf_context* g = gguf_init_from_file(path.c_str(), gp);
+    if (!g) fail("cannot read LoRA adapter '" + path + "'");
+    struct FileGuard {
+        gguf_context* g;
+        ggml_context* c;
+        ~FileGuard() { gguf_free(g); if (c) ggml_free(c); }
+    } guard{g, ctx_file};
+    if (get_str(g, "statim.format") != "statim-lora-v1")
+        fail("'" + path + "' is not a Statim LoRA adapter (convert it with tools/convert_lora.py)");
+
+    std::shared_ptr<Model> m(new Model());
+    Impl& M = *m->impl_;
+    auto info = std::make_unique<AdapterInfo>();
+    info->path = path;
+    info->mode = mode;
+    info->name = get_str(g, "general.name");
+    const std::string base_name = get_str(g, "statim.lora.base_name");
+    if (!base_name.empty() && base_name != B.hp.name)
+        fail("LoRA adapter '" + path + "' was converted for model '" + base_name + "', not '" + B.hp.name + "'");
+    if (int64_t id = gguf_find_key(g, "statim.lora.rank"); id >= 0) info->rank = static_cast<int>(gguf_get_val_u32(g, id));
+    if (int64_t id = gguf_find_key(g, "statim.lora.alpha"); id >= 0) info->alpha = gguf_get_val_f32(g, id);
+    if (int64_t id = gguf_find_key(g, "statim.lora.categories"); id >= 0 && gguf_get_arr_type(g, id) == GGUF_TYPE_STRING)
+        for (size_t i = 0; i < gguf_get_arr_n(g, id); ++i) info->categories.emplace_back(gguf_get_arr_str(g, id, i));
+
+    // share everything with the base
+    M.base = base_model;
+    M.hp = B.hp;
+    M.tok = B.tok;
+    M.weight_bytes = B.weight_bytes;
+    M.dev = B.dev;
+    M.device_desc = B.device_desc;
+    M.tok_embd = B.tok_embd;
+    M.embd_norm = B.embd_norm;
+    M.final_norm = B.final_norm;
+    M.type_emb = B.type_emb;
+    M.enc = B.enc;
+    M.head = B.head;
+    M.sc_norm_w = B.sc_norm_w;
+    M.sc_norm_b = B.sc_norm_b;
+    M.sc1_w = B.sc1_w;
+    M.sc1_b = B.sc1_b;
+    M.sc2_w = B.sc2_w;
+    M.sc2_b = B.sc2_b;
+    M.act0_w = B.act0_w;
+    M.act0_b = B.act0_b;
+    M.act2_w = B.act2_w;
+    M.act2_b = B.act2_b;
+
+    // collect the LoRA pairs: encoder.layers.<l>.<target>.weight.lora_{a,b}
+    struct Pair {
+        int layer = -1, target = -1;
+        ggml_tensor *a = nullptr, *b = nullptr;
+    };
+    std::map<std::string, Pair> pairs;
+    for (int64_t i = 0; i < gguf_get_n_tensors(g); ++i) {
+        const std::string name = gguf_get_tensor_name(g, i);
+        const bool is_a = name.size() > 7 && name.compare(name.size() - 7, 7, ".lora_a") == 0;
+        const bool is_b = name.size() > 7 && name.compare(name.size() - 7, 7, ".lora_b") == 0;
+        const std::string wname = name.substr(0, name.size() - 7);
+        int layer = -1, target = -1;
+        if (!(is_a || is_b) || !parse_proj_name(wname, B.hp.n_layer, layer, target))
+            fail("LoRA adapter '" + path + "': unsupported tensor '" + name + "'");
+        Pair& p = pairs[wname];
+        p.layer = layer;
+        p.target = target;
+        ggml_tensor* t = ggml_get_tensor(ctx_file, name.c_str());
+        if (t->type != GGML_TYPE_F32 && t->type != GGML_TYPE_F16)
+            fail("LoRA adapter '" + path + "': tensor '" + name + "' must be f32 or f16");
+        (is_a ? p.a : p.b) = t;
+    }
+    if (pairs.empty()) fail("LoRA adapter '" + path + "' has no tensors");
+    info->n_pairs = static_cast<int>(pairs.size());
+
+    struct Job {
+        Pair p;
+        ggml_tensor* w;
+        std::vector<float> a, b;
+        ggml_tensor* dst = nullptr;
+        ggml_tensor* dst_b = nullptr;  // runtime mode: B factor
+    };
+    std::vector<Job> jobs;
+    for (auto& [wname, p] : pairs) {
+        if (!p.a || !p.b) fail("LoRA adapter '" + path + "': " + wname + " needs both lora_a and lora_b");
+        ggml_tensor* w = M.enc[p.layer].proj(p.target);
+        const int64_t in = w->ne[0], out = w->ne[1], r = p.a->ne[1];
+        if (ggml_n_dims(p.a) != 2 || ggml_n_dims(p.b) != 2 || p.a->ne[0] != in || p.b->ne[0] != r || p.b->ne[1] != out || r < 1)
+            fail("LoRA adapter '" + path + "': " + wname + " has shapes A " + std::to_string(p.a->ne[0]) + "x" +
+                 std::to_string(p.a->ne[1]) + ", B " + std::to_string(p.b->ne[0]) + "x" + std::to_string(p.b->ne[1]) +
+                 " but the base weight maps " + std::to_string(in) + " -> " + std::to_string(out));
+        Job j{p, w, to_f32(p.a), to_f32(p.b)};
+        auto all_zero = [](const std::vector<float>& v) { return std::all_of(v.begin(), v.end(), [](float x) { return x == 0.0f; }); };
+        if (all_zero(j.a) || all_zero(j.b)) continue;  // exact no-op: keep the base tensor
+        jobs.push_back(std::move(j));
+    }
+    info->n_applied = static_cast<int>(jobs.size());
+
+    // tensors for the new weights (merge) or the factors (runtime); on the CPU, merged weights of a
+    // repackable type go to the repack buffer like the base ones
+    const bool cpu = M.on_cpu();
+    ggml_backend_buffer_type_t rbuft = cpu && mode == AdapterMode::merge && B.n_repacked > 0 ? repack_buft() : nullptr;
+    const size_t n_ctx = std::max<size_t>(1, jobs.size() * 2);
+    ggml_init_params cp{n_ctx * ggml_tensor_overhead(), nullptr, /*no_alloc=*/true};
+    M.ctx_adapter = ggml_init(cp);
+    M.ctx_adapter_repack = ggml_init(cp);
+    int n_repack = 0;
+    for (Job& j : jobs) {
+        const std::string wname = ggml_get_name(j.w);
+        if (mode == AdapterMode::merge) {
+            const bool rp = rbuft && repack_eligible(j.w);
+            j.dst = ggml_new_tensor(rp ? M.ctx_adapter_repack : M.ctx_adapter, j.w->type, 2, j.w->ne);
+            n_repack += rp;
+            ggml_set_name(j.dst, (wname + ".merged").c_str());
+        } else {
+            j.dst = ggml_new_tensor_2d(M.ctx_adapter, GGML_TYPE_F32, j.p.a->ne[0], j.p.a->ne[1]);
+            j.dst_b = ggml_new_tensor_2d(M.ctx_adapter, GGML_TYPE_F32, j.p.b->ne[0], j.p.b->ne[1]);
+            ggml_set_name(j.dst, (wname + ".lora_a").c_str());
+            ggml_set_name(j.dst_b, (wname + ".lora_b").c_str());
+        }
+    }
+    ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(M.dev);
+    if (!jobs.empty() && static_cast<int>(jobs.size()) > n_repack) {
+        M.adapter_buf = ggml_backend_alloc_ctx_tensors_from_buft(M.ctx_adapter, buft);
+        if (!M.adapter_buf) fail("cannot allocate LoRA adapter '" + path + "' on " + ggml_backend_dev_name(M.dev));
+        ggml_backend_buffer_set_usage(M.adapter_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+        info->bytes += ggml_backend_buffer_get_size(M.adapter_buf);
+    }
+    if (n_repack > 0) {
+        M.adapter_repack_buf = ggml_backend_alloc_ctx_tensors_from_buft(M.ctx_adapter_repack, rbuft);
+        if (!M.adapter_repack_buf) fail("cannot allocate LoRA adapter '" + path + "' in the CPU repack buffer");
+        ggml_backend_buffer_set_usage(M.adapter_repack_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+        info->bytes += ggml_backend_buffer_get_size(M.adapter_repack_buf);
+    }
+
+    for (Job& j : jobs) {
+        EncLayer& L = M.enc[j.p.layer];
+        if (mode == AdapterMode::merge) {
+            const int64_t in = j.w->ne[0], out = j.w->ne[1];
+            std::vector<float> merged = merge_lora(base_weight_f32(B, j.w), j.a, j.b, in, out, j.p.a->ne[1], n_threads);
+            std::vector<uint8_t> bytes = from_f32(j.w->type, merged, in, out);
+            ggml_backend_tensor_set(j.dst, bytes.data(), 0, bytes.size());
+            L.proj(j.p.target) = j.dst;
+        } else {
+            ggml_backend_tensor_set(j.dst, j.a.data(), 0, j.a.size() * sizeof(float));
+            ggml_backend_tensor_set(j.dst_b, j.b.data(), 0, j.b.size() * sizeof(float));
+            L.lora_a[j.p.target] = j.dst;
+            L.lora_b[j.p.target] = j.dst_b;
+        }
+    }
+    info->load_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    M.adapter = std::move(info);
+    return m;
+}
+
+std::vector<float> Model::weight_f32(const std::string& name) const {
+    const Impl& M = *impl_;
+    const Impl& B = M.base ? *M.base->impl_ : M;
+    ggml_tensor* bw = ggml_get_tensor(B.ctx_w, name.c_str());
+    if (!bw) fail("model has no tensor '" + name + "'");
+    int layer = -1, target = -1;
+    if (!M.base || !parse_proj_name(name, M.hp.n_layer, layer, target)) return base_weight_f32(B, bw);
+    const EncLayer& L = M.enc[layer];
+    const ggml_tensor* w = const_cast<EncLayer&>(L).proj(target);
+    if (L.lora_a[target])  // runtime adapter: the effective weight W + B·A
+        return merge_lora(base_weight_f32(B, bw), to_f32_tensor(L.lora_a[target]), to_f32_tensor(L.lora_b[target]),
+                          bw->ne[0], bw->ne[1], L.lora_a[target]->ne[1], static_cast<int>(std::max(1u, std::thread::hardware_concurrency())));
+    if (w == bw) return base_weight_f32(B, bw);
+    if (M.adapter_repack_buf && w->buffer == M.adapter_repack_buf)
+        fail("merged weight '" + name + "' lives in the CPU repack buffer and cannot be read back");
+    return to_f32_tensor(w);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Graph construction
 
 namespace {
@@ -360,6 +647,13 @@ ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_te
 ggml_tensor* linear(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b = nullptr) {
     x = ggml_mul_mat(c, w, x);
     return b ? ggml_add(c, x, b) : x;
+}
+
+// Encoder projection i of layer L, plus B·(A·x) when a runtime LoRA adapter targets it.
+ggml_tensor* enc_proj(ggml_context* c, ggml_tensor* x, const EncLayer& L, int i, ggml_tensor* w) {
+    ggml_tensor* y = ggml_mul_mat(c, w, x);
+    if (!L.lora_a[i]) return y;
+    return ggml_add(c, y, ggml_mul_mat(c, L.lora_b[i], ggml_mul_mat(c, L.lora_a[i], x)));
 }
 
 void geglu_op(ggml_tensor* dst, int ith, int nth, void*) {
@@ -504,7 +798,7 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         const EncLayer& Ly = M.enc[l];
         const bool glob = h.layer_is_global[l];
         ggml_tensor* a = Ly.attn_norm ? layer_norm(c, x, Ly.attn_norm, nullptr, h.norm_eps) : x;
-        ggml_tensor* qkv = linear(c, a, Ly.wqkv);  // [3d, L, B]
+        ggml_tensor* qkv = enc_proj(c, a, Ly, 0, Ly.wqkv);  // [3d, L, B]
         const size_t es = ggml_element_size(qkv);
         auto view = [&](int part) {
             return ggml_view_4d(c, qkv, hd, h.n_head, L, B, hd * es, qkv->nb[1], qkv->nb[2], part * d * es);
@@ -516,17 +810,17 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         q = ggml_rope_ext(c, q, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f);
         k = ggml_rope_ext(c, k, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f);
         ggml_tensor* o = attention(c, q, k, v, glob ? io.mask_global : io.mask_local, hd, h.n_head, L, B, flash);
-        x = ggml_add(c, x, linear(c, o, Ly.wo));
+        x = ggml_add(c, x, enc_proj(c, o, Ly, 1, Ly.wo));
 
         ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps);
-        m = linear(c, m, Ly.wi);  // [2*ff, L, B]; first half = input, second half = gate
+        m = enc_proj(c, m, Ly, 2, Ly.wi);  // [2*ff, L, B]; first half = input, second half = gate
         if (M.on_cpu()) {
             ggml_tensor* args[] = {m};
             m = ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr);
         } else {
             m = ggml_geglu_erf(c, m);  // same math; custom ops only run on the CPU backend
         }
-        x = ggml_add(c, x, linear(c, m, Ly.wo_mlp));
+        x = ggml_add(c, x, enc_proj(c, m, Ly, 3, Ly.wo_mlp));
     }
     x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps);
     io.hidden = x;

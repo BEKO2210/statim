@@ -7,6 +7,33 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- LoRA adapters: one base model plus small per-category adapters, chosen per request.
+  - `tools/convert_lora.py` converts a PEFT adapter (safetensors; LoRA on the encoder's
+    `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo`) into a `statim-lora-v1` GGUF. The PEFT scale
+    (`lora_alpha / r`, rsLoRA, `rank_pattern` / `alpha_pattern`) is folded into `lora_b`; DoRA,
+    trained biases, `modules_to_save` and LoRA on other modules are rejected. `--base` checks the
+    shapes and binds the adapter to the model's `general.name`; `--category` sets the question
+    families for auto routing.
+  - `statim serve --adapter [model:]name=file.gguf` (repeatable) and `--adapter-mode merge|runtime`;
+    `decide`, `bench` and `info` take one `--adapter`. Merge (default) computes `W + B·A` with ggml
+    at load and runs the unchanged base graph: base latency, one copy of the adapted weights per
+    adapter (438 MB f32 / 116 MB q8_0 for the multilingual model). Runtime keeps only the factors
+    (3.3 MB at rank 4) and adds `B·(A·x)` in the graph, 17-28 % slower per request on CPU.
+    Zero-delta pairs are skipped, so an untrained adapter is bit-identical to the base.
+  - Request field `adapter`: a loaded name, `"auto"` or `null`/`"none"`. `"auto"` routes by
+    question family: keywords of the 14 decision categories in the question ID, then in the
+    instructions; a request whose questions do not all share one family uses the base weights.
+    A named adapter that only one model carries selects that model (`routing.reason` `adapter`).
+  - `routing.adapter` and `routing.adapter_reason` in responses, `adapters` per model in
+    `GET /v1/models` and `statim_adapter_info` in `/metrics`, all only when the server has
+    adapters loaded (or the request sets `adapter`); responses of servers without adapters are
+    unchanged. Adapters share the base model's `--workers` slots; micro-batches never mix adapters.
+  - Tests (CPU): `lora_convert` (converter scaling and rejections), `lora_parity` (a zero adapter
+    is bit-identical to the base; a random rank-4 adapter matches a PyTorch merge of the same
+    adapter into the official Laya model within 1e-4 in weights and logits, in both modes) and
+    `server_lora` (selection, auto routing, errors, batch endpoint, micro-batching across adapters).
+
 ## [0.7.0] - 2026-09-28
 
 ### Added

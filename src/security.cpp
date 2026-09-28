@@ -117,11 +117,14 @@ ojson parse_request(const std::string& text, const SecurityLimits& limits) {
 }
 void validate_request_fields(const ojson& body) {
     fields(body, {"state", "states", "questions", "model", "lang", "ensemble", "ensemble_margin", "calibrate",
-                  "return_logits", "max_len", "head_max_len", "min_confidence"});
+                  "return_logits", "max_len", "head_max_len", "min_confidence", "adapter"});
     if (!body.contains("questions") || !body["questions"].is_object()) throw HttpError(400, "'questions' must be an object");
     for (const char* name : {"model", "lang"})
         if (body.contains(name) && (!body[name].is_string() || rendered_size(body[name]) > 256))
             throw HttpError(422, std::string(name) + " must be a string of at most 256 bytes");
+    if (body.contains("adapter") && !body["adapter"].is_null() &&
+        (!body["adapter"].is_string() || rendered_size(body["adapter"]) > 256))
+        throw HttpError(422, "adapter must be null or a string of at most 256 bytes");
     const auto& qs = body["questions"];
     if (qs.size() > 64) throw HttpError(413, "too many questions");
     for (auto it = qs.begin(); it != qs.end(); ++it) {

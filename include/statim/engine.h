@@ -43,6 +43,17 @@ struct Question;  // validated question (engine internal)
 // results must have been produced with return_logits). Answers are re-decoded at T = 1.
 ojson fuse_answers(const ojson& questions, const std::vector<const ojson*>& results, const std::vector<double>& weights);
 
+// Question families for "adapter": "auto" routing (the decision categories of the training
+// mixture). question_family() returns the family of one question, or nothing:
+//   1. the question ID is split into lowercase ASCII words (runs of letters and digits); if they
+//      contain keywords of exactly one family, that family;
+//   2. if they contain none, the same test on the instructions (when a string);
+//   3. otherwise (no keyword, or keywords of several families) no family.
+// request_family() is the family shared by every question of a request, or nothing.
+const std::vector<std::pair<std::string, std::vector<std::string>>>& question_families();
+std::optional<std::string> question_family(const std::string& id, const ojson& question);
+std::optional<std::string> request_family(const ojson& questions);
+
 class Engine {
 public:
     Engine(std::shared_ptr<Model> model, RunOptions run = {});

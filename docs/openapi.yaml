@@ -152,11 +152,22 @@ components:
           - lang:other
           - default
           - consensus
+          - adapter
         engine:
           type: string
           const: statim
         weights:
           type: string
+        adapter:
+          type:
+          - string
+          - 'null'
+          description: LoRA adapter that ran, null for the base weights. Present only when the server has
+            adapters loaded or the request sets adapter.
+        adapter_reason:
+          type: string
+          description: none, requested, auto:<family>, auto:<family>:no-adapter, auto:no-family or auto:consensus.
+            Present together with adapter.
     ChoiceAnswer:
       type: object
       required:
@@ -316,6 +327,13 @@ components:
         model:
           type: string
           x-maxBytes: 256
+        adapter:
+          type:
+          - string
+          - 'null'
+          x-maxBytes: 256
+          description: null or "none" (base weights), "auto" (by question family), or the name of a LoRA
+            adapter loaded for the selected model (--adapter). See docs/API.md, LoRA adapters.
         lang:
           type: string
           x-maxBytes: 256
@@ -368,6 +386,13 @@ components:
         model:
           type: string
           x-maxBytes: 256
+        adapter:
+          type:
+          - string
+          - 'null'
+          x-maxBytes: 256
+          description: null or "none" (base weights), "auto" (by question family), or the name of a LoRA
+            adapter loaded for the selected model (--adapter). See docs/API.md, LoRA adapters.
         lang:
           type: string
           x-maxBytes: 256
@@ -460,6 +485,48 @@ components:
           type: integer
         device:
           type: string
+        adapters:
+          type: array
+          description: Present only when the server was started with --adapter.
+          items:
+            $ref: '#/components/schemas/Adapter'
+    Adapter:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - source
+      - mode
+      - rank
+      - alpha
+      - pairs
+      - pairs_applied
+      - categories
+      - bytes
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        mode:
+          type: string
+          enum:
+          - merge
+          - runtime
+        rank:
+          type: integer
+        alpha:
+          type: number
+        pairs:
+          type: integer
+        pairs_applied:
+          type: integer
+        categories:
+          type: array
+          items:
+            type: string
+        bytes:
+          type: integer
     ModelList:
       type: object
       additionalProperties: false
@@ -497,7 +564,7 @@ paths:
       tags:
       - decisions
       summary: Score one state.
-      description: Runs every question against one state. model, lang, ensemble, ensemble_margin, calibrate,
+      description: Runs every question against one state. model, adapter, lang, ensemble, ensemble_margin, calibrate,
         return_logits, min_confidence, max_len, and head_max_len are optional. See docs/API.md.
       operationId: decide
       security:
@@ -2386,7 +2453,7 @@ paths:
               schema:
                 type: string
         '422':
-          description: model/lang field validation; min_confidence validation (0..1); strict integer validation
+          description: model/lang/adapter field validation; unknown adapter; min_confidence validation (0..1); strict integer validation
             of ensemble (1..8), max_len, or head_max_len (32..8192); effective sequence capacity; question
             validation; option-marker budget; or expiry of the cooperative inference deadline.
           content:
@@ -2924,7 +2991,7 @@ paths:
               schema:
                 type: string
         '422':
-          description: model/lang field validation; min_confidence validation (0..1); strict integer validation
+          description: model/lang/adapter field validation; unknown adapter; min_confidence validation (0..1); strict integer validation
             of ensemble (1..8), max_len, or head_max_len (32..8192); effective sequence capacity; question
             validation; option-marker budget; or expiry of the cooperative inference deadline.
           content:
