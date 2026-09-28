@@ -13,7 +13,8 @@ Suites and their role:
   Emotion validation, AG News train rows): the challenger's mean must be higher. Model selection
   never looks at test splits.
 - held-out tests (eval_laya.py on the first 2,000 rows; bench/eval_multilingual.py per language;
-  bench/eval_zeroshot.py suites never trained on): no suite may drop by more than 2 standard errors
+  bench/eval_zeroshot.py suites never trained on; bench/eval_categories.py, one suite per decision
+  category from the unused splits of the mixture v6 sources): no suite may drop by more than 2 standard errors
   (binomial, sqrt(p(1-p)/n) for each model, combined). That margin separates real regressions
   from sampling noise.
 A challenger that improves validation but harms any held-out suite is rejected: it has started to
@@ -59,7 +60,7 @@ def gguf_for(model_dir):
     return path
 
 
-def http_suites(model_dir, tmp):
+def http_suites(model_dir, tmp, mixture=None):
     srv = subprocess.Popen([BIN, "serve", "--device", DEVICE, "-m",
                             f"m={gguf_for(model_dir)}", "--port", str(PORT), "--no-access-log"],
                            cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -73,8 +74,10 @@ def http_suites(model_dir, tmp):
         rows = []
         # the benchmark scripts only accept known model names; the server has a single model, and an
         # unknown name falls back to it, so pass a valid name
+        categories = ["--n", "150"] + (["--exclude-mixture", mixture] if mixture else [])
         for script, extra in (("bench/eval_multilingual.py", ["--n", "150"]),
-                              ("bench/eval_zeroshot.py", ["--n", "150"])):
+                              ("bench/eval_zeroshot.py", ["--n", "150"]),
+                              ("bench/eval_categories.py", categories)):
             if not os.path.exists(os.path.join(ROOT, script)):
                 continue
             out = os.path.join(tmp, os.path.basename(script) + ".jsonl")
@@ -86,22 +89,34 @@ def http_suites(model_dir, tmp):
         srv.wait(timeout=60)
 
 
-def evaluate(model_dir):
+def evaluate(model_dir, mixture=None):
     tmp = os.path.join(model_dir, "eval-tmp")
     os.makedirs(tmp, exist_ok=True)
-    res = {"model": model_dir, "validation": {}, "heldout": {}}
+    res = {"model": model_dir, "validation": {}, "heldout": {}, "reported": {}, "mixture": mixture}
     dev = jsonl(run([PY, "tools/finetune/eval_dev.py", model_dir]))[0]
     res["validation"] = {k: v for k, v in dev.items() if k not in ("model", "seconds", "mean")}
     for r in jsonl(run([PY, "tools/finetune/eval_laya.py", model_dir, "--n", "2000", "--head-max-len", "512"])):
         n = r.get("n", 2000)
         res["heldout"][f"test/{r['suite']}"] = {"acc": r["accuracy"], "n": n, "ece": r.get("ece")}
-    for r in http_suites(model_dir, tmp):
-        if r.get("lang") == "macro":
+    for r in http_suites(model_dir, tmp, mixture):
+        if r.get("lang") == "macro" or "accuracy" not in r:  # macro line, or a skipped language
             continue
-        res["heldout"][f"{r['suite']}/{r['lang']}"] = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
+        row = {"acc": r["accuracy"], "n": r["n"], "ece": r.get("ece")}
+        if r.get("family") == "categories":
+            row["pool"] = r.get("pool")  # compare() only compares category cells built from the same pool
+            if r.get("gate") is False:  # zero-shot or biased cell: reported, never gated
+                res["reported"][f"{suite_key(r)}/{r['lang']}"] = dict(row, note=r.get("gate_note"))
+                continue
+        res["heldout"][f"{suite_key(r)}/{r['lang']}"] = row
     json.dump(res, open(os.path.join(model_dir, "eval.json"), "w"), indent=1)
     print(json.dumps({"validation_mean": round(sum(res["validation"].values()) / len(res["validation"]), 4),
                       "heldout_suites": len(res["heldout"])}))
+
+
+def suite_key(record):
+    """eval_categories.py names its suites after the category ("sentiment", "nli"); prefix them so they
+    cannot collide with a suite of another script."""
+    return ("categories:" + record["suite"]) if record.get("family") == "categories" else record["suite"]
 
 
 ZERO_SHOT = {"go_emotions", "multi_hatecheck", "sib200", "indonli", "farstail", "belebele", "semrel"}
@@ -118,7 +133,15 @@ def compare(champ_dir, chall_dir, z=2.0):
     va = sum(a["validation"][k] for k in keys) / len(keys)
     vb = sum(b["validation"][k] for k in keys) / len(keys)
     harms, gains = [], []
-    for k in sorted(set(a["heldout"]) & set(b["heldout"])):
+    # Category cells are comparable only when both models drew them from the same pool (same suite
+    # spec, sources, adapters and, with --mixture, the same training mixture excluded).
+    shared = sorted(set(a["heldout"]) & set(b["heldout"]))
+    different = [k for k in shared if k.startswith("categories:")
+                 and a["heldout"][k].get("pool") != b["heldout"][k].get("pool")]
+    if different:
+        print(f"categories: {len(different)} cells not compared (their pools differ)")
+    shared = [k for k in shared if k not in different]
+    for k in shared:
         x, y = a["heldout"][k], b["heldout"][k]
         se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
         d = y["acc"] - x["acc"]
@@ -133,8 +156,9 @@ def compare(champ_dir, chall_dir, z=2.0):
         "trained": lambda k: k.split("/")[0] == "amazon_massive_intent" or k in ("test/banking77", "test/typed_decisions"),
         "zero-shot": lambda k: k.split("/")[0] in ZERO_SHOT or k in ("test/ag_news", "test/emotion"),
         "sentiment": lambda k: k.split("/")[0] == "multilingual_sentiments",
+        "categories": lambda k: k.startswith("categories:"),
     }
-    common = sorted(set(a["heldout"]) & set(b["heldout"]))
+    common = shared
     for fam, member in families.items():
         ks = [k for k in common if member(k)]
         if not ks:
@@ -170,13 +194,16 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("eval")
     e.add_argument("model")
+    e.add_argument("--mixture", default=os.environ.get("STATIM_GATE_MIXTURE"),
+                   help="built mixture the model was trained on (jsonl.gz); category suite items that share "
+                        "a text with it are dropped (env STATIM_GATE_MIXTURE)")
     c = sub.add_parser("compare")
     c.add_argument("champion")
     c.add_argument("challenger")
     c.add_argument("--z", type=float, default=2.0)
     a = ap.parse_args()
     if a.cmd == "eval":
-        evaluate(a.model)
+        evaluate(a.model, a.mixture)
     else:
         sys.exit(0 if compare(a.champion, a.challenger, a.z) else 1)
 

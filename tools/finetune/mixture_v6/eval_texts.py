@@ -1,7 +1,9 @@
 """Build the single normalised exclusion set for every Statim evaluation.
 
 The pickle is a dict, not a bare set, so a stale cache cannot silently omit a
-new suite.  Text normalisation is exactly build_mixture.norm.
+new suite.  It also stores the fingerprint of the category suites in
+bench/eval_categories.py, so a changed suite spec rebuilds the set.  Text
+normalisation is exactly build_mixture.norm.
 """
 
 from __future__ import annotations
@@ -24,7 +26,34 @@ SUITES = [
     "typed_decisions:test", "go_emotions:test", "multi_hatecheck:test",
     "flores200:dev+devtest", "belebele:test-passages", "sib200:test",
     "hwu64:test", "indonli:test_expert", "farstail:test", "semrel:test",
+    "categories:held-out-pool",
 ]
+
+
+def _eval_categories():
+    """bench/eval_categories.py (bench/ is not a package)."""
+    import importlib.util
+    import sys
+    if "eval_categories" in sys.modules:
+        return sys.modules["eval_categories"]
+    spec = importlib.util.spec_from_file_location("eval_categories", ROOT / "bench" / "eval_categories.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["eval_categories"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def add_category_suites(out, pool=None):
+    """Every pooled item of every category suite, not only the sampled ones: another --seed or --n
+    must not reach a text training has seen. A source that failed to load would leave a hole in
+    the banned set, so it aborts the build instead."""
+    ec = _eval_categories()
+    if pool is None:
+        pool, failures = ec.load_pool()
+        if failures:
+            raise RuntimeError("category suite sources failed to load: %s" % ", ".join(sorted(failures)))
+    out |= ec.suite_texts(pool)
+    return out
 
 
 def norm(text):
@@ -139,6 +168,7 @@ def build_set():
                            split="x", delimiter="\t"), ["premise", "hypothesis"])
     for config in ("eng", "arb", "hin"):
         _add(out, load_dataset("SemRel/SemRel2024", config, split="test"), ["sentence1", "sentence2"])
+    add_category_suites(out)
     out.discard("")
     return out
 
@@ -147,12 +177,14 @@ def load(cache=DEFAULT_CACHE, rebuild=False):
     cache = Path(cache)
     if cache.exists() and not rebuild:
         payload = pickle.loads(cache.read_bytes())
-        if isinstance(payload, dict) and payload.get("suites") == SUITES and isinstance(payload.get("texts"), set):
+        if (isinstance(payload, dict) and payload.get("suites") == SUITES and isinstance(payload.get("texts"), set)
+                and payload.get("categories") == _eval_categories().fingerprint()):
             return payload["texts"]
     texts = build_set()
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_bytes(pickle.dumps({"version": 1, "normalisation": "build_mixture.norm",
-                                    "suites": SUITES, "texts": texts}, protocol=pickle.HIGHEST_PROTOCOL))
+                                    "suites": SUITES, "categories": _eval_categories().fingerprint(),
+                                    "texts": texts}, protocol=pickle.HIGHEST_PROTOCOL))
     return texts
 
 
