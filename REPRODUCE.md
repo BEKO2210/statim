@@ -18,22 +18,22 @@ gitignored.
 git clone https://github.com/BEKO2210/statim && cd statim
 mkdir -p dist && cd dist
 # binary (Linux x86-64; or build from source, see README "Quick start")
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.5.2/statim-0.5.2-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.5.2/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.5.2-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.7.0/statim-0.7.0-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.7.0/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.7.0-linux-x86_64-cpu.tar.gz
 # model (q8_0 for CPU, 357 MB) and its checksum list from the model repository
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 cd ..
-dist/statim-0.5.2-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
+dist/statim-0.7.0-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
 until curl -sf localhost:8080/health; do sleep 1; done
 python3 examples/ticket-triage/triage.py eval --limit 500 --concurrency 2 --seed 0
 ```
 
 Expected (Banking77 test split, seeded stratified sample of 500 tickets, 77 intents in one
-question): intent accuracy **0.896** (448/500); with `min_confidence` 0.9 the server escalates 4 % of
-the tickets and accuracy on the rest is **0.915** (0.9146, 439/480). Exact values and the coverage
+question): intent accuracy **0.908** (454/500); with `min_confidence` 0.9 the server escalates 2 % of
+the tickets and accuracy on the rest is **0.920** (0.9204, 451/490). Exact values and the coverage
 curve are in [examples/ticket-triage/README.md](examples/ticket-triage/README.md). The first run
 downloads the Banking77 test split (about 100 KB) into `examples/ticket-triage/.cache/`. On a 4-core
 cloud VM the 500 requests take about 6 minutes.
@@ -92,8 +92,8 @@ Expected for `statim-decide-en-large` 0.5.0 (`models/statim-decide-en-large/eval
 | `amazon_massive_intent/en` | 0.8667 | 150 |
 | `hwu64/en` | 0.8333 | 150 |
 
-and for `statim-decide-multilingual-base` 0.4.0: typed-decisions 0.7585, Banking77 0.9035,
-AG News 0.9315, Emotion 0.5265, MASSIVE mean over 12 languages 0.7717. The suites with 2,000 rows
+and for `statim-decide-multilingual-base` 0.7.0: typed-decisions 0.7630, Banking77 0.9140,
+AG News 0.9295, Emotion 0.5040, MASSIVE mean over 12 languages 0.7995. The suites with 2,000 rows
 are deterministic (first rows of the test split); the 150-row suites are seeded stratified samples
 (`--seed 20260926`), so they are deterministic too. The `compare` step should report every suite
 "within noise" and no significant difference in either direction.
@@ -123,7 +123,7 @@ This is the call `gate.py eval` makes. It prints one JSON line per suite; compar
 `heldout` in `dist/statim-decide-multilingual-base/evaluation/eval.json`. `--n` applies to AG News,
 Emotion and Banking77 (first *n* test rows); typed-decisions always uses the whole test split
 (400 states, 2,000 decisions). On a 4-core cloud VM without a GPU it takes about 20 minutes
-(AG News 2.5 min, Emotion 1.3 min, Banking77 9 min, typed-decisions 6.5 min). Obtained there:
+(AG News 2.5 min, Emotion 1.3 min, Banking77 9 min, typed-decisions 6.5 min). Obtained there for 0.4.0:
 typed-decisions 0.7585, Banking77 0.9035, AG News 0.9310, Emotion 0.5285.
 
 ## 4. The model beats its base checkpoint

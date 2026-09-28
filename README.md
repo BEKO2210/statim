@@ -46,7 +46,7 @@ pass the no-harm gate (below) before release:
 | Model | Encoder | Languages | typed-decisions | Banking77 | MASSIVE | Files |
 |---|---|---|---|---|---|---|
 | [statim-decide-en-large](https://huggingface.co/Beko2210/statim-decide-en-large) 0.5.0 | ModernBERT-large, 395M | English | **0.768** | **0.928** | 0.867 (en) | f32 1.58 GB · q8_0 0.45 GB |
-| [statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) 0.4.0 | mmBERT-base | 12 evaluated | 0.7585 | 0.903 | 0.772 (12 languages) | f32 0.91 GB · q8_0 0.36 GB |
+| [statim-decide-multilingual-base](https://huggingface.co/Beko2210/statim-decide-multilingual-base) 0.7.0 | mmBERT-base | 12 evaluated | 0.763 | 0.914 | 0.800 (12 languages) | f32 0.91 GB · q8_0 0.36 GB |
 
 ```bash
 hf download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --local-dir models   # pip install huggingface_hub
@@ -390,9 +390,11 @@ published result (meraGPT 0.768). Reproduce:
   <img alt="Statim 0.4.0 vs. the base checkpoint: MASSIVE 0.340 to 0.772, Banking77 0.517 to 0.903, typed decisions 0.351 to 0.758, zero-shot suites within noise." src="assets/diagrams/results-0.4.0-light.svg" width="100%">
 </picture>
 
-The 0.4.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
+The 0.7.0 model is the multilingual checkpoint fine-tuned on **licence-audited data only**
 (`train_multitask.py --clean`; every source in [DATA_LICENSES.md](DATA_LICENSES.md)). typed-decisions
-0.7585 is above Jev (0.727) and the dataset's teacher agreement ceiling (0.735). A new model replaces
+0.763 is above Jev (0.727) and the dataset's teacher agreement ceiling (0.735). Since 0.7.0 it also
+answers 14 decision categories (mixture v6, 111 licence-checked sources): on held-out category suites
+it reaches 0.748 macro accuracy, up from 0.559 for 0.4.0 (per category in the model card). A new model replaces
 the current one only through `tools/finetune/gate.py`: its validation mean must improve, no held-out
 suite may drop by more than two standard errors, and no suite family (trained, zero-shot, sentiment)
 may drift down significantly when pooled. Training uses early stopping on validation. Reproduce:

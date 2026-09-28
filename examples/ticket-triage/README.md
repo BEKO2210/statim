@@ -17,12 +17,12 @@ Release binary (Linux x86-64, CPU):
 ```sh
 git clone --recursive https://github.com/BEKO2210/statim.git
 cd statim
-curl -fL -o statim-0.5.2-linux-x86_64-cpu.tar.gz \
-  https://github.com/BEKO2210/statim/releases/download/v0.5.2/statim-0.5.2-linux-x86_64-cpu.tar.gz
-tar -xzf statim-0.5.2-linux-x86_64-cpu.tar.gz
+curl -fL -o statim-0.7.0-linux-x86_64-cpu.tar.gz \
+  https://github.com/BEKO2210/statim/releases/download/v0.7.0/statim-0.7.0-linux-x86_64-cpu.tar.gz
+tar -xzf statim-0.7.0-linux-x86_64-cpu.tar.gz
 ```
 
-The binary is `statim-0.5.2-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.5.2 release](https://github.com/BEKO2210/statim/releases/tag/v0.5.2).
+The binary is `statim-0.7.0-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.7.0 release](https://github.com/BEKO2210/statim/releases/tag/v0.7.0).
 
 Build from source instead:
 
@@ -53,7 +53,7 @@ statim serve --device cpu -m multilingual=/absolute/path/to/model.gguf --port 80
 ### 3. Start the server
 
 ```sh
-./statim-0.5.2-linux-x86_64-cpu/statim serve --device cpu \
+./statim-0.7.0-linux-x86_64-cpu/statim serve --device cpu \
   -m multilingual=statim-decide-multilingual-base-q8_0.gguf \
   --port 8080
 ```
@@ -135,27 +135,27 @@ shown but do not escalate the ticket.
 `eval --limit 500 --concurrency 2` then asks the intent question only (seed 0, 77 intents, six or
 seven tickets each, warm process):
 
-Intent accuracy **0.8960** (448/500).
+Intent accuracy **0.9080** (454/500).
 
 | min_confidence | coverage | answered | accuracy | correct |
 |---:|---:|---:|---:|---:|
-| 0.0 | 1.0000 | 500 | 0.8960 | 448 |
-| 0.5 | 0.9720 | 486 | 0.9095 | 442 |
-| 0.6 | 0.9660 | 483 | 0.9130 | 441 |
-| 0.7 | 0.9660 | 483 | 0.9130 | 441 |
-| 0.8 | 0.9660 | 483 | 0.9130 | 441 |
-| 0.9 | 0.9600 | 480 | 0.9146 | 439 |
+| 0.0 | 1.0000 | 500 | 0.9080 | 454 |
+| 0.5 | 0.9880 | 494 | 0.9150 | 452 |
+| 0.6 | 0.9880 | 494 | 0.9150 | 452 |
+| 0.7 | 0.9880 | 494 | 0.9150 | 452 |
+| 0.8 | 0.9840 | 492 | 0.9167 | 451 |
+| 0.9 | 0.9800 | 490 | 0.9204 | 451 |
 
 Coverage is the share whose `answer_confidence` is at least the threshold (the share the server
 would not escalate); accuracy is computed on that share. A threshold of 0 escalates nothing.
 
-End-to-end latency at concurrency 2, including queueing behind the single worker: **p50 514.6 ms**,
-**p95 556.7 ms**; throughput **3.98 requests/s** (500 requests in 125.5 s). With one worker, two
+End-to-end latency at concurrency 2, including queueing behind the single worker: **p50 439.6 ms**,
+**p95 488.3 ms**; throughput **4.50 requests/s** (500 requests in 111.2 s). With one worker, two
 in-flight requests each wait about one service time. A GPU build answers far faster; see the main
 README. The first request after startup is slower while the weights are paged in.
 
-The model is usually very sure: 480 of 500 intents have `answer_confidence` of at least 0.9, so a
-threshold of 0.9 sends 20 tickets to a person and lifts accuracy on the rest from 0.896 to 0.915.
+The model is usually very sure: 490 of 500 intents have `answer_confidence` of at least 0.9, so a
+threshold of 0.9 sends 10 tickets to a person and lifts accuracy on the rest from 0.908 to 0.920.
 The full 3,080-row test split or the f32 file print slightly different numbers. `results.json` and
 `results.md` in this directory are this run.
 
