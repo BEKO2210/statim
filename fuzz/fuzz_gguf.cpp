@@ -1,4 +1,4 @@
-// libFuzzer harness: Model::load on arbitrary files (seeds: the tiny GGUF models).
+// libFuzzer harness: Model::load on arbitrary files (seeds: the tiny GGUF models, including q4_0 and q8_0).
 //
 // A malformed or hostile model file must be rejected with an exception at load time. When a file
 // is accepted, the model must also be safe to run: the harness tokenizes and runs one small

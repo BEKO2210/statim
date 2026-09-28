@@ -24,8 +24,9 @@ so the merged weight is W' = W + lora_b @ lora_a.
 
 --base (required) is the Statim model GGUF the adapter was trained on: every tensor shape is
 checked against it, and its fingerprint (SHA-256 over its vectors: normalisation weights and biases,
-see checkpoint_fingerprint) and general.name are recorded. The engine loads the adapter only onto a model
-with that fingerprint, which is the same for every weight type of one checkpoint.
+see checkpoint_fingerprint), optional statim.checkpoint_sha256 content identity, and general.name
+are recorded. The engine loads the adapter only onto a matching model. Both hashes are the same for
+every weight type of one checkpoint; the content identity also covers matrices.
 --category (repeatable) names the question families the adapter serves in "adapter": "auto"
 routing; without it the adapter name is used (see docs/API.md, "LoRA adapters").
 """
@@ -290,6 +291,8 @@ def main():
     w.add_array("statim.lora.categories", a.category or [name])
     w.add_string("statim.lora.base_name", base_name)
     w.add_string("statim.lora.base_fingerprint", fingerprint)
+    if "statim.checkpoint_sha256" in kv:
+        w.add_string("statim.lora.base_checkpoint_sha256", kv["statim.checkpoint_sha256"])
 
     total = 0
     for (layer, module) in sorted(pairs):

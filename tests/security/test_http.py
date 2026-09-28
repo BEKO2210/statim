@@ -238,6 +238,41 @@ def main():
                 proc.wait(timeout=15)
         records = [json.loads(line) for line in logfile.read_text().splitlines() if line.startswith('{')]
         assert any(r.get('event') == 'listening' and r.get('auth') is False and r.get('auth_status') == 'off' for r in records)
+        # A path from the command line is arbitrary bytes. model_loaded must not throw.
+        tiny = Path(__file__).resolve().parents[2] / 'fuzz' / 'data' / 'tiny-metaspace.gguf'
+        assert tiny.is_file(), tiny
+        link = os.path.join(os.fsencode(tmp), b'm-\xff.gguf')
+        os.symlink(os.fsencode(tiny), link)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        badlog = Path(tmp) / 'bad-path.log'
+        cmd = [os.fsencode(args.binary), b'serve', b'-m', b'tiny=' + link, b'--device', b'cpu',
+               b'--threads', b'2', b'--port', str(port).encode()]
+        with badlog.open('w+b') as log:
+            proc = subprocess.Popen(cmd, env=env, stdout=log, stderr=log)
+            try:
+                for _ in range(100):
+                    if proc.poll() is not None:
+                        raise AssertionError(badlog.read_bytes())
+                    try:
+                        if request('/health', auth=False)[0] == 200:
+                            break
+                    except (OSError, http.client.HTTPException):
+                        time.sleep(.05)
+                else:
+                    raise AssertionError(b'server did not become healthy:\n' + badlog.read_bytes())
+            finally:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+        text = badlog.read_bytes().decode('utf-8')
+        loaded = [json.loads(line) for line in text.splitlines() if line.startswith('{') and '"model_loaded"' in line]
+        assert loaded and loaded[0]['event'] == 'model_loaded' and '\ufffd' in loaded[0]['path'], text
+        print('invalid-utf8 model path: health 200', flush=True)
         print(f'security HTTP: {checks} checks passed')
     return 0
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """tools/convert_lora.py: scaling (lora_alpha / r, rsLoRA, rank_pattern / alpha_pattern), key
-formats, f16 and bf16 factors, the base fingerprint, and every rejected input. numpy, safetensors
-and gguf only.
+formats, f16 and bf16 factors, the base fingerprint and checkpoint SHA-256, and every rejected
+input. numpy, safetensors and gguf only.
 
     python tests/lora/test_convert_lora.py --base models/laya-multilingual-f32.gguf [--binary build/statim]
 
@@ -64,6 +64,20 @@ def pair(prefix, r, n_in, n_out, seed):
             prefix + ".lora_B.weight": rng.standard_normal((n_out, r)).astype(np.float32)}
 
 
+def tiny_base(path, checkpoint_sha256=None):
+    w = gguf.GGUFWriter(path, "laya")
+    w.add_name("tiny-base")
+    w.add_string("statim.format", "statim-decision-v1")
+    if checkpoint_sha256 is not None:
+        w.add_string("statim.checkpoint_sha256", checkpoint_sha256)
+    w.add_tensor("encoder.layers.0.attn.Wqkv.weight", np.zeros((48, 16), np.float32))
+    w.add_tensor("encoder.final_norm.weight", np.ones(16, np.float32))
+    w.write_header_to_file()
+    w.write_kv_data_to_file()
+    w.write_tensors_to_file()
+    w.close()
+
+
 def main():
     global BASE
     ap = argparse.ArgumentParser()
@@ -99,6 +113,18 @@ def main():
             info = json.loads(subprocess.run([a.binary, "info", "-m", a.base], capture_output=True, text=True,
                                              env=dict(os.environ, STATIM_DEVICE="cpu"), check=True).stdout)
             check(info["fingerprint"] == fp, "the recorded fingerprint is the engine's (statim info: %s...)" % info["fingerprint"][:16])
+
+        # The full checkpoint identity is copied only when the base has it (old bases remain valid).
+        small = adapter(os.path.join(tmp, "checkpoint-sha"), pair("encoder.layers.0.attn.Wqkv", 2, 16, 48, 31))
+        for present in (True, False):
+            base = os.path.join(tmp, "base-%s.gguf" % present)
+            want_sha = "1" * 64 if present else None
+            tiny_base(base, want_sha)
+            r = subprocess.run([sys.executable, CONVERT, small, "-o", out, "--base", base], capture_output=True, text=True)
+            field = gguf.GGUFReader(out).get_field("statim.lora.base_checkpoint_sha256") if r.returncode == 0 else None
+            check(r.returncode == 0 and ((field.contents() == want_sha) if present else field is None),
+                  "base checkpoint SHA-256 is %s when the base %s it (%s)" %
+                  ("recorded" if present else "absent", "has" if present else "lacks", r.stderr.strip()[-120:]))
 
         # f16 and bf16 factors widen to f32 exactly (safetensors.numpy cannot read bf16)
         t16 = {k: v.astype(np.float16) for k, v in pair(wqkv, 2, 768, 2304, 6).items()}

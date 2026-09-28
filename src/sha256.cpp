@@ -57,6 +57,7 @@ void Sha256::block(const uint8_t* p) {
 }
 
 void Sha256::update(const void* data, size_t n) {
+    if (n == 0) return;  // data may be null then (an empty vector's data()), and memcpy with null is UB
     const auto* p = static_cast<const uint8_t*>(data);
     bytes_ += n;
     if (n_ > 0) {

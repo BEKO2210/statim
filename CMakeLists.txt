@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(statim VERSION 0.8.0 LANGUAGES C CXX)
+project(statim VERSION 0.8.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -110,6 +110,10 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME lora_convert COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_convert_lora.py --base ${LORA_BASE}
       --binary $<TARGET_FILE:statim>)
     set_tests_properties(lora_convert PROPERTIES TIMEOUT 120)
+    add_test(NAME lora_checkpoint_binding COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/lora/test_checkpoint_binding.py --binary $<TARGET_FILE:statim>
+      --quantize $<TARGET_FILE:statim-quantize> --work ${CMAKE_CURRENT_BINARY_DIR}/lora-checkpoint-binding)
+    set_tests_properties(lora_checkpoint_binding PROPERTIES TIMEOUT 120)
     add_test(NAME lora_parity COMMAND test_lora ${LORA_BASE} ${LORA}/zero.gguf ${LORA}/random.gguf
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_laya-multilingual.jsonl
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_lora_random.jsonl ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/lora_random_weights.json)
@@ -157,7 +161,14 @@ endif()
 
 # ---- tools
 add_executable(statim-quantize tools/quantize.cpp)
+target_include_directories(statim-quantize PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(statim-quantize PRIVATE ggml)
+if(STATIM_BUILD_TESTS AND Python3_Interpreter_FOUND)
+  add_test(NAME quantize_types COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_quantize_types.py
+    --binary $<TARGET_FILE:statim-quantize>
+    --model ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/data/tiny-metaspace.gguf)
+  set_tests_properties(quantize_types PROPERTIES TIMEOUT 60)
+endif()
 
 # ---- statim binary (CLI + HTTP server)
 find_package(Threads REQUIRED)
