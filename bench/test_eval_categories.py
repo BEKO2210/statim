@@ -164,9 +164,12 @@ def test_prep_pii_spans_feeds_pii_adapter():
     assert sorted(ec.gold_index(it) for it in items) == [0, 1]
 
 
-def test_prep_cpc_section():
-    rows = ec.PREP["cpc_section"]([{"_v6_config": "a"}, {"_v6_config": "h"}])
-    assert [r["_v6_config"] for r in rows] == ["human necessities", "electricity"]
+def test_topic_items_carry_cpc_section_titles():
+    src = ec.HELD_OUT["topic"][0]
+    rows = ec.PREP["cpc_section"]([{"abstract": "A machine.", "_v6_config": "a", "_v6_lang": "en"},
+                                   {"abstract": "A circuit.", "_v6_config": "h", "_v6_lang": "en"}])
+    items = ec.items_from_rows(src, rows)
+    assert sorted(ec.option_names(it)[ec.gold_index(it)] for it in items) == ["electricity", "human necessities"]
 
 
 # --------------------------------------------------------------------------- sampling

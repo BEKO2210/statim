@@ -447,7 +447,10 @@ def _prep_toxic_label(rows):
 
 
 def _prep_cpc_section(rows):
-    """big_patent labels are the config letters; the adapter reads _v6_config. Use the CPC section title."""
+    """big_patent labels are the config letters; the adapter reads _v6_config. Use the CPC section title,
+    unless the registry already maps the letters itself (it does since the v6 adapter fixes)."""
+    if hasattr(_registry(), "CPC_SECTIONS"):
+        return rows
     for row in rows:
         row["_v6_config"] = CPC_SECTIONS[row["_v6_config"]]
     return rows
