@@ -27,6 +27,7 @@
 #include "ggml.h"
 #include "gguf.h"
 #include "ggml-impl.h"  // ggml_graph_view for STATIM_PROFILE
+#include "weight_types.h"
 
 namespace statim {
 
@@ -90,6 +91,7 @@ struct Model::Impl {
     ggml_backend_buffer_t weight_buf = nullptr;    // weights copied to a non-CPU device
     std::string device_desc = "cpu";
     std::string fingerprint;  // checkpoint_fingerprint(); adapter views copy the base's
+    std::string checkpoint_sha256;  // converter's full source-tensor hash; optional for old files
     // adapter view (Model::with_adapter): the base owns everything above; this owns only its own
     // merged weights or LoRA factors
     std::shared_ptr<Model> base;
@@ -128,6 +130,7 @@ struct Model::Impl {
 
 static std::vector<float> to_f32(ggml_type type, const void* data, int64_t n, const char* name) {
     std::vector<float> out(n);
+    if (n == 0) return out;  // an empty tensor: out.data() may be null, and memcpy from/to null is UB
     if (type == GGML_TYPE_F32) {
         std::memcpy(out.data(), data, out.size() * sizeof(float));
     } else if (type == GGML_TYPE_F16) {
@@ -149,6 +152,7 @@ size_t Model::weight_bytes() const { return impl_->weight_bytes; }
 const std::string& Model::device() const { return impl_->device_desc; }
 const AdapterInfo* Model::adapter() const { return impl_->adapter.get(); }
 const std::string& Model::fingerprint() const { return impl_->fingerprint; }
+const std::string& Model::checkpoint_sha256() const { return impl_->checkpoint_sha256; }
 
 static std::string lower(std::string s) {
     for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -333,19 +337,12 @@ static void validate(const Model::Impl& M) {
     }
 
     // tensors: exact shapes, and types the CPU and GPU kernels accept for each use
-    auto weight_type = [](ggml_type t) {
-        switch (t) {
-            case GGML_TYPE_F32: case GGML_TYPE_F16: case GGML_TYPE_BF16: case GGML_TYPE_Q4_0: case GGML_TYPE_Q4_1:
-            case GGML_TYPE_Q5_0: case GGML_TYPE_Q5_1: case GGML_TYPE_Q8_0: case GGML_TYPE_Q2_K: case GGML_TYPE_Q3_K:
-            case GGML_TYPE_Q4_K: case GGML_TYPE_Q5_K: case GGML_TYPE_Q6_K: return true;
-            default: return false;
-        }
-    };
+    // matrices: the types in matrix_type_ok (src/weight_types.h), which statim-quantize uses too
     auto shape = [&](const ggml_tensor* t, int64_t ne0, int64_t ne1, bool matrix) {
         if (!t) return;
         if (t->ne[0] != ne0 || t->ne[1] != ne1 || t->ne[2] != 1 || t->ne[3] != 1)
             fail(std::string("tensor '") + t->name + "' has the wrong shape");
-        if (matrix ? !weight_type(t->type) : t->type != GGML_TYPE_F32)
+        if (matrix ? !matrix_type_ok(t->type) : t->type != GGML_TYPE_F32)
             fail(std::string("tensor '") + t->name + "' has an unsupported type");
     };
     const int64_t d = h.n_embd;
@@ -442,6 +439,7 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     HParams& h = M.hp;
     const gguf_context* g = M.gguf;
     h.name = get_str(g, "general.name");
+    M.checkpoint_sha256 = get_str(g, "statim.checkpoint_sha256");
     h.n_embd = get_u32(g, "laya.encoder.n_embd");
     h.n_layer = get_u32(g, "laya.encoder.n_layer");
     h.n_head = get_u32(g, "laya.encoder.n_head");
@@ -653,6 +651,11 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
         fail("LoRA adapter '" + path + "' was converted for another checkpoint ('" + base_name + "', fingerprint " +
              base_fp.substr(0, 16) + "...), not for this '" + B.hp.name + "' (fingerprint " + B.fingerprint.substr(0, 16) +
              "...)");
+    const std::string base_sha = get_str(g, "statim.lora.base_checkpoint_sha256");
+    if (!base_sha.empty() && !B.checkpoint_sha256.empty() && base_sha != B.checkpoint_sha256)
+        fail("LoRA adapter '" + path + "' was converted for another checkpoint: the vectors match but the matrices do not "
+             "(checkpoint SHA-256 " + base_sha.substr(0, 16) + "..., this '" + B.hp.name + "' has " +
+             B.checkpoint_sha256.substr(0, 16) + "...); is another adapter merged into this base?");
     // typed reads, like the model's: gguf_get_* abort on a type mismatch
     if (int64_t id = key(g, "statim.lora.rank", false, GGUF_TYPE_UINT32); id >= 0) info->rank = static_cast<int>(gguf_get_val_u32(g, id));
     if (int64_t id = key(g, "statim.lora.alpha", false, GGUF_TYPE_FLOAT32); id >= 0) info->alpha = gguf_get_val_f32(g, id);
@@ -667,6 +670,7 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     M.dev = B.dev;
     M.device_desc = B.device_desc;
     M.fingerprint = B.fingerprint;
+    M.checkpoint_sha256 = B.checkpoint_sha256;
     M.tok_embd = B.tok_embd;
     M.embd_norm = B.embd_norm;
     M.final_norm = B.final_norm;

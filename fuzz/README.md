@@ -40,7 +40,7 @@ driver of an ordinary build: `build/fuzz_replay_<name> <file-or-dir>...`.
 | `replay_main.cpp` | runs a harness over files without libFuzzer; ctest uses it |
 | `seeds/<name>/` | hand-written starting inputs; with the regressions, replayed by ctest `fuzz_regressions_<name>` |
 | `regressions/<name>/` | every input that once crashed, named after the bug; also replayed by ctest |
-| `data/tiny-*.gguf` | two tiny deterministic models (16-wide, 2 layers; Metaspace and ByteLevel BPE), written by `make_tiny_model.py`; the gguf seeds |
+| `data/tiny-*.gguf` | tiny deterministic models written by `make_tiny_model.py`, the gguf seeds. `tiny-metaspace.gguf` and `tiny-bytelevel.gguf` are 16-wide, 2-layer f32/f16 models (Metaspace and ByteLevel BPE). `tiny-metaspace-q4_0.gguf` and `tiny-metaspace-q8_0.gguf` are the metaspace model with `head.layers.*.linear2.weight` in q4_0 and q8_0: that matrix has `ne[0] = 32` (one block) and `ne[1] = 16` (`ne[1] % 8 == 0`), so `repack_weights` runs on AVX2 for q4_0 and on ARM dotprod/i8mm for q4_0 and q8_0 |
 | `request.dict` | libFuzzer dictionary of request field names and values |
 | `ubsan.supp` | UBSan suppressions — confirmed upstream ggml issues only, one line each with the reason |
 
@@ -51,7 +51,7 @@ semantic (e.g. `tests/test_model_validation.cpp` for model files).
 
 ## The grown corpus
 
-The corpus the fuzzers grow is not committed: most gguf entries are near-copies of the two tiny
+The corpus the fuzzers grow is not committed: most gguf entries are near-copies of the tiny
 models (about 15 MB on disk). It lives in `build-fuzz/corpus-<name>/`, and CI keeps it between runs
 with `actions/cache`. Minimise a local corpus with:
 

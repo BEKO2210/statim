@@ -8,7 +8,7 @@ foreach(name request tokenizer gguf)
     continue()  # fuzz_gguf.cpp loads models from memory through memfd_create, which only Linux has
   endif()
   if(name STREQUAL "gguf")
-    set(seed_dir ${STATIM_FUZZ_DIR}/data)  # the two tiny valid models are the gguf seeds
+    set(seed_dir ${STATIM_FUZZ_DIR}/data)  # tiny models, including the q4_0 and q8_0 repack seeds
   else()
     set(seed_dir ${STATIM_FUZZ_DIR}/seeds/${name})
   endif()
