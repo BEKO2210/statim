@@ -115,10 +115,10 @@ bool throws(F&& f, const std::string& needle) {
     return false;
 }
 
-// Writes the adapter at src to dst with its metadata changed by edit and the tensor of the same
-// name swapped for `replace` (if given).
+// Writes the adapter at src to dst with its metadata changed by edit, the tensor of the same name
+// swapped for `replace` (if given) and `extra` tensors added.
 void rewrite_adapter(const std::string& src, const std::string& dst, const std::function<void(gguf_context*)>& edit,
-                     const ggml_tensor* replace = nullptr) {
+                     const ggml_tensor* replace = nullptr, const std::vector<const ggml_tensor*>& extra = {}) {
     ggml_context* data = nullptr;
     gguf_context* in = gguf_init_from_file(src.c_str(), {/*no_alloc=*/false, &data});
     if (!in) throw std::runtime_error("cannot read " + src);
@@ -129,6 +129,7 @@ void rewrite_adapter(const std::string& src, const std::string& dst, const std::
         const char* name = gguf_get_tensor_name(in, i);
         gguf_add_tensor(out, replace && std::strcmp(name, ggml_get_name(replace)) == 0 ? replace : ggml_get_tensor(data, name));
     }
+    for (const ggml_tensor* t : extra) gguf_add_tensor(out, t);
     const bool ok = gguf_write_to_file(out, dst.c_str(), false);
     gguf_free(out);
     gguf_free(in);
@@ -362,6 +363,19 @@ int main(int argc, char** argv) {
     }
     check(throws([&] { statim::Model::with_adapter(base, edited); }, "encoder.layers.3.mlp.Wi.weight has shapes A 100x4"),
           "an adapter whose shapes do not fit the base is rejected");
+    {
+        ggml_context* c = ggml_init({2 * ggml_tensor_overhead() + 2 * 2304 * 4 * sizeof(float) + 64, nullptr, false});
+        ggml_tensor* a = ggml_new_tensor_2d(c, GGML_TYPE_F32, 768, 4);
+        ggml_tensor* b = ggml_new_tensor_2d(c, GGML_TYPE_F32, 4, 2304);
+        ggml_set_name(a, "encoder.layers.03.mlp.Wi.weight.lora_a");  // a second name for layer 3
+        ggml_set_name(b, "encoder.layers.03.mlp.Wi.weight.lora_b");
+        std::memset(a->data, 0, ggml_nbytes(a));
+        std::memset(b->data, 0, ggml_nbytes(b));
+        rewrite_adapter(random_path, edited, [](gguf_context*) {}, nullptr, {a, b});
+        ggml_free(c);
+    }
+    check(throws([&] { statim::Model::with_adapter(base, edited); }, "unsupported tensor 'encoder.layers.03.mlp.Wi.weight.lora_a'"),
+          "a layer number with a leading zero is not a second name for the same projection");
     rewrite_adapter(random_path, edited, [](gguf_context* g) { gguf_set_val_str(g, "statim.lora.rank", "4"); });
     check(throws([&] { statim::Model::with_adapter(base, edited); }, "has the wrong type"),
           "adapter metadata of the wrong type is an error, not an abort");

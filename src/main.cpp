@@ -190,6 +190,9 @@ int main(int argc, char** argv) {
 
         auto model = statim::Model::load(cfg.models.front().second, cfg.device);
         if (cfg.adapters.size() > 1) throw std::runtime_error(cmd + " takes at most one --adapter");
+        if (!cfg.adapters.empty() && cfg.adapters.front().model != cfg.models.front().first)
+            throw std::runtime_error("--adapter " + cfg.adapters.front().model + ":" + cfg.adapters.front().name + ": " + cmd +
+                                     " loads only the model '" + cfg.models.front().first + "'");
         if (!cfg.adapters.empty())
             model = statim::Model::with_adapter(
                 model, cfg.adapters.front().path,

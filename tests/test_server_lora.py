@@ -316,6 +316,10 @@ def test_startup_errors(binary, model, adapters, tmp):
     fp = fp[fp.index(b"@\0\0\0\0\0\0\0") + 8:][:64]  # the value: u64 length 64, then 64 hex digits
     other = tmp / "other-base.gguf"
     other.write_bytes(raw.replace(fp, bytes(reversed(fp))))
+    r = subprocess.run([binary, "info", "-m", "multilingual=" + model, "--adapter", "other:x=" + str(adapters / "zero.gguf")],
+                       capture_output=True, text=True, timeout=120, env=dict(os.environ, STATIM_DEVICE="cpu"))
+    check(r.returncode != 0 and "info loads only the model 'multilingual'" in r.stderr,
+          "info with --adapter for another model -> exit %d" % r.returncode)
     for args, needle in [
         (["--adapter", "nosuch:x=" + str(adapters / "zero.gguf")], "no model named 'nosuch'"),
         (["--adapter", "auto=" + str(adapters / "zero.gguf")], "must be 1-64 of"),

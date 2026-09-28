@@ -552,6 +552,7 @@ static bool parse_proj_name(const std::string& wname, int n_layer, int& layer, i
     if (dot == std::string::npos || dot == pre.size() || dot - pre.size() > 5) return false;
     const std::string num = wname.substr(pre.size(), dot - pre.size());
     if (!std::all_of(num.begin(), num.end(), [](char ch) { return ch >= '0' && ch <= '9'; })) return false;
+    if (num.size() > 1 && num[0] == '0') return false;  // "layers.03" would be a second name for layer 3
     layer = std::stoi(num);
     target = -1;
     for (int t = 0; t < 4; ++t)
