@@ -29,9 +29,10 @@ between minor versions; every change is listed here.
 - libFuzzer harnesses under ASan + UBSan for request bodies (`POST /v1/systemone` and `/batch`,
   through the handler's own parsing, validation, tokenization, packing, inference and response
   serialization), the tokenizer (arbitrary bytes, both BPE pipelines, real Laya vocabularies) and
-  GGUF model loading (`fuzz/`, `-DSTATIM_FUZZ=ON`, `fuzz/run.sh`). Minimised seed corpora and every
+  GGUF model loading (`fuzz/`, `-DSTATIM_FUZZ=ON`, `fuzz/run.sh`). The hand-written seeds and every
   crash input are committed and replayed by ctest (`fuzz_regressions_*`) in ordinary builds.
-- CI job `fuzz`: every harness for 60 s per push; crash inputs are uploaded as an artifact.
+- CI job `fuzz`: every harness for 60 s per push, continuing from the corpus grown in earlier runs
+  (kept with `actions/cache`); crash inputs are uploaded as an artifact.
 - `tests/test_model_validation.cpp`: 20 malformed-model cases that must be rejected at load.
 - Startup warning `auth_off_on_network` when the server listens beyond loopback without API keys
   (the Docker images do this by default).

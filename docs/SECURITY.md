@@ -21,8 +21,9 @@ reduced to `status` and `version`. Limits and flags are documented in README →
 ## Fuzzing (pre-1.0)
 
 `fuzz/` holds libFuzzer harnesses for request bodies, the tokenizer and GGUF loading, built with
-ASan + UBSan (`fuzz/README.md`). CI runs each for 60 s per push; the committed corpora and every
-crash input are replayed by ctest in ordinary builds. Initial campaign (clang 18, 3 harnesses in
+ASan + UBSan (`fuzz/README.md`). CI runs each for 60 s per push from the corpus grown in earlier
+runs (`actions/cache`); the committed seeds and every crash input are replayed by ctest in ordinary
+builds. Initial campaign (clang 18, 3 harnesses in
 parallel, 35 min each): `fuzz_request` 562,522 executions, `fuzz_tokenizer`
 622,148, `fuzz_gguf` 502,099 after the F5 fix (plus 246,999 in the first run, which stopped on
 F5). Findings:
@@ -35,7 +36,7 @@ F5). Findings:
 | F4 — calibration tables parsed lazily: malformed `laya.temperature_by_options` throws from `Engine()`; a short per-language `temperature` array is indexed out of bounds on requests that set `lang` | Both tables validated at load. | `fuzz/regressions/gguf/engine-ctor-bad-temperature-json.gguf`, `test_model_validation` |
 | F5 — `general.name` with invalid UTF-8 is echoed as `"model"`; `dump()` throws, so every request and `/v1/models` answered 500 | Load requires valid UTF-8. | `fuzz/regressions/gguf/general-name-invalid-utf8.gguf`, `test_model_validation` |
 | F6 — empty mask token silently disables scrubbing the mask piece from caller text | Rejected at load. | `test_model_validation` |
-| F7 — tensor-bounds check `off + nbytes > size` can wrap; `fstat` result unchecked | Overflow-free comparison; `fstat` checked. | `fuzz_gguf` corpus |
+| F7 — tensor-bounds check `off + nbytes > size` can wrap; `fstat` result unchecked | Overflow-free comparison; `fstat` checked. | `fuzz_gguf` (no committed input) |
 | U1, U2 — upstream ggml `gguf_init_from_reader`: the element-count overflow guard itself overflows (`ggml_nelements`), and the tensor type is loaded into `enum ggml_type` before its range check | Not ours to patch in the vendored tree; both wrap/are rejected in practice. Suppressed by exact function in `fuzz/ubsan.supp`; to be reported upstream. | `fuzz/regressions/gguf/ggml-nelements-overflow-in-guard.gguf` |
 
 The request and tokenizer harnesses found no crash, hang, leak, UB or contract violation (every
