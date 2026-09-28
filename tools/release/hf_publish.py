@@ -87,13 +87,37 @@ def suite_score(heldout, key):
 
 
 def gate_counts(base, model):
-    gain = noise = loss = 0
+    """(gains, within noise, regressions, nominal drops) with the gate's own rule: a gain is more than two
+    combined standard errors, a regression must stay significant after Holm-Bonferroni over all suites."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "finetune"))
+    from gate import holm_regressions  # noqa: PLC0415 (stdlib-only module)
+    tests = []
     for k in sorted(set(base) & set(model)):
         x, y = base[k], model[k]
+        if k.startswith("categories:") and x.get("pool") != y.get("pool"):
+            continue  # cells from different suite pools are not comparable
         se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
-        d = y["acc"] - x["acc"]
-        gain, noise, loss = (gain + 1, noise, loss) if d > 2 * se else (gain, noise, loss + 1) if d < -2 * se else (gain, noise + 1, loss)
-    return gain, noise, loss
+        tests.append((k, x["acc"], y["acc"], y["acc"] - x["acc"], se))
+    gain = sum(t[3] > 2 * t[4] for t in tests)
+    loss = len(holm_regressions(tests))
+    nominal = sum(t[3] < -2 * t[4] for t in tests) - loss
+    return gain, len(tests) - gain - loss - nominal, loss, nominal
+
+
+def category_rows(held, bheld):
+    """Macro accuracy per decision category over its languages (bench/eval_categories.py cells)."""
+    cats = {}
+    for k, v in held.items():
+        if k.startswith("categories:") and "/" in k:
+            cat, lang = k[len("categories:"):].split("/", 1)
+            cats.setdefault(cat, []).append((lang, v["acc"], (bheld.get(k) or {}).get("acc")))
+    rows = []
+    for cat, cells in sorted(cats.items()):
+        m = sum(c[1] for c in cells) / len(cells)
+        bs = [c[2] for c in cells if c[2] is not None]
+        b = f"{sum(bs) / len(bs):.3f}" if len(bs) == len(cells) else ""
+        rows.append(f"| {cat.replace('_', ' ')} | {', '.join(sorted(c[0] for c in cells))} | **{m:.3f}** | {b} |")
+    return rows
 
 
 def card(a, meta, ev, base_ev, files):
@@ -133,7 +157,17 @@ def card(a, meta, ev, base_ev, files):
     import yaml  # noqa: PLC0415 (only needed here)
     head = "---\n" + yaml.safe_dump(front, sort_keys=False, allow_unicode=True) + "---\n"
     gate_line = (f"Against the checkpoint it was trained from, on {sum(g)} held-out suites: **{g[0]} significant "
-                 f"gains, {g[1]} within noise, {g[2]} regressions** (two combined binomial standard errors).") if g else ""
+                 f"gains, {g[1]} within noise, {g[2]} regressions** (gains: more than two combined binomial "
+                 f"standard errors; regressions: significant after Holm-Bonferroni over all suites"
+                 + (f"; {g[3]} nominal drop{'s' if g[3] != 1 else ''} beyond two standard errors did not stay significant"
+                    if g[3] else "") + ").") if g else ""
+    crows = category_rows(held, bheld)
+    cat_md = ("### Decision categories\n\n"
+              "One held-out suite per decision category, built from splits of the training sources that the "
+              "mixture never loads; any text that also occurs in the training mixture is dropped. 150 items "
+              "per language, macro over languages.\n\n"
+              "| Category | Languages | This model | Base checkpoint |\n|---|---|---|---|\n"
+              + "\n".join(crows) + "\n") if crows else ""
     return head + textwrap.dedent(f"""
     # {a.info['display']}
 
@@ -183,6 +217,7 @@ def card(a, meta, ev, base_ev, files):
     |---|---|---|---|---|
     {chr(10).join(rows)}
 
+    {cat_md}
     Published systems under the same protocol, for orientation: typed-decisions meraGPT 0.768,
     laya-typed-decisions 0.766, Jev 0.727; AG News zero-shot Laya 0.950, GPT-3 (CARP) 0.926, Jev 0.881;
     Banking77 supervised MPNet 0.941{'' if a.info['serve_key'] == 'english' else '; MASSIVE XLM-R base 0.857 over 12 languages (full train set)'}. Sources:

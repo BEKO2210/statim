@@ -11,11 +11,11 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 
 | Field | Statim | Best published, same protocol |
 |---|---|---|
-| typed-decisions test | **0.768** statim-decide-en-large; 0.7585 statim-decide-multilingual-base | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
-| Banking77, trained on train split | **0.928** en-large; 0.903 multilingual-base | 94.1 MPNet (supervised) |
-| MASSIVE, trained | 0.867 en-large (English); 0.772 multilingual-base (12 languages, 2,000 rows per language) | 85.7 XLM-R base (12 languages, supervised, full data) |
-| AG News, zero-shot (never trained) | 0.939 en-large; 0.9315 multilingual-base | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
-| Emotion, zero-shot (never trained) | 0.588 en-large; 0.5265 multilingual-base (first 2,000 rows); 0.600 consensus of the Laya checkpoints (first 400) | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
+| typed-decisions test | **0.768** statim-decide-en-large; 0.763 statim-decide-multilingual-base | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
+| Banking77, trained on train split | **0.928** en-large; 0.914 multilingual-base | 94.1 MPNet (supervised) |
+| MASSIVE, trained | 0.867 en-large (English); 0.800 multilingual-base (12 languages) | 85.7 XLM-R base (12 languages, supervised, full data) |
+| AG News, zero-shot (never trained) | 0.939 en-large; 0.9295 multilingual-base | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
+| Emotion, zero-shot (never trained) | 0.588 en-large; 0.504 multilingual-base (first 2,000 rows); 0.600 consensus of the Laya checkpoints (first 400) | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
 
 Gaps we measure and work on next: sentiment and emotion are never trained (they served as zero-shot
 suites) and the models rarely choose a "mixed" opinion; reading comprehension (Belebele 0.31–0.45)

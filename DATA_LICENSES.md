@@ -200,6 +200,124 @@ Licence as recorded per row by tasksource; source names follow its build manifes
 
 Filter statistics of this build: rows 2,500,000, not commercial 1,124,896, audit excluded 489,942, not permissive 219,847, too long 6,489, test duplicate 7.
 
+### Mixture v6 sources (111 sources, 534,231 items, at most 6200 per source)
+
+Licence checked at the source for every entry (registry `tools/finetune/sources/v6-keep.json`, review notes and attribution in `tools/finetune/sources/v6-research.md`). Every text that occurs in an evaluation suite was removed first (862,438 banned texts).
+
+| Source | Category | Licence | Languages | Items |
+|---|---|---|---|---:|
+| [3nesdeniz/agentic-prompt-injection-5k](https://huggingface.co/datasets/3nesdeniz/agentic-prompt-injection-5k) | prompt-injection | CC-BY-4.0 | en | 6,200 |
+| [3nesdeniz/turkish-conversation-prompt-injection](https://huggingface.co/datasets/3nesdeniz/turkish-conversation-prompt-injection) | prompt-injection | CC-BY-4.0 | tr | 530 |
+| [Adilbai/kz-gov-complaints-data-kz-ru](https://huggingface.co/datasets/Adilbai/kz-gov-complaints-data-kz-ru) | complaint, sentiment | Apache-2.0 | ru, kk | 1,200 |
+| [adiprog14/lingrow-support-tickets](https://huggingface.co/datasets/adiprog14/lingrow-support-tickets) | complaint | MIT | en | 6,200 |
+| [ai4bharat/IndicSentiment](https://huggingface.co/datasets/ai4bharat/IndicSentiment) | sentiment | CC0-1.0 (AI4Bharat/IndicBERT README; HF card has none) | en, hi, bn, mr, ta, te, ur, gu +6 | 6,200 |
+| [alaminxpro/university-students-complaints](https://huggingface.co/datasets/alaminxpro/university-students-complaints) | complaint | CC-BY-4.0 | en | 546 |
+| [allenai/prosocial-dialog](https://huggingface.co/datasets/allenai/prosocial-dialog) | safety-moderation | CC-BY-4.0 | en | 6,200 |
+| [alusci/sms-otp-spam-dataset](https://huggingface.co/datasets/alusci/sms-otp-spam-dataset) | spam-sms | MIT (templated; low value) | en | 6,200 |
+| [amyrmahdy/decima-synthetic-decisions](https://huggingface.co/datasets/amyrmahdy/decima-synthetic-decisions) | typed-decisions | cc-by-4.0 (card; fully synthetic, teacher Gemma-4-26B-A4B-it, Apache-2.0 model card) | en, fa, ar, ru | 6,200 |
+| [ankitkupadhyay/XNLI](https://huggingface.co/datasets/ankitkupadhyay/XNLI) | nli | apache-2.0 (card); content inherits MNLI/OANC terms | ar, bg, de, el, en, es, fr, hi +7 | 6,200 |
+| [Anthropic/hh-rlhf](https://huggingface.co/datasets/Anthropic/hh-rlhf) | safety-moderation | MIT | en | 6,200 |
+| [AshenFdo/synthetic_blood_request_urgency_dataset](https://huggingface.co/datasets/AshenFdo/synthetic_blood_request_urgency_dataset) | urgency | mit | en | 2,500 |
+| [Avature/Job-Title-Similarity](https://huggingface.co/datasets/Avature/Job-Title-Similarity) | similarity | apache-2.0 | de, en, es, fr, it, ja, nl, pl +3 | 4,563 |
+| [BEE-spoke-data/consumer-finance-complaints](https://huggingface.co/datasets/BEE-spoke-data/consumer-finance-complaints) | complaint | CC0-1.0 card; CFPB US federal data, narratives published with consumer opt-in consent | en | 6,200 |
+| [boun-tabi/nli_tr](https://huggingface.co/datasets/boun-tabi/nli_tr) | nli | same terms as MultiNLI (GitHub boun-tabi/NLI-TR README) | tr | 6,200 |
+| [brighter-dataset/BRIGHTER-emotion-categories](https://huggingface.co/datasets/brighter-dataset/BRIGHTER-emotion-categories) | emotion | cc-by-4.0 | hi | 3,629 |
+| [brighter-dataset/BRIGHTER-emotion-categories](https://huggingface.co/datasets/brighter-dataset/BRIGHTER-emotion-categories) | emotion | cc-by-4.0 | mr | 3,768 |
+| [clips/VaccinChatNL](https://huggingface.co/datasets/clips/VaccinChatNL) | intent-dialogue-act | CC-BY-4.0 | nl | 6,200 |
+| [cngchis/Support-Ticket-Router-12K-Cleaned](https://huggingface.co/datasets/cngchis/Support-Ticket-Router-12K-Cleaned) | complaint | Apache-2.0 | en | 6,200 |
+| [CohereForAI/aya_redteaming](https://huggingface.co/datasets/CohereForAI/aya_redteaming) | safety-moderation | Apache-2.0 | en, fr, es, ru, ar, hi, sr, tl | 494 |
+| [CohereLabs/aya_dataset](https://huggingface.co/datasets/CohereLabs/aya_dataset) | language-id | apache-2.0 | 65 incl. ar, de, en, fr, hi, it, ja, nl, pl, pt, ru, es, tr, zh | 6,200 |
+| [community-datasets/re_dial](https://huggingface.co/datasets/community-datasets/re_dial) | sentiment | CC-BY-4.0 | en | 6,200 |
+| [community-datasets/tapaco](https://huggingface.co/datasets/community-datasets/tapaco) | similarity | cc-by-2.0 (Tatoeba CC-BY 2.0 FR) | en, de, fr, es, it, pt, nl, pl +6 | 6,200 |
+| [Console-AI/IT-helpdesk-synthetic-tickets](https://huggingface.co/datasets/Console-AI/IT-helpdesk-synthetic-tickets) | complaint, urgency | MIT | en | 1,000 |
+| ConvLab/crosswoz (github thu-coai/CrossWOZ) | intent-dialogue-act | Apache-2.0 | zh | 6,200 |
+| [ddrg/super_eurlex](https://huggingface.co/datasets/ddrg/super_eurlex) | topic | MIT card; EUR-Lex reuse authorised incl. commercial with attribution (Decision 2011/833/EU) | bg, cs, da, de, el, en, es, et +16 | 6,200 |
+| [declare-lab/CategoricalHarmfulQA](https://huggingface.co/datasets/declare-lab/CategoricalHarmfulQA) | safety-moderation | Apache-2.0 | en, zh, vi | 550 |
+| [dell-research-harvard/headlines-semantic-similarity](https://huggingface.co/datasets/dell-research-harvard/headlines-semantic-similarity) | similarity | cc-by-2.0 (off-copyright US newspapers) | en | 6,200 |
+| [dhruv0808/indic_sentiment_analyzer](https://huggingface.co/datasets/dhruv0808/indic_sentiment_analyzer) | sentiment | CC-BY-4.0 | en, hi, te, ta, kn, or, bn, gu +4 | 6,200 |
+| [dvgodoy/CUAD_v1_Contract_Understanding_clause_classification](https://huggingface.co/datasets/dvgodoy/CUAD_v1_Contract_Understanding_clause_classification) | topic | CC-BY-4.0 | en | 6,200 |
+| [E3-JSI/synthetic-multi-pii-ner-v1](https://huggingface.co/datasets/E3-JSI/synthetic-multi-pii-ner-v1) | pii | mit | en, fr, de, el, nl, it, sl | 2,971 |
+| [elvanalabs/sarcasm-statements-90](https://huggingface.co/datasets/elvanalabs/sarcasm-statements-90) | sarcasm | mit | en | 90 |
+| [Fumika/Wikinews-multilingual](https://huggingface.co/datasets/Fumika/Wikinews-multilingual) | topic | CC-BY-2.5 (Wikinews) | en, es, fr, de, pt, pl, it, zh +25 | 6,200 |
+| [gfissore/arxiv-abstracts-2021](https://huggingface.co/datasets/gfissore/arxiv-abstracts-2021) | topic | CC0-1.0 (arXiv metadata) | en | 6,200 |
+| [asappresearch/abcd](https://github.com/asappresearch/abcd) | complaint | MIT (GitHub LICENSE) | en | 6,200 |
+| [bvidgen/Dynamically-Generated-Hate-Speech-Dataset (v0.2.3.csv; NOT tasksource/dynahate mirror tagged gpl)](https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset) | toxicity-hate | CC-BY-4.0 (upstream README) | en | 6,200 |
+| [HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)](https://github.com/HLTCHKUST/BiToD) | intent-dialogue-act | Apache-2.0 | en, zh | 6,200 |
+| [PolyAI-LDN/task-specific-datasets/nlupp](https://github.com/PolyAI-LDN/task-specific-datasets) | intent-dialogue-act | CC-BY-4.0 | en | 705 |
+| [wwbp/empathic_reactions](https://github.com/wwbp/empathic_reactions) | emotion | cc-by-4.0 | en | 3,719 |
+| [GoktugD/turkish-formality-rewrite-500k](https://huggingface.co/datasets/GoktugD/turkish-formality-rewrite-500k) | formality | cc0-1.0 | tr | 6,200 |
+| [GoktugD/turkish-intent-classification-1m](https://huggingface.co/datasets/GoktugD/turkish-intent-classification-1m) | intent-dialogue-act | CC0-1.0 (template-generated) | tr | 6,200 |
+| [GoktugD/turkish-nli-constructed-1.5m](https://huggingface.co/datasets/GoktugD/turkish-nli-constructed-1.5m) | nli | cc0-1.0 | tr | 6,200 |
+| [google-research-datasets/poem_sentiment](https://huggingface.co/datasets/google-research-datasets/poem_sentiment) | sentiment | CC-BY-4.0 | en | 892 |
+| google-research-datasets/taskmaster1/2/3 (github Taskmaster TM-1..TM-4) | intent-dialogue-act | CC-BY-4.0 | en | 6,200 |
+| [gretelai/gretel-pii-masking-en-v1](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1) | pii | apache-2.0 | en | 6,200 |
+| [gretelai/synthetic_pii_finance_multilingual](https://huggingface.co/datasets/gretelai/synthetic_pii_finance_multilingual) | pii | apache-2.0 | en, fr, de, nl, es, it, sv | 6,200 |
+| [hblim/customer-complaints](https://huggingface.co/datasets/hblim/customer-complaints) | complaint | MIT | en | 1,260 |
+| [Helsinki-NLP/tatoeba](https://huggingface.co/datasets/Helsinki-NLP/tatoeba) | language-id | cc-by-2.0 | 300+ incl. all priority | 6,200 |
+| [Helsinki-NLP/tatoeba](https://huggingface.co/datasets/Helsinki-NLP/tatoeba) | similarity | cc-by-2.0 (Tatoeba CC-BY 2.0 FR) | en, de, fr, es, it, pt, nl, pl +6 | 6,200 |
+| [ibm-research/AttaQ](https://huggingface.co/datasets/ibm-research/AttaQ) | safety-moderation | MIT | en | 1,402 |
+| [IDinsight/urgency_detection_maternal_health_synthetic](https://huggingface.co/datasets/IDinsight/urgency_detection_maternal_health_synthetic) | urgency | mit | en | 6,200 |
+| jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv) | toxicity-hate | CC-BY-4.0 | de | 5,441 |
+| [jmccardle/pulse-sofroniew-emotion-concept-texts](https://huggingface.co/datasets/jmccardle/pulse-sofroniew-emotion-concept-texts) | emotion | cc-by-4.0 | en | 6,200 |
+| [joelniklaus/covid19_emergency_event](https://huggingface.co/datasets/joelniklaus/covid19_emergency_event) | topic | CC0-1.0 | en, fr, hu, it, nb, nl, pl | 1,202 |
+| [joelniklaus/german_argument_mining](https://huggingface.co/datasets/joelniklaus/german_argument_mining) | argument-mining | cc-by-4.0 | de | 6,200 |
+| [Johnson8187/Chinese_Multi-Emotion_Dialogue_Dataset](https://huggingface.co/datasets/Johnson8187/Chinese_Multi-Emotion_Dialogue_Dataset) | emotion | mit | zh | 6,200 |
+| [JusteLeo/French-emotion](https://huggingface.co/datasets/JusteLeo/French-emotion) | emotion | mit | fr | 6,200 |
+| [kchawla123/casino](https://huggingface.co/datasets/kchawla123/casino) | intent-dialogue-act | CC-BY-4.0 | en | 3,643 |
+| [Kenshiii/synthetic-product-reviews](https://huggingface.co/datasets/Kenshiii/synthetic-product-reviews) | sentiment | CC-BY-4.0 | en | 687 |
+| [KhiredNetworks/synthetic-product-reviews](https://huggingface.co/datasets/KhiredNetworks/synthetic-product-reviews) | sentiment | MIT | en | 6,200 |
+| [leonvanbokhorst/synthetic-complaints-v2](https://huggingface.co/datasets/leonvanbokhorst/synthetic-complaints-v2) | complaint, sentiment | MIT | en | 6,200 |
+| [liri-uzh/cfpb-complaints-mini](https://huggingface.co/datasets/liri-uzh/cfpb-complaints-mini) | complaint | CC0-1.0 (CFPB public domain) | en | 6,200 |
+| [llm-for-emotion/Cultural-Emo](https://huggingface.co/datasets/llm-for-emotion/Cultural-Emo) | emotion | mit | ar, de, en, hi, es | 3,999 |
+| [lyon-nlp/clustering-hal-s2s](https://huggingface.co/datasets/lyon-nlp/clustering-hal-s2s) | topic | Apache-2.0 card; HAL metadata CC0 | fr | 6,200 |
+| [masakhane/InjongoIntent](https://huggingface.co/datasets/masakhane/InjongoIntent) | intent-dialogue-act | Apache-2.0 | en, am, ee, ha, ig, rw, ln, lg +9 | 6,200 |
+| [matsuxr/JaGovFaqs-22k](https://huggingface.co/datasets/matsuxr/JaGovFaqs-22k) | similarity | cc-by-4.0 (Japanese government copyright policy) | ja | 6,200 |
+| [maximoss/mnli-nineeleven-fr](https://huggingface.co/datasets/maximoss/mnli-nineeleven-fr) | nli | bsd-2-clause | fr | 3,988 |
+| [MoritzLaurer/synthetic_zeroshot_mixtral_v0.1](https://huggingface.co/datasets/MoritzLaurer/synthetic_zeroshot_mixtral_v0.1) | nli | apache-2.0 (Mixtral-8x7B outputs) | en | 6,200 |
+| [mteb/toxic_conversations_50k](https://huggingface.co/datasets/mteb/toxic_conversations_50k) | toxicity-hate | CC-BY-4.0 (Civil Comments text CC0) | en | 6,200 |
+| [NABA-AI/LUB-Saudi-Arabic-Intent](https://huggingface.co/datasets/NABA-AI/LUB-Saudi-Arabic-Intent) | intent-dialogue-act | CC-BY-4.0 (synthetic) | ar | 1,500 |
+| [NagaYu/deference-keigo-corpus](https://huggingface.co/datasets/NagaYu/deference-keigo-corpus) | formality | cc-by-4.0 | ja | 3,186 |
+| [napsternxg/wands](https://huggingface.co/datasets/napsternxg/wands) | similarity | MIT (wayfair/WANDS) | en | 6,200 |
+| [NortheasternUniversity/big_patent](https://huggingface.co/datasets/NortheasternUniversity/big_patent) | topic | CC-BY-4.0 | en | 6,200 |
+| [Novora/Tri-Class-Sentiment-Synthetic](https://huggingface.co/datasets/Novora/Tri-Class-Sentiment-Synthetic) | sentiment | CC0-1.0 | en | 6,200 |
+| [nvidia/Aegis-AI-Content-Safety-Dataset-1.0](https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-1.0) | safety-moderation | CC-BY-4.0 | en | 6,200 |
+| [nvidia/Aegis-AI-Content-Safety-Dataset-2.0](https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-2.0) | safety-moderation | CC-BY-4.0 | en | 6,200 |
+| [nvidia/CantTalkAboutThis-Topic-Control-Dataset](https://huggingface.co/datasets/nvidia/CantTalkAboutThis-Topic-Control-Dataset) | safety-topic-control | CC-BY-4.0 | en | 1,073 |
+| [nvidia/Nemotron-PII](https://huggingface.co/datasets/nvidia/Nemotron-PII) | pii | cc-by-4.0 | en | 6,200 |
+| [nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1](https://huggingface.co/datasets/nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1) | prompt-injection (indirect) | CC-BY-4.0 | en | 1,220 |
+| [nyu-mll/multi_nli](https://huggingface.co/datasets/nyu-mll/multi_nli) | nli | OANC licence (permissive, commercial OK) per MNLI paper/card; fiction genre mixed incl. CC-BY-SA-3.0 | en | 6,200 |
+| [OpenAssistant/oasst2](https://huggingface.co/datasets/OpenAssistant/oasst2) | toxicity-moderation | Apache-2.0 | en, es, ru, zh, de, fr, pt, it +4 | 6,200 |
+| [OpenSafetyLab/Salad-Data](https://huggingface.co/datasets/OpenSafetyLab/Salad-Data) | safety-moderation | Apache-2.0 | en | 6,200 |
+| [OrSabbach/food-delivery-support-tickets](https://huggingface.co/datasets/OrSabbach/food-delivery-support-tickets) | complaint | MIT | en | 6,200 |
+| [pacoreyes/StanceSentences](https://huggingface.co/datasets/pacoreyes/StanceSentences) | stance | apache-2.0 | en | 972 |
+| pfb30/multi_woz_v22 (github budzianowski/multiwoz) | intent-dialogue-act | MIT (upstream); Apache-2.0 (card) | en | 6,200 |
+| [PolyAI/minds14](https://huggingface.co/datasets/PolyAI/minds14) | complaint | CC-BY-4.0 | cs, de, en, es, fr, it, ko, nl +4 | 6,200 |
+| [Process-Venue/IntentClassification_Dataset_for_AI_Assistant_Prompt_Routing_Hindi](https://huggingface.co/datasets/Process-Venue/IntentClassification_Dataset_for_AI_Assistant_Prompt_Routing_Hindi) | intent-dialogue-act | Apache-2.0 (text provenance undocumented) | hi | 4,998 |
+| [reshabhs/SPML_Chatbot_Prompt_Injection](https://huggingface.co/datasets/reshabhs/SPML_Chatbot_Prompt_Injection) | prompt-injection | MIT | en | 6,200 |
+| [RichardSakaguchiMS/brazilian-customer-service-conversations](https://huggingface.co/datasets/RichardSakaguchiMS/brazilian-customer-service-conversations) | complaint, sentiment | Apache-2.0 | pt | 1,510 |
+| [s2pidape/support-ticket-dataset](https://huggingface.co/datasets/s2pidape/support-ticket-dataset) | complaint | CC-BY-4.0 | en | 6,200 |
+| [shreyaspullehf/emotion-dataset-20-emotions](https://huggingface.co/datasets/shreyaspullehf/emotion-dataset-20-emotions) | emotion | mit | en | 6,200 |
+| [sileod/attempto-nli](https://huggingface.co/datasets/sileod/attempto-nli) | nli | apache-2.0 | en | 6,200 |
+| [SINAI/ALIA-es-discriminative-stance-detection](https://huggingface.co/datasets/SINAI/ALIA-es-discriminative-stance-detection) | stance | cc-by-4.0 | es | 2,850 |
+| [stjiris/IRIS_sts](https://huggingface.co/datasets/stjiris/IRIS_sts) | similarity | mit | pt | 3,334 |
+| [sutro/synthetic-product-reviews-20k](https://huggingface.co/datasets/sutro/synthetic-product-reviews-20k) | sentiment | MIT | en | 6,200 |
+| [sweatSmile/sarcastic-dataset](https://huggingface.co/datasets/sweatSmile/sarcastic-dataset) | sarcasm | mit | en | 1,440 |
+| [takehika/wanli-ja-nli](https://huggingface.co/datasets/takehika/wanli-ja-nli) | nli | cc-by-4.0 | ja | 6,200 |
+| [tanaos/synthetic-emotion-detection-dataset-v1](https://huggingface.co/datasets/tanaos/synthetic-emotion-detection-dataset-v1) | emotion | mit | en | 6,200 |
+| [tanaos/synthetic-sentiment-analysis-dataset-v1](https://huggingface.co/datasets/tanaos/synthetic-sentiment-analysis-dataset-v1) | sentiment | MIT | en | 6,200 |
+| [tasksource/esci](https://huggingface.co/datasets/tasksource/esci) | similarity | apache-2.0 (amazon-science/esci-data) | en, es, ja | 6,200 |
+| [tasksource/help-desk-tickets](https://huggingface.co/datasets/tasksource/help-desk-tickets) | complaint, urgency | CC-BY-4.0 (Mendeley btm76zndnt v3) | en, mixed | 357 |
+| [tasksource/it-support-tickets](https://huggingface.co/datasets/tasksource/it-support-tickets) | complaint | CC-BY-4.0 (Zenodo 7648117) | en, de, pt, es | 1,568 |
+| [theatticusproject/cuad-qa](https://huggingface.co/datasets/theatticusproject/cuad-qa) | reading-comprehension | CC-BY-4.0 | en | 6,200 |
+| [theatticusproject/maud](https://huggingface.co/datasets/theatticusproject/maud) | reading-comprehension | CC-BY-4.0 | en | 6,200 |
+| [uoe-nlp/multi3-nlu](https://huggingface.co/datasets/uoe-nlp/multi3-nlu) | intent-dialogue-act | CC-BY-4.0 | am, mr, tr, es | 5,636 |
+| [urchade/synthetic-pii-ner-mistral-v1](https://huggingface.co/datasets/urchade/synthetic-pii-ner-mistral-v1) | pii | apache-2.0 | en, fr, it, de, es | 6,200 |
+| [vic35get/nhtsa_complaints_dataset](https://huggingface.co/datasets/vic35get/nhtsa_complaints_dataset) | complaint | Apache-2.0 card; NHTSA US federal data | en | 6,200 |
+| [Wismut/nym-pii-multilingual-data](https://huggingface.co/datasets/Wismut/nym-pii-multilingual-data) | pii | mit | en, de, fr, es, it, pt, nl, pl +14 | 6,200 |
+| [WorkInTheDark/FairytaleQA](https://huggingface.co/datasets/WorkInTheDark/FairytaleQA) | reading-comprehension | Apache-2.0 | en | 6,200 |
+| [YiMeng-SYSU/chinese-logic-sentiment-dataset](https://huggingface.co/datasets/YiMeng-SYSU/chinese-logic-sentiment-dataset) | sentiment | Apache-2.0 | zh | 2,176 |
+| [3609356 (ClaimBuster)](https://zenodo.org/records/3609356) | claim-detection | cc-by-4.0 | en | 1,032 |
+
 ## Used only for evaluation (never trained on)
 
 | Dataset | Licence |

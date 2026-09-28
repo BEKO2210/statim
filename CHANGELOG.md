@@ -7,6 +7,38 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-28
+
+### Added
+- `statim-decide-multilingual-base` 0.7.0, fine-tuned from 0.4.0 on the fixed mixture v6 (111 of 112
+  licence-checked sources, 534,231 items) plus the licence-filtered v5 mixture, with stronger
+  distillation from 0.4.0 so it keeps what 0.4.0 knew. Held-out results against 0.4.0:
+  - decision categories (14 categories, 35 language cells, texts that occur in training removed):
+    0.748 macro accuracy, up from 0.559 (+18.5 points pooled); reading 0.927, stance and urgency
+    0.893, PII 0.856 over 11 languages, similarity 0.833, sentiment 0.800, formality 0.773,
+    complaint 0.767, intent 0.753, NLI 0.747, safety 0.727, topic 0.607, emotion 0.586, fact-check
+    0.313;
+  - typed-decisions 0.763 (0.7585), Banking77 0.914 (0.9035), MASSIVE 0.800 (0.772); AG News 0.9295
+    and DAIR Emotion 0.504 within noise of 0.9315 and 0.5265;
+  - ticket triage (500 Banking77 tickets, q8_0 on CPU): 0.908 (0.896); at `min_confidence` 0.9,
+    2 % escalated and 0.920 on the rest (4 % and 0.915 before);
+  - gate: 23 significant gains, 66 within noise, no regression after Holm-Bonferroni (one nominal
+    drop, Belebele German, near chance for both models); validation mean 0.7340 (0.7404).
+- Model cards list the decision categories per language cell; the site's gate grid shows them as
+  their own group. Both use the gate's corrected regression rule.
+- `tools/finetune/mixture_v6/audit.py`, a content audit that loads a sample of every enabled
+  source. It flags serialized options, numeric options, constant labels and question/option
+  mismatches. The `mixture-audit` workflow runs it together with the offline adapter tests.
+- `bench/eval_categories.py`: one held-out suite per decision category (sentiment, emotion,
+  complaint, NLI, safety, reading comprehension, similarity, topic, intent, stance, formality,
+  urgency, fact-check, PII), built from the test or otherwise unused splits of the mixture v6
+  sources through the v6 adapters (first instruction paraphrase, fixed option order), 150 seeded
+  stratified items per suite and language, evaluated over HTTP. Every pooled suite text is in the
+  mixture's banned set (`eval_texts.py`), and `gate.py` checks the suites as a `categories` family.
+  `--exclude-mixture` (`gate.py eval --mixture`) drops items that share a text with the training
+  mixture; gate.py compares a category cell only on the same pool fingerprint and keeps zero-shot
+  or biased cells (reported with a reason) out of the family.
+
 ### Changed
 - Promotion gate (`tools/finetune/gate.py`): per-suite regressions are one-sided z-tests with
   Holm-Bonferroni over all compared suites (family-wise error 5 %); the validation mean may fall by at
@@ -38,20 +70,8 @@ between minor versions; every change is listed here.
   - Disabled with a reason: SimpleSafetyTests, MultiJail and OR-Bench (benchmarks), QuALITY
     (articles exceed the window), humor-greats and Lakera gandalf (positives only), MELO and
     washenkov (no pairs can be built), hass-intent-templates (template syntax).
-
-### Added
-- `tools/finetune/mixture_v6/audit.py`, a content audit that loads a sample of every enabled
-  source. It flags serialized options, numeric options, constant labels and question/option
-  mismatches. The `mixture-audit` workflow runs it together with the offline adapter tests.
-- `bench/eval_categories.py`: one held-out suite per decision category (sentiment, emotion,
-  complaint, NLI, safety, reading comprehension, similarity, topic, intent, stance, formality,
-  urgency, fact-check, PII), built from the test or otherwise unused splits of the mixture v6
-  sources through the v6 adapters (first instruction paraphrase, fixed option order), 150 seeded
-  stratified items per suite and language, evaluated over HTTP. Every pooled suite text is in the
-  mixture's banned set (`eval_texts.py`), and `gate.py` checks the suites as a `categories` family.
-  `--exclude-mixture` (`gate.py eval --mixture`) drops items that share a text with the training
-  mixture; gate.py compares a category cell only on the same pool fingerprint and keeps zero-shot
-  or biased cells (reported with a reason) out of the family.
+- Category topic suite: after the v6 adapter fixes, the registry maps big_patent's CPC letters itself;
+  the suite no longer renames them first, so the topic pool is no longer empty (#21).
 
 ## [0.6.2] - 2026-09-28
 
@@ -358,7 +378,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/BEKO2210/statim/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/BEKO2210/statim/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/BEKO2210/statim/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/BEKO2210/statim/compare/v0.5.2...v0.6.0
