@@ -24,7 +24,8 @@ void usage() {
     std::fprintf(stderr,
                  "statim %s — local System-1 decision engine (Laya/Jev compatible)\n\n"
                  "usage:\n"
-                 "  statim serve   -m [name=]model.gguf [-m ...] [--host 127.0.0.1] [--port 8080]\n"
+                 "  statim serve   -m [name=]model.gguf [-m ...] [--adapter [model:]name=adapter.gguf ...]\n"
+                 "                 [--adapter-mode merge|runtime] [--host 127.0.0.1] [--port 8080]\n"
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--batch-window-ms 0] [--max-batch 16]\n"
                  "                 [--min-confidence P]\n"
@@ -34,10 +35,10 @@ void usage() {
                  "                 [--max-request-work 4096] [--max-request-tokens 1048576]\n"
                  "                 [--max-attention-mib 1024] [--max-response-bytes 16777216]\n"
                  "                 [--http-queue 32] [--request-timeout 30] [--inference-timeout 120]\n"
-                 "  statim decide  -m model.gguf [--device D] [--ensemble K] [--lang xx] < request.json\n"
+                 "  statim decide  -m model.gguf [--adapter name=adapter.gguf] [--device D] [--ensemble K] [--lang xx] < request.json\n"
                  "                 (request: {\"state\": ..., \"questions\": {...}})\n"
-                 "  statim bench   -m model.gguf [--device D] [--threads N] [--runs 5] < request.json\n"
-                 "  statim info    -m model.gguf\n"
+                 "  statim bench   -m model.gguf [--adapter name=adapter.gguf] [--device D] [--threads N] [--runs 5] < request.json\n"
+                 "  statim info    -m model.gguf [--adapter name=adapter.gguf]\n"
                  "  statim version\n\n"
                  "env: STATIM_API_KEY (comma-separated keys), STATIM_DEVICE (default device),\n     STATIM_GPU_FAST=1 (= --gpu-fast: f16 GPU math, ~2x faster, logits move by up to ~0.1), STATIM_LOG=debug\n",
                  STATIM_VERSION);
@@ -108,6 +109,26 @@ int main(int argc, char** argv) {
                 auto eq = v.find('=');
                 if (eq != std::string::npos && v.find('/') > eq) cfg.models.emplace_back(v.substr(0, eq), v.substr(eq + 1));
                 else cfg.models.emplace_back(model_name_from_path(v), v);
+            } else if (a == "--adapter") {
+                // [model:]name=path; without "model:" the adapter belongs to the first -m model
+                const std::string v = next();
+                const auto eq = v.find('=');
+                if (eq == std::string::npos || eq + 1 == v.size())
+                    throw std::runtime_error("--adapter expects [model:]name=adapter.gguf, got '" + v + "'");
+                std::string target = v.substr(0, eq);
+                statim::AdapterSpec spec;
+                spec.path = v.substr(eq + 1);
+                const auto colon = target.find(':');
+                if (colon != std::string::npos) {
+                    spec.model = target.substr(0, colon);
+                    target = target.substr(colon + 1);
+                }
+                spec.name = target;
+                cfg.adapters.push_back(spec);
+            } else if (a == "--adapter-mode") {
+                const std::string v = next();
+                if (v != "merge" && v != "runtime") throw std::runtime_error("--adapter-mode must be merge or runtime");
+                cfg.adapter_mode = v;
             } else if (a == "--host") cfg.host = next();
             else if (a == "--port") cfg.port = number();
             else if (a == "--device") cfg.device = next();
@@ -163,17 +184,35 @@ int main(int argc, char** argv) {
             return 2;
         }
         if (cfg.ensemble < 1 || cfg.ensemble > 8 || runs < 1) throw std::runtime_error("ensemble must be 1-8 and runs must be positive");
+        for (auto& ad : cfg.adapters)
+            if (ad.model.empty()) ad.model = cfg.models.front().first;
         if (cmd == "serve") return statim::run_server(cfg);
 
         auto model = statim::Model::load(cfg.models.front().second, cfg.device);
+        if (cfg.adapters.size() > 1) throw std::runtime_error(cmd + " takes at most one --adapter");
+        if (!cfg.adapters.empty() && cfg.adapters.front().model != cfg.models.front().first)
+            throw std::runtime_error("--adapter " + cfg.adapters.front().model + ":" + cfg.adapters.front().name + ": " + cmd +
+                                     " loads only the model '" + cfg.models.front().first + "'");
+        if (!cfg.adapters.empty())
+            model = statim::Model::with_adapter(
+                model, cfg.adapters.front().path,
+                cfg.adapter_mode.empty() ? std::nullopt
+                                         : std::optional(cfg.adapter_mode == "runtime" ? statim::AdapterMode::runtime
+                                                                                      : statim::AdapterMode::merge),
+                cfg.threads);
         if (cmd == "info") {
             const auto& h = model->hparams();
-            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"device", model->device()}, {"weight_bytes", model->weight_bytes()},
+            ojson info = {{"name", h.name}, {"weights", h.weight_type}, {"fingerprint", model->fingerprint()},
+                          {"device", model->device()}, {"weight_bytes", model->weight_bytes()},
                           {"encoder", {{"layers", h.n_layer}, {"hidden", h.n_embd}, {"heads", h.n_head}, {"ff", h.n_ff},
                                        {"local_window", h.local_window}, {"rope_theta_global", h.rope_theta_global},
                                        {"rope_theta_local", h.rope_theta_local}}},
                           {"head", {{"layers", h.head_n_layer}, {"heads", h.head_n_head}, {"ff", h.head_n_ff}}},
                           {"max_len", h.max_len}, {"head_max_len", h.head_max_len}, {"vocab", model->tokenizer().vocab_size()}};
+            if (const statim::AdapterInfo* ad = model->adapter())
+                info["adapter"] = {{"name", ad->name}, {"path", ad->path}, {"mode", ad->mode == statim::AdapterMode::merge ? "merge" : "runtime"},
+                                   {"rank", ad->rank}, {"alpha", ad->alpha}, {"pairs", ad->n_pairs}, {"pairs_applied", ad->n_applied},
+                                   {"categories", ad->categories}, {"bytes", ad->bytes}, {"load_ms", ad->load_ms}};
             std::cout << info.dump(2) << "\n";
             return 0;
         }

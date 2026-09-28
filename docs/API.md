@@ -217,6 +217,7 @@ With no API keys configured, the bearer check is skipped and every path is open.
 | `state` | yes | Text or any JSON value except null. A string is scored as written. Any other value is serialized with Python-style separators (`, ` and `: `), with object key order kept and non-ASCII characters kept. When the token budget cuts the state, a JSON array keeps the end of the sequence and every other value keeps the beginning. |
 | `questions` | yes | Object. Each key is the question id returned in `answers`. At most 64 questions. |
 | `model` | no | `english`, `multilingual`, `consensus`, an alias `convaiinnovations/laya-<id>`, or omitted. Any other string is ignored and routing runs as if `model` were omitted. See [Model routing and consensus](#model-routing-and-consensus). |
+| `adapter` | no | `null`, `"none"`, `"auto"`, or the name of a LoRA adapter loaded for the selected model. See [LoRA adapters](#lora-adapters). Anything else is HTTP 422. |
 | `lang` | no | String. Selects a per-language temperature when the checkpoint has one for that language (the part before `-`, compared case-insensitively). It does not select the checkpoint. The English and multilingual GGUF files shipped with this tree store an empty language-temperature table, so this field does not change scores on those files. |
 | `ensemble` | no | Integer from 1 to 8 inclusive. Any other present value is HTTP 422 with `ensemble must be an integer between 1 and 8`. Omitting it uses the server default (1, unless `--ensemble` was set). Values above 1 re-score choice questions under extra cyclic option orders and average them. Score and noul questions are not rotated. |
 | `ensemble_margin` | no | Number, clamped to 0..1. A non-number is ignored. The default is 1. Extra option orders run only when the gap between the top probability and the second is below this margin. A margin of 0 runs no extra orders. |
@@ -252,7 +253,7 @@ How criteria become option text:
 
 A single decision is one object. `model` is the checkpoint name stored in the GGUF file (`general.name`), not the `-m` id. On these files that is `laya` or `laya-multilingual`. Consensus sets `model` to `consensus`.
 
-`routing.model` is the id that was actually used: `english`, `multilingual`, or `consensus`. `routing.reason` is `requested`, `lang:en`, `lang:other`, `default` (only one checkpoint is loaded, or the two are not named `english` and `multilingual`), or `consensus`. `routing.engine` is `statim`. `routing.weights` is the weight type of the checkpoint that ran. For consensus it is the English checkpoint's weight type.
+`routing.model` is the id that was actually used: `english`, `multilingual`, or `consensus`. `routing.reason` is `requested`, `lang:en`, `lang:other`, `default` (only one checkpoint is loaded, or the two are not named `english` and `multilingual`), or `consensus`. `routing.engine` is `statim`. `routing.weights` is the weight type of the checkpoint that ran. For consensus it is the English checkpoint's weight type. `routing.reason` is `adapter` when a named LoRA adapter selected the model. When the server has LoRA adapters loaded or the request sets `adapter`, `routing.adapter` is the adapter that ran, or `null` for the base weights, and `routing.adapter_reason` says why (`none`, `requested`, `auto:<family>`, `auto:<family>:no-adapter`, `auto:no-family`, `auto:consensus`); see [LoRA adapters](#lora-adapters).
 
 `usage.input_tokens` counts encoder tokens for the canonical option order. Extra ensemble views are not added. Consensus adds the two checkpoints together. `usage.output_tokens` is always 0.
 
@@ -658,6 +659,143 @@ curl -sS -w '\n%{http_code}\n' \
 200
 ```
 
+## LoRA adapters
+
+One base checkpoint can serve several small, per-category LoRA adapters. Each request picks one with `adapter`; the base weights, the tokenizer and every tensor an adapter does not touch are shared.
+
+### Convert
+
+`tools/convert_lora.py` reads a PEFT adapter directory (`adapter_config.json` and `adapter_model.safetensors`, as `save_pretrained` writes them) and writes a Statim adapter GGUF:
+
+```bash
+python tools/convert_lora.py runs/emotion-lora -o models/emotion.lora.gguf \
+    --base models/laya-multilingual-f32.gguf --category emotion
+```
+
+- Targets: the encoder's attention (`attn.Wqkv`, `attn.Wo`) and MLP (`mlp.Wi`, `mlp.Wo`) projections, any subset of layers. Keys may carry the `base_model.model.` prefix and an adapter name (`lora_A.default.weight`).
+- Scale: `lora_alpha / r`, or `lora_alpha / sqrt(r)` with `use_rslora`; `rank_pattern` and `alpha_pattern` are matched per module the way PEFT matches them. The scale is folded into `lora_b`, so the file stores `W' = W + lora_b · lora_a`.
+- Factors may be f32, f16 or bf16 (the dtype PEFT saves when the model was trained in bf16); f16 and bf16 are widened to f32 exactly.
+- Rejected with an error, because Statim cannot represent them and dropping them would serve a different model than the one that was evaluated:
+  - LoRA on any other module (decision head, embeddings, classifier), `bias` other than `none`, `lora_bias`, `modules_to_save`, `trainable_token_indices`, `layer_replication`, `target_parameters`, a missing `lora_A` or `lora_B`, a rank that disagrees with the config;
+  - `fan_in_fan_out`, which PEFT sets for Conv1D weights stored as (in, out), not for the encoder's `nn.Linear` projections;
+  - the LoRA variants whose inference is not `W + B·A`: DoRA, aLoRA (`alora_invocation_tokens`), QALoRA, BD-LoRA, KaSA and Arrow. VeLoRA, MonteCLoRA and MiCA only change training (PEFT evaluates and merges them as plain LoRA), so they convert, and their training-only tensors are skipped;
+  - `init_lora_weights` PiSSA, OLoRA, CorDA or LoRA-GA, which change the base weights at initialisation, so the saved adapter only fits that changed base, and LoftQ, which replaces them with quantized ones. PEFT's `save_pretrained(..., path_initial_model_for_weight_conversion=...)` turns the first four into a plain LoRA (saved with `init_lora_weights: true`), which converts.
+- `--base` (required) is the Statim model the adapter was trained on. Every shape is checked against it, and its `general.name` and fingerprint are recorded. The fingerprint is a SHA-256 over the checkpoint's vectors, every tensor of ggml shape `[n, 1, 1, 1]` (the normalisation weights and the biases of the decision head and scorer): in byte order of the names, each as its name and a NUL byte, the element count (u64 little-endian) and the values as little-endian f32. Full fine-tuning changes these weights and quantizing never touches them, so the fingerprint tells apart two fine-tunes that share a name and is the same for the f32, f16, q8_0 and q4_0 files of one checkpoint (whose names may differ). It cannot tell apart checkpoints that differ only in their matrices: a checkpoint with a LoRA merged into its encoder projections has its base's fingerprint, so do not load an adapter onto a checkpoint that already contains another adapter. `statim info -m model.gguf` prints it.
+- `--category` (repeatable) lists the question families the adapter serves in `"adapter": "auto"`; without it the adapter name is used.
+
+File layout (`statim.format` = `statim-lora-v1`): `encoder.layers.<l>.<target>.weight.lora_a` (f32, ggml ne `[in, r]`) and `.lora_b` (f32, ne `[r, out]`, pre-scaled), plus `statim.lora.rank`, `statim.lora.alpha`, `statim.lora.rslora`, `statim.lora.categories`, `statim.lora.base_name` and `statim.lora.base_fingerprint`. The engine loads an adapter only onto a model with the recorded fingerprint, and refuses a file without one.
+
+### Load
+
+```bash
+statim serve -m multilingual=models/laya-multilingual-q8_0.gguf \
+    --adapter multilingual:emotion=models/emotion.lora.gguf \
+    --adapter multilingual:sentiment=models/sentiment.lora.gguf
+```
+
+`--adapter [model:]name=file.gguf` attaches an adapter to the `-m` model called `model` (the first `-m` model when omitted). Names are 1-64 characters of `A-Z a-z 0-9 _ . -`; `auto` and `none` are reserved; a name may repeat across models but not within one. Every adapter is loaded and checked at startup, so a bad file stops the server before it listens. `statim decide`, `bench` and `info` take one `--adapter name=file.gguf` as well.
+
+`--adapter-mode merge|runtime` chooses how adapters are applied, for all of them. Without it, adapters on f32, f16 or bf16 weights are merged and adapters on quantized weights run as runtime LoRA; see [below](#merge-at-load-vs-runtime-lora).
+
+Adapters share the base model's `--workers` slots and engines: a server with `--workers 2` runs at most two forward passes at once over the base and all its adapters together, and holds at most two engines (compute buffers) for them, so adapters add neither compute threads nor compute memory. An engine serves one weight set at a time; when a request needs one for another adapter (or the base) and none is idle for it, an idle engine of another weight set is dropped and a new one is built. `statim_engines` in `/metrics` shows the count. With `--batch-window-ms`, requests are only batched with requests for the same adapter.
+
+### Select
+
+| `adapter` | Weights used | `routing.adapter` | `routing.adapter_reason` |
+|---|---|---|---|
+| omitted, `null` or `"none"` | base | `null` | `none` |
+| a loaded name, e.g. `"emotion"` | that adapter | `"emotion"` | `requested` |
+| `"auto"` | the adapter serving the request's question family, else base | its name or `null` | `auto:<family>`, `auto:<family>:no-adapter` or `auto:no-family` |
+
+Model routing runs first. An explicit `model` must carry the named adapter, otherwise the request fails with 422. Without an explicit `model`, a named adapter that exactly one loaded model carries selects that model (`routing.reason` = `adapter`); otherwise the usual language routing picks the model, and the adapter must exist there. `"model": "consensus"` accepts only `"auto"` (which then uses the base weights, `auto:consensus`) or no adapter. The `--consensus` default applies to requests without a named adapter only: a request that names one runs on that adapter's model.
+
+```bash
+curl -sS http://127.0.0.1:8080/v1/systemone -H 'Content-Type: application/json' --data-binary @- <<'EOF'
+{"state": "Worst experience ever. The agent hung up on me twice.",
+ "adapter": "auto",
+ "questions": {"sentiment": {"type": "choice", "instructions": "What is the sentiment of the message?",
+                             "criteria": ["positive", "neutral", "negative"]}}}
+EOF
+```
+
+With one model loaded and an adapter of category `sentiment`, the response carries `"routing": {"model": "multilingual", "reason": "default", ..., "adapter": "sentiment", "adapter_reason": "auto:sentiment"}`. `"auto"` never selects the model: `routing.reason` comes from the usual model routing (`default`, `lang:en`, `lang:other` or `requested`). The access log records the adapter per request.
+
+### The auto rule
+
+The families are the decision categories of the training mixture. Each family has a fixed keyword list:
+
+| Family | Keywords |
+|---|---|
+| `sentiment` | sentiment, polarity |
+| `emotion` | emotion, emotions, emotional, feeling, feelings, mood |
+| `complaint` | complaint, complaints, complain, complaining |
+| `nli` | nli, entailment, entail, entails, contradiction, contradict, contradicts |
+| `safety` | safety, unsafe, toxic, toxicity, harmful, moderation |
+| `reading` | reading, comprehension, passage |
+| `similarity` | similarity, similar, paraphrase, paraphrases |
+| `topic` | topic, topics |
+| `intent` | intent, intents, intention |
+| `stance` | stance |
+| `formality` | formality, formal, informal |
+| `urgency` | urgency, urgent |
+| `fact_check` | fact, facts, factual, claim, claims |
+| `pii` | pii, personally |
+
+1. A question's family comes from its ID first: the ID is split into lowercase ASCII words (runs of letters and digits, so `fact_check` is `fact` `check`). If those words hit the keywords of exactly one family, that is the family.
+2. If the ID hits no family, the same test runs on `instructions` (when it is a string).
+3. No hit, or hits in more than one family, means the question has no family.
+4. The request's family is the family every question shares. One question without a family, or two questions of different families, route the whole request to the base weights (`auto:no-family`).
+5. Among the chosen model's adapters, the first one (in `--adapter` order) whose categories contain the family is used; if none does, the base weights are used (`auto:<family>:no-adapter`).
+
+The rule is deliberately literal and keyword-based: it is deterministic, costs nothing, and a caller who wants a family can name the question after it (`"sentiment": {...}`). Non-English instructions only match through the question ID. It does not route per question: a request that mixes families runs on the base weights, and a caller who wants per-family adapters for such a request sends one request per family.
+
+### Merge at load vs. runtime LoRA
+
+`merge` computes `W' = W + B·A` once per adapted projection when the adapter loads: the base weight is dequantized to f32, `B·A` is added with a ggml graph on the CPU, and the result is stored in the base weight's type (quantized types are quantized again; on the CPU, repackable types go to the same repack buffer as the base). Requests then run the unchanged base graph. `runtime` keeps the base weights and adds `B·(A·x)` after each adapted projection in the graph. Without `--adapter-mode`, adapters on float weights (f32, f16, bf16) are merged and adapters on quantized weights run as runtime LoRA, for the accuracy reason below.
+
+Measured on 4 threads of an Intel Xeon @ 2.10 GHz, `laya-multilingual`, every projection of all 22 layers adapted, 10 short states from `tests/data/golden_inputs.json` with all 8 questions (one request per state, mean of 30):
+
+| Base weights | Adapter | Mode | ms per request | Extra memory | Load time |
+|---|---|---|---|---|---|
+| f32 | – | base | 560–588 | – | – |
+| f32 | rank 4 | merge | 519–557 | 438 MB | 0.7–0.8 s |
+| f32 | rank 4 | runtime | 749 | 3.3 MB | 4 ms |
+| f32 | rank 16 | runtime | 707 | 13.5 MB | 12 ms |
+| q8_0 | – | base | 798–830 | – | – |
+| q8_0 | rank 4 | merge | 812 | 116 MB | 1.2 s |
+| q8_0 | rank 4 | runtime | 1067 | 3.3 MB | 4 ms |
+| q8_0 | rank 16 | runtime | 934 | 13.5 MB | 10 ms |
+
+- Latency: a merged adapter runs at base speed (the differences above are run-to-run noise). Runtime LoRA costs 17-28 % per request although rank 4 adds under 1 % of the FLOPs: it adds three graph nodes per adapted projection (264 for this model), and on short CPU inputs every node pays a thread barrier and a pass over the activations. On float weights merge is exact and costs nothing per request, so it is the default there.
+- Accuracy on float weights: the two modes agree within 2.4e-5 in the logits.
+- Accuracy on quantized weights: merge quantizes `W + B·A` again, so the adapter's delta is rounded to the quantization grid, and a LoRA delta is often smaller than one step of it. `lora_quantized` measures this on the 80 reference items with the random rank-4 test adapter (mean |Δlogit|, CPU):
+
+  | Base | vs. the f32 base | Adapter effect (runtime) | Runtime vs. the f32 PyTorch merge | Merge vs. runtime |
+  |---|---|---|---|---|
+  | q8_0 | 0.085 | 0.480 | 0.081 | 0.070, 14 % of the effect |
+  | q4_0 | 0.641 | 0.549 | 0.674 | 0.502, 91 % of the effect |
+
+  Runtime LoRA keeps a quantized model with the adapter as close to the f32 reference as the quantized base is to the f32 base. Merging loses a seventh of the adapter's effect on q8_0 and nearly all of it on q4_0, where the test adapter's delta (about 0.004 per weight) is smaller than one quantization step; a trained adapter's delta is often smaller still. So runtime is the default on quantized weights, and `--adapter-mode merge` trades that accuracy for base latency. For the best quantized result, merge the adapter into the checkpoint in PyTorch and quantize once with `tools/convert_laya.py`.
+- Memory: the price of merge is one copy of the adapted projections per adapter: 438 MB in f32, 116 MB in q8_0, whatever the rank. Runtime stores only the factors (MB). Fourteen category adapters on an f32 base cost about 6.1 GB merged; that is when `--adapter-mode runtime` pays off there too.
+- Exactness: a LoRA pair whose `lora_a` or `lora_b` is all zeros is skipped in both modes (the base tensor stays in place), so an untrained adapter (PEFT initialises `lora_B` to zero) is bit-identical to the base on every weight type.
+- Types that need an importance matrix to quantize (the IQ types) cannot be merged; runtime mode, their default, works.
+
+### Inspect
+
+`GET /v1/models` lists each model's adapters: `id`, `source` (the adapter's `general.name`), `mode`, `rank`, `alpha`, `pairs` (LoRA pairs in the file), `pairs_applied` (non-zero pairs), `categories` and `bytes` (memory added on top of the base). `/metrics` exports `statim_adapter_info{model,adapter,mode} 1` and `statim_adapter_bytes{model,adapter}` per adapter, and `statim_engines{model}` (engines alive for a model and its adapters, at most `--workers`). `statim info -m base.gguf --adapter name=file.gguf` prints the same fields; `statim info` also prints the model's `fingerprint`.
+
+### Tests
+
+`ctest -R lora` (CPU):
+
+- `lora_fixtures` writes a zero and a random rank-4 PEFT adapter from an integer hash (no RNG, identical on every platform) and converts them.
+- `lora_convert` checks scaling, f16 and bf16 factors, the recorded fingerprint against `statim info`, and every rejected input of the converter.
+- `lora_parity` checks that the zero adapter's logits and `decide()` output are bit-identical to the base, and that the random adapter's merged weights and logits match a PyTorch reference that merged the same adapter into the official Laya model (`tests/lora/gen_reference.py`, committed as `tests/data/golden_lora_random.jsonl`) within 1e-4, in both modes. It also checks SHA-256 against the FIPS 180-2 vectors and that adapters for another checkpoint, without a fingerprint, or with shapes that do not fit are refused.
+- `lora_quantized` quantizes the base to q8_0 and q4_0 (`lora_quantize_*`) and checks the table above: same fingerprint, runtime as the default, runtime within 1.5 times the base's quantization noise of the f32 reference, merged weights equal to `quantize(dequantize(W) + B·A)` bit for bit, and repacked merged weights computing what the file layout computes.
+- `server_lora` covers selection, auto routing, model selection by adapter, the batch endpoint, micro-batching across adapters, `/v1/models`, `/metrics`, authentication before adapter checks, a named adapter under `--consensus`, one engine for the base and two adapters with `--workers 1`, and the error cases.
+
+CI runs them with `ctest -R lora -V`, so the measured differences are in the log.
+
 ## Option budget
 
 Options share `head_max_len` tokens with the question text. When they do not fit, each option is cut to `max(4, (head_max_len - 16) / number of options)` tokens. With the English default of 192, a choice of about 77 labels is cut to one or two subwords per label, so the model does not read the label text. Set `head_max_len` to 512 for that kind of question. The state budget grows with it, because the engine keeps at least `head_max_len + 128` tokens in total.
@@ -888,6 +1026,9 @@ Handler errors are JSON objects with one string field, `detail`. HTTP framing, d
 | 413 | the final serialized response exceeds `--max-response-bytes` | `{"detail":"response exceeds byte budget"}` |
 | 413 | a defensive state/question/model cardinality check fails | `{"detail":"request exceeds state/question/model limits"}` |
 | 422 | `model` or `lang` is not a string of at most 256 bytes | `{"detail":"model must be a string of at most 256 bytes"}` (the field name changes) |
+| 422 | `adapter` is not null or a string of at most 256 bytes | `{"detail":"adapter must be null or a string of at most 256 bytes"}` |
+| 422 | `adapter` names no adapter of the selected model | `{"detail":"unknown adapter 'x' for model 'multilingual' (loaded: emotion, sentiment)"}`; the parenthesis says `none loaded` and lists other models' adapters as `other models: <model>:<adapter>, ...` when there are any |
+| 422 | a named `adapter` with `"model": "consensus"` | `{"detail":"adapter 'emotion' cannot be combined with consensus"}` |
 | 422 | `max_len` or `head_max_len` is not an integer from 32 to 8192 | `{"detail":"max_len must be an integer between 32 and 8192"}` (the field name changes) |
 | 422 | `ensemble` is not an integer from 1 to 8 | `{"detail":"ensemble must be an integer between 1 and 8"}` |
 | 422 | `min_confidence` is not a number from 0 to 1 | `{"detail":"min_confidence must be a number from 0 to 1"}` |
@@ -1399,7 +1540,7 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/ready
 200
 ```
 
-`GET /v1/models` lists checkpoints in load order. `id` is the `-m` name. `source` is the GGUF `general.name`. `max_len` is the checkpoint default. `head_max_len` is not in this object. `device` is the actual compute device used by that model. This endpoint requires the bearer key when authentication is configured.
+`GET /v1/models` lists checkpoints in load order. `id` is the `-m` name. `source` is the GGUF `general.name`. `max_len` is the checkpoint default. `head_max_len` is not in this object. `device` is the actual compute device used by that model. When the server was started with `--adapter`, every entry also has `adapters`, the model's LoRA adapters (possibly empty; fields in [LoRA adapters](#lora-adapters)). This endpoint requires the bearer key when authentication is configured.
 
 ```bash
 curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/v1/models

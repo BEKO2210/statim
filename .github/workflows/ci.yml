@@ -23,7 +23,9 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF
           cmake --build build
       - name: Parity gates vs. the official Laya package
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure -E lora
+      - name: LoRA gates (verbose, so the measured differences stay in the log)
+        run: ctest --test-dir build -R lora -V
   fuzz:
     # 60 s per libFuzzer harness under ASan + UBSan, from the committed seeds and regressions plus the
     # corpus grown in earlier runs (actions/cache; fuzz/README.md).

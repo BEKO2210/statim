@@ -1,6 +1,7 @@
 // Statim HTTP server: Jev/Laya-compatible POST /v1/systemone plus operational endpoints.
 #include "statim/server.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -24,6 +25,19 @@
 namespace statim {
 
 namespace {
+
+// A Prometheus label value: backslash, double quote and newline escaped (text exposition format).
+// Model names come from the command line and may contain any of them.
+std::string prom_label(const std::string& v) {
+    std::string out;
+    for (char c : v) {
+        if (c == '\\') out += "\\\\";
+        else if (c == '"') out += "\\\"";
+        else if (c == '\n') out += "\\n";
+        else out += c;
+    }
+    return out;
+}
 
 std::string new_request_id() {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
@@ -88,56 +102,128 @@ struct Summary {
     }
 };
 
-// A fixed set of engines (each owns its compute buffers; weights are shared). Requests borrow
-// one; when all are busy and the wait queue is full the caller gets 503 instead of piling up.
+// A fixed number of compute slots per base model (each engine owns its compute buffers; weights
+// are shared). The base model and its adapter views share the slots, so adapters never add
+// compute threads, and they share the engines too: the pool never holds more engines than slots.
+// An engine serves one view; a view gets one when it first runs, and when every engine is taken,
+// an idle engine of another view is dropped for it. Compute buffers only grow, so without the cap
+// every adapter would keep its own set of peak-sized buffers. Requests borrow an engine; when all
+// slots are busy and the wait queue is full the caller gets 503 instead of piling up.
 class EnginePool {
 public:
     EnginePool(const std::shared_ptr<Model>& model, int workers, int threads_per_worker) {
-        RunOptions ro;
-        ro.n_threads = threads_per_worker;
-        for (int i = 0; i < workers; ++i) free_.push_back(std::make_unique<Engine>(model, ro));
-        size_ = workers;
+        ro_.n_threads = threads_per_worker;
+        for (int i = 0; i < workers; ++i) free_[model.get()].push_back(std::make_unique<Engine>(model, ro_));
+        size_ = engines_ = workers;
     }
     struct Lease {
         EnginePool* pool;
+        const Model* key;
         std::unique_ptr<Engine> engine;
         ~Lease() {
-            if (engine) pool->release(std::move(engine));
+            if (engine) pool->release(key, std::move(engine));
         }
     };
-    std::unique_ptr<Lease> acquire(std::chrono::steady_clock::time_point deadline) {
+    std::unique_ptr<Lease> acquire(const std::shared_ptr<Model>& model, std::chrono::steady_clock::time_point deadline) {
+        auto l = std::make_unique<Lease>();  // allocated before a slot is taken: nothing below may throw
+        l->pool = this;                      // until the guarded engine construction
+        l->key = model.get();
         std::unique_lock<std::mutex> lk(mu_);
-        if (!cv_.wait_until(lk, deadline, [&] { return !free_.empty(); })) throw HttpError(503, "inference queue deadline exceeded");
-        auto l = std::make_unique<Lease>();
-        l->pool = this;
-        l->engine = std::move(free_.back());
-        free_.pop_back();
+        if (!cv_.wait_until(lk, deadline, [&] { return busy_ < size_; })) throw HttpError(503, "inference queue deadline exceeded");
+        ++busy_;
+        if (auto it = free_.find(model.get()); it != free_.end() && !it->second.empty()) {
+            l->engine = std::move(it->second.back());
+            it->second.pop_back();
+            return l;
+        }
+        // At the cap, some engine is idle: engines_ counts the idle ones and those of the other busy
+        // slots, and busy_ (this request included) is at most size_. This view has none idle, so it
+        // belongs to another view; take it from the view with the most idle engines.
+        std::vector<std::unique_ptr<Engine>>* from = nullptr;
+        if (engines_ >= size_)
+            for (auto& [key, idle] : free_)
+                if (key != model.get() && !idle.empty() && (!from || idle.size() > from->size())) from = &idle;
+        std::unique_ptr<Engine> evicted;
+        if (from) {
+            evicted = std::move(from->back());
+            from->pop_back();
+        } else {
+            ++engines_;
+        }
+        lk.unlock();
+        evicted.reset();  // frees its compute buffers before the new engine allocates its own
+        try {
+            l->engine = std::make_unique<Engine>(model, ro_);
+        } catch (...) {
+            l->engine.reset();
+            lk.lock();
+            --engines_;
+            --busy_;
+            cv_.notify_one();
+            throw;
+        }
         return l;
     }
     int busy() {
         std::lock_guard<std::mutex> lk(mu_);
-        return size_ - static_cast<int>(free_.size());
+        return busy_;
     }
     int size() const { return size_; }
+    int engines() {
+        std::lock_guard<std::mutex> lk(mu_);
+        return engines_;
+    }
 
 private:
-    void release(std::unique_ptr<Engine> e) {
+    void release(const Model* key, std::unique_ptr<Engine> e) noexcept {
         {
             std::lock_guard<std::mutex> lk(mu_);
-            free_.push_back(std::move(e));
+            --busy_;
+            try {
+                free_[key].push_back(std::move(e));
+            } catch (...) {  // out of memory: give up the engine (destroyed on return), never the slot
+                --engines_;
+            }
         }
         cv_.notify_one();
     }
+    RunOptions ro_;
     std::mutex mu_;
     std::condition_variable cv_;
-    std::vector<std::unique_ptr<Engine>> free_;
+    std::map<const Model*, std::vector<std::unique_ptr<Engine>>> free_;
     int size_ = 0;
+    int engines_ = 0;  // idle engines plus one per busy slot (holding or building one); <= size_
+    int busy_ = 0;
+};
+
+// A LoRA adapter view of a loaded model (Model::with_adapter), selected with "adapter".
+struct LoadedAdapter {
+    std::string name;
+    std::shared_ptr<Model> model;
 };
 
 struct LoadedModel {
     std::string name;
     std::shared_ptr<Model> model;
     std::unique_ptr<EnginePool> pool;
+    std::vector<LoadedAdapter> adapters;
+    const LoadedAdapter* adapter(const std::string& n) const {
+        for (auto& a : adapters)
+            if (a.name == n) return &a;
+        return nullptr;
+    }
+    // "adapter": "auto": the first adapter (in --adapter order) that serves the family
+    const LoadedAdapter* adapter_for(const std::string& family) const {
+        for (auto& a : adapters)
+            for (auto& c : a.model->adapter()->categories)
+                if (c == family) return &a;
+        return nullptr;
+    }
+    std::string adapter_names() const {
+        std::string s;
+        for (auto& a : adapters) s += (s.empty() ? "" : ", ") + a.name;
+        return s.empty() ? "none loaded" : "loaded: " + s;
+    }
 };
 
 // Validated single requests wait here before any engine is leased.  Each route has its own
@@ -361,7 +447,32 @@ int run_server(const ServerConfig& cfg) {
         std::fprintf(stderr, "statim serve: no model given (-m path.gguf)\n");
         return 2;
     }
+    for (const AdapterSpec& spec : cfg.adapters) {
+        LoadedModel* lm = nullptr;
+        for (auto& m : models)
+            if (m.name == spec.model) lm = &m;
+        if (!lm) throw std::runtime_error("--adapter " + spec.model + ":" + spec.name + ": no model named '" + spec.model + "'");
+        const bool valid_name = !spec.name.empty() && spec.name.size() <= 64 &&
+            std::all_of(spec.name.begin(), spec.name.end(), [](char c) {
+                return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.';
+            });
+        if (!valid_name || spec.name == "auto" || spec.name == "none")
+            throw std::runtime_error("--adapter name '" + spec.name + "' must be 1-64 of [A-Za-z0-9_.-] and not 'auto' or 'none'");
+        if (lm->adapter(spec.name)) throw std::runtime_error("--adapter " + spec.model + ":" + spec.name + " given twice");
+        LoadedAdapter la;
+        la.name = spec.name;
+        std::optional<AdapterMode> mode;
+        if (!cfg.adapter_mode.empty()) mode = cfg.adapter_mode == "runtime" ? AdapterMode::runtime : AdapterMode::merge;
+        la.model = Model::with_adapter(lm->model, spec.path, mode, threads);
+        const AdapterInfo& ai = *la.model->adapter();
+        std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "adapter_loaded"},
+            {"model", lm->name}, {"adapter", la.name}, {"path", spec.path}, {"mode", ai.mode == AdapterMode::merge ? "merge" : "runtime"},
+            {"rank", ai.rank}, {"pairs", ai.n_pairs}, {"pairs_applied", ai.n_applied}, {"categories", ai.categories},
+            {"bytes", ai.bytes}, {"ms", ai.load_ms}}.dump().c_str());
+        lm->adapters.push_back(std::move(la));
+    }
 
+    const bool any_adapters = !cfg.adapters.empty();
     std::vector<std::string> api_keys = cfg.api_keys;
     std::atomic<int> in_flight{0};
     std::atomic<uint64_t> req_total{0}, req_errors{0}, tokens_total{0}, rejected_busy{0};
@@ -403,6 +514,18 @@ int run_server(const ServerConfig& cfg) {
                 }
             // unknown ids (e.g. a Jev model name) fall through to routing, like laya.serve
         }
+        // a named adapter that exactly one model carries selects that model
+        if (body.contains("adapter") && body["adapter"].is_string()) {
+            const std::string want = body["adapter"].get<std::string>();
+            LoadedModel* only = nullptr;
+            int n = 0;
+            for (auto& m : models)
+                if (m.adapter(want)) only = &m, ++n;
+            if (n == 1) {
+                reason = "adapter";
+                return *only;
+            }
+        }
         LoadedModel* en = by_name("english");
         LoadedModel* ml = by_name("multilingual");
         if (en && ml) {
@@ -416,9 +539,10 @@ int run_server(const ServerConfig& cfg) {
         return models.front();
     };
 
-    auto run_one_model = [](LoadedModel& lm, const std::vector<ojson>& states, const ojson& questions,
-                            DecideOptions opts) {
-        auto lease = lm.pool->acquire(opts.deadline);
+    // weights: the base model, or one of its adapter views
+    auto run_one_model = [](LoadedModel& lm, const std::shared_ptr<Model>& weights, const std::vector<ojson>& states,
+                            const ojson& questions, DecideOptions opts) {
+        auto lease = lm.pool->acquire(weights, opts.deadline);
         return lease->engine->decide_batch(states, questions, opts);
     };
     LoadedModel* consensus_en = by_name("english");
@@ -426,8 +550,8 @@ int run_server(const ServerConfig& cfg) {
     auto run_consensus = [&](const std::vector<ojson>& states, const ojson& questions, DecideOptions opts) {
         const bool keep_logits = opts.return_logits;
         opts.return_logits = true;
-        std::vector<ojson> re = run_one_model(*consensus_en, states, questions, opts);
-        std::vector<ojson> rm = run_one_model(*consensus_ml, states, questions, opts);
+        std::vector<ojson> re = run_one_model(*consensus_en, consensus_en->model, states, questions, opts);
+        std::vector<ojson> rm = run_one_model(*consensus_ml, consensus_ml->model, states, questions, opts);
         std::vector<ojson> results;
         results.reserve(re.size());
         for (size_t i = 0; i < re.size(); ++i) {
@@ -443,15 +567,20 @@ int run_server(const ServerConfig& cfg) {
         return results;
     };
 
-    std::map<LoadedModel*, std::unique_ptr<MicroBatcher>> batchers;
+    // one coordinator per weight set: requests for different adapters never share a forward pass
+    std::map<const Model*, std::unique_ptr<MicroBatcher>> batchers;
     std::unique_ptr<MicroBatcher> consensus_batcher;
     if (cfg.batch_window_ms > 0) {
-        for (auto& m : models)
-            batchers[&m] = std::make_unique<MicroBatcher>(
-                cfg.batch_window_ms, cfg.max_batch, workers,
-                [&m, &run_one_model](const std::vector<ojson>& states, const ojson& questions, DecideOptions opts) {
-                    return run_one_model(m, states, questions, std::move(opts));
-                }, batch_size, batch_wait_ms);
+        for (auto& m : models) {
+            std::vector<std::shared_ptr<Model>> weights{m.model};
+            for (auto& a : m.adapters) weights.push_back(a.model);
+            for (auto& w : weights)
+                batchers[w.get()] = std::make_unique<MicroBatcher>(
+                    cfg.batch_window_ms, cfg.max_batch, workers,
+                    [&m, w, &run_one_model](const std::vector<ojson>& states, const ojson& questions, DecideOptions opts) {
+                        return run_one_model(m, w, states, questions, std::move(opts));
+                    }, batch_size, batch_wait_ms);
+        }
         if (consensus_en && consensus_ml)
             consensus_batcher = std::make_unique<MicroBatcher>(cfg.batch_window_ms, cfg.max_batch, workers,
                                                                run_consensus, batch_size, batch_wait_ms);
@@ -462,7 +591,7 @@ int run_server(const ServerConfig& cfg) {
         const auto supplied_id = req.get_header_value("X-Request-Id");
         const std::string rid = valid_request_id(supplied_id) ? supplied_id : new_request_id();
         res.set_header("X-Request-Id", rid);
-        std::string model_name = "-";
+        std::string model_name = "-", adapter_name = "-";
         size_t n_tokens = 0;
         int status = 200;
         struct InFlight {
@@ -501,19 +630,52 @@ int run_server(const ServerConfig& cfg) {
             const double min_confidence = parsed.min_confidence;
             std::vector<ojson>& states = parsed.states;
 
+            // LoRA adapter: absent, null or "none" = the base weights; "auto" = the adapter that
+            // serves the request's question family (request_family); otherwise a loaded adapter name.
+            const std::string want_adapter =
+                body.contains("adapter") && body["adapter"].is_string() ? body["adapter"].get<std::string>() : "none";
+            const bool named_adapter = want_adapter != "none" && want_adapter != "auto";
+
             // Consensus: both English and multilingual checkpoints answer, their option
             // log-probabilities are averaged. Opt in per request ("model": "consensus") or by default
-            // with --consensus.
+            // with --consensus; the default does not apply to a request that names an adapter, which
+            // selects its model itself.
             LoadedModel* en = by_name("english");
             LoadedModel* ml = by_name("multilingual");
             const bool want_consensus =
-                en && ml && ((body.contains("model") && body["model"] == "consensus") || (cfg.consensus && !body.contains("model")));
+                en && ml && ((body.contains("model") && body["model"] == "consensus") ||
+                             (cfg.consensus && !body.contains("model") && !named_adapter));
             std::string reason;
             LoadedModel& lm = want_consensus ? *en : find_model(body, states, reason);
+
+            const LoadedAdapter* adapter = nullptr;
+            std::string adapter_reason = "none";
+            if (want_consensus) {
+                if (named_adapter) throw HttpError{422, "adapter '" + want_adapter + "' cannot be combined with consensus"};
+                if (want_adapter == "auto") adapter_reason = "auto:consensus";
+            } else if (want_adapter == "auto") {
+                const auto family = request_family(questions);
+                if (!family) adapter_reason = "auto:no-family";
+                else if ((adapter = lm.adapter_for(*family))) adapter_reason = "auto:" + *family;
+                else adapter_reason = "auto:" + *family + ":no-adapter";
+            } else if (named_adapter) {
+                adapter = lm.adapter(want_adapter);
+                if (!adapter) {
+                    std::string others;
+                    for (auto& m : models)
+                        for (auto& ad : m.adapters)
+                            if (&m != &lm) others += (others.empty() ? "" : ", ") + m.name + ":" + ad.name;
+                    throw HttpError{422, "unknown adapter '" + want_adapter + "' for model '" + lm.name + "' (" +
+                                             lm.adapter_names() + (others.empty() ? "" : "; other models: " + others) + ")"};
+                }
+                adapter_reason = "requested";
+            }
+            const std::shared_ptr<Model>& weights = adapter ? adapter->model : lm.model;
             check_work(questions, states.size(), lm.model->hparams(), opts, cfg.limits, want_consensus ? 2 : 1);
             if (want_consensus) check_work(questions, states.size(), ml->model->hparams(), opts, cfg.limits, 2);
             opts.deadline = t0 + std::chrono::seconds(cfg.inference_timeout);
             model_name = want_consensus ? "consensus" : lm.name;
+            adapter_name = adapter ? adapter->name : "-";
             std::vector<ojson> results;
             double infer_ms = 0;
             if (!batch && cfg.batch_window_ms > 0) {
@@ -524,10 +686,10 @@ int run_server(const ServerConfig& cfg) {
                 if (want_consensus)
                     budgets.push_back({effective_max_len(ml->model->hparams(), opts),
                                        opts.head_max_len.value_or(ml->model->hparams().head_max_len)});
-                ojson compatible = {questions, budgets, opts.ensemble, opts.ensemble_margin,
+                ojson compatible = {questions, budgets, adapter ? ojson(adapter->name) : ojson(nullptr), opts.ensemble, opts.ensemble_margin,
                                     opts.calibrate, opts.return_logits, min_confidence,
                                     opts.lang ? ojson(*opts.lang) : ojson(nullptr)};
-                MicroBatcher* batcher = want_consensus ? consensus_batcher.get() : batchers.at(&lm).get();
+                MicroBatcher* batcher = want_consensus ? consensus_batcher.get() : batchers.at(weights.get()).get();
                 auto [result, shared_ms] = batcher->submit(compatible.dump(), states.front(), questions, opts,
                                                            opts.deadline, req.is_connection_closed);
                 results.push_back(std::move(result));
@@ -536,7 +698,7 @@ int run_server(const ServerConfig& cfg) {
             } else {
                 const auto ti = std::chrono::steady_clock::now();
                 results = want_consensus ? run_consensus(states, questions, opts)
-                                         : run_one_model(lm, states, questions, opts);
+                                         : run_one_model(lm, weights, states, questions, opts);
                 infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
                 if (want_consensus) reason = "consensus";
             }
@@ -544,6 +706,10 @@ int run_server(const ServerConfig& cfg) {
                 n_tokens += r["usage"]["input_tokens"].get<size_t>();
                 r["routing"] = {{"model", model_name}, {"reason", reason}, {"engine", "statim"},
                                 {"weights", lm.model->hparams().weight_type}};
+                if (any_adapters || body.contains("adapter")) {  // unchanged responses for servers without adapters
+                    r["routing"]["adapter"] = adapter ? ojson(adapter->name) : ojson(nullptr);
+                    r["routing"]["adapter_reason"] = adapter_reason;
+                }
                 if (min_confidence > 0 && r.contains("answers"))
                     for (auto& [qid, ans] : r["answers"].items())
                         if (ans.contains("answer_confidence"))
@@ -582,7 +748,7 @@ int run_server(const ServerConfig& cfg) {
         }
         if (cfg.access_log)
             std::fprintf(stdout, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "request"},
-                {"request_id", rid}, {"path", req.path}, {"status", status}, {"model", model_name}, {"tokens", n_tokens},
+                {"request_id", rid}, {"path", req.path}, {"status", status}, {"model", model_name}, {"adapter", adapter_name}, {"tokens", n_tokens},
                 {"ms", ms}, {"remote", req.remote_addr}}.dump().c_str());
         std::fflush(stdout);
     };
@@ -609,6 +775,14 @@ int run_server(const ServerConfig& cfg) {
             data.push_back({{"id", m.name}, {"object", "model"}, {"owned_by", "statim"}, {"source", h.name},
                             {"weights", h.weight_type}, {"layers", h.n_layer}, {"hidden", h.n_embd}, {"max_len", h.max_len},
                             {"vocab", m.model->tokenizer().vocab_size()}, {"device", m.model->device()}});
+            ojson adapters = ojson::array();
+            for (auto& a : m.adapters) {
+                const AdapterInfo& ai = *a.model->adapter();
+                adapters.push_back({{"id", a.name}, {"source", ai.name}, {"mode", ai.mode == AdapterMode::merge ? "merge" : "runtime"},
+                                    {"rank", ai.rank}, {"alpha", ai.alpha}, {"pairs", ai.n_pairs}, {"pairs_applied", ai.n_applied},
+                                    {"categories", ai.categories}, {"bytes", ai.bytes}});
+            }
+            if (any_adapters) data.back()["adapters"] = adapters;
         }
         send_json(res, 200, {{"object", "list"}, {"data", data}});
     });
@@ -641,10 +815,28 @@ int run_server(const ServerConfig& cfg) {
         o << "# TYPE statim_in_flight gauge\nstatim_in_flight " << in_flight << "\n";
         o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
           << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
-        for (auto& m : models) {
-            o << "statim_workers_busy{model=\"" << m.name << "\"} " << m.pool->busy() << "\n";
-            o << "statim_model_info{model=\"" << m.name << "\",weights=\"" << m.model->hparams().weight_type
+        // one block per metric family, as text parsers that close a family on a name change expect
+        o << "# TYPE statim_workers_busy gauge\n";
+        for (auto& m : models) o << "statim_workers_busy{model=\"" << prom_label(m.name) << "\"} " << m.pool->busy() << "\n";
+        o << "# TYPE statim_model_info gauge\n";
+        for (auto& m : models)
+            o << "statim_model_info{model=\"" << prom_label(m.name) << "\",weights=\"" << prom_label(m.model->hparams().weight_type)
               << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
+        if (any_adapters) {
+            o << "# HELP statim_engines Engines (compute buffers) held or being built for a model and its adapters; at most --workers.\n"
+                 "# TYPE statim_engines gauge\n";
+            for (auto& m : models) o << "statim_engines{model=\"" << prom_label(m.name) << "\"} " << m.pool->engines() << "\n";
+            o << "# TYPE statim_adapter_info gauge\n";
+            for (auto& m : models)
+                for (auto& a : m.adapters)
+                    o << "statim_adapter_info{model=\"" << prom_label(m.name) << "\",adapter=\"" << prom_label(a.name) << "\",mode=\""
+                      << (a.model->adapter()->mode == AdapterMode::merge ? "merge" : "runtime") << "\"} 1\n";
+            o << "# HELP statim_adapter_bytes Memory an adapter adds on top of the shared base weights.\n"
+                 "# TYPE statim_adapter_bytes gauge\n";
+            for (auto& m : models)
+                for (auto& a : m.adapters)
+                    o << "statim_adapter_bytes{model=\"" << prom_label(m.name) << "\",adapter=\"" << prom_label(a.name) << "\"} "
+                      << a.model->adapter()->bytes << "\n";
         }
         res.set_content(o.str(), "text/plain; version=0.0.4");
     });

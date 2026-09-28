@@ -130,11 +130,37 @@ See [accuracy](#accuracy) before choosing 4-bit.
 
 | endpoint | |
 |---|---|
-| `POST /v1/systemone` | `{state, questions, model?, lang?, min_confidence?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). Extras: `return_logits`, `calibrate`, `ensemble`; a positive `min_confidence` adds `escalate` to each answer |
+| `POST /v1/systemone` | `{state, questions, model?, lang?, min_confidence?}` → `{model, answers, usage, routing}` (Jev/Laya shape). `model`: `english`, `multilingual`, `consensus`, or omitted (auto-routing by language). `adapter`: a loaded LoRA adapter, `"auto"` (by question family) or `null`. Extras: `return_logits`, `calibrate`, `ensemble`; a positive `min_confidence` adds `escalate` to each answer |
 | `POST /v1/systemone/batch` | `{states: [...], questions, ...}` → `{results: [...]}` packed into shared forward passes |
 | `GET /v1/models` | loaded models |
 | `GET /health`, `GET /ready` | liveness / readiness |
 | `GET /metrics` | Prometheus: request counts by status, latency histogram, tokens, in-flight, busy workers |
+
+### LoRA adapters
+
+One base model can serve small per-category LoRA adapters, chosen per request:
+
+```sh
+python tools/convert_lora.py runs/emotion-lora -o models/emotion.lora.gguf \
+    --base models/laya-multilingual-q8_0.gguf --category emotion      # PEFT adapter -> GGUF
+statim serve -m multilingual=models/laya-multilingual-q8_0.gguf \
+    --adapter multilingual:emotion=models/emotion.lora.gguf
+curl -s localhost:8080/v1/systemone -d '{"state": "...", "adapter": "emotion", "questions": {...}}'
+```
+
+The converter takes LoRA on the encoder's attention and MLP projections and rejects anything it
+cannot represent (DoRA and the other LoRA variants, head or embedding LoRA, `modules_to_save`,
+initialisations that change the base weights). It binds the adapter to its base checkpoint by a
+fingerprint of the normalisation weights, which the f32 and quantized files of one checkpoint
+share. On f32 weights adapters are merged into a copy of the adapted weights at load (`W + B·A`,
+computed with ggml), so a request costs exactly the base latency; each adapter then holds its own
+copy of those weights (438 MB for the multilingual model). On quantized weights they run as runtime
+LoRA: only the factors (a few MB) are kept and `B·(A·x)` is evaluated in the graph, at 17-28 % more
+latency on CPU, because merging would round the adapter's delta to the quantization grid (on q4_0
+the test adapter loses 91 % of its effect). `--adapter-mode merge|runtime` overrides the choice.
+`"adapter": "auto"` picks the adapter whose category matches every question's family (keywords in
+the question ID, then the instructions). Details, measurements and the exact rule:
+[docs/API.md](docs/API.md#lora-adapters).
 
 Errors retain FastAPI's `{"detail": "..."}` shape: 400 malformed input, 401 auth,
 413 resource limits, 422 invalid questions/budgets or an expired inference deadline,
@@ -179,7 +205,7 @@ state object fields remain supported. Limits count UTF-8 **bytes** unless stated
 | `--max-attention-mib` | 1,024 MiB | Conservative per-graph estimate: `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes, covering all shorter packed rows too |
 | `--max-response-bytes` | 16,777,216 | Conservative response estimate before inference, plus a final serialized-response check |
 | `--max-concurrent` | 16 | Admitted inference requests including body reception and engine queueing; excess gets 503; configurable 1–256 |
-| `--workers` | 1 | Inference workers per model; configurable 1–64 |
+| `--workers` | 1 | Inference workers per model; configurable 1–64. A model's LoRA adapters share its workers |
 | `--batch-window-ms` | 0 | Wait this many milliseconds to combine compatible concurrent `/v1/systemone` requests; 0 disables micro-batching |
 | `--max-batch` | 16 | Maximum states in one server-created micro-batch; configurable 1–256 |
 | `--http-queue` | 32 | Pending sockets, in addition to `max-concurrent + 4` fixed HTTP workers; excess sockets are closed |

@@ -2,6 +2,7 @@
 #include "statim/security.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -658,6 +659,68 @@ ojson fuse_answers(const ojson& questions, const std::vector<const ojson*>& resu
 
 ojson Engine::decide(const ojson& state, const ojson& questions, const DecideOptions& opts) {
     return decide_batch({state}, questions, opts)[0];
+}
+
+const std::vector<std::pair<std::string, std::vector<std::string>>>& question_families() {
+    static const std::vector<std::pair<std::string, std::vector<std::string>>> kFamilies = {
+        {"sentiment", {"sentiment", "polarity"}},
+        {"emotion", {"emotion", "emotions", "emotional", "feeling", "feelings", "mood"}},
+        {"complaint", {"complaint", "complaints", "complain", "complaining"}},
+        {"nli", {"nli", "entailment", "entail", "entails", "contradiction", "contradict", "contradicts"}},
+        {"safety", {"safety", "unsafe", "toxic", "toxicity", "harmful", "moderation"}},
+        {"reading", {"reading", "comprehension", "passage"}},
+        {"similarity", {"similarity", "similar", "paraphrase", "paraphrases"}},
+        {"topic", {"topic", "topics"}},
+        {"intent", {"intent", "intents", "intention"}},
+        {"stance", {"stance"}},
+        {"formality", {"formality", "formal", "informal"}},
+        {"urgency", {"urgency", "urgent"}},
+        {"fact_check", {"fact", "facts", "factual", "claim", "claims"}},
+        {"pii", {"pii", "personally"}},
+    };
+    return kFamilies;
+}
+
+namespace {
+
+// Families whose keywords occur as whole lowercase ASCII words in text.
+std::vector<std::string> families_in(const std::string& text) {
+    std::vector<std::string> words;
+    std::string w;
+    for (char ch : text + " ") {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        if (c < 0x80 && std::isalnum(c)) w.push_back(static_cast<char>(std::tolower(c)));
+        else if (!w.empty()) words.push_back(std::move(w)), w.clear();
+    }
+    std::vector<std::string> hits;
+    for (const auto& [family, keys] : question_families())
+        for (const auto& k : keys)
+            if (std::find(words.begin(), words.end(), k) != words.end()) {
+                hits.push_back(family);
+                break;
+            }
+    return hits;
+}
+
+}  // namespace
+
+std::optional<std::string> question_family(const std::string& id, const ojson& question) {
+    std::vector<std::string> hits = families_in(id);
+    if (hits.empty() && question.is_object() && question.contains("instructions") && question["instructions"].is_string())
+        hits = families_in(question["instructions"].get<std::string>());
+    if (hits.size() == 1) return hits.front();
+    return std::nullopt;
+}
+
+std::optional<std::string> request_family(const ojson& questions) {
+    std::optional<std::string> family;
+    if (!questions.is_object() || questions.empty()) return std::nullopt;
+    for (auto it = questions.begin(); it != questions.end(); ++it) {
+        auto f = question_family(it.key(), it.value());
+        if (!f || (family && *family != *f)) return std::nullopt;
+        family = f;
+    }
+    return family;
 }
 
 }  // namespace statim
