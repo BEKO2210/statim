@@ -588,3 +588,68 @@ def test_egov_rows_name_the_law_field():
     items = list(adapt(entry("nlp-waseda/e_gov"), rows, 1))
     assert _golds(items, "choice") == {"刑事": 1, "厚生": 1}
     assert all(it["_task"] == "topic" and it["lang"] == "ja" for it in items)
+
+
+# =========================================================================== Part G sources
+# Sources added for the categories where 0.7.0 trails Qwen3-8B zero-shot (source_part G in v6-keep.json).
+
+PART_G_IDS = {"naeyn/nobody-pii-synth-de"}
+
+
+def test_part_g_sources_are_enabled_with_evidence_and_pinned():
+    raw = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    enabled = {e["id"]: e for e in raw if e.get("use") is True}
+    for sid in PART_G_IDS:
+        e = enabled[sid]
+        assert e["source_part"] == "G" and e["licence_evidence"] and e["provenance"], sid
+        assert not re.search(r"(?i)\b(nc|sa|nd)\b|non-?commercial|share-?alike|no-?deriv", e["licence"]), sid
+        assert re.fullmatch(r"[0-9a-f]{40}", e["pinned_commit"]), sid
+    assert loaders.NOBODY_PII["revision"] == enabled["naeyn/nobody-pii-synth-de"]["pinned_commit"]
+    assert loaders.NOBODY_PII["file"] == "data/train.parquet"  # never validation or test
+    rejected = [e for e in raw if e.get("source_part") == "G" and e.get("use") is False]
+    assert rejected and all(e["excluded_reason"] for e in rejected)
+
+
+def test_no_part_g_source_is_a_held_out_source():
+    ec = _eval_categories()
+    held = {src.entry for sources in ec.HELD_OUT.values() for src in sources}
+    held |= {src.repo for sources in ec.HELD_OUT.values() for src in sources if src.repo}
+    assert not PART_G_IDS & held
+
+
+def test_nobody_pii_rows_keep_types_and_retag_pii_free_rows():
+    records = [
+        {"text": "Rechnung an Jan Weber, IBAN DE35703188546038719758.", "lang": "de",
+         "ner": "[{'start': 2, 'end': 3, 'label': 'person'}, {'start': 5, 'end': 5, 'label': 'iban'}]"},
+        {"text": "The report is ready and the numbers are final.", "lang": "de", "ner": "[]"},
+        {"text": "The quarterly report shows a 12 percent increase in output.", "lang": "de", "ner": "[]"},
+        {"text": "Der Geschäftsführer hält auf der Messe eine Keynote und die Präsentation ist fertig.",
+         "lang": "de", "ner": "[]"},
+        {"text": "Het rapport is klaar en de cijfers van dit jaar zijn definitief.", "lang": "nl",
+         "ner": []},
+        {"text": "", "lang": "de", "ner": "[]"},
+        {"text": "broken", "lang": "de", "ner": "[{'start': 1,"},
+        {"text": "Bonjour, voici la facture.", "lang": "fr", "ner": "[{'start': 0, 'end': 0, 'label': 'person'}]"},
+    ]
+    rows = loaders.nobody_pii_rows(records)
+    assert [(r["_v6_lang"], [x["label"] for x in r["entities"]]) for r in rows] == [
+        ("de", ["person", "iban"]), ("en", []), ("de", []), ("nl", [])]  # one English hint only: dropped
+
+
+def test_nobody_pii_adapter_asks_both_answers():
+    e = entry("naeyn/nobody-pii-synth-de")
+    rows = [{"text": "Kontakt: jan.weber@example.org, Tel. 0301234567, Jan Weber", "_v6_lang": "de",
+             "entities": [{"label": "email"}, {"label": "phone number"}, {"label": "person"}]},
+            {"text": "Die Lieferung verschiebt sich auf nächste Woche.", "_v6_lang": "de", "entities": []},
+            {"text": "Please send the IBAN NL96BRDJ6008444537 to Evie Jansen.", "_v6_lang": "en",
+             "entities": [{"label": "iban"}, {"label": "person"}]},
+            {"text": "Het rapport is klaar en ligt ter inzage.", "_v6_lang": "nl", "entities": []}]
+    items = list(adapt(e, rows * 6, 7))
+    pii = [it for it in items if it.get("_task") == "pii" and it["q"]["type"] == "noul"]
+    assert _golds(pii, "noul") == {"yes": 12, "no": 12}
+    assert {it["lang"] for it in pii} == {"de", "en", "nl"}
+    no_pii = {it["state"] for it in pii if it["target"][0] == 1.0}
+    assert no_pii == {"Die Lieferung verschiebt sich auf nächste Woche.", "Het rapport is klaar en ligt ter inzage."}
+    probes = [it for it in items if it.get("_task") == "pii_type"]
+    assert probes and {"yes", "no"} <= set(_golds(probes, "noul"))
+

@@ -23,6 +23,17 @@ between minor versions; every change is listed here.
     `routing.adapter` and records the adapter, so base and adapter runs stay apart.
   - `tools/finetune/test_train_lora.py`: category selection, dev split, decision; an opt-in test
     trains and converts a real adapter (`STATIM_LORA_BASE_DIR`, `STATIM_LORA_BASE_GGUF`).
+- Mixture v6, Part G: training data for the categories where 0.7.0 trails Qwen3-8B zero-shot.
+  Evidence and every examined candidate are in `tools/finetune/sources/v6-research.md` (Part G),
+  and the sources are registered in `v6-keep.json` (`source_part` G):
+  - PII: `naeyn/nobody-pii-synth-de` (Apache-2.0, generated from templates and Faker, no model
+    output), train split at a pinned commit. 9,133 items: per-type probes de 4,710, en 2,151,
+    nl 1,746, plus 526 choice items. The loader re-derives the language of PII-free rows, which are
+    partly English under a `de` tag.
+  - Fact-check: no source passed the licence and label checks (38 candidates examined). Emotion,
+    sentiment and safety: nothing kept; four checked candidates are recorded as rejected.
+- Offline tests for the Part G loader and adapter and for the evidence and held-out rules
+  (`test_label_fixes.py`).
 
 ## [0.8.1] - 2026-09-29
 
