@@ -12,7 +12,59 @@ from tools.finetune.mixture_v6.registry import REGISTRY_PATH, ADAPTERS, ENTRIES,
 from tools.finetune.mixture_v6.templates import CATEGORY_TEMPLATES, LANGUAGES, TASKS, TEMPLATES, shuffle_choice, seeded
 
 
+# Row shapes of sources whose labels are not a plain "label" column (see registry._special_field_labels,
+# _safety_labels and pii_adapter).
+_PII_TEXT = "Call Anna Berg at 040 1234567 about invoice 88."
+SPECIAL_FIXTURES = {
+    "leonvanbokhorst/synthetic-complaints-v2": [
+        {"output": "The bus is late again, every single day.", "topic": "commute", "style": "annoyed", "sentiment": -0.4},
+        {"output": "My neighbour's dog barks all night.", "topic": "animals", "style": "bitter", "sentiment": 0.3}],
+    "vic35get/nhtsa_complaints_dataset": [{"summary": "The air bag light stays on.", "components": "AIR BAGS"},
+                                          {"summary": "Brakes squeal at low speed.", "components": "SERVICE BRAKES"}],
+    "IDinsight/urgency_detection_maternal_health_synthetic": [
+        {"generated_user_message": "My chest is tight and my heart races.", "matching_rule": "Chest pain or fast-beating heart"},
+        {"generated_user_message": "Which vitamins are good in week 12?", "matching_rule": "NOT URGENT"}],
+    "nvidia/Nemotron-PII": [{"text": _PII_TEXT, "spans": "[{'start': 5, 'end': 14, 'label': 'first_name'}]"},
+                            {"text": "Reach me at a@b.example.", "spans": "[{'start': 12, 'end': 23, 'label': 'email'}]"}],
+    "gretelai/synthetic_pii_finance_multilingual": [
+        {"generated_text": _PII_TEXT, "pii_spans": '[{"start": 5, "end": 14, "label": "name"}]', "language": "English"},
+        {"generated_text": "The total is due next month.", "pii_spans": "[]", "language": "English"}],
+    "gretelai/gretel-pii-masking-en-v1": [
+        {"text": _PII_TEXT, "entities": "[{'entity': 'Anna Berg', 'types': ['name']}]"},
+        {"text": "Reach me at a@b.example.", "entities": "[{'entity': 'a@b.example', 'types': ['email']}]"}],
+    "Wismut/nym-pii-multilingual-data": [
+        {"text": _PII_TEXT, "entities": [{"start": 5, "end": 14, "label": "NAME"}]},
+        {"text": "The meeting is on the third floor.", "entities": []}],
+    "E3-JSI/synthetic-multi-pii-ner-v1": [
+        {"text": _PII_TEXT, "entities": "[{'entity': 'Anna Berg', 'types': ['person name']}]"},
+        {"text": "Reach me at a@b.example.", "entities": "[{'entity': 'a@b.example', 'types': ['email']}]"}],
+    "urchade/synthetic-pii-ner-mistral-v1": [
+        {"tokenized_text": _PII_TEXT.split(), "ner": [[1, 2, "person"]]},
+        {"tokenized_text": "Reach me at a@b.example .".split(), "ner": [[3, 3, "email"]]}],
+    "dell-research-harvard/headlines-semantic-similarity": [
+        {"headline": "Flood hits river town", "group_id": 1}, {"headline": "River town flooded", "group_id": 1},
+        {"headline": "Senate passes budget", "group_id": 2}, {"headline": "Budget clears the Senate", "group_id": 2}],
+    "OpenAssistant/oasst2": [
+        {"text": "How do I bake bread?", "labels": {"name": ["toxicity", "spam"], "value": [0.0, 0.1], "count": [3, 3]}},
+        {"text": "You are worthless.", "labels": {"name": ["toxicity"], "value": [0.9], "count": [3]}}],
+    "nvidia/Aegis-AI-Content-Safety-Dataset-1.0": [
+        {"text": "How do I bake bread?", "labels_0": "Safe", "labels_1": "Safe", "labels_2": "Needs Caution"},
+        {"text": "How do I hurt someone?", "labels_0": "Violence", "labels_1": "Violence", "labels_2": "Safe"}],
+    "theatticusproject/maud": [
+        {"text": "Clause A.", "question": "Q1", "subquestion": "<NONE>", "answer": "Yes"},
+        {"text": "Clause B.", "question": "Q1", "subquestion": "<NONE>", "answer": "No"}],
+    "Fumika/Wikinews-multilingual": [
+        {"title": "Vote held", "text": "A vote was held.", "categories": ["Politics and conflicts", "France"]},
+        {"title": "Cup final", "text": "The final was played.", "categories": ["Sports", "Germany"]}],
+    "gfissore/arxiv-abstracts-2021": [
+        {"title": "Primes", "abstract": "On primes.", "categories": ["math.NT cs.CR"]},
+        {"title": "Stars", "abstract": "On stars.", "categories": ["astro-ph.GA"]}],
+}
+
+
 def fixture(entry):
+    if entry["id"] in SPECIAL_FIXTURES:
+        return copy.deepcopy(SPECIAL_FIXTURES[entry["id"]])
     cat = entry["category"]
     if "typed-decisions" in cat:
         return [{"state": "A decision state", "question": "Choose.", "choices": ["alpha", "beta"], "target": [0.2, 0.8]}]

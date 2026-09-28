@@ -7,7 +7,33 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Fixed
+- Mixture v6 labels. Several v6 adapters wrote a constant or wrong gold label, and training
+  would have learned it:
+  - toxicity/moderation: "not toxic", prosocial-dialog `__casual__`, Aegis 1.0 votes and the
+    oasst2 crowd votes all became "violates a policy";
+  - similarity: every pair of tapaco, headlines, JaGovFaqs, ESCI and WANDS was "unrelated";
+  - PII: span lists were used as class labels;
+  - ClassLabel ids and card-documented ints were offered as options "0", "1", "2";
+  - star ratings were offered as sentiment options;
+  - multi-label rows (BRIGHTER, aya_redteaming, Wikinews, arXiv, NHTSA) got an arbitrary first
+    label as gold;
+  - the complaint sources always answered "is this a complaint?" with yes;
+  - MAUD and FairytaleQA gave constant answers;
+  - reading contexts revealed the answer by their length.
+
+  The fixes:
+  - Hub sources are sampled over the whole split (seeded strata over the parquet revision)
+    instead of the head of the stream, so sorted and label-cycling splits yield every label.
+  - A yes/no question that one source answers the same way in >= 97 % of its items is dropped.
+  - Disabled with a reason: SimpleSafetyTests, MultiJail and OR-Bench (benchmarks), QuALITY
+    (articles exceed the window), humor-greats and Lakera gandalf (positives only), MELO and
+    washenkov (no pairs can be built), hass-intent-templates (template syntax).
+
 ### Added
+- `tools/finetune/mixture_v6/audit.py`, a content audit that loads a sample of every enabled
+  source. It flags serialized options, numeric options, constant labels and question/option
+  mismatches. The `mixture-audit` workflow runs it together with the offline adapter tests.
 - `bench/eval_categories.py`: one held-out suite per decision category (sentiment, emotion,
   complaint, NLI, safety, reading comprehension, similarity, topic, intent, stance, formality,
   urgency, fact-check, PII), built from the test or otherwise unused splits of the mixture v6

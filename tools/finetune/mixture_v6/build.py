@@ -191,6 +191,7 @@ def clean_items(entry, raw_items, banned, cap, seed):
     clean = _balanced(clean, cap, seed)
     for item in clean:
         item.pop("_texts", None)
+        item.pop("_task", None)
     return clean, stats
 
 

@@ -316,7 +316,7 @@
    "mixed"
   ],
   "category": "3-complaint; 10-urgency",
-  "label_field": "issue_priority; issue_type; issue_resolution",
+  "label_field": "issue_priority",
   "text_fields": [
    "text"
   ],
@@ -364,7 +364,7 @@
    "en"
   ],
   "category": "3-complaint",
-  "label_field": "Product; Issue; Sub-issue; Company response to consumer",
+  "label_field": "Product; Issue",
   "text_fields": [
    "Consumer complaint narrative"
   ],
@@ -1244,8 +1244,8 @@
   ],
   "test_overlap_note": "public-domain Gutenberg; needs negatives; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "positives only: its one question ('is this humorous?') is always yes"
  },
  {
   "id": "nyu-mll/multi_nli",
@@ -1625,8 +1625,8 @@
   ],
   "test_overlap_note": "none; ESCO text reuse terms not separately verified",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "queries without their corpus texts: no related pairs can be built, every pair was 'unrelated'"
  },
  {
   "id": "matsuxr/JaGovFaqs-22k",
@@ -1681,8 +1681,8 @@
   ],
   "test_overlap_note": "none; synthetic",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "the duplicate rows' originals are not in the release: no pairs can be built (the adapter compared two turns of one chat)"
  },
  {
   "id": "github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset (v0.2.3.csv; NOT tasksource/dynahate mirror tagged gpl)",
@@ -1766,9 +1766,7 @@
   "category": "5-toxicity-moderation",
   "label_field": "labels.{spam,pii,not_appropriate,hate_speech,sexual_content,toxicity,violence} (mean crowd votes)",
   "text_fields": [
-   "text",
-   "lang",
-   "role"
+   "text"
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; drop synthetic=true; ignore detoxify scores",
   "source_part": "D",
@@ -1914,8 +1912,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "owner: benchmark or hosted-model output (OR-Bench is a published over-refusal benchmark; labels from GPT-4/Gemini judges)"
  },
  {
   "id": "natolambert/xstest-v2-copy (paul-rottger/exaggerated-safety)",
@@ -1950,8 +1948,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "owner: benchmark or hosted-model output (SimpleSafetyTests is a published safety benchmark)"
  },
  {
   "id": "JailbreakBench/JBB-Behaviors",
@@ -2116,8 +2114,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; dedup against hh-rlhf/Aegis/Salad/AttaQ (shared Anthropic red-team prompts)",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "owner: benchmark or hosted-model output (MultiJail is a published jailbreak benchmark; academic-only clause)"
  },
  {
   "id": "Virtue-AI-HUB/PolyGuard",
@@ -2356,8 +2354,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "positives only (prompt injections without benign counterparts): its one yes/no question is always yes"
  },
  {
   "id": "Lakera/mosscap_prompt_injection",
@@ -2433,8 +2431,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap; long passages need chunking",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "articles are ~5,000 words, far beyond the 1,024-token window: the question cannot be answered from the visible text (and the adapter read 'article' while the loader wrote 'context', so the passage was dropped)"
  },
  {
   "id": "WorkInTheDark/FairytaleQA",
@@ -2447,9 +2445,8 @@
   "category": "6-reading-comprehension",
   "label_field": "ex-or-im; attribute",
   "text_fields": [
-   "story_section",
-   "question",
-   "answer1"
+   "context",
+   "question"
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
@@ -2828,8 +2825,8 @@
   ],
   "test_overlap_note": "exact-dedup expanded utterances against MASSIVE test (all langs) and HWU64 test",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null
+  "use": false,
+  "excluded_reason": "states are template syntax such as '(Stop[p]|Haut) <timer>', not utterances"
  },
  {
   "id": "TigreGotico/yes-no-multilingual",
