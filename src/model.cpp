@@ -89,7 +89,7 @@ struct Model::Impl {
     ggml_backend_dev_t dev = nullptr;              // device the graphs run on
     ggml_backend_buffer_t weight_buf = nullptr;    // weights copied to a non-CPU device
     std::string device_desc = "cpu";
-    std::string fingerprint;  // norm_fingerprint(); adapter views copy the base's
+    std::string fingerprint;  // checkpoint_fingerprint(); adapter views copy the base's
     // adapter view (Model::with_adapter): the base owns everything above; this owns only its own
     // merged weights or LoRA factors
     std::shared_ptr<Model> base;
@@ -256,21 +256,22 @@ static void repack_weights(Model::Impl& M) {
     }
 }
 
-// SHA-256 over the checkpoint's normalisation weights: for every tensor whose name contains
-// "norm", in byte order of the names, the name and a NUL byte, the element count (u64
-// little-endian) and the values as little-endian f32. Full fine-tuning changes these weights, and
-// quantizing keeps them (tools/quantize.cpp and tools/convert_laya.py never quantize a norm), so the
-// value tells apart fine-tunes that share a name and is the same for every weight type of one
-// checkpoint. It cannot tell apart checkpoints that differ only in other weights, such as a LoRA
-// merged into the projections or a fine-tune with frozen norms. tools/convert_lora.py computes the
-// same value and records it in the adapter.
-// Called before upload_weights() takes the weights off the file mapping (the CPU repack never
-// moves a norm: they are 1-D f32, which validate() enforces for the ones the graph uses).
-static std::string norm_fingerprint(const Model::Impl& M) {
+// SHA-256 over the checkpoint's vectors (tensors with ne[1..3] = 1: every normalisation weight and
+// bias, including the decision head's and the scorer's): for each, in byte order of the names, the
+// name and a NUL byte, the element count (u64 little-endian) and the values as little-endian f32.
+// Full fine-tuning changes these weights, and quantizing keeps them (tools/quantize.cpp and
+// tools/convert_laya.py only quantize matrices), so the value tells apart fine-tunes that share a
+// name and is the same for every weight type of one checkpoint. It cannot tell apart checkpoints
+// that differ only in their matrices, such as a LoRA merged into the encoder's projections.
+// tools/convert_lora.py computes the same value and records it in the adapter.
+// Called before upload_weights() takes the weights off the file mapping; the CPU repack only moves
+// matrices.
+static std::string checkpoint_fingerprint(const Model::Impl& M) {
     std::vector<std::string> names;
     for (int64_t i = 0; i < gguf_get_n_tensors(M.gguf); ++i) {
         std::string n = gguf_get_tensor_name(M.gguf, i);
-        if (n.find("norm") != std::string::npos) names.push_back(std::move(n));
+        const ggml_tensor* x = ggml_get_tensor(M.ctx_w, n.c_str());
+        if (x->ne[1] == 1 && x->ne[2] == 1 && x->ne[3] == 1) names.push_back(std::move(n));
     }
     std::sort(names.begin(), names.end());
     Sha256 h;
@@ -521,7 +522,7 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     M.act2_w = to_f32(M.t("act_head.2.weight"));
     M.act2_b = to_f32(M.t("act_head.2.bias"));
     validate(M);
-    M.fingerprint = norm_fingerprint(M);
+    M.fingerprint = checkpoint_fingerprint(M);
     if (!M.on_cpu()) upload_weights(M);
     return m;
 }
@@ -641,7 +642,7 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     info->name = get_str(g, "general.name");
     // The adapter only fits the checkpoint it was trained on. general.name cannot tell: fine-tunes may
     // share it, and the f32 and q8_0 files of one checkpoint may differ in it. The fingerprint can
-    // (norm_fingerprint).
+    // (checkpoint_fingerprint).
     const std::string base_fp = get_str(g, "statim.lora.base_fingerprint");
     const std::string base_name = get_str(g, "statim.lora.base_name");
     if (base_fp.empty())

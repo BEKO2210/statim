@@ -114,9 +114,18 @@ def main():
         check(r.returncode == 0 and np.array_equal(
             [np.array(x.data) for x in gguf.GGUFReader(out).tensors if x.name.endswith("lora_a")][0].reshape(2, 768), want),
             "bf16 factors convert exactly (%s)" % r.stderr.strip()[-120:])
-        for init in ("gaussian", "eva", True):
+        for init in ("gaussian", "eva", True, "mica"):
             r = convert(adapter(os.path.join(tmp, "init-%s" % init), pair(wqkv, 2, 768, 2304, 8), init_lora_weights=init), out)
-            check(r.returncode == 0, "init_lora_weights=%r (base weights unchanged) converts" % (init,))
+            check(r.returncode == 0, "init_lora_weights=%r (base weights unchanged, plain LoRA at inference) converts" % (init,))
+        # VeLoRA and MonteCLoRA evaluate as plain LoRA; their training-only state is skipped
+        for name, cfg, extra in [("velora", {"velora_config": {"num_groups": 32}}, ".lora_velora_embed"),
+                                 ("monteclora", {"monteclora_config": {"num_samples": 4}}, ".lora_monteclora_sampler.std_prior")]:
+            t = dict(pair(wqkv, 2, 768, 2304, 9))
+            t[wqkv + extra] = np.ones(24, np.float32)
+            r = convert(adapter(os.path.join(tmp, name), t, **cfg), out)
+            names = sorted(x.name for x in gguf.GGUFReader(out).tensors) if r.returncode == 0 else []
+            check(names == ["encoder.layers.1.attn.Wqkv.weight.lora_a", "encoder.layers.1.attn.Wqkv.weight.lora_b"],
+                  "%s converts as plain LoRA, training-only state skipped (%s)" % (name, r.stderr.strip()[-120:]))
 
         d = adapter(os.path.join(tmp, "rs"), dict(pair(wqkv, 4, 768, 2304, 3)), r=4, lora_alpha=8, use_rslora=True)
         check(convert(d, out).returncode == 0, "rsLoRA converts")
@@ -144,11 +153,10 @@ def main():
             ("alora", pair(wqkv, 2, 768, 2304, 5), {"alora_invocation_tokens": [5, 6]}, [], "alora_invocation_tokens"),
             ("qalora", pair(wqkv, 2, 768, 2304, 5), {"use_qalora": True}, [], "use_qalora"),
             ("bdlora", pair(wqkv, 2, 768, 2304, 5), {"use_bdlora": {"nblocks": 2}}, [], "use_bdlora"),
-            ("velora", pair(wqkv, 2, 768, 2304, 5), {"velora_config": {"rank": 1}}, [], "velora_config"),
-            ("monteclora", pair(wqkv, 2, 768, 2304, 5), {"monteclora_config": {"num_samples": 4}}, [], "monteclora_config"),
             ("kasa", pair(wqkv, 2, 768, 2304, 5), {"kasa_config": {"beta": 0.1}}, [], "kasa_config"),
             ("arrow", pair(wqkv, 2, 768, 2304, 5), {"arrow_config": {"top_k": 2}}, [], "arrow_config"),
-            ("mica", pair(wqkv, 2, 768, 2304, 5), {"init_lora_weights": "mica"}, [], "MiCA"),
+            ("nor", pair(wqkv, 2, 768, 2304, 5), {"r": None}, [], "r must be a positive integer"),
+            ("strr", pair(wqkv, 2, 768, 2304, 5), {"r": "2"}, [], "r must be a positive integer"),
             ("pissa", pair(wqkv, 2, 768, 2304, 5), {"init_lora_weights": "pissa_niter_4"}, [], "changes the base weights"),
             ("olora", pair(wqkv, 2, 768, 2304, 5), {"init_lora_weights": "olora"}, [], "changes the base weights"),
             ("corda", pair(wqkv, 2, 768, 2304, 5), {"init_lora_weights": "corda"}, [], "changes the base weights"),

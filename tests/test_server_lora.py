@@ -88,20 +88,31 @@ def metric(text, line_prefix):
 
 class Server:
     def __init__(self, binary, args, log_path):
-        self.port = reserve_port()
         env = dict(os.environ, STATIM_DEVICE="cpu")
         for k in ("STATIM_API_KEY", "STATIM_GPU_FAST"):
             env.pop(k, None)
-        self.log = open(log_path, "w+")
         self.log_path = log_path
-        self.proc = subprocess.Popen([binary, "serve", "--device", "cpu", "--threads", "2", "--port", str(self.port),
-                                      "--no-access-log"] + args, env=env, stdout=self.log, stderr=self.log)
+        # reserve_port() frees the port before the server binds it; if something else takes it in
+        # between, start again on another port
+        for _ in range(5):
+            self.port = reserve_port()
+            self.log = open(log_path, "w+")
+            self.proc = subprocess.Popen([binary, "serve", "--device", "cpu", "--threads", "2", "--port", str(self.port),
+                                          "--no-access-log"] + args, env=env, stdout=self.log, stderr=self.log)
+            if self._healthy():
+                return
+            self.log.close()
+            if "cannot listen" not in Path(log_path).read_text():
+                raise AssertionError(Path(log_path).read_text())
+        raise AssertionError("no free port after 5 attempts")
+
+    def _healthy(self):
         for _ in range(1200):
             if self.proc.poll() is not None:
-                raise AssertionError(Path(log_path).read_text())
+                return False
             try:
                 if call(self.port, "GET", "/health")[0] == 200:
-                    return
+                    return True
             except (OSError, http.client.HTTPException):
                 time.sleep(0.05)
         raise AssertionError("server did not become healthy")

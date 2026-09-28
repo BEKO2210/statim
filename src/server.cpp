@@ -815,11 +815,13 @@ int run_server(const ServerConfig& cfg) {
         o << "# TYPE statim_in_flight gauge\nstatim_in_flight " << in_flight << "\n";
         o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
           << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
-        for (auto& m : models) {
-            o << "statim_workers_busy{model=\"" << prom_label(m.name) << "\"} " << m.pool->busy() << "\n";
+        // one block per metric family, as text parsers that close a family on a name change expect
+        o << "# TYPE statim_workers_busy gauge\n";
+        for (auto& m : models) o << "statim_workers_busy{model=\"" << prom_label(m.name) << "\"} " << m.pool->busy() << "\n";
+        o << "# TYPE statim_model_info gauge\n";
+        for (auto& m : models)
             o << "statim_model_info{model=\"" << prom_label(m.name) << "\",weights=\"" << prom_label(m.model->hparams().weight_type)
               << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
-        }
         if (any_adapters) {
             o << "# HELP statim_engines Engines (compute buffers) held or being built for a model and its adapters; at most --workers.\n"
                  "# TYPE statim_engines gauge\n";

@@ -8,10 +8,12 @@ encoder into a Statim LoRA adapter GGUF.
 Supported targets: the ModernBERT encoder's attention (attn.Wqkv, attn.Wo) and MLP (mlp.Wi,
 mlp.Wo) projections of every layer, as plain LoRA (W' = W + B·A) in f32, f16 or bf16. Anything
 else is rejected: LoRA on other modules, trained biases, modules_to_save, fan_in_fan_out, the LoRA
-variants PEFT marks as such (DoRA, aLoRA, QALoRA, BD-LoRA, VeLoRA, MonteCLoRA, KaSA, Arrow, MiCA)
-and initialisations that change the base weights (PiSSA, OLoRA, CorDA, LoRA-GA, LoftQ) unless
+variants whose inference differs from W + B·A (DoRA, aLoRA, QALoRA, BD-LoRA, KaSA, Arrow) and
+initialisations that change the base weights (PiSSA, OLoRA, CorDA, LoRA-GA, LoftQ) unless
 save_pretrained converted the adapter into a plain LoRA. Statim cannot represent these, and
-silently dropping them would serve a different model than the one that was evaluated.
+silently dropping them would serve a different model than the one that was evaluated. VeLoRA,
+MonteCLoRA and MiCA only change training (PEFT's eval forward and merge are plain LoRA), so they
+convert; their training-only tensors (lora_velora_*, lora_monteclora_*) are skipped.
 
 File layout (statim.format = "statim-lora-v1"):
   <base tensor>.lora_a  f32, torch shape [r, in]   (ggml ne [in, r])
@@ -21,8 +23,8 @@ File layout (statim.format = "statim-lora-v1"):
 so the merged weight is W' = W + lora_b @ lora_a.
 
 --base (required) is the Statim model GGUF the adapter was trained on: every tensor shape is
-checked against it, and its fingerprint (SHA-256 over the normalisation weights, see
-norm_fingerprint) and general.name are recorded. The engine loads the adapter only onto a model
+checked against it, and its fingerprint (SHA-256 over its vectors: normalisation weights and biases,
+see checkpoint_fingerprint) and general.name are recorded. The engine loads the adapter only onto a model
 with that fingerprint, which is the same for every weight type of one checkpoint.
 --category (repeatable) names the question families the adapter serves in "adapter": "auto"
 routing; without it the adapter name is used (see docs/API.md, "LoRA adapters").
@@ -44,10 +46,13 @@ import gguf
 TARGETS = ("attn.Wqkv", "attn.Wo", "mlp.Wi", "mlp.Wo")
 # PEFT key: [base_model.model.][encoder.|model.]layers.<i>.<module>.lora_<A|B>[.<adapter>].weight
 KEY_RE = re.compile(r"(?:^|\.)layers\.(\d+)\.(attn\.Wqkv|attn\.Wo|mlp\.Wi|mlp\.Wo)\.lora_([AB])(?:\.[^.]+)?\.weight$")
-# LoraConfig fields that select a LoRA variant (PEFT marks them "is_lora_variant", plus use_qalora,
-# whose pooled input changes the forward pass), checked against peft main, September 2026
-VARIANTS = ("use_dora", "alora_invocation_tokens", "use_qalora", "use_bdlora", "velora_config", "monteclora_config",
-            "kasa_config", "arrow_config")
+# LoraConfig fields that select a LoRA variant whose inference is not W + B·A (checked against
+# src/peft/tuners/lora/variants.py on peft main, September 2026). use_qalora pools the input. The
+# other variants PEFT marks "is_lora_variant" (velora_config, monteclora_config, and
+# init_lora_weights="mica") evaluate and merge as plain LoRA and are accepted.
+VARIANTS = ("use_dora", "alora_invocation_tokens", "use_qalora", "use_bdlora", "kasa_config", "arrow_config")
+# state that VeLoRA and MonteCLoRA keep for training only (eval forward and merge ignore it)
+TRAINING_ONLY = re.compile(r"\.lora_(velora|monteclora)_")
 # init_lora_weights values that change the base weights (PiSSA, OLoRA, CorDA, LoRA-GA) or replace
 # them with quantized ones (LoftQ)
 BASE_CHANGING_INITS = ("pissa", "olora", "corda", "lora_ga", "loftq")
@@ -109,18 +114,19 @@ def gguf_header(path):
     return kv, shapes, where
 
 
-def norm_fingerprint(path, shapes, where):
-    """The engine's checkpoint fingerprint (src/model.cpp, norm_fingerprint): SHA-256 over every
-    tensor whose name contains "norm", in byte order of the names, each as its name and a NUL byte,
-    the element count (u64 little-endian) and the values as little-endian f32."""
+def checkpoint_fingerprint(path, shapes, where):
+    """The engine's checkpoint fingerprint (src/model.cpp, checkpoint_fingerprint): SHA-256 over every
+    vector (ggml shape with ne[1..3] = 1: normalisation weights and biases), in byte order of the
+    names, each as its name and a NUL byte, the element count (u64 little-endian) and the values as
+    little-endian f32."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
-        for name in sorted((n for n in shapes if "norm" in n), key=lambda n: n.encode()):
+        for name in sorted((n for n, sh in shapes.items() if all(d == 1 for d in sh[1:])), key=lambda n: n.encode()):
             ttype, offset = where[name]
             n = math.prod(shapes[name])
             width = {0: 4, 1: 2, 30: 2}.get(ttype)  # ggml F32, F16, BF16
             if width is None:
-                fail("%s: normalisation tensor %s has ggml type %d, expected f32, f16 or bf16" % (path, name, ttype))
+                fail("%s: vector %s has ggml type %d, expected f32, f16 or bf16" % (path, name, ttype))
             f.seek(offset)
             raw = f.read(width * n)
             if len(raw) != width * n:
@@ -212,8 +218,6 @@ def read_adapter(adapter_dir):
         if cfg.get(key):
             fail("%s=%r: this LoRA variant computes something other than W + B·A and is not supported" % (key, cfg[key]))
     init = cfg.get("init_lora_weights", True)
-    if isinstance(init, str) and init.lower() == "mica":
-        fail("init_lora_weights='mica' selects the MiCA LoRA variant, which is not supported")
     if isinstance(init, str) and init.lower().startswith(BASE_CHANGING_INITS):
         fail("init_lora_weights=%r changes the base weights, so the adapter only fits that changed base; convert it "
              "into a plain LoRA with save_pretrained(..., path_initial_model_for_weight_conversion=...) "
@@ -243,12 +247,18 @@ def main():
     a = ap.parse_args()
 
     cfg, weights = read_adapter(a.adapter_dir)
-    r_default = int(cfg["r"])
-    alpha_default = float(cfg.get("lora_alpha", r_default))
+    r_default, alpha_default = cfg.get("r"), cfg.get("lora_alpha", cfg.get("r"))
+    if type(r_default) is not int or r_default < 1:
+        fail("adapter_config.json: r must be a positive integer, got %r" % (r_default,))
+    if type(alpha_default) not in (int, float):
+        fail("adapter_config.json: lora_alpha must be a number, got %r" % (alpha_default,))
+    alpha_default = float(alpha_default)
     rslora = bool(cfg.get("use_rslora", False))
 
     pairs = {}
     for key, arr in weights.items():
+        if TRAINING_ONLY.search(key):
+            continue
         m = KEY_RE.search(key)
         if not m:
             fail("unsupported tensor %r: only the encoder's %s projections can carry LoRA" % (key, ", ".join(TARGETS)))
@@ -266,7 +276,7 @@ def main():
     if kv.get("statim.format") != "statim-decision-v1":
         fail("%s is not a Statim decision model" % a.base)
     base_name = kv.get("general.name", "")
-    fingerprint = norm_fingerprint(a.base, base_shapes, where)
+    fingerprint = checkpoint_fingerprint(a.base, base_shapes, where)
 
     name = a.name or os.path.basename(os.path.normpath(a.adapter_dir))
     w = gguf.GGUFWriter(a.out, "laya")

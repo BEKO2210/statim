@@ -36,12 +36,13 @@ between minor versions; every change is listed here.
     `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo`) into a `statim-lora-v1` GGUF. The PEFT scale
     (`lora_alpha / r`, rsLoRA, `rank_pattern` / `alpha_pattern`) is folded into `lora_b`; f16 and
     bf16 factors are widened exactly. Rejected: trained biases, `modules_to_save`, LoRA on other
-    modules, `fan_in_fan_out`, the LoRA variants (DoRA, aLoRA, QALoRA, BD-LoRA, VeLoRA,
-    MonteCLoRA, KaSA, Arrow, MiCA) and initialisations that change the base weights (PiSSA, OLoRA,
-    CorDA, LoRA-GA, LoftQ) unless PEFT converted the adapter into a plain LoRA. `--base` is
-    required: it checks the shapes and records the checkpoint's fingerprint, a SHA-256 over its
-    normalisation weights that is the same for its f32 and quantized files and differs between
-    fully fine-tuned checkpoints (not for a LoRA merged into the weights, which keeps the norms);
+    modules, `fan_in_fan_out`, the LoRA variants whose inference is not `W + B·A` (DoRA, aLoRA,
+    QALoRA, BD-LoRA, KaSA, Arrow) and initialisations that change the base weights (PiSSA, OLoRA,
+    CorDA, LoRA-GA, LoftQ) unless PEFT converted the adapter into a plain LoRA; VeLoRA, MonteCLoRA
+    and MiCA adapters convert as the plain LoRA they are at inference. `--base` is required: it
+    checks the shapes and records the checkpoint's fingerprint, a SHA-256 over its vectors (norms
+    and biases) that is the same for its f32 and quantized files and differs between fully
+    fine-tuned checkpoints (not for a LoRA merged into the matrices, which keeps the vectors);
     the engine refuses an adapter whose fingerprint does not match (`statim info` prints a
     model's). `--category` sets the question families for auto routing.
   - `statim serve --adapter [model:]name=file.gguf` (repeatable) and `--adapter-mode merge|runtime`;
