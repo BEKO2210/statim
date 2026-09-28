@@ -404,12 +404,26 @@ def test_fingerprint_tracks_registry_file(tmp_path, monkeypatch):
     assert ec.fingerprint() != before
 
 
-def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
+def _gate_pair(tmp_path, pools):
     import json
-    champ, chall = tmp_path / "champ", tmp_path / "chall"
-    for d, acc, pool in ((champ, 0.80, "p1"), (chall, 0.60, "p2")):
-        d.mkdir()
+    dirs = []
+    for name, acc, pool in (("champ", 0.80, pools[0]), ("chall", 0.60, pools[1])):
+        d = tmp_path / name
+        d.mkdir(parents=True)
         heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool}}
-        json.dump({"validation": {"v": 0.5 if d == champ else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
-    assert gate.compare(str(champ), str(chall)) is True  # the 20-point drop is on a different pool
-    assert "1 cells not compared" in capsys.readouterr().out
+        json.dump({"validation": {"v": 0.5 if name == "champ" else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
+        dirs.append(str(d))
+    return dirs
+
+
+def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
+    # A 20-point drop on a different pool is not compared at all, so it is no regression.
+    gate.compare(*_gate_pair(tmp_path / "different", ("p1", "p2")))
+    out = capsys.readouterr().out
+    assert "1 cells not compared" in out
+    assert "(held-out regression)" not in out and "REGRESSION" not in out
+    # The same drop on the same pool is a regression.
+    assert gate.compare(*_gate_pair(tmp_path / "same", ("p1", "p1"))) is False
+    out = capsys.readouterr().out
+    assert "cells not compared" not in out
+    assert "categories:nli/en" in out
