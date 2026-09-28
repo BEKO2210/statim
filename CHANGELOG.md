@@ -7,6 +7,33 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-29
+
+LoRA adapters are bound to the exact checkpoint they were trained on, and the follow-ups from the
+fuzzing review (#27).
+
+### Fixed
+- An adapter could load onto a checkpoint that differs from its base only in the matrices, e.g. one
+  with another adapter merged in: the 0.8.0 fingerprint covers the vectors (norms and biases) only.
+  `tools/convert_laya.py` now records `statim.checkpoint_sha256`, a SHA-256 over every source
+  tensor before type conversion, so all weight types of one checkpoint share it; `statim-quantize`
+  keeps it, `tools/convert_lora.py` copies it into the adapter, and the engine refuses a mismatch
+  when both files carry it. Files converted before keep the fingerprint check alone.
+  `statim info` prints it.
+- `statim-quantize` accepts only the matrix types the loader accepts (one list,
+  `src/weight_types.h`); types such as `iq4_nl` used to produce files the engine refuses.
+- A model or adapter path that is not valid UTF-8 no longer stops `statim serve` at startup: the
+  `model_loaded` and `adapter_loaded` log lines replace invalid bytes instead of throwing.
+- `docs/API.md` lists the 422 `inference cancelled` response (client gone while waiting in a
+  micro-batch).
+
+### Changed
+- Fuzzing: q4_0 and q8_0 variants of the tiny model are gguf seeds, so the CPU repack path in
+  `Model::load` is fuzzed as well. Tests: `quantize_types`, `lora_checkpoint_binding` (tiny models
+  with equal vectors and different matrices), and a non-UTF-8 model path in `security_http`.
+- CI converts the Laya checkpoints again (model cache key `laya-models-v2`) so they carry the
+  checkpoint SHA-256.
+
 ## [0.8.0] - 2026-09-29
 
 Per-category LoRA adapters, a measured comparison with a general LLM, fuzzing and hardened model
@@ -14,11 +41,6 @@ loading, and licence-checked training data for the weakest categories. The publi
 unchanged.
 
 ### Added
-- Checkpoint content binding for LoRA adapters. `tools/convert_laya.py` records a SHA-256 over every
-  source tensor before type conversion, `statim-quantize` preserves it, and `tools/convert_lora.py`
-  copies it into adapters. When both files carry the key, the engine rejects an adapter for a base
-  with equal vectors but different matrices. Older model and adapter files continue to use the
-  existing vector fingerprint.
 - `bench/baselines.py` and `docs/BASELINES.md`: Statim against a local LLM (Qwen3-8B, zero-shot)
   and a zero-shot NLI classifier (mDeBERTa-v3 XNLI) on the gate's 11,550 held-out items, with the
   same questions and options for every system. Over 14 decision categories: 0.748, 0.704 and 0.488;
@@ -489,7 +511,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/BEKO2210/statim/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/BEKO2210/statim/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/BEKO2210/statim/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/BEKO2210/statim/compare/v0.6.1...v0.6.2
