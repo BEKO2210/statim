@@ -52,10 +52,28 @@ between minor versions; every change is listed here.
 - Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
 
+- `CLAUDE.md`: how to build, test, document and release Statim, and the rules for data, models and
+  the API, for coding agents working in the repository.
+
 ### Fixed
 - `docs/API.md` still gave 0.2.1 and 0.3.0 as the compiled-in version, and its `/metrics` example and
   check snippet predated the TYPE lines of `statim_workers_busy` and `statim_model_info` (0.8.0), so
   the snippet failed against a real server.
+- Documentation audit, every file against the code, the CLI and the releases:
+  - `REPRODUCE.md` and the ticket-triage example downloaded v0.7.0. The example's "What you should
+    see" named the 0.4.0 model file, and its demo transcript came from 0.4.0; it is re-recorded
+    with the published 0.7.0 model.
+  - The site showed MASSIVE 0.772 (the 0.4.0 model) for the 0.7.0 model, now 0.800.
+  - `docs/openapi.yaml` gave 0.4.0 and 0.2.1 as versions and lacked the 422
+    `inference cancelled` response. Both API documents lacked the micro-batch summaries in the
+    `/metrics` example and several serve flags.
+  - ROADMAP listed shipped 0.9 work as open. SECURITY now lists fuzz finding F8 (0.8.1) and dates
+    its validation counts. The client READMEs name the server version and say that adapters are
+    not wrapped yet.
+
+### Removed
+- `docs/WEITERMACHEN.md`, internal handoff notes from 2026-09-26. README, ROADMAP and CHANGELOG
+  carry the current state.
 
 ## [0.8.1] - 2026-09-29
 
