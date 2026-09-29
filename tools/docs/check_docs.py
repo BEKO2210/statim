@@ -9,7 +9,7 @@ Checks, over every tracked Markdown file and the site's HTML (history is exempt,
             points at a file that exists, and a #fragment at a heading (or HTML id) of that file
   paths     a backticked repository path (`tools/finetune/gate.py`, `docs/API.md`) exists; paths
             with placeholders (<...>, *, ...) and generated paths (build/, models/, data/, dist/)
-            are skipped
+            are skipped, and so are records, which may name a file that was removed since
   flags     every --flag in a documented command is one the program parses: `statim ...` against
             the arguments src/main.cpp compares, `python ... script.py ...` against that script's
             add_argument() calls, `fuzz/run.sh` and `tools/fetch_models.sh` are skipped (positional)
@@ -34,9 +34,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Records of the past: their links and paths are still checked, but not their versions and flags.
-HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md",
-           "docs/WEITERMACHEN.md"}
+# Records of the past: their links are still checked, but not their paths, versions and flags.
+HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md"}
 # Files whose release download URLs pin the version a recorded run used (with the reason).
 PINNED = {"docs/reproductions/clean-room.md": "a dated clean-room reproduction of v0.6.0"}
 GENERATED = ("build", "build-", "models/", "data/", "dist/", "logs/", "runs/", "out/")
@@ -431,8 +430,8 @@ def main():
     for path in files:
         text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
         check_links(path, text, problems)
-        check_paths(path, text, problems)
         if path not in HISTORY:
+            check_paths(path, text, problems)
             if path.endswith(".md"):
                 check_flags(path, text, problems)
             check_releases(path, text, version, problems)

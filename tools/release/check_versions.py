@@ -6,8 +6,8 @@
 
 The version lives in `project(statim VERSION x.y.z)`. The places below repeat it: the server's
 compiled-in string, the client SDKs, the demo Space's Dockerfile, the site's footers and JSON-LD,
-the README's quick start (release download), the client READMEs, and the examples in the API
-reference and the OpenAPI spec. Model versions
+the release downloads in the README, REPRODUCE.md and the ticket-triage example, the client
+READMEs, and the examples in the API reference and the OpenAPI spec. Model versions
 (statim-decide-* 0.5.0, 0.7.0) are a different number and are never touched: every pattern below
 is anchored on text that only surrounds the engine version. Standard library only, so CI runs it
 before anything is built.
@@ -39,6 +39,12 @@ SITES = [
     ("README.md", r"releases/download/v%s/" % V, 2),
     ("README.md", r"statim-%s-linux-x86_64-cpu" % V, 3),
     ("README.md", r"The current release is v%s:" % V, 1),
+    ("REPRODUCE.md", r"releases/download/v%s/" % V, 2),
+    ("REPRODUCE.md", r"statim-%s-linux-x86_64-cpu" % V, 3),
+    ("examples/ticket-triage/README.md", r"releases/download/v%s/" % V, 1),
+    ("examples/ticket-triage/README.md", r"releases/tag/v%s\)" % V, 1),
+    ("examples/ticket-triage/README.md", r"\[v%s release\]" % V, 1),
+    ("examples/ticket-triage/README.md", r"statim-%s-linux-x86_64-cpu" % V, 5),
     ("docs/API.md", r"In this tree that version is `%s`" % V, 1),
     ("docs/API.md", r'\{"status":"ok","version":"%s"\}' % V, 1),
     ("docs/API.md", r'weights="[a-z0-9_]+",version="%s"' % V, 3),

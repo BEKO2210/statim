@@ -2,7 +2,7 @@
 
 Official Python client for the [Statim](../../README.md) HTTP API. The package
 is named `statim`, uses only the standard library, and targets the API
-documented in [`docs/API.md`](../../docs/API.md) (server 0.8.1), except LoRA
+documented in [`docs/API.md`](../../docs/API.md) (server 0.8.2), except LoRA
 adapters (0.8.0): requests cannot select an `adapter` yet, and the adapter
 fields of responses and `/v1/models` are not exposed.
 

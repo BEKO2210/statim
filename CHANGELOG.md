@@ -7,19 +7,12 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
-### Fixed
-- Fact-check options `check worthy` and `non factual` had no description, in the training items and
-  in the held-out suite: their gloss keys kept the hyphen (`check-worthy`, `non-factual`) that
-  `registry.canon()` turns into a space. `templates.describe()` now matches labels regardless of
-  separators, and a test requires every gloss to be reachable in every language. This changes the
-  fact-check suite's items and the category pool fingerprint. The baselines answered the 150
-  fact-check items again: Qwen3-8B 0.493 → 0.513 (its 14-category mean 0.704 → 0.706); Statim
-  (0.313) and mDeBERTa-XNLI (0.347) are unchanged.
+## [0.8.2] - 2026-09-29
 
 ### Added
 - `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match every
-  place that repeats it (server, SDKs, Space Dockerfile, site, README quick start, client READMEs,
-  API reference and OpenAPI spec);
+  place that repeats it (server, SDKs, Space Dockerfile, site, release downloads in README,
+  REPRODUCE.md and the ticket-triage example, client READMEs, API reference and OpenAPI spec);
   CI runs it first, and `--set x.y.z` bumps all of them for a release.
 - `tools/docs/check_docs.py`, run by CI before the build: every tracked Markdown file and the site
   are checked for links and anchors (also github.com links into the repository), repository paths,
@@ -61,10 +54,39 @@ between minor versions; every change is listed here.
 - Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
 
+- `CLAUDE.md`: how to build, test, document and release Statim, and the rules for data, models and
+  the API, for coding agents working in the repository.
+- `docs/ADAPTERS.md`: the first category-adapter experiment on 0.7.0. The PII adapter (+5.46
+  points over 11 languages) and the emotion adapter (+4.75 over 8) pass the gate; safety (+8.0 on
+  one cell of 150 items), sentiment and fact-check stay within noise. The adapters are not
+  published yet.
+
+### Removed
+- `docs/WEITERMACHEN.md`, internal handoff notes from 2026-09-26. README, ROADMAP and CHANGELOG
+  carry the current state.
+
 ### Fixed
+- Fact-check options `check worthy` and `non factual` had no description, in the training items and
+  in the held-out suite: their gloss keys kept the hyphen (`check-worthy`, `non-factual`) that
+  `registry.canon()` turns into a space. `templates.describe()` now matches labels regardless of
+  separators, and a test requires every gloss to be reachable in every language. This changes the
+  fact-check suite's items and the category pool fingerprint. The baselines answered the 150
+  fact-check items again: Qwen3-8B 0.493 → 0.513 (its 14-category mean 0.704 → 0.706); Statim
+  (0.313) and mDeBERTa-XNLI (0.347) are unchanged.
 - `docs/API.md` still gave 0.2.1 and 0.3.0 as the compiled-in version, and its `/metrics` example and
   check snippet predated the TYPE lines of `statim_workers_busy` and `statim_model_info` (0.8.0), so
   the snippet failed against a real server.
+- Documentation audit, every file against the code, the CLI and the releases:
+  - `REPRODUCE.md` and the ticket-triage example downloaded v0.7.0. The example's "What you should
+    see" named the 0.4.0 model file, and its demo transcript came from 0.4.0; it is re-recorded
+    with the published 0.7.0 model.
+  - The site showed MASSIVE 0.772 (the 0.4.0 model) for the 0.7.0 model, now 0.800.
+  - `docs/openapi.yaml` gave 0.4.0 and 0.2.1 as versions and lacked the 422
+    `inference cancelled` response. Both API documents lacked the micro-batch summaries in the
+    `/metrics` example and several serve flags.
+  - ROADMAP listed shipped 0.9 work as open. SECURITY now lists fuzz finding F8 (0.8.1) and dates
+    its validation counts. The client READMEs name the server version and say that adapters are
+    not wrapped yet.
 
 ## [0.8.1] - 2026-09-29
 
@@ -574,7 +596,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/BEKO2210/statim/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/BEKO2210/statim/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/BEKO2210/statim/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/BEKO2210/statim/compare/v0.6.2...v0.7.0

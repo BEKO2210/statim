@@ -17,12 +17,12 @@ Release binary (Linux x86-64, CPU):
 ```sh
 git clone --recursive https://github.com/BEKO2210/statim.git
 cd statim
-curl -fL -o statim-0.8.1-linux-x86_64-cpu.tar.gz \
-  https://github.com/BEKO2210/statim/releases/download/v0.8.1/statim-0.8.1-linux-x86_64-cpu.tar.gz
-tar -xzf statim-0.8.1-linux-x86_64-cpu.tar.gz
+curl -fL -o statim-0.8.2-linux-x86_64-cpu.tar.gz \
+  https://github.com/BEKO2210/statim/releases/download/v0.8.2/statim-0.8.2-linux-x86_64-cpu.tar.gz
+tar -xzf statim-0.8.2-linux-x86_64-cpu.tar.gz
 ```
 
-The binary is `statim-0.8.1-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.8.1 release](https://github.com/BEKO2210/statim/releases/tag/v0.8.1).
+The binary is `statim-0.8.2-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.8.2 release](https://github.com/BEKO2210/statim/releases/tag/v0.8.2).
 
 Build from source instead:
 
@@ -53,7 +53,7 @@ statim serve --device cpu -m multilingual=/absolute/path/to/model.gguf --port 80
 ### 3. Start the server
 
 ```sh
-./statim-0.8.1-linux-x86_64-cpu/statim serve --device cpu \
+./statim-0.8.2-linux-x86_64-cpu/statim serve --device cpu \
   -m multilingual=statim-decide-multilingual-base-q8_0.gguf \
   --port 8080
 ```
