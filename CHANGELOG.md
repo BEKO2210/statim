@@ -7,6 +7,27 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-09-29
+
+### Changed
+- A first contact in three steps. The README quick start is download (with checksum checks), start
+  and ask. It no longer clones the repository, and it no longer starts a second server with another
+  model file.
+  - The quick start shows the real answer of the published q8_0 model, with the `legend` that gives
+    `score` its scale, and one sentence on what `choice`, `score` and `noul` return.
+  - The block was run verbatim in an empty folder with the v0.8.5 release: both checksums OK, the
+    answer identical to the excerpt.
+- The README opens with what Statim does in plain words, and states the release binary's platform:
+  x86-64 with AVX2.
+- Building from source, GPU backends and quantization moved to `docs/BUILD.md`. It says that release
+  binaries exist only for Linux x86-64 and everything else builds from source.
+- The research detail of "Results" (gate method and charts, consensus, calibration and quantization,
+  many-option tasks) moved verbatim to `docs/RESULTS.md`. The README keeps the evidence tables.
+
+### Fixed
+- The engine binary is 5.5 MB (5,460,960 bytes in the v0.8.5 CPU release), not the 3.3 MB measured
+  on 2026-09-26, in the README and on the site. A `check_docs` fact keeps the copies equal.
+
 ## [0.8.5] - 2026-09-29
 
 ### Added
@@ -642,7 +663,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.6...HEAD
+[0.8.6]: https://github.com/BEKO2210/statim/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/BEKO2210/statim/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/BEKO2210/statim/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/BEKO2210/statim/compare/v0.8.2...v0.8.3

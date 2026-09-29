@@ -35,7 +35,7 @@ SITES = [
     ("site/impressum/index.html", r"<span>Statim %s\." % V, 1),
     ("site/datenschutz/index.html", r"<span>Statim %s\." % V, 1),
     ("site/license/index.html", r"<span>Statim %s\." % V, 1),
-    ("README.md", r"This downloads the v%s Linux" % V, 1),
+    ("README.md", r"# 1\. Download the engine[^\n]*\n(?:[^\n]*\n)*?curl -fLO https://github\.com/BEKO2210/statim/releases/download/v%s/" % V, 1),
     ("README.md", r"releases/download/v%s/" % V, 2),
     ("README.md", r"statim-%s-linux-x86_64-cpu" % V, 3),
     ("README.md", r"The current release is v%s:" % V, 1),
