@@ -7,6 +7,27 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-09-29
+
+### Added
+- The first published category adapters for statim-decide-multilingual-base 0.7.0, on Hugging Face:
+  [PII](https://huggingface.co/Beko2210/statim-decide-multilingual-base-pii) (+5.46 points over
+  11 languages, 0.856 to 0.910) and
+  [emotion](https://huggingface.co/Beko2210/statim-decide-multilingual-base-emotion) (+4.75 over
+  8). On the published f32 base file they reproduce the experiment cell for cell. On the q8_0 file,
+  as runtime LoRA, they gain +5.52 and +5.33 points. Each repository carries the GGUF, the PEFT
+  source, the training record, the evaluation files, a NOTICE with the CC-BY attributions, and
+  checksums.
+- `tools/release/hf_publish_adapter.py` builds such a package from a LoRA experiment's outputs:
+  - It refuses an adapter the gate did not promote.
+  - It checks that every published base file loads the adapter with the fingerprint the adapter
+    records, and it copies the evaluations of the published files.
+  - It writes the model card and NOTICE from the experiment's files, and it removes local paths.
+  - With `--upload`, it compares the remote SHA-256 with the local checksums.
+  - `tools/release/test_hf_publish_adapter.py` covers it, and CI runs it.
+- `check_docs.py` also guards the Statim and Qwen3-8B numbers that ROADMAP repeats for the five
+  weak categories, and the published adapters' numbers.
+
 ## [0.8.3] - 2026-09-29
 
 ### Added
@@ -606,7 +627,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/BEKO2210/statim/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/BEKO2210/statim/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/BEKO2210/statim/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/BEKO2210/statim/compare/v0.8.0...v0.8.1

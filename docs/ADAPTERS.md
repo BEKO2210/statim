@@ -5,6 +5,29 @@ category ([docs/API.md](API.md#lora-adapters)). This page records the adapters t
 Decide and the evidence behind each decision. An adapter is published only when the gate promotes
 it.
 
+## Published adapters
+
+| Adapter | Repository | File (13.5 MB) | SHA-256 |
+|---|---|---|---|
+| PII | [Beko2210/statim-decide-multilingual-base-pii](https://huggingface.co/Beko2210/statim-decide-multilingual-base-pii) | `statim-decide-multilingual-base-pii.lora.gguf` | `2991a33b5d9db4f5b679081885faab1f84289d6eae7660830447e790bd168b29` |
+| Emotion | [Beko2210/statim-decide-multilingual-base-emotion](https://huggingface.co/Beko2210/statim-decide-multilingual-base-emotion) | `statim-decide-multilingual-base-emotion.lora.gguf` | `c832dc6aada9bf0b07e7f481b554d51ddff2fe0c1365ba49145de13f3952bdc8` |
+
+Both adapt statim-decide-multilingual-base 0.7.0 and are bound to it by its fingerprint. They were
+checked on the published base files. On f32, merged at load, they reproduce the experiment below
+cell for cell. On q8_0, as runtime LoRA, the mean change over the language cells is +5.52 points for
+PII and +5.33 for emotion. Each repository carries its evaluation files, training record, PEFT
+source and checksums. `tools/release/hf_publish_adapter.py` builds them from the experiment's
+outputs and refuses an adapter the gate did not promote.
+
+```sh
+statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf \
+    --adapter multilingual:pii=statim-decide-multilingual-base-pii.lora.gguf \
+    --adapter multilingual:emotion=statim-decide-multilingual-base-emotion.lora.gguf
+```
+
+With `"adapter": "auto"`, PII and emotion questions use their adapter, and every other question
+uses the base weights.
+
 ## Specialists for the weak categories (2026-09-29)
 
 **Question.** A zero-shot Qwen3-8B leads statim-decide-multilingual-base 0.7.0 in five of the 14
@@ -67,8 +90,8 @@ No language cell regressed in any category. Accuracy per cell for the two promot
 - **Fact-check needs a new run.** The fact-check adapter was trained and measured while two of its
   three options had no description, a lookup bug fixed after this run. It needs a rebuilt mixture.
 
-The promoted adapters are not published yet. Publishing them, adapter support in the client SDKs,
-and new runs for the rejected categories are next ([ROADMAP](ROADMAP.md)).
+The promoted adapters are published (see above), and the client SDKs select adapters since 0.8.3.
+New runs for the rejected categories are next ([ROADMAP](ROADMAP.md)).
 
 ### Reproduce
 
