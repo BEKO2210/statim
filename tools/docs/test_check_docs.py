@@ -98,7 +98,7 @@ class ServerChecks(Tree):
 class FactChecks(Tree):
     def setUp(self):
         super().setUp()
-        for rel in sorted({path for _, places in check_docs.FACTS for path, _ in places}):
+        for rel in sorted({place[0] for _, places in check_docs.FACTS for place in places}):
             (self.tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(REAL / rel, self.tmp / rel)
 
@@ -128,6 +128,28 @@ class FactChecks(Tree):
         found = self.facts()
         self.assertIn("facts: en-large MASSIVE English: no match in docs/ROADMAP.md (reworded? update FACTS in "
                       "tools/docs/check_docs.py)", found)
+
+    def test_same_label_is_scoped_to_its_section(self):
+        readme = self.tmp / "README.md"
+        source = self.tmp / "source.md"
+        readme.write_text("## First\n\n| Suite | Score |\n|---|---:|\n| Shared | 0.1 |\n\n"
+                          "## Second\n\n| Suite | Score |\n|---|---:|\n| Shared | 0.2 |\n",
+                          encoding="utf-8")
+        source.write_text("first 0.1\nsecond 0.2\n", encoding="utf-8")
+        old_facts = check_docs.FACTS
+        check_docs.FACTS = [
+            ("first", [("source.md", r"first (\d?\.\d+)"),
+                       ("README.md", check_docs.cell("Shared", 0), "## First")]),
+            ("second", [("source.md", r"second (\d?\.\d+)"),
+                        ("README.md", check_docs.cell("Shared", 0), "## Second")]),
+        ]
+        try:
+            self.assertEqual(self.facts(), [])
+            self.edit("README.md", "| Shared | 0.2 |", "| Shared | 0.3 |")
+            self.assertEqual(self.facts(),
+                             ["facts: second: README.md says 0.3, source.md says 0.2"])
+        finally:
+            check_docs.FACTS = old_facts
 
 
 class DocChecks(Tree):

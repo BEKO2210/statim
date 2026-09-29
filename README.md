@@ -9,7 +9,7 @@
   <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
   <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
-  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, Small Business, Free Trial or commercial" src="https://img.shields.io/badge/weights-PolyForm%20NC%20%C2%B7%20Small%20Business%20%C2%B7%20Trial%20%2B%20commercial-161B22"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, PolyForm Small Business, PolyForm Free Trial, or commercial" src="https://img.shields.io/badge/weights-PolyForm%20or%20commercial-161B22"></a>
 </p>
 
 <p align="center">
@@ -31,21 +31,37 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 > *statim* (Latin): immediately, at once.
 
-**Try it:** [live demo](https://huggingface.co/spaces/Beko2210/statim) (no install, no key) ·
-**Models:** [English](https://huggingface.co/Beko2210/statim-decide-en-large) and
-[multilingual](https://huggingface.co/Beko2210/statim-decide-multilingual-base) on Hugging Face ·
-**Example:** [ticket triage in ten minutes](examples/ticket-triage) ·
-**Reproduce the results:** [REPRODUCE.md](REPRODUCE.md)
+- **[Live demo](https://huggingface.co/spaces/Beko2210/statim)**: in the browser, no install, no key
+- **Models on Hugging Face**: [English](https://huggingface.co/Beko2210/statim-decide-en-large),
+  [multilingual](https://huggingface.co/Beko2210/statim-decide-multilingual-base), and three
+  [category adapters](docs/ADAPTERS.md)
+- **[Ticket triage example](examples/ticket-triage)**: a complete application in ten minutes
+- **[Reproduce every number](REPRODUCE.md)** with the scripts in this repository
 
 ## At a glance
 
-| Evidence | Statim | Comparison | Protocol and source |
-|---|---:|---:|---|
-| 14 decision categories, macro accuracy | **0.748** | Qwen3-8B 0.706; mDeBERTa-v3 XNLI 0.488 | Same 11,550 held-out items, questions, and options. Statim was trained on these categories; both baselines were zero-shot. [Full results](docs/BASELINES.md) |
-| Banking77, 77 intents | **0.913** | Qwen3-8B 0.650; mDeBERTa-v3 XNLI 0.224 | Same trained-versus-zero-shot comparison. [Full results](docs/BASELINES.md) |
-| One RTX 3070 | **68 decisions/s**, 11.6 ms/decision | Qwen3-8B ≈6; mDeBERTa-v3 XNLI 4 decisions/s | Statim Vulkan f32 in batches of 16; Qwen3-8B Ollama Q4_K_M with 2 parallel requests; mDeBERTa CUDA f32. [Measurements](docs/BASELINES.md#speed-on-the-same-machine) |
-| CPU latency | **535 ms/state** multilingual; **1,683 ms/state** English | RTX 3070: 54 ms and 137 ms | Ryzen 7 5800X, 16 threads, f32, 30 states × 8 questions, up to 770 tokens. [Performance](#gpu-performance) |
-| Reference parity | **240/240** token sequences | Answers within 1e-4 of Laya | CI-gated against the official Python package. [Reproduce](REPRODUCE.md#2-the-engine-matches-the-python-reference) |
+| Measure | **Statim** | **Qwen3-8B** |
+|---|---:|---:|
+| 14-category macro accuracy | **0.748** | 0.706 |
+| Banking77 | **0.913** | 0.650 |
+| Decisions/s, one RTX 3070 | **68** | ≈6 |
+
+- CPU latency: **535 ms/state, multilingual**; **1,683 ms/state, English**. RTX 3070: 54 ms and 137 ms.
+- Reference parity: **240/240** token sequences, with answers within 1e-4 of Laya.
+
+**How it was measured**
+
+- Accuracy: the same 11,550 held-out items, questions, and options. Statim was trained; both
+  baselines were zero-shot. mDeBERTa-v3 XNLI scored 0.488 on the 14 categories and 0.224 on
+  Banking77's 77 intents. [Full results](docs/BASELINES.md)
+- Speed: Statim Vulkan f32 reached 68 decisions/s (11.6 ms/decision) in batches of 16 on one RTX
+  3070. Qwen3-8B reached ≈6 decisions/s through Ollama Q4_K_M with 2 parallel requests;
+  mDeBERTa-v3 XNLI used CUDA f32 and reached 4 decisions/s.
+  [Measurements](docs/BASELINES.md#speed-on-the-same-machine)
+- CPU latency: Ryzen 7 5800X, 16 threads, f32, 30 states × 8 questions, and up to 770 tokens.
+  [Performance](#gpu-performance)
+- Parity: CI-gated against the official Python package.
+  [Reproduce](REPRODUCE.md#2-the-engine-matches-the-python-reference)
 
 These rows use different workloads. They are separate evidence for accuracy, throughput, latency,
 and parity, not one combined benchmark.
@@ -56,15 +72,15 @@ Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, as
 
 ```bash
 # 1. Download the engine (3 MB) and the multilingual model (357 MB), and verify both
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.6/statim-0.8.6-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.6/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.6-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.7/statim-0.8.7-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.7/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.7-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 
 # 2. Start the server (it keeps running; it is ready when it logs "listening")
-./statim-0.8.6-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
+./statim-0.8.7-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
 
 # 3. In a second terminal: one ticket, three typed questions
 curl -s localhost:8080/v1/systemone -d '{
@@ -108,16 +124,26 @@ the tokenizer in GGUF, making each model a self-describing artifact.
 
 ## Why Statim
 
-| | Laya (Python) | Statim |
+| Measure | Laya | Statim |
 |---|---|---|
-| Runtime | Python 3.10+, PyTorch, transformers | One 5.5 MB binary and one `.gguf` file |
-| Answers | Reference | 240/240 token sequences; answers within 1e-4 |
-| Tokenizer | HF `tokenizers` (Rust) | Native C++; identical on 3,906 cases plus 140k fuzz strings, about 10× faster |
+| Runtime | Python stack | 5.5 MB + `.gguf` |
+| Answers | Reference | 240/240; within 1e-4 |
 | Cold start to first answer | 11.35 s | **0.76 s** |
-| Server memory | 3,915 MB | **650 MB**, with mmap'd weights shared between processes |
-| HTTP throughput | 0.43 req/s | **1.07 req/s** with 6 threads; 0.99 req/s with 4 threads |
-| Server | FastAPI, one inference at a time | Worker pool, admission control, bearer auth, Prometheus metrics, JSON logs, health/readiness, request IDs, graceful shutdown |
-| Deployment | pip or Docker | Static binary, distroless Docker, hardened systemd unit |
+| Server memory | 3,915 MB | **650 MB** |
+| HTTP throughput | 0.43 req/s | **1.07 req/s** |
+
+- Runtime: Laya needs Python 3.10+, PyTorch, and transformers. Statim uses one 5.5 MB binary and one
+  `.gguf` file.
+- Answers: the comparison covers 240/240 token sequences; answers are within 1e-4 of the reference.
+- Tokenizer: Laya uses HF `tokenizers` (Rust). Statim's native C++ tokenizer is identical on 3,906
+  cases plus 140k fuzz strings and about 10× faster.
+- Memory and throughput: Statim's mmap'd weights are shared between processes. Its 1.07 req/s uses
+  6 threads; with 4 threads it reaches 0.99 req/s.
+- Server: Laya uses FastAPI and runs one inference at a time. Statim has a worker pool, admission
+  control, bearer auth, Prometheus metrics, JSON logs, health/readiness, request IDs, and graceful
+  shutdown.
+- Deployment: Laya uses pip or Docker. Statim uses a static binary, distroless Docker, and a hardened
+  systemd unit.
 
 The comparison uses the laptop CPU protocol under [CPU performance](#cpu-performance). Consensus
 across the two base checkpoints is reported separately in [the research results](docs/RESULTS.md#base-checkpoint-consensus).
@@ -127,10 +153,18 @@ across the two base checkpoints is reported separately in [the research results]
 Statim runs any Laya checkpoint. Published Statim Decide models use licence-audited fine-tuning data
 and must pass a no-harm promotion gate.
 
-| Model | Encoder | Languages | typed-decisions | Banking77 | MASSIVE | Files |
-|---|---|---:|---:|---:|---:|---|
-| [statim-decide-en-large 0.5.0](https://huggingface.co/Beko2210/statim-decide-en-large) | ModernBERT-large, 395M | English | **0.768** | **0.928** | 0.867 (en) | f32 1.58 GB; q8_0 0.45 GB |
-| [statim-decide-multilingual-base 0.7.0](https://huggingface.co/Beko2210/statim-decide-multilingual-base) | mmBERT-base | 12 evaluated | 0.763 | 0.914 | 0.800 (12 languages) | f32 0.91 GB; q8_0 0.36 GB |
+| Model | Languages |
+|---|---:|
+| [statim-decide-en-large 0.5.0](https://huggingface.co/Beko2210/statim-decide-en-large)<br>ModernBERT-large, 395M | English |
+| [statim-decide-multilingual-base 0.7.0](https://huggingface.co/Beko2210/statim-decide-multilingual-base)<br>mmBERT-base | 12 evaluated |
+
+Files: f32 1.58 GB and q8_0 0.45 GB (English); f32 0.91 GB and q8_0 0.36 GB (multilingual).
+
+| Suite | English | Multilingual |
+|---|---:|---:|
+| typed-decisions | **0.768** | 0.763 |
+| Banking77 | **0.928** | 0.914 |
+| MASSIVE | 0.867 (en) | 0.800 (12 languages) |
 
 These are trained-suite promotion-gate results. Under the same published protocol,
 typed-decisions scores are meraGPT 0.768, laya-typed-decisions 0.766, and Jev 0.727; supervised
@@ -145,12 +179,16 @@ hf download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --l
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /v1/systemone` | Decide for one state; returns `model`, `answers`, `usage`, and `routing`. |
-| `POST /v1/systemone/batch` | Decide for multiple states with shared questions and packed forward passes. |
-| `GET /v1/models` | List loaded models and adapters. |
+| `POST /v1/systemone` | Decide for one state |
+| `POST /v1/systemone/batch` | Decide for many states |
+| `GET /v1/models` | List loaded models and adapters |
 | `GET /health`, `GET /ready` | Liveness and readiness. |
-| `GET /metrics` | Prometheus request, latency, token, concurrency, worker, batch, model, and adapter metrics. |
-| `GET /` | Browser playground, enabled by default. |
+| `GET /metrics` | Prometheus metrics |
+| `GET /` | Browser playground |
+
+The single-state response returns `model`, `answers`, `usage`, and `routing`. Batch requests use
+shared questions and packed forward passes. The playground is enabled by default. Prometheus covers
+request, latency, token, concurrency, worker, batch, model, and adapter metrics.
 
 Requests contain `state` and `questions`, with optional `model`, `adapter`, `lang`,
 `min_confidence`, `return_logits`, `calibrate`, and `ensemble`. `model` may select a loaded model or
@@ -205,8 +243,11 @@ The dependency-free Python and TypeScript clients retry `503` responses with bac
 
 | Package | Path |
 |---|---|
-| Python `statim` | [`clients/python`](clients/python) (`pip install ./clients/python`) |
-| TypeScript `@statim/client` | [`clients/js`](clients/js) (`npx tsc`, then import the package) |
+| Python `statim` | [`clients/python`](clients/python) |
+| TypeScript `@statim/client` | [`clients/js`](clients/js) |
+
+Install Python with `pip install ./clients/python`. For TypeScript, run `npx tsc`, then import the
+package.
 
 ```python
 from statim import Client
@@ -234,16 +275,30 @@ using the f32 multilingual checkpoint and Laya 0.3.20 on PyTorch 2.14. The workl
 questions from `tests/data/golden_inputs.json`, up to 20 options and 770 tokens. Each engine uses its
 best thread count. Scripts are in `bench/`.
 
-| Measurement | Laya | Statim | Difference |
-|---|---:|---:|---:|
-| In-process mean / p50 per state | 1,186 / 815 ms | **1,139 / 823 ms** | −4 % mean |
-| HTTP, 1 client: throughput | 0.43 req/s, 4 threads | **1.07 req/s**, 6 threads; 0.99 req/s, 4 threads | 2.3–2.5× |
-| HTTP, 1 client: p50 / p95 | 1,718 / 4,994 ms | **889 / 1,280 ms** | p95 −74 % |
-| HTTP, 4 clients: throughput / p95 | 0.53 req/s / 11,958 ms | **1.12 req/s / 4,425 ms** | 2.1× |
-| Server resident memory | 3,915 MB | **650 MB** | 6× less |
-| Cold start to first answer | 11.35 s | **0.76 s** | 15× faster |
-| Peak memory, one shot | 2,667 MB | **585 MB** f32; **234 MB** q8_0 | 4.6–11× less |
-| Runtime footprint | PyTorch alone ≥ 1.2 GB | **5.5 MB** binary | |
+| Measure | Laya | Statim |
+|---|---:|---:|
+| In-process mean | 1,186 ms | **1,139 ms** |
+| In-process p50 | 815 ms | **823 ms** |
+| HTTP rate, 1 client | 0.43 req/s | **1.07 req/s** |
+| HTTP p50, 1 client | 1,718 ms | **889 ms** |
+| HTTP p95, 1 client | 4,994 ms | **1,280 ms** |
+| HTTP rate, 4 clients | 0.53 req/s | **1.12 req/s** |
+| HTTP p95, 4 clients | 11,958 ms | **4,425 ms** |
+| Resident memory | 3,915 MB | **650 MB** |
+| Cold start | 11.35 s | **0.76 s** |
+| Peak memory, f32 | 2,667 MB | **585 MB** |
+| Peak memory, q8_0 | 2,667 MB | **234 MB** |
+| Runtime footprint | PyTorch ≥ 1.2 GB | **5.5 MB** |
+
+Against Laya:
+
+- **One client:** Laya's 0.43 req/s used 4 threads. Statim reached 1.07 req/s with 6 threads (2.5×)
+  and 0.99 req/s with 4 threads (2.3×), a 2.3–2.5× range. p95 falls by 74 %.
+- **Four clients:** 0.53 against 1.12 req/s is 2.1× the throughput, with p95 11,958 against 4,425 ms.
+- **In-process:** the mean latency per state is 4 % lower; the p50 is about the same.
+- **Memory and start:** 6× less resident memory, and 15× faster from cold start to first answer.
+  Peak memory for one shot is 4.6× less in f32 and 11× less in q8_0.
+- **Footprint:** the runtime-footprint row compares PyTorch alone with the Statim binary.
 
 On AVX2 without VNNI, q8_0 halves the file and cuts memory 2.5× but is slower than f32. Its logits
 move by up to ~0.4 and 2 of 240 parity answers change. ARM dotprod/i8mm and AVX-512-VNNI are the
@@ -257,13 +312,18 @@ GPU build and launch instructions are in [docs/BUILD.md](docs/BUILD.md#gpu-backe
 the default. Both f32 checkpoints use about 3.3 GB of VRAM. On an RTX 3070 and Ryzen 7 5800X, f32,
 using the 30 × 8 golden workload:
 
-| Model and path | CPU | RTX 3070 | Speed-up |
+| Path | CPU | RTX 3070 | Gain |
 |---|---:|---:|---:|
-| Multilingual, in-process per state | 535 ms | **54 ms** | ~10× |
-| English, in-process per state | 1,683 ms | **137 ms** | ~12× |
-| Multilingual, HTTP, 1 client | 2.68 req/s; p50 353 ms | **20.5 req/s; p50 45 ms** | 7.7× |
-| English, HTTP, 1 client | 0.91 req/s; p50 1,039 ms | **8.1 req/s; p50 119 ms** | 8.9× |
-| Parity max \|Δlogit\|, multilingual / English | 5.0e-4 / 2.0e-4 | **8.8e-5 / 1.6e-4** | 240/240 argmax |
+| Multilingual state | 535 ms | **54 ms** | ~10× |
+| English state | 1,683 ms | **137 ms** | ~12× |
+| Multilingual rate<br>1 client | 2.68 req/s | **20.5 req/s** | 7.7× |
+| Multilingual p50<br>1 client | 353 ms | **45 ms** | — |
+| English rate<br>1 client | 0.91 req/s | **8.1 req/s** | 8.9× |
+| English p50<br>1 client | 1,039 ms | **119 ms** | — |
+| Multilingual max \|Δlogit\| | 5.0e-4 | **8.8e-5** | 240/240 argmax |
+| English max \|Δlogit\| | 2.0e-4 | **1.6e-4** | 240/240 argmax |
+
+The state rows are in-process measurements per state.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/gpu-dark.svg">
@@ -302,14 +362,17 @@ Every system receives the same 11,550 held-out items, questions, and options: 37
 Banking77. Training-mixture overlaps are removed. Statim 0.7.0 was trained on these categories;
 Qwen3-8B and mDeBERTa were zero-shot. This compares out-of-the-box systems, not learning methods.
 
-| | Statim 0.7.0 | Qwen3-8B, zero-shot | mDeBERTa XNLI, zero-shot |
+| Measure | Statim | Qwen3-8B | NLI |
 |---|---:|---:|---:|
 | Parameters | 307M | 8.2B | 279M |
 | 14-category macro accuracy | **0.748** | 0.706 | 0.488 |
 | Categories won | **9** | 5 | 0 |
 | Banking77 | **0.913** | 0.650 | 0.224 |
 | AG News | **0.929** | 0.847 | 0.581 |
-| Decisions/s, same RTX 3070 | **68** | ≈6 | 4 |
+| Decisions/s | **68** | ≈6 | 4 |
+
+These are Statim 0.7.0 against zero-shot Qwen3-8B and the zero-shot NLI classifier mDeBERTa-v3-base
+XNLI (column NLI), measured on the same RTX 3070 where speed is reported.
 
 Qwen3-8B leads on emotion, fact-check, sentiment, safety, and PII. See
 [docs/BASELINES.md](docs/BASELINES.md) for all cells, limitations, speed, and reproduction commands.
@@ -319,10 +382,18 @@ Qwen3-8B leads on emotion, fact-check, sentiment, safety, and PII. See
 Published models must pass validation, held-out-suite, and pooled-family promotion gates before
 replacing their base. The full method and charts are in [docs/RESULTS.md](docs/RESULTS.md#published-model-gates).
 
-| Model | Trained suites | Never-trained suites | Gate versus base |
-|---|---|---|---|
-| English 0.5.0 | typed-decisions 0.768; Banking77 0.928; MASSIVE English 0.867; HWU64 0.833 | AG News 0.939; Emotion 0.588 | 54 suites: 11 significant gains, 0 regressions; zero-shot family within noise |
-| Multilingual 0.7.0 | typed-decisions 0.763; Banking77 0.914; MASSIVE 0.800 over 12 languages | AG News 0.9295; Emotion 0.504 | 89 suites: 23 significant gains, 66 within noise, 0 regressions; 14-category macro 0.748 (0.4.0: 0.559) |
+| Suite | English 0.5.0 | Multilingual 0.7.0 |
+|---|---:|---:|
+| typed-decisions | 0.768 | 0.763 |
+| Banking77 | 0.928 | 0.914 |
+| MASSIVE | 0.867 English | 0.800 / 12 languages |
+| HWU64 (English only) | 0.833 | — |
+| AG News (never trained) | 0.939 | 0.9295 |
+| Emotion (never trained) | 0.588 | 0.504 |
+
+English passed 54 suites with 11 significant gains, 0 regressions, and its zero-shot family within
+noise. Multilingual passed 89 suites with 23 significant gains, 66 within noise, and 0 regressions;
+its 14-category macro accuracy is 0.748 (0.4.0: 0.559).
 
 Category-adapter results and promotion evidence are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
 
@@ -346,9 +417,9 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.8.6: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.8.6 gives the README a three-step
-quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
+The current release is v0.8.7: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.8.7 makes the README readable on
+phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
 the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
 the comparison with a local LLM and an NLI classifier, fuzzing in CI, load-time model and adapter
@@ -361,13 +432,14 @@ Before 1.0, the HTTP API may change between minor versions. See the [changelog](
 
 ## Licence
 
-| Component or use | Licence |
-|---|---|
-| Source code: engine, server, tools | [Apache-2.0](LICENSE), free for any use |
-| Statim weights, noncommercial | [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md): personal use, research, experiments, and noncommercial organisations |
-| Statim weights, small companies | [PolyForm Small Business 1.0.0](LICENSE-MODEL.md): commercial use below 100 people and 1 M USD revenue |
-| Statim weights, evaluation | [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md): fewer than 32 consecutive days |
-| Other commercial use | Paid licence; see [COMMERCIAL.md](COMMERCIAL.md) |
+- Source code—engine, server, and tools—is [Apache-2.0](LICENSE), free for any use.
+- Statim weights for personal use, research, experiments, and noncommercial organisations use
+  [PolyForm Noncommercial 1.0.0](LICENSE-MODEL.md).
+- Small companies—below 100 people and 1 M USD revenue—may use the weights commercially under
+  [PolyForm Small Business 1.0.0](LICENSE-MODEL.md).
+- Evaluation for fewer than 32 consecutive days uses
+  [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md).
+- Other commercial use needs a paid licence; see [COMMERCIAL.md](COMMERCIAL.md).
 
 Released weights use commercially usable, non-ShareAlike data; sources are in
 [DATA_LICENSES.md](DATA_LICENSES.md). Original Laya checkpoints are Apache-2.0. Statim is independent
