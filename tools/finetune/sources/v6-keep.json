@@ -3287,6 +3287,31 @@
   "excluded_reason": null
  },
  {
+  "id": "Powpowpow23/ru-pii-ner-data",
+  "config": "default",
+  "split": "train",
+  "licence": "apache-2.0 (card YAML and LICENSE file); DeepSeek-written templates filled with fictitious Faker/custom-generator values",
+  "languages": [
+   "ru"
+  ],
+  "category": "10-pii",
+  "label_field": "entities (character spans {type, start, end}); supervised_types bounds type-level negatives; source_families containing negative_examples supplies document-level no-PII labels",
+  "text_fields": [
+   "text"
+  ],
+  "licence_evidence": [
+   "https://huggingface.co/datasets/Powpowpow23/ru-pii-ner-data/blob/55acbec07fb04a18455111a34337cb515a7f821e/README.md (YAML license: apache-2.0; 'Собственная синтетика распространяется под Apache-2.0 (LICENSE). Автор подтвердил право на распространение результатов генерации.')",
+   "https://huggingface.co/datasets/Powpowpow23/ru-pii-ner-data/blob/55acbec07fb04a18455111a34337cb515a7f821e/LICENSE (Apache License, Version 2.0, January 2004)",
+   "https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html (Terms of Use, 2026-03-27, §4.2(3): outputs may be used for 'training other models (such as model distillation)'; the same evidence rule as agentlans/fact-or-opinion)"
+  ],
+  "provenance": "Synthetic Russian messages. README: a language model wrote message templates (generation records name the DeepSeek family); code inserted fictitious values using Faker and specialised generators and tracked character boundaries automatically. External Red, Nerus, NEREL and Scanpatch corpora and derivatives are excluded. Not gated. Train only: 104,111 rows; validation was used for development. The 2,400 train rows in source_families negative_examples are the only document-level negatives; absence of a type outside supervised_types is not a negative.",
+  "pinned_commit": "55acbec07fb04a18455111a34337cb515a7f821e",
+  "test_overlap_note": "no eval-suite source and not a re-release of a mixture or eval source; 0 exact matches of its 104,111 train texts against the 29,767 pooled items of the sentiment/emotion/safety/fact_check/pii suites; exact-dedup vs all eval texts in build.py",
+  "source_part": "G",
+  "use": true,
+  "excluded_reason": null
+ },
+ {
   "id": "kakeith406/op-fed",
   "config": "aggregated",
   "split": "train",

@@ -343,12 +343,14 @@ had reached are listed below only where they were checked to the end.
 | Source | Licence and evidence | Provenance | Languages | Rows after filter (items at full size) | Category |
 |---|---|---|---|---|---|
 | `naeyn/nobody-pii-synth-de`, train split, commit f78fcbca | Card YAML `apache-2.0`; repository [LICENSE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/LICENSE) "Apache License, Version 2.0"; [NOTICE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/NOTICE) "Apache-2.0 (see LICENSE). This repository contains procedurally generated rows and does not contain records copied from ai4privacy/…" | README: "generated from templates and Faker locale providers. No source records containing real people's personal data were used"; no language model. Not gated. 0 exact overlap with the pooled suite items | de 4,795, en 2,379, nl 1,792 (8,966 of 9,450 rows; PII-free rows whose language the text does not confirm are dropped) | 9,133 items: pii_type probes de 4,710, en 2,151, nl 1,746; pii choice de 368, en 74, nl 84. The pii yes/no task is dropped (97.6 % yes) | 10-pii |
+| `Powpowpow23/ru-pii-ner-data`, train split, commit 55acbec0 | Card YAML `apache-2.0`; pinned [LICENSE](https://huggingface.co/datasets/Powpowpow23/ru-pii-ner-data/blob/55acbec07fb04a18455111a34337cb515a7f821e/LICENSE) "Apache License, Version 2.0"; README confirms the author's distribution right. DeepSeek Terms (2026-03-27) §4.2(3) allow outputs for "training other models (such as model distillation)", the same evidence rule as `agentlans/fact-or-opinion` | README: DeepSeek-family teacher wrote templates; code filled them with fictitious Faker/custom-generator values and tracked character spans. External corpora are excluded; not gated. 0 exact matches against the 29,767 pooled sentiment/emotion/safety/fact_check/pii items | ru; 104,111 train rows (validation was the development split), 25 nested-span types | Type names are mapped to the existing PII vocabulary where meanings match (`FULL_NAME`→`person`, `DATE_OF_BIRTH`→`date of birth`, `PHONE`→`phone number`, `INN`→`tax id`, etc.). A negative type probe must be in `supervised_types`; only the 2,400 `negative_examples` rows can answer the broad PII question "no". The normal per-source item cap applies | 10-pii |
 
 Honest limits:
-- **PII** gets one source for de and nl, the two cells with the largest gaps among the Latin-script languages.
-  Its types are coarse (person, email, address, phone number, organization, date of birth, iban) and it has too
-  few PII-free texts for the "contains personal data?" question, so it trains the per-type probes only.
-  ar, ja, ru and zh still rely on the nym train split alone.
+- **PII** gets one source for de and nl, plus one Russian source with finer document, payment and address types.
+  The de/nl source has too few PII-free texts for the "contains personal data?" question, so it trains the
+  per-type probes only. The Russian source is automatically labelled and not fully hand-checked; its partial
+  `supervised_types` coverage must be retained, and only its explicit negative family is safe as broad negatives.
+  ar, ja and zh still rely on the nym train split alone.
 - **Fact-check**: no source passed. Outside ClaimBuster, check-worthiness data is either CheckThat!-derived,
   fact-check-site or social-media text, unlicensed, restricted, or labelled by a hosted model. The one clean
   human-labelled set (op-fed) labels opinion, not the three-way verdict.
