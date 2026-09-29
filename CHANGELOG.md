@@ -8,6 +8,9 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match the 20
+  places that repeat it (server, SDKs, Space Dockerfile, site, README quick start, API reference);
+  CI runs it first, and `--set x.y.z` bumps all of them for a release.
 - LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
   encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no
   `modules_to_save`, no DoRA, `init_lora_weights` true or gaussian), decision head and token
@@ -39,6 +42,11 @@ between minor versions; every change is listed here.
     sentiment and safety: nothing kept; four checked candidates are recorded as rejected.
 - Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
+
+### Fixed
+- `docs/API.md` still gave 0.2.1 and 0.3.0 as the compiled-in version, and its `/metrics` example and
+  check snippet predated the TYPE lines of `statim_workers_busy` and `statim_model_info` (0.8.0), so
+  the snippet failed against a real server.
 
 ## [0.8.1] - 2026-09-29
 
