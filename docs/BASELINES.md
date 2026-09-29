@@ -7,7 +7,7 @@ share of gold answers.
 
 **In short:**
 - Over 14 decision categories, Statim scores **0.748** macro accuracy. Qwen3-8B, an LLM 26 times its
-  size, scores 0.704. mDeBERTa-XNLI scores 0.488.
+  size, scores 0.706. mDeBERTa-XNLI scores 0.488.
 - Statim wins 9 of the 14 categories. The LLM is ahead on emotion, fact-check, sentiment, safety and
   PII.
 - On the same GPU, Statim answers about 68 decisions per second, the LLM about 6.
@@ -30,6 +30,10 @@ share of gold answers.
 - **mDeBERTa-v3-base-mnli-xnli:** the Hugging Face zero-shot-classification pipeline. The
   hypothesis is the question followed by "The answer is {option}."
 - **Hardware:** RTX 3070 8 GB, Ryzen 7 5800X.
+- **Fact-check, answered again on 2026-09-29:** in the first run, two of the three fact-check
+  options were described by their bare labels (a lookup bug, fixed in #35). All three systems
+  answered the 150 fact-check items again with the intended descriptions. Only Qwen3-8B changed,
+  from 0.493 to 0.513. The timings are from the first run.
 
 ## What this does and does not show
 
@@ -78,9 +82,9 @@ remove-overlap step uses it; without it, suite items that share a text with trai
 | stance | **0.893** | 0.733 | 0.873 |
 | formality | **0.773** | 0.497 | 0.460 |
 | urgency | **0.893** | 0.833 | 0.500 |
-| fact_check | 0.313 | **0.493** | 0.347 |
+| fact_check | 0.313 | **0.513** | 0.347 |
 | pii | 0.856 | **0.878** | 0.507 |
-| **mean of categories** | **0.748** | **0.704** | **0.488** |
+| **mean of categories** | **0.748** | **0.706** | **0.488** |
 
 ## Every suite
 
@@ -111,7 +115,7 @@ remove-overlap step uses it; without it, suite items that share a text with trai
 | formality (ja) | **0.547** | 0.493 | 0.480 |
 | formality (tr) | **1.000** | 0.500 | 0.440 |
 | urgency (en) | **0.893** | 0.833 | 0.500 |
-| fact_check (en) | 0.313 | **0.493** | 0.347 |
+| fact_check (en) | 0.313 | **0.513** | 0.347 |
 | pii (ar) | 0.847 | **0.893** | 0.480 |
 | pii (de) | 0.840 | **0.893** | 0.540 |
 | pii (en) | **0.893** | 0.887 | 0.500 |

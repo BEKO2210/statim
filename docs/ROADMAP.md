@@ -15,11 +15,11 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 | Banking77, trained on train split | **0.928** en-large; 0.914 multilingual-base | 94.1 MPNet (supervised) |
 | MASSIVE, trained | 0.867 en-large (English); 0.800 multilingual-base (12 languages) | 85.7 XLM-R base (12 languages, supervised, full data) |
 | AG News, zero-shot (never trained) | 0.939 en-large; 0.9295 multilingual-base | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
-| 14 decision categories, held out | **0.748** multilingual-base (0.7.0) | 0.704 Qwen3-8B, 0.488 mDeBERTa-v3 XNLI (both zero-shot, measured on the same items: docs/BASELINES.md) |
+| 14 decision categories, held out | **0.748** multilingual-base (0.7.0) | 0.706 Qwen3-8B, 0.488 mDeBERTa-v3 XNLI (both zero-shot, measured on the same items: docs/BASELINES.md) |
 | DAIR Emotion (this dataset never trained on) | 0.588 en-large; 0.504 multilingual-base (first 2,000 rows); 0.600 consensus of the Laya checkpoints (first 400) | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
 
 Gaps we measure and work on next: a zero-shot Qwen3-8B still leads in five of the 14 categories,
-emotion (0.586 vs 0.726), fact-check (0.313 vs 0.493), sentiment (0.800 vs 0.873), safety (0.727 vs
+emotion (0.586 vs 0.726), fact-check (0.313 vs 0.513), sentiment (0.800 vs 0.873), safety (0.727 vs
 0.753) and PII (0.856 vs 0.878) (docs/BASELINES.md), and Belebele reading is near chance. Next: more
 licence-clean data for these categories and per-category LoRA adapters (engine support since 0.8.0),
 compared with the generalist on the same held-out suites.

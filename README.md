@@ -40,7 +40,7 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 | Evidence | Statim | Comparison | Protocol and source |
 |---|---:|---:|---|
-| 14 decision categories, macro accuracy | **0.748** | Qwen3-8B 0.704; mDeBERTa-v3 XNLI 0.488 | Same 11,550 held-out items, questions, and options. Statim was trained on these categories; both baselines were zero-shot. [Full results](docs/BASELINES.md) |
+| 14 decision categories, macro accuracy | **0.748** | Qwen3-8B 0.706; mDeBERTa-v3 XNLI 0.488 | Same 11,550 held-out items, questions, and options. Statim was trained on these categories; both baselines were zero-shot. [Full results](docs/BASELINES.md) |
 | Banking77, 77 intents | **0.913** | Qwen3-8B 0.650; mDeBERTa-v3 XNLI 0.224 | Same trained-versus-zero-shot comparison. [Full results](docs/BASELINES.md) |
 | One RTX 3070 | **68 decisions/s**, 11.6 ms/decision | Qwen3-8B ≈6; mDeBERTa-v3 XNLI 4 decisions/s | Statim Vulkan f32 in batches of 16; Qwen3-8B Ollama Q4_K_M with 2 parallel requests; mDeBERTa CUDA f32. [Measurements](docs/BASELINES.md#speed-on-the-same-machine) |
 | CPU latency | **535 ms/state** multilingual; **1,683 ms/state** English | RTX 3070: 54 ms and 137 ms | Ryzen 7 5800X, 16 threads, f32, 30 states × 8 questions, up to 770 tokens. [Performance](#gpu-performance) |
@@ -314,7 +314,7 @@ Qwen3-8B and mDeBERTa were zero-shot. This compares out-of-the-box systems, not 
 | | Statim 0.7.0 | Qwen3-8B, zero-shot | mDeBERTa XNLI, zero-shot |
 |---|---:|---:|---:|
 | Parameters | 307M | 8.2B | 279M |
-| 14-category macro accuracy | **0.748** | 0.704 | 0.488 |
+| 14-category macro accuracy | **0.748** | 0.706 | 0.488 |
 | Categories won | **9** | 5 | 0 |
 | Banking77 | **0.913** | 0.650 | 0.224 |
 | AG News | **0.929** | 0.847 | 0.581 |
