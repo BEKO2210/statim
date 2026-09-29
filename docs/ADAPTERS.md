@@ -93,6 +93,24 @@ No language cell regressed in any category. Accuracy per cell for the two promot
 The promoted adapters are published (see above), and the client SDKs select adapters since 0.8.3.
 New runs for the rejected categories are next ([ROADMAP](ROADMAP.md)).
 
+### Replication: safety on fresh items
+
+Registered on 2026-09-29, before any fresh item was scored. The safety adapter gained +8.0 points on
+its single cell of 150 items, inside the noise band (2 SE 9.7). This replication tests the same file
+on items the first run never scored.
+
+- **Adapter:** the file measured above, unchanged: `models/lora-exp1/safety.lora.gguf`, SHA-256
+  `9620969cef129a9ede45816db575a6c5b9ecf27574443b0110259bec1b703202`.
+- **Base:** statim-decide-multilingual-base 0.7.0, f32 on Vulkan, as above.
+- **Items:** the safety suite in English, the only language with at least 150 pooled items.
+  - The draw uses seed 20260927 and 1,500 items with the first 150 dropped (`--n 1500 --skip 150`).
+  - The draw is prefix-stable, so these 1,350 items are disjoint from the 150 above.
+  - The whole draw has 752 and 748 items per class (listed without a model).
+  - Items that share a text with the 0.7.0 training mixture are removed.
+- **Power:** at the first run's accuracies, 2 SE is about 3.2 points.
+- **Decision:** `gate.adapter_decision` with z = 2, on the fresh items alone. A promotion means the
+  adapter is published as the third one; a rejection means it is not. Both runs are reported here.
+
 ### Reproduce
 
 ```sh
