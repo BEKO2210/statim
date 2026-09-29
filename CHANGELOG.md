@@ -7,6 +7,21 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-09-29
+
+### Added
+- The safety adapter for statim-decide-multilingual-base 0.7.0 is published
+  ([Beko2210/statim-decide-multilingual-base-safety](https://huggingface.co/Beko2210/statim-decide-multilingual-base-safety)).
+  Its first run gained +8.0 points on 150 items, inside the noise band. A replication, registered
+  in `docs/ADAPTERS.md` before it ran, tested the same file on 1,350 fresh items: 0.708 to 0.806,
+  +9.78 points, 2 SE 3.28, promote. On the published f32 base file it reproduces the replication
+  cell for cell. On q8_0, as runtime LoRA, it gains +10.30 points.
+- `bench/eval_categories.py --skip N` and `tools/finetune/lora_experiment.py --eval-skip N` score
+  only items an earlier run never saw: the stratified draw is prefix-stable, so a draw of 1,500 starts
+  with the 150 items of the first run. Adapter cards state the fresh sample.
+- Adapter cards name sources and licences without the registry's working notes, and show Qwen3-8B
+  only when the items are the ones BASELINES measured.
+
 ## [0.8.4] - 2026-09-29
 
 ### Added
@@ -627,7 +642,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.5...HEAD
+[0.8.5]: https://github.com/BEKO2210/statim/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/BEKO2210/statim/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/BEKO2210/statim/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/BEKO2210/statim/compare/v0.8.1...v0.8.2

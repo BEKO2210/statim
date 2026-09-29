@@ -414,6 +414,12 @@ FACTS += [
     ("emotion adapter, base", [
         ("docs/ADAPTERS.md", r"Emotion: the mean over its six gate cells rises from (\d?\.\d+)"),
         ("docs/BASELINES.md", cell("emotion", 0)), ("docs/ROADMAP.md", after("and emotion (", NUM + " to"))]),
+    ("safety adapter, replication base", [
+        ("docs/ADAPTERS.md", r"On the 1,350 fresh items, accuracy rises from (\d?\.\d+)"),
+        ("docs/ROADMAP.md", after("safety passes too (", NUM + " to"))]),
+    ("safety adapter, replication", [
+        ("docs/ADAPTERS.md", r"On the 1,350 fresh items, accuracy rises from \d?\.\d+ to (\d?\.\d+)"),
+        ("docs/ROADMAP.md", after("safety passes too (", r"\d?\.\d+ to " + NUM))]),
     ("emotion adapter", [
         ("docs/ADAPTERS.md", r"Emotion: the mean over its six gate cells rises from \d?\.\d+ to (\d?\.\d+)"),
         ("docs/ROADMAP.md", after("and emotion (", r"\d?\.\d+ to " + NUM))]),

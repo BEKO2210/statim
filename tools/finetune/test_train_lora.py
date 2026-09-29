@@ -155,11 +155,14 @@ def test_skip_train_recovers_and_verifies_mixture(tmp_path):
     args = lora_experiment.parse_args([
         "--base-checkpoint", "base", "--base-gguf", "base.gguf", "--skip-train", "--work", str(tmp_path / "work"),
         "--categories", "emotion", "--train-python", "train-python", "--tools-python", "tools-python",
+        "--eval-skip", "40",
     ])
     plan = lora_experiment.plan(args, "emotion")
     assert plan["exclude_mixture"] == str(mixture)
     assert plan["train"][0] == "train-python" and plan["convert"][0] == plan["eval_base"][0] == "tools-python"
     assert "--strict" in plan["eval_base"] and "--strict" in plan["eval_adapter"]
+    for command in (plan["eval_base"], plan["eval_adapter"]):
+        assert command[command.index("--skip") + 1] == "40"
     mixture.write_text('{"changed":true}\n', encoding="utf-8")
     with pytest.raises(SystemExit, match="SHA-256 differs"):
         lora_experiment.plan(args, "emotion")
@@ -230,8 +233,10 @@ def test_summary_calls_an_initial_adapter_no_gain():
                 "train": {"items": {}, "updates": 1, "dev_before": {"dev_acc": 0.5},
                           "best": {"dev_acc": 0.5, "epoch": 0, "update": 0, "saved_initial": True}}}
     summary = {"base_checkpoint": "base", "base_gguf": "base.gguf", "mixture": "mix", "exclude_mixture": "mix",
-               "n": 1, "seed": 1, "z": 2.0, "alpha": 0.05, "created": "now", "categories": {"emotion": category}}
+               "n": 2, "eval_skip": 1, "seed": 1, "z": 2.0, "alpha": 0.05, "created": "now",
+               "categories": {"emotion": category}}
     text = lora_experiment.summary_md(summary)
+    assert "sample: n=2 draw per language cell, skip 1, seed 1" in text
     assert "initial zero-delta adapter; this category has no gain" in text
 
 

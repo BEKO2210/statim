@@ -66,9 +66,11 @@ class PublishAdapterTest(unittest.TestCase):
                 },
                 "cells": [
                     {"lang": "en", "base_acc": 0.1234, "adapter_acc": 0.8765,
-                     "delta": 0.7531, "se": 0.0123, "verdict": "gain (2 SE)"},
+                     "delta": 0.7531, "se": 0.0123, "verdict": "gain (2 SE)",
+                     "n_base": 37, "n_adapter": 37},
                     {"lang": "de", "base_acc": 0.2, "adapter_acc": 0.4,
-                     "delta": 0.2, "se": 0.02, "verdict": "gain (2 SE)"},
+                     "delta": 0.2, "se": 0.02, "verdict": "gain (2 SE)",
+                     "n_base": 37, "n_adapter": 37},
                 ],
                 "family": {"rows": {"delta": 0.2468, "se": 0.0135, "groups": 2, "flag": "gain"},
                            "suites": {"delta": 0.2468, "se": 0.0135, "groups": 1, "flag": "gain"}},
@@ -219,6 +221,11 @@ class PublishAdapterTest(unittest.TestCase):
         self.assertIn("statim-decide-multilingual-base-pii.lora.gguf", card)
         self.assertEqual(card.count("The pooled family change is"), 1)
         self.assertNotIn("Pooled by rows", card)
+        self.assertIn("Each cell uses 37 items (seed 7654321).", card)
+        self.assertIn("A single cell of 37 items rarely clears 2.25 SE", card)
+        self.assertIn("- Each language cell has 37 items.", card)
+        self.assertIn("pii en (n=37, seed=7654321, z=2.25, alpha=0.031)", card)
+        self.assertNotIn("fresh items", card)
         for path in self.out.rglob("*"):
             if path.is_file():
                 self.assertNotIn(b"/home/", path.read_bytes(), path)
@@ -294,6 +301,84 @@ class PublishAdapterTest(unittest.TestCase):
         metadata = yaml.safe_load(card.split("---", 2)[1])
         self.assertEqual(metadata["base_model_relation"], "adapter")
         self.assertEqual(metadata["model-index"][0]["results"][0]["metrics"][0]["value"], 0.8765)
+
+    def test_eval_skip_uses_fresh_scored_count_everywhere(self):
+        self.summary["eval_skip"] = 5
+        for cell in self.summary["categories"]["pii"]["cells"]:
+            cell["n_base"] = cell["n_adapter"] = 32
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        card = (self.out / "README.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "Each cell uses 32 fresh items: a seeded stratified draw of 37 (seed 7654321) "
+            "whose first 5 items, scored by an earlier run, are skipped. That earlier run is "
+            "reported in docs/ADAPTERS.md.",
+            card,
+        )
+        self.assertIn("A single cell of 32 items rarely clears 2.25 SE", card)
+        self.assertIn("- Each language cell has 32 items.", card)
+        # BASELINES' Qwen3-8B numbers belong to the first draw's items, not to these fresh ones
+        self.assertNotIn("Qwen3-8B zero-shot |", card)
+        self.assertIn("so it is not shown next to these fresh items", card)
+        for language in ("en", "de"):
+            self.assertIn(
+                f"pii {language} (n=32 fresh: draw 37, skip 5, seed=7654321, "
+                "z=2.25, alpha=0.031)",
+                card,
+            )
+
+    def test_public_names_drop_registry_working_notes(self):
+        import hf_publish_adapter as tool
+        self.assertEqual(tool.public_name("mit (templated; low value)"), "mit")
+        self.assertEqual(tool.public_name("jagoldz/gahd (filter via GitHub jagol/gahd x.csv)"), "jagoldz/gahd")
+        self.assertEqual(tool.licence_display({"licence": "cc-by-4.0 (upstream README)"}), "CC-BY-4.0")
+        self.assertEqual(tool.source_url({"id": "owner/name (a note)"}), "https://huggingface.co/datasets/owner/name")
+
+    def test_scored_count_must_match_draw_minus_skip(self):
+        self.summary["eval_skip"] = 5
+        for cell in self.summary["categories"]["pii"]["cells"]:
+            cell["n_base"] = cell["n_adapter"] = 31  # the draw of 37 minus 5 leaves 32
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("minus skip 5 is 32", run.stderr + run.stdout)
+
+    def test_fresh_items_need_no_baseline_row(self):
+        self.summary["eval_skip"] = 5
+        for cell in self.summary["categories"]["pii"]["cells"]:
+            cell["n_base"] = cell["n_adapter"] = 32
+            cell["lang"] = "xx"  # no BASELINES row has this language
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_single_cell_card_has_no_pooling_sentence(self):
+        self.summary["categories"]["pii"]["cells"] = self.summary["categories"]["pii"]["cells"][:1]
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        card = (self.out / "README.md").read_text(encoding="utf-8")
+        self.assertNotIn("rarely clears", card)
+
+    def test_explicit_zero_eval_skip_leaves_card_unchanged(self):
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        without_field = (self.out / "README.md").read_bytes()
+
+        self.summary["eval_skip"] = 0
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual((self.out / "README.md").read_bytes(), without_field)
+
+    def test_rejects_different_base_and_adapter_scored_counts(self):
+        self.summary["categories"]["pii"]["cells"][0]["n_adapter"] = 36
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("scored item counts differ for en: n_base=37, n_adapter=36", run.stderr)
 
 
 if __name__ == "__main__":
