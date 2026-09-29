@@ -12,7 +12,7 @@ jobs:
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
         run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/docs/check_docs.py
       - name: Toolchain
-        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user numpy safetensors gguf PyYAML jsonschema
+        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user numpy safetensors gguf PyYAML 'jsonschema>=4.18'
       - name: API v1 contract compatibility
         run: python3 tools/docs/test_api_contract.py && python3 tools/docs/api_contract.py --check
       - name: Cache models
