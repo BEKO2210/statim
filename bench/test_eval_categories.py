@@ -208,6 +208,16 @@ def test_stratified_balances_buckets():
     assert sum(rest) == 130 and max(rest) - min(rest) <= 1
 
 
+def test_realized_pool_fingerprint_tracks_items_n_and_seed():
+    items = ec.stratified(_pool(), 20, 7)
+    before = ec.pool_items_sha256(items, 20, 7)
+    assert before == ec.pool_items_sha256(list(reversed(items)), 20, 7)
+    assert before != ec.pool_items_sha256(items, 20, 8)
+    changed = copy.deepcopy(items)
+    changed[0]["state"] += " changed"
+    assert before != ec.pool_items_sha256(changed, 20, 7)
+
+
 def test_make_tasks_skips_small_and_degenerate_languages():
     pool = _pool()
     pool += [_fake("src1", "a", i, lang="de") for i in range(200)]   # single class
@@ -392,6 +402,13 @@ def test_incomplete_pool_is_not_cached(tmp_path, monkeypatch):
     cache = tmp_path / "pool.jsonl.gz"
     pool, failures = ec.load_pool(cache=cache, log=lambda m: None)
     assert failures and not cache.exists()
+
+
+@pytest.mark.parametrize("extra", [["--strict"], ["--adapter", "emotion"]])
+def test_strict_or_adapter_aborts_on_source_failure(monkeypatch, extra):
+    monkeypatch.setattr(ec, "load_pool", lambda **unused: ([_item("x")], {"src": "HTTPError: 503"}))
+    with pytest.raises(SystemExit, match="held-out pool is incomplete"):
+        ec.main(["--list", *extra])
 
 
 def test_fingerprint_tracks_registry_file(tmp_path, monkeypatch):

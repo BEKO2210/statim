@@ -8,6 +8,21 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
+- LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
+  encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no
+  `modules_to_save`, no DoRA, `init_lora_weights` true or gaussian), decision head and token
+  embeddings frozen, trained on one category's rows of a built mixture with the RLCD + CE step of
+  the full fine-tunes, best adapter by dev accuracy, saved with `save_pretrained` (safetensors).
+  The output converts with `tools/convert_lora.py`. Defaults are sized for an 8 GB RTX 3070 (bf16
+  autocast, gradient checkpointing, `--max-tokens 8192 --max-rows 64 --accum 2`, r 16); see the
+  module docstring. Needs `pip install peft`.
+  - `tools/finetune/lora_experiment.py` runs train, convert, serve with the adapter and
+    `bench/eval_categories.py` for base and adapter per category, and decides with the gate's Holm
+    logic (`gate.adapter_decision`, factored out of `gate.compare`).
+  - `bench/eval_categories.py --adapter NAME` sends `"adapter"` with every request, checks
+    `routing.adapter` and records the adapter, so base and adapter runs stay apart.
+  - `tools/finetune/test_train_lora.py`: category selection, dev split, decision; an opt-in test
+    trains and converts a real adapter (`STATIM_LORA_BASE_DIR`, `STATIM_LORA_BASE_GGUF`).
 - Mixture v6, Part G: training data for the categories where 0.7.0 trails Qwen3-8B zero-shot.
   Evidence and every examined candidate are in `tools/finetune/sources/v6-research.md` (Part G),
   and the sources are registered in `v6-keep.json` (`source_part` G):
