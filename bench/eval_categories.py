@@ -20,10 +20,12 @@ repaired that way are listed in EXCLUDED with the reason.
 
 Sample: per suite and language, a seeded stratified draw of --n items (default 150). Buckets are
 (source, gold option); items in a bucket are sorted by text, shuffled with --seed, then drawn
-round-robin over the sorted buckets. A language with fewer than --n pooled items, or where one
-gold class holds more than 70 % of the draw, is skipped and listed in the output. Every pooled
-item (not only the drawn ones) is part of the banned set in tools/finetune/mixture_v6/eval_texts.py,
-so another --seed or --n can never pick a text training has seen.
+round-robin over the sorted buckets. Because every bucket is shuffled before drawing, draws are
+prefix-stable for one seed; --skip drops a previously scored prefix for a fresh replication. A
+language with too few scored items, or where one gold class holds more than 70 % of the scored
+items, is skipped and listed in the output. Every pooled item (not only the drawn ones) is part of
+the banned set in tools/finetune/mixture_v6/eval_texts.py, so another --seed or --n can never pick a
+text training has seen.
 
 Scoring: accuracy (argmax = gold), balanced accuracy (mean recall over gold options), ECE, NLL and
 Brier as in bench/eval_accuracy.metrics. A noul question scores [1 - p(true), p(true)]; a score
@@ -723,8 +725,10 @@ def stratified(items, n, seed):
     return picked
 
 
-def make_tasks(pool, suites, langs, n, seed):
+def make_tasks(pool, suites, langs, n, seed, skip=0):
     """[(suite, lang, items)] plus [(suite, lang, reason)] for skipped languages."""
+    if skip >= n:
+        raise ValueError("skip must be less than n")
     by = collections.defaultdict(list)
     for item in pool:
         if item["suite"] in suites:
@@ -735,10 +739,16 @@ def make_tasks(pool, suites, langs, n, seed):
             if langs and lang not in langs:
                 continue
             items = by[(suite, lang)]
-            if len(items) < n:
-                skipped.append((suite, lang, "only %d pooled items, need %d" % (len(items), n)))
+            picked = stratified(items, n, seed)[skip:]
+            need = n - skip
+            if len(picked) < need:
+                if skip:
+                    why = "only %d of %d needed items after skipping %d (%d pooled)" % (
+                        len(picked), need, skip, len(items))
+                else:
+                    why = "only %d pooled items, need %d" % (len(items), n)
+                skipped.append((suite, lang, why))
                 continue
-            picked = stratified(items, n, seed)
             counts = collections.Counter(option_names(it)[gold_index(it)] for it in picked)
             if len(counts) < 2 or max(counts.values()) > MAX_CLASS_SHARE * len(picked):
                 skipped.append((suite, lang, "one gold class holds %d of %d sampled items" % (
@@ -748,14 +758,16 @@ def make_tasks(pool, suites, langs, n, seed):
     return tasks, skipped
 
 
-def pool_items_sha256(items, n, seed):
+def pool_items_sha256(items, n, seed, skip=0):
     """SHA-256 of one realized sample and the sampling inputs, independent of item order."""
     rows = []
     for item in items:
         value = {k: item.get(k) for k in ("suite", "lang", "source", "state", "q", "target")}
         rows.append(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-    raw = json.dumps({"n": n, "seed": seed, "items": sorted(rows)}, ensure_ascii=False,
-                     sort_keys=True, separators=(",", ":"))
+    inputs = {"n": n, "seed": seed, "items": sorted(rows)}
+    if skip:
+        inputs["skip"] = skip
+    raw = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -864,6 +876,9 @@ def main(argv=None):
     ap.add_argument("--suites", nargs="+", default=list(SUITES), choices=SUITES)
     ap.add_argument("--langs", nargs="+", default=None, help="ISO codes (default: every language with enough items)")
     ap.add_argument("--n", type=int, default=DEFAULT_N, help="stratified sample size per suite and language")
+    ap.add_argument("--skip", type=int, default=0,
+                    help="drop the first N items of each draw: the items a run with --n N and the same --seed "
+                         "scored, so the rest are fresh")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--head-max-len", type=int, default=512)
     ap.add_argument("--out", default=None, help="JSONL, one record per suite/language plus one macro line per suite")
@@ -878,6 +893,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.n < 1:
         raise SystemExit("--n must be >= 1")
+    if a.skip < 0 or a.skip >= a.n:
+        raise SystemExit("--skip must be >= 0 and less than --n")
 
     pool, failures = load_pool(rebuild=a.rebuild, log=lambda m: print(m, flush=True))
     pool_fp = fingerprint()
@@ -888,7 +905,7 @@ def main(argv=None):
         print("source unavailable: %s (%s)" % (key, why), flush=True)
     if failures and (a.strict or a.adapter):
         raise SystemExit("held-out pool is incomplete: %d source(s) unavailable" % len(failures))
-    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed)
+    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed, a.skip)
     for suite, lang, why in skipped:
         print("skip %s %s: %s" % (suite, lang, why), flush=True)
     if not tasks:
@@ -911,8 +928,9 @@ def main(argv=None):
             probs = run_items(a.url, items, model=a.model, api_key=os.environ.get("STATIM_API_KEY"),
                               head_max_len=a.head_max_len, adapter=a.adapter)
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
-            row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra, "n": len(items), "seed": a.seed,
-                   "pool": pool_fp, "pool_items_sha256": pool_items_sha256(items, a.n, a.seed),
+            row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra,
+                   "n": len(items), "seed": a.seed, "skip": a.skip,
+                   "pool": pool_fp, "pool_items_sha256": pool_items_sha256(items, len(items), a.seed, a.skip),
                    "sources": dict(collections.Counter(it["source"] for it in items)),
                    "question_types": dict(collections.Counter(it["q"]["type"] for it in items)),
                    "gold_counts": dict(sorted(gold.items())), **score(items, probs),
@@ -931,14 +949,15 @@ def main(argv=None):
         for suite, rows in by_suite.items():
             m = {k: round(sum(r[k] for r in rows) / len(rows), 4)
                  for k in ("accuracy", "balanced_accuracy", "ece", "nll", "brier")}
-            rec = {"family": "categories", "suite": suite, "lang": "macro", "model": label, **extra, "n": sum(r["n"] for r in rows),
-                   "n_langs": len(rows), **m}
+            rec = {"family": "categories", "suite": suite, "lang": "macro", "model": label, **extra,
+                   "n": sum(r["n"] for r in rows), "skip": a.skip, "n_langs": len(rows), **m}
             records.append(rec)
             if out:
                 out.write(json.dumps(rec, ensure_ascii=False) + "\n")
         if out:
             for suite, lang, why in skipped:
-                out.write(json.dumps({"family": "categories", "suite": suite, "lang": lang, "skipped": why},
+                out.write(json.dumps({"family": "categories", "suite": suite, "lang": lang,
+                                      "skip": a.skip, "skipped": why},
                                      ensure_ascii=False) + "\n")
     finally:
         if out:

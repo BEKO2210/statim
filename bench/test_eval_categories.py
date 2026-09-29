@@ -5,6 +5,7 @@
 import collections
 import copy
 import inspect
+import json
 import os
 import sys
 
@@ -199,6 +200,13 @@ def test_stratified_is_deterministic_and_seeded():
     assert len(set(one)) == 150  # no duplicates
 
 
+@pytest.mark.parametrize("seed", [3, 29])
+@pytest.mark.parametrize("n1,n2", [(1, 7), (7, 19), (19, 75), (75, 151), (100, 200)])
+def test_stratified_draws_are_prefix_stable(seed, n1, n2):
+    pool = _pool()
+    assert ec.stratified(pool, n2, seed)[:n1] == ec.stratified(pool, n1, seed)
+
+
 def test_stratified_balances_buckets():
     counts = collections.Counter((it["source"], ec.option_names(it)[ec.gold_index(it)])
                                  for it in ec.stratified(_pool(), 150, 1))
@@ -211,11 +219,20 @@ def test_stratified_balances_buckets():
 def test_realized_pool_fingerprint_tracks_items_n_and_seed():
     items = ec.stratified(_pool(), 20, 7)
     before = ec.pool_items_sha256(items, 20, 7)
+    assert before != ec.pool_items_sha256(items, 20, 7, skip=1)
     assert before == ec.pool_items_sha256(list(reversed(items)), 20, 7)
     assert before != ec.pool_items_sha256(items, 20, 8)
     changed = copy.deepcopy(items)
     changed[0]["state"] += " changed"
     assert before != ec.pool_items_sha256(changed, 20, 7)
+
+
+def test_realized_pool_fingerprint_skip_zero_is_stable():
+    item = _fake("src", "a", 1)
+    assert ec.pool_items_sha256([item], 1, 7, skip=0) == ec.pool_items_sha256([item], 1, 7)
+    assert ec.pool_items_sha256([item], 1, 7, skip=0) == (
+        "6a09614bb7e15cb920579086010050fcded808e99092229c35c2b5f6366b11bc"
+    )
 
 
 def test_make_tasks_skips_small_and_degenerate_languages():
@@ -227,6 +244,68 @@ def test_make_tasks_skips_small_and_degenerate_languages():
     assert {(s, l) for s, l, _ in skipped} == {("s", "de"), ("s", "fr")}
     tasks2, _ = ec.make_tasks(pool, ["s"], None, 150, 1)
     assert [it["state"] for it in tasks[0][2]] == [it["state"] for it in tasks2[0][2]]
+
+
+def test_make_tasks_skip_is_exact_fresh_suffix():
+    pool, n1, n2, seed = _pool(), 20, 60, 7
+    draw = ec.stratified(pool, n2, seed)
+    tasks, skipped = ec.make_tasks(pool, ["s"], None, n2, seed, skip=n1)
+    assert skipped == []
+    scored = tasks[0][2]
+    assert scored == draw[n1:]
+    assert len(scored) == n2 - n1
+    assert {it["state"] for it in scored}.isdisjoint(it["state"] for it in draw[:n1])
+    assert {it["state"] for it in scored}.isdisjoint(
+        it["state"] for it in ec.stratified(pool, n1, seed)
+    )
+
+
+def test_make_tasks_skip_rejects_pool_shorter_than_draw():
+    pool = [_fake("src", "a", i) for i in range(55)]
+    pool += [_fake("src", "b", i) for i in range(55)]
+    tasks, skipped = ec.make_tasks(pool, ["s"], None, 150, 1, skip=20)
+    assert tasks == []
+    assert skipped == [("s", "en", "only 90 of 130 needed items after skipping 20 (110 pooled)")]
+    _, unskipped = ec.make_tasks(pool, ["s"], None, 150, 1)
+    assert unskipped == [("s", "en", "only 110 pooled items, need 150")]
+
+
+def test_make_tasks_rejects_skip_at_least_n():
+    with pytest.raises(ValueError, match="skip must be less than n"):
+        ec.make_tasks(_pool(), ["s"], None, 20, 1, skip=20)
+
+
+def test_majority_cap_is_applied_after_skip():
+    pool = [_fake("src", "a", i) for i in range(100)] + [_fake("src", "b", i) for i in range(10)]
+    full, _ = ec.make_tasks(pool, ["s"], None, 30, 1)
+    assert len(full) == 1  # the full draw is 20 a / 10 b and passes the 70 % cap
+    tasks, skipped = ec.make_tasks(pool, ["s"], None, 30, 1, skip=20)
+    assert tasks == []
+    assert skipped == [("s", "en", "one gold class holds 10 of 10 sampled items")]
+
+
+def test_explicit_skip_zero_preserves_records_and_fingerprint(tmp_path, monkeypatch):
+    pool = [_fake("src", "a", i) for i in range(2)]
+    pool += [_fake("src", "b", i) for i in range(2)]
+    pool += [_fake("src", "a", i, lang="de") for i in range(2)]
+    for item in pool:
+        item["suite"] = "sentiment"
+    monkeypatch.setattr(ec, "load_pool", lambda **unused: (pool, {}))
+    monkeypatch.setattr(ec, "fingerprint", lambda: "cache-fingerprint")
+    monkeypatch.setattr(ec, "run_items", lambda *args, **kwargs: [[0.8, 0.1, 0.1] for _ in args[1]])
+    monkeypatch.setattr(ec.time, "time", lambda: 1.0)
+
+    def run(name, extra):
+        path = tmp_path / name
+        assert ec.main(["--suites", "sentiment", "--n", "4", "--out", str(path), *extra]) == 0
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    implicit = run("implicit.jsonl", [])
+    explicit = run("explicit.jsonl", ["--skip", "0"])
+    assert explicit == implicit
+    assert [record["skip"] for record in explicit] == [0, 0, 0]
+    assert explicit[0]["pool"] == "cache-fingerprint"
+    assert explicit[0]["pool_items_sha256"] == implicit[0]["pool_items_sha256"]
 
 
 # --------------------------------------------------------------------------- banned set

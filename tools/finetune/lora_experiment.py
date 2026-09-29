@@ -23,6 +23,7 @@ Per category (default: emotion fact_check sentiment safety pii), in order:
   eval     .venv/bin/python bench/eval_categories.py --strict --suites C [--exclude-mixture X] --n N --seed S,
            once without and once
            with --adapter C, into <work>/C.base.jsonl and <work>/C.adapter.jsonl
+           (--eval-skip K passes --skip K to both evaluations for a fresh replication suffix)
   decide   gate.adapter_decision on the two files' cells (gate.heldout_cells)
 
 One server per category, not one for all: the server loads every --adapter at startup and refuses to
@@ -101,7 +102,8 @@ def plan(a, category):
         else (adapter_mixture(adapter_dir, a.mixture) if a.skip_train else a.mixture)
     evaluate = [a.tools_python, os.path.join(ROOT, "bench", "eval_categories.py"), "--strict", "--url",
                 "http://127.0.0.1:%d" % a.port,
-                "--model", MODEL, "--suites", category, "--n", str(a.n), "--seed", str(a.seed)]
+                "--model", MODEL, "--suites", category, "--n", str(a.n), "--skip", str(a.eval_skip),
+                "--seed", str(a.seed)]
     if exclude:
         evaluate += ["--exclude-mixture", exclude]
     p = {
@@ -272,8 +274,9 @@ def summary_md(summary):
     lines = ["# LoRA specialists: base vs adapter", "",
              "- base checkpoint: `%s`" % s["base_checkpoint"], "- base GGUF: `%s`" % s["base_gguf"],
              "- training mixture: `%s`" % s["mixture"], "- excluded from the suites: `%s`" % s["exclude_mixture"],
-             "- sample: n=%d per language cell, seed %d; decision: gate.adapter_decision (pooled category gain "
-             "> %g SE, no Holm-significant cell regression, family-wise %g)" % (s["n"], s["seed"], s["z"], s["alpha"]),
+             "- sample: n=%d draw per language cell, skip %d, seed %d; decision: gate.adapter_decision (pooled "
+             "category gain > %g SE, no Holm-significant cell regression, family-wise %g)" % (
+                 s["n"], s.get("eval_skip", 0), s["seed"], s["z"], s["alpha"]),
              "- created %s" % s["created"], ""]
     lines += ["| category | promote | cells | pooled delta (pts) | 2 SE (pts) | reason |", "|---|---|---|---|---|---|"]
     for cat, r in s["categories"].items():
@@ -340,6 +343,8 @@ def parse_args(argv=None):
                          "default 120 s on a CPU")
     ap.add_argument("--server-timeout", type=int, default=600, help="seconds to wait for the server to listen")
     ap.add_argument("--n", type=int, default=DEFAULT_N, help="eval_categories --n (items per language cell)")
+    ap.add_argument("--eval-skip", type=int, default=0,
+                    help="eval_categories --skip (drop this previously scored prefix from each draw)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED, help="eval_categories --seed")
     ap.add_argument("--exclude-mixture", default=None,
                     help='eval_categories --exclude-mixture (default: --mixture; "none" to exclude nothing)')
@@ -361,6 +366,8 @@ def parse_args(argv=None):
         a.tools_python = a.tools_python or default_python(".venv")
     if not a.skip_train and not a.mixture:
         ap.error("--mixture is required unless --skip-train")
+    if a.eval_skip < 0 or a.eval_skip >= a.n:
+        ap.error("--eval-skip must be >= 0 and less than --n")
     if (a.exclude_mixture or "").lower() == "none":
         print("WARNING: --exclude-mixture none disables training-overlap filtering; results are not held out.",
               file=sys.stderr)
@@ -387,7 +394,8 @@ def main(argv=None):
     summary = {"created": datetime.datetime.now().isoformat(timespec="seconds"),
                "base_checkpoint": os.path.abspath(a.base_checkpoint), "base_gguf": os.path.abspath(a.base_gguf),
                "mixture": a.mixture and os.path.abspath(a.mixture), "exclude_mixture": plans[0]["exclude_mixture"],
-               "n": a.n, "seed": a.seed, "z": a.z, "alpha": gate.ALPHA, "argv": sys.argv, "categories": {}}
+               "n": a.n, "eval_skip": a.eval_skip, "seed": a.seed, "z": a.z, "alpha": gate.ALPHA,
+               "argv": sys.argv, "categories": {}}
     t0 = time.time()
     for p in plans:
         print("=== %s" % p["category"], flush=True)

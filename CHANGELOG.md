@@ -7,6 +7,10 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Added
+- Fresh held-out replication suffixes with `bench/eval_categories.py --skip` and
+  `tools/finetune/lora_experiment.py --eval-skip`.
+
 ## [0.8.4] - 2026-09-29
 
 ### Added
