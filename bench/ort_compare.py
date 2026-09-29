@@ -48,7 +48,8 @@ MODEL_DIR = ROOT / "models/laya-multilingual-v9"
 GGUF_F32 = ROOT / "models/laya-multilingual-v9-f32.gguf"
 GGUF_Q8 = OUT / "laya-multilingual-v9-q8_0.gguf"
 ONNX_F32 = OUT / "laya-multilingual-v9-f32.onnx"
-ONNX_INT8 = OUT / "laya-multilingual-v9-int8.onnx"
+ONNX_INT8 = OUT / "advocate/laya-v9-int8-nbits-b32-acc0.onnx"  # MatMulNBits 8-bit, block 32: faster and closer to f32 than accuracy_level 4 here
+ONNX_INT8_DYNAMIC = OUT / "advocate/laya-v9-int8-perchannel-reducerange.onnx"
 RELEASE = OUT / "release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim"
 INPUT_NAMES = ["input_ids", "attention_mask", "marker_pos", "marker_mask", "qtype"]
 QTYPES = {"choice": 0, "score": 1, "noul": 2}
@@ -98,6 +99,8 @@ def session(path: Path, threads: int, provider: str = "cpu"):
     opts.intra_op_num_threads = threads
     opts.inter_op_num_threads = 1
     opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.add_session_config_entry("session.set_denormal_as_zero", "1")
     providers = {
         "cpu": ["CPUExecutionProvider"],
         "cuda": ["CUDAExecutionProvider"],
@@ -271,6 +274,12 @@ class ORTEngine:
 
 def serve_ort(args) -> None:
     engine = ORTEngine(args.model_dir, args.onnx, args.threads, args.ort_provider)
+    if INPUTS.exists():
+        try:
+            warm_data = json.loads(INPUTS.read_text())
+            engine.decide({"state": warm_data["states"][0], "questions": warm_data["questions"]})
+        except Exception:
+            pass
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -717,6 +726,7 @@ def main() -> int:
     ap.add_argument("--onnx", type=Path, default=ONNX_F32, help="model used by --serve-ort")
     ap.add_argument("--onnx-f32", type=Path, default=ONNX_F32)
     ap.add_argument("--onnx-int8", type=Path, default=ONNX_INT8)
+    ap.add_argument("--onnx-int8-dynamic", type=Path, default=ONNX_INT8_DYNAMIC)
     ap.add_argument("--gguf-f32", type=Path, default=GGUF_F32)
     ap.add_argument("--gguf-q8", type=Path, default=GGUF_Q8)
     ap.add_argument("--golden", type=Path, default=V9_GOLDEN)
@@ -778,6 +788,15 @@ def main() -> int:
                 ort_timing, ort_p = ort_raw(onnx, rows, threads, args.repeats, invocation, args.ort_provider)
                 raw.append({"pair": pair, **ort_timing})
                 parity_results[f"{pair}_ort_t{threads}"] = ort_p
+            if args.onnx_int8_dynamic and args.onnx_int8_dynamic.exists():
+                invocation = [str(args.ort_python), str(Path(__file__).resolve()), "--thread-counts", str(threads),
+                              "--repeats", str(args.repeats), "--ort-provider", args.ort_provider,
+                              "--out", str(args.out)]
+                if args.ort_only:
+                    invocation.insert(-2, "--ort-only")
+                ort_timing, ort_p = ort_raw(args.onnx_int8_dynamic, rows, threads, args.repeats, invocation, args.ort_provider)
+                raw.append({"pair": "dynamic_int8", **ort_timing})
+                parity_results[f"dynamic_int8_ort_t{threads}"] = ort_p
         base["raw"], base["raw_parity"] = raw, parity_results
         base["limited_states"] = len(state_groups(rows))
         base["socket"] = "pending: reviewer run"
