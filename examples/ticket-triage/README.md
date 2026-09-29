@@ -17,12 +17,12 @@ Release binary (Linux x86-64, CPU):
 ```sh
 git clone --recursive https://github.com/BEKO2210/statim.git
 cd statim
-curl -fL -o statim-0.7.0-linux-x86_64-cpu.tar.gz \
-  https://github.com/BEKO2210/statim/releases/download/v0.7.0/statim-0.7.0-linux-x86_64-cpu.tar.gz
-tar -xzf statim-0.7.0-linux-x86_64-cpu.tar.gz
+curl -fL -o statim-0.8.1-linux-x86_64-cpu.tar.gz \
+  https://github.com/BEKO2210/statim/releases/download/v0.8.1/statim-0.8.1-linux-x86_64-cpu.tar.gz
+tar -xzf statim-0.8.1-linux-x86_64-cpu.tar.gz
 ```
 
-The binary is `statim-0.7.0-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.7.0 release](https://github.com/BEKO2210/statim/releases/tag/v0.7.0).
+The binary is `statim-0.8.1-linux-x86_64-cpu/statim`. Checksums are attached to the [v0.8.1 release](https://github.com/BEKO2210/statim/releases/tag/v0.8.1).
 
 Build from source instead:
 
@@ -53,7 +53,7 @@ statim serve --device cpu -m multilingual=/absolute/path/to/model.gguf --port 80
 ### 3. Start the server
 
 ```sh
-./statim-0.7.0-linux-x86_64-cpu/statim serve --device cpu \
+./statim-0.8.1-linux-x86_64-cpu/statim serve --device cpu \
   -m multilingual=statim-decide-multilingual-base-q8_0.gguf \
   --port 8080
 ```
@@ -81,11 +81,11 @@ Intent names are sent as readable phrases (`card_arrival` becomes `card arrival`
 
 ## What you should see
 
-Measured on 2026-09-27 on an AMD Ryzen 7 5800X (8 cores / 16 threads), 16 GB RAM, Linux, CPU only,
-with exactly the files from the ten-minute path: the published
-`statim-decide-multilingual-base-q8_0.gguf` (SHA-256
-`39fa79fdc381a21cc324909b810d0cfb414f474656fa7994d561118b3fbc73fd`, as listed in the model's
-`SHA256SUMS`) and one inference worker with 16 threads.
+Measured on an AMD Ryzen 7 5800X (8 cores / 16 threads), 16 GB RAM, Linux, CPU only, with the
+published 0.7.0 `statim-decide-multilingual-base-q8_0.gguf` (SHA-256
+`96fb3971656ee6b596cb0c108aff4bbe1306d87707ffe9ae5f364a52b919ff1b`, as listed in the model's
+`SHA256SUMS`): the evaluation on 2026-09-28 with Statim 0.7.0 and one inference worker with 16
+threads, the `demo` transcript on 2026-09-29 with Statim 0.8.1.
 
 `demo` (`--seed 0`, `--min-confidence 0.8`). All five intents match the gold label:
 
@@ -93,36 +93,36 @@ with exactly the files from the ten-minute path: the published
 [1/5]
 text     Please delete my account.
 intent   terminate account   p=1.0000   gold=terminate account (terminate_account)   match   escalate=no
-urgency  immediately   score=1.5644   p=0.6163   escalate=yes
-refund   no   noul=0.0655   escalate=no
+urgency  immediately   score=1.6762   p=0.7018   escalate=yes
+refund   no   noul=0.0327   escalate=no
 ticket   escalate=no (intent at or above 0.80)
 
 [2/5]
 text     There's a debit on my account that I didn't do.
 intent   direct debit payment not recognised   p=1.0000   gold=direct debit payment not recognised (direct_debit_payment_not_recognised)   match   escalate=no
-urgency  today   score=0.9576   p=0.6072   escalate=yes
-refund   no   noul=0.1877   escalate=no
+urgency  today   score=0.9616   p=0.8329   escalate=no
+refund   no   noul=0.0751   escalate=no
 ticket   escalate=no (intent at or above 0.80)
 
 [3/5]
 text     Where do I order a virtual card from?
 intent   getting virtual card   p=1.0000   gold=getting virtual card (getting_virtual_card)   match   escalate=no
-urgency  today   score=1.0550   p=0.5257   escalate=yes
-refund   no   noul=0.1532   escalate=no
+urgency  today   score=1.0198   p=0.6155   escalate=yes
+refund   no   noul=0.3285   escalate=yes
 ticket   escalate=no (intent at or above 0.80)
 
 [4/5]
 text     Where is my card accepted?
 intent   card acceptance   p=1.0000   gold=card acceptance (card_acceptance)   match   escalate=no
-urgency  can wait   score=0.5004   p=0.5538   escalate=yes
-refund   no   noul=0.1296   escalate=no
+urgency  today   score=0.6162   p=0.4677   escalate=yes
+refund   no   noul=0.2909   escalate=yes
 ticket   escalate=no (intent at or above 0.80)
 
 [5/5]
 text     If I want a physical card, do I have to pay anything?
 intent   order physical card   p=1.0000   gold=order physical card (order_physical_card)   match   escalate=no
-urgency  today   score=0.8943   p=0.3862   escalate=yes
-refund   no   noul=0.3710   escalate=yes
+urgency  can wait   score=0.6683   p=0.5208   escalate=yes
+refund   no   noul=0.1946   escalate=no
 ticket   escalate=no (intent at or above 0.80)
 ```
 
@@ -150,7 +150,7 @@ Coverage is the share whose `answer_confidence` is at least the threshold (the s
 would not escalate); accuracy is computed on that share. A threshold of 0 escalates nothing.
 
 End-to-end latency at concurrency 2, including queueing behind the single worker: **p50 439.6 ms**,
-**p95 488.3 ms**; throughput **4.50 requests/s** (500 requests in 111.2 s). With one worker, two
+**p95 488.3 ms**; throughput **4.49 requests/s** (500 requests in 111.2 s). With one worker, two
 in-flight requests each wait about one service time. A GPU build answers far faster; see the main
 README. The first request after startup is slower while the weights are paged in.
 

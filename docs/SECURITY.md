@@ -26,7 +26,8 @@ runs (`actions/cache`); the committed seeds and every crash input are replayed b
 builds. Initial campaign (clang 18, 3 harnesses in
 parallel, 35 min each): `fuzz_request` 562,522 executions, `fuzz_tokenizer`
 622,148, `fuzz_gguf` 502,099 after the F5 fix (plus 246,999 in the first run, which stopped on
-F5). Findings:
+F5). A follow-up run (0.8.1) added q4_0/q8_0 repack seeds to `fuzz_gguf` and found one more (F8).
+Findings:
 
 | Finding | Fix | Regression coverage |
 |---|---|---|
@@ -38,6 +39,7 @@ F5). Findings:
 | F6 — empty mask token silently disables scrubbing the mask piece from caller text | Rejected at load. | `test_model_validation` |
 | F7 — tensor-bounds check `off + nbytes > size` can wrap; `fstat` result unchecked | Overflow-free comparison; `fstat` checked. | `fuzz_gguf` (no committed input) |
 | U1, U2 — upstream ggml `gguf_init_from_reader`: the element-count overflow guard itself overflows (`ggml_nelements`), and the tensor type is loaded into `enum ggml_type` before its range check | Not ours to patch in the vendored tree; both wrap/are rejected in practice. Suppressed by exact function in `fuzz/ubsan.supp`; to be reported upstream. | `fuzz/regressions/gguf/ggml-nelements-overflow-in-guard.gguf` |
+| F8 — a tensor with zero elements makes `Model::load`'s conversion, and the checkpoint SHA-256, `memcpy` through a null `data()` pointer (undefined behaviour) | Both skip zero-length copies (`src/model.cpp`, `src/sha256.cpp`). | `fuzz/regressions/gguf/empty-tensor-to-f32-memcpy-null.gguf` |
 
 The request and tokenizer harnesses found no crash, hang, leak, UB or contract violation (every
 rejection was `HttpError` 400/413/422 or `QuestionError`). The tokenizer is linear on adversarial
@@ -59,7 +61,8 @@ rejection was `HttpError` 400/413/422 or `QuestionError`). The tokenizer is line
 
 ## Validation
 
-Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` and
+The run that validated the 0.3.0 fixes (the suites have grown since; `ctest` prints today's
+counts). Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` and
 `cmake --build build -j16` passed. Final CTest parity results are recorded after the run.
 
 - Socket-free security: **83 checks passed**.

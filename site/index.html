@@ -198,7 +198,7 @@
   <div class="container">
     <div class="section-head">
       <h2 id="acc-title">Accuracy you can check</h2>
-      <p>Every number here comes from a script in the repository. The best Statim Decide model on each benchmark next to published systems under the same protocol, and the 54 held-out suites every release has to pass.</p>
+      <p>Every number here comes from a script in the repository. The best Statim Decide model on each benchmark next to published systems under the same protocol, and the held-out suites every release has to pass.</p>
     </div>
 
     <div class="strips">
@@ -257,20 +257,20 @@
       <figure class="strip">
         <figcaption>
           <h3>MASSIVE, 12 languages</h3>
-          <span class="score">0.772</span>
+          <span class="score">0.800</span>
           <span class="proto">Trained on 2,000 rows per language; the paper's XLM-R used the full train set.</span>
         </figcaption>
         <div class="axis" style="--min:.70;--max:.90" aria-hidden="true">
-          <span class="dot" style="--v:.857"></span><span class="dot us" style="--v:.772"></span>
+          <span class="dot" style="--v:.857"></span><span class="dot us" style="--v:.800"></span>
           <small class="tick" style="left:0">0.70</small><small class="tick" style="left:50%">0.80</small><small class="tick" style="left:100%">0.90</small>
         </div>
         <ul class="who">
           <li>XLM-R base, MASSIVE paper<span class="num">0.857</span></li>
-          <li class="us">Statim Decide Multilingual<span class="num">0.772</span></li>
+          <li class="us">Statim Decide Multilingual<span class="num">0.800</span></li>
         </ul>
       </figure>
     </div>
-    <p class="note">Published results from the respective papers and model cards, collected with sources in <a href="https://github.com/BEKO2210/statim/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a>. Statim's numbers: <code>tools/finetune/gate.py</code>.</p>
+    <p class="note">Published results from the respective papers and model cards, collected with sources in <a href="https://github.com/BEKO2210/statim/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a>. Statim's numbers: <code>tools/finetune/gate.py</code>. Against a zero-shot Qwen3-8B and a zero-shot NLI classifier on the same 14 decision categories, Statim scores 0.748 macro accuracy to their 0.704 and 0.488; see <a href="https://github.com/BEKO2210/statim/blob/main/docs/BASELINES.md">docs/BASELINES.md</a>.</p>
 
     <div class="gate">
       <div class="gate-intro">
@@ -326,7 +326,7 @@
         </div>
       </li>
     </ul>
-    <p class="note" style="margin-top:14px">Laya is the Python reference server. Measured on a 2015-class laptop CPU with the multilingual checkpoint in f32, 30 states with 8 questions each; method and raw numbers in the <a href="https://github.com/BEKO2210/statim#benchmarks">README</a>.</p>
+    <p class="note" style="margin-top:14px">Laya is the Python reference server. Measured on a 2015-class laptop CPU with the multilingual checkpoint in f32, 30 states with 8 questions each; method and raw numbers in the <a href="https://github.com/BEKO2210/statim#cpu-performance">README</a>.</p>
 
     <dl class="spec">
       <div><dt>Runtime</dt><dd><span class="from">Python 3.10+, PyTorch, transformers</span><span class="to">One 3.3 MB binary and one .gguf file</span></dd></div>
@@ -391,12 +391,12 @@
     <div>
       <div class="section-head" style="margin-bottom:28px">
         <h2 id="api-title">Speaks the Jev/Laya API</h2>
-        <p><code>POST /v1/systemone</code> returns <code>{model, answers, usage, routing}</code>, and errors keep FastAPI's <code>{"detail": ...}</code> shape. Official Python and TypeScript clients use only the standard library and retry on 503.</p>
+        <p><code>POST /v1/systemone</code> returns <code>{model, answers, usage, routing}</code>, and errors keep FastAPI's <code>{"detail": ...}</code> shape. Requests can also select a loaded LoRA adapter by name, or <code>"auto"</code> to route by question category. Official Python and TypeScript clients use only the standard library and retry on 503.</p>
       </div>
       <dl class="endpoints">
         <div><dt><span>POST</span>/v1/systemone</dt><dd>One state, any number of questions</dd></div>
         <div><dt><span>POST</span>/v1/systemone/batch</dt><dd>Many states, packed into shared forward passes</dd></div>
-        <div><dt><span>GET</span>/v1/models</dt><dd>Loaded models and the device they run on</dd></div>
+        <div><dt><span>GET</span>/v1/models</dt><dd>Loaded models, their adapters and the device they run on</dd></div>
         <div><dt><span>GET</span>/health, /ready</dt><dd>Liveness and readiness probes</dd></div>
         <div><dt><span>GET</span>/metrics</dt><dd>Prometheus metrics</dd></div>
       </dl>

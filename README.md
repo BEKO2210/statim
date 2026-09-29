@@ -178,7 +178,8 @@ curl -s localhost:8080/v1/systemone -d '{"state": "...", "adapter": "emotion", "
 
 The converter accepts plain LoRA on encoder attention and MLP projections, rejects unsupported
 variants and modules, and binds the adapter to its base by a fingerprint of the checkpoint's norms
-and biases, which its f32 and quantized files share.
+and biases, plus, since 0.8.1, a checkpoint SHA-256 over every source tensor; both are shared by a
+checkpoint's f32 and quantized files, and the engine refuses an adapter whose base does not match.
 
 - f32, f16, and bf16 default to merging `W + B·A` at load. Requests retain base latency; each
   adapter owns a copy of the adapted weights, 438 MB for the multilingual f32 model.

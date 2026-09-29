@@ -6,7 +6,7 @@ weight types made from the same checkpoint have the same content identity.
 
     python tools/convert_laya.py models/laya-multilingual -o models/laya-multilingual-q8_0.gguf --type q8_0
 
---type: f32 | f16 | q8_0 | q4_0 (applies to large 2-D matmul weights; norms, biases and small
+--type: f32 | f16 | q8_0 | q5_0 | q4_0 (applies to large 2-D matmul weights; norms, biases and small
 tensors stay f32). The token embedding follows --embd-type (default: same as --type).
 """
 import argparse

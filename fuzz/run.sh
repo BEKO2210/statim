@@ -22,5 +22,5 @@ args=(-max_total_time="$secs" -timeout=25 -rss_limit_mb=4096 -print_final_stats=
 [ "$name" = request ] && args+=(-dict=fuzz/request.dict)
 [ "$name" != gguf ] && args+=(-max_len=16384)
 seeds="fuzz/seeds/$name"
-[ "$name" = gguf ] && seeds="fuzz/data"  # the two tiny valid models
+[ "$name" = gguf ] && seeds="fuzz/data"  # the tiny valid models
 exec "$build/fuzz_$name" "${args[@]}" "$@" "$work" "$seeds" "fuzz/regressions/$name"

@@ -18,23 +18,24 @@ gitignored.
 git clone https://github.com/BEKO2210/statim && cd statim
 mkdir -p dist && cd dist
 # binary (Linux x86-64; or build from source, see README "Quick start")
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.7.0/statim-0.7.0-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.7.0/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.7.0-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.1/statim-0.8.1-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.1/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.1-linux-x86_64-cpu.tar.gz
 # model (q8_0 for CPU, 357 MB) and its checksum list from the model repository
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 cd ..
-dist/statim-0.7.0-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
+dist/statim-0.8.1-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
 until curl -sf localhost:8080/health; do sleep 1; done
 python3 examples/ticket-triage/triage.py eval --limit 500 --concurrency 2 --seed 0
 ```
 
-Expected (Banking77 test split, seeded stratified sample of 500 tickets, 77 intents in one
-question): intent accuracy **0.908** (454/500); with `min_confidence` 0.9 the server escalates 2 % of
-the tickets and accuracy on the rest is **0.920** (0.9204, 451/490). Exact values and the coverage
-curve are in [examples/ticket-triage/README.md](examples/ticket-triage/README.md). The first run
+Expected, measured with the v0.7.0 release and the multilingual 0.7.0 model (Banking77 test split,
+seeded stratified sample of 500 tickets, 77 intents in one question): intent accuracy **0.908**
+(454/500); with `min_confidence` 0.9 the server escalates 2 % of the tickets and accuracy on the rest
+is **0.920** (0.9204, 451/490). Exact values and the coverage curve are in
+[examples/ticket-triage/README.md](examples/ticket-triage/README.md). The first run
 downloads the Banking77 test split (about 100 KB) into `examples/ticket-triage/.cache/`. On a 4-core
 cloud VM the 500 requests take about 6 minutes.
 
@@ -55,7 +56,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ctest --test-dir build                          # add -DSTATIM_VULKAN=ON / -DSTATIM_CUDA=ON for the GPU gates
 ```
 
-Expected: `100% tests passed` (10 tests on CPU; 4 more for each of `-DSTATIM_VULKAN=ON` and `-DSTATIM_CUDA=ON`). Without the
+Expected: `100% tests passed`; `-DSTATIM_VULKAN=ON` and `-DSTATIM_CUDA=ON` add their GPU parity tests. Without the
 submodule, CMake stops with `third_party/ggml does not contain a CMakeLists.txt file`.
 
 Run `ctest` as a regular user. As root (the default in Docker and many cloud sandboxes) `security`
