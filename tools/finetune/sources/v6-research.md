@@ -335,25 +335,32 @@ derivative. Candidates were also checked for exact text overlap against the 29,7
 suites, and 20+ gold labels per source were read by hand.
 
 Coverage: fact-check was searched exhaustively (38 candidates: Hub, Zenodo, OSF, figshare, arXiv, ACL
-Anthology, GitHub). Emotion, sentiment, safety and PII searches were cut short for budget; the candidates they
-had reached are listed below only where they were checked to the end.
+Anthology, GitHub). Emotion, sentiment, safety and PII searches were cut short for budget, and a second search
+on 2026-09-29 continued them: 60 more candidates checked at the source (the handoff's open candidates first,
+then emotion in ru/es/hi/de, Simplified-Chinese sentiment with irony and contrast, English safety hard
+negatives, PII in ar/ja/ru/zh, and one new fact-check set). It kept one source (`Powpowpow23/ru-pii-ner-data`);
+the 59 rejected ones are in the EXCLUDED table with their reasons.
 
 ### KEEP (source_part G in v6-keep.json)
 
 | Source | Licence and evidence | Provenance | Languages | Rows after filter (items at full size) | Category |
 |---|---|---|---|---|---|
 | `naeyn/nobody-pii-synth-de`, train split, commit f78fcbca | Card YAML `apache-2.0`; repository [LICENSE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/LICENSE) "Apache License, Version 2.0"; [NOTICE](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/NOTICE) "Apache-2.0 (see LICENSE). This repository contains procedurally generated rows and does not contain records copied from ai4privacy/…" | README: "generated from templates and Faker locale providers. No source records containing real people's personal data were used"; no language model. Not gated. 0 exact overlap with the pooled suite items | de 4,795, en 2,379, nl 1,792 (8,966 of 9,450 rows; PII-free rows whose language the text does not confirm are dropped) | 9,133 items: pii_type probes de 4,710, en 2,151, nl 1,746; pii choice de 368, en 74, nl 84. The pii yes/no task is dropped (97.6 % yes) | 10-pii |
+| `Powpowpow23/ru-pii-ner-data`, train split, commit 55acbec0 | Card YAML `apache-2.0`; pinned [LICENSE](https://huggingface.co/datasets/Powpowpow23/ru-pii-ner-data/blob/55acbec07fb04a18455111a34337cb515a7f821e/LICENSE) "Apache License, Version 2.0"; README confirms the author's distribution right. DeepSeek Terms (2026-03-27) §4.2(3) allow outputs for "training other models (such as model distillation)", the same evidence rule as `agentlans/fact-or-opinion` | README: DeepSeek-family teacher wrote templates; code filled them with fictitious Faker/custom-generator values and tracked character spans. External corpora are excluded; not gated. 0 exact matches against the 29,767 pooled sentiment/emotion/safety/fact_check/pii items | ru; 104,111 train rows (validation was the development split), 25 nested-span types | Type names are mapped to the existing PII vocabulary where meanings match (`FULL_NAME`→`person`, `DATE_OF_BIRTH`→`date of birth`, `PHONE`→`phone number`, `INN`→`tax id`, etc.). A negative type probe must be in `supervised_types`; only the 2,400 `negative_examples` rows can answer the broad PII question "no". The normal per-source item cap applies | 10-pii |
 
 Honest limits:
-- **PII** gets one source for de and nl, the two cells with the largest gaps among the Latin-script languages.
-  Its types are coarse (person, email, address, phone number, organization, date of birth, iban) and it has too
-  few PII-free texts for the "contains personal data?" question, so it trains the per-type probes only.
-  ar, ja, ru and zh still rely on the nym train split alone.
+- **PII** gets one source for de and nl, plus one Russian source with finer document, payment and address types.
+  The de/nl source has too few PII-free texts for the "contains personal data?" question, so it trains the
+  per-type probes only. The Russian source is automatically labelled and not fully hand-checked; its partial
+  `supervised_types` coverage must be retained, and only its explicit negative family is safe as broad negatives.
+  ar, ja and zh still rely on the nym train split alone.
 - **Fact-check**: no source passed. Outside ClaimBuster, check-worthiness data is either CheckThat!-derived,
   fact-check-site or social-media text, unlicensed, restricted, or labelled by a hosted model. The one clean
   human-labelled set (op-fed) labels opinion, not the three-way verdict.
-- **Emotion, sentiment, safety**: nothing kept. The candidates reached are rejected below; the searches were not
-  finished.
+- **Emotion, sentiment, safety**: nothing kept, after both searches (the second one checked 39 more candidates
+  for these three). What exists is NonCommercial, a benchmark, platform or scraped text, or written by a
+  hosted model the policy excludes. These categories need synthetic data from a model whose licence allows it
+  (tools/synth with a local Apache-2.0 model).
 
 ### EXCLUDED (examined for Part G)
 
@@ -397,6 +404,65 @@ Honest limits:
 | `gtfintechlab/SubjECTive-QA` | fact-check | Gated (auto); earnings-call transcripts have unclear rights; labels do not map. |
 | `ibm-research/debate_speeches` | fact-check | CDLA-Permissive-2.0 is not allowed; labels unrelated (speech quality). |
 | `tanmayvasvani/hindi-misinfo-taxonomy-800` | fact-check | Social-media platform text (X/Facebook); the licence covers only the annotations. |
+| `redmadrobot-rnd/pii_train` | pii | Text origin fails: 9,940 rows are real user and log text, not released by the rights holders, and they cannot be separated from the templates. The MIT line is a YAML tag with no grant. Machine-generated annotations name no model. |
+| `mabahboh/sitr-arabic-pii` | pii | Text origin is undocumented. The Apache sentence in the README does not identify who wrote the text. |
+| `alrosait/pii-synthetic-ru` | pii | Generator is Claude. Anthropic outputs are excluded. The count mismatch (card 4,500 vs repo ~3,000) does not name an allowed generator for the extra rows. |
+| `FouratAI/arabic-pii-dataset` | pii | YAML licence tag with no grant text, no provenance and no label definition. Same bar as the cheer-ekman rejection. |
+| `C-Ilyas/arabic-pii-dataset` | pii | No licence and no origin. |
+| `Bisher/synthetic-arabic-pii` | pii | No licence, and the generator is unnamed. The English slice is "source-derived" from an unnamed public source. |
+| `wolframko/russian-pii-66k` | pii | No licence and no origin statement. |
+| `gorkem371/pii-intent-detection-multilingual` | pii | The gold is sharing intent. Mapping it onto presence of personal data would be a guess. The card's own counterexample is a phone number labelled not-PII. |
+| `KhalidAlharbi377/pii-detection-multisource-en-saudi-arabic` | pii | Re-ships rejected, already-used and held-out sources. A CC-BY compilation licence does not clean that. |
+| `isotonic/pii-masking-200k` | pii | CC-BY-NC-4.0 forbids commercial use. English-centric as well, so it does not fill ar/ja/ru/zh. |
+| `raayraay/privacyleak-pii` | pii | Published machine-unlearning benchmark. Faker and the ja/zh locales would otherwise fit. Do not train on retain or forget. |
+| `auren-research/pii-shield` | pii | Real Enron, legal and SEC text, with model detections treated as labels, then machine-translated without human checks. |
+| `subhash-holla/pii-anon` | pii | It is a published benchmark, the synthetic majority names no model, and the non-synthetic slice is not identified. |
+| `mapo80/aliasit-pii-dataset-v3` | pii | Aggregate of sources already in the mixture, already rejected (ai4privacy), or held out (gretel test). Italian-first, and the partial E3-JSI rows are not a clean slice. |
+| `wan9yu/pii-bench-zh` | pii | Named a benchmark, and the card limits use to research and evaluation. That restriction is stricter than Apache-2.0. |
+| `lianghsun/tw-PII-bench` | pii | Evaluation benchmark for Traditional Chinese, designed against OpenAI's privacy filter. |
+| `Meddies/meddies-pii` | pii | CC-BY-NC-4.0. ja, zh and ru are in the language list, and that does not cure the NonCommercial clause. |
+| `ScienceSoft/piibench` | pii | Conflicting licences including ShareAlike, a published benchmark, real court text, and a re-pack of Gretel and Nemotron. |
+| `guneeshv/REDACT-PII-Benchmark` | pii | Gated (auto) and licence "other". Also framed as a benchmark. |
+| `alex-shvets/EmoPillars` | emotion | Utterances are grounded in English Wikipedia plot synopses (CC-BY-SA). English only, so it also misses ru/es/hi/de. Many of the 28 labels do not map onto basic8. |
+| `laion/emotional-roleplay-finetuning-dataset` | emotion | Speech clips, not short first-person text. The text label is a Gemini-3.5-flash caption. |
+| `Fischerboot/german-emotions-alpaca-gemini` | emotion | Gemini outputs, no label schema. |
+| `codaco/german-emotional-speech` | emotion | Audio for speech-emotion classification, no transcripts, label set not specified. |
+| `langswap/dialogs-ru-emotional-conversations` | emotion | OpenRAIL is not an allowed licence. Even under a permissive licence the labels are on acted speech, and five of the twelve classes do not map. |
+| `Djacon/ru-izard-emotions` | emotion | Russian translation of GoEmotions Reddit comments. Already excluded. The card's MIT tag and the GitHub Apache pointer also disagree. |
+| `mrm8488/go_emotions-es-mt` | emotion | Spanish machine translation of the GoEmotions eval suite. |
+| `seara/ru_go_emotions` | emotion | Russian (and parallel English) GoEmotions. Already excluded. |
+| `SkyWater21/ru_twitter_emotions` | emotion | Russian Twitter emotions. Platform text is excluded. |
+| `BrunoGR/HRECPW` | emotion | Not loadable without a Hugging Face token. A BrunoGR/HRECPW Plutchik release was already excluded as tweets, DAIR and GPT-3.5. |
+| `BrunoGR/HEAR` | emotion | HTTP 401 without a token, so the CI audit cannot load it. The card was not read. |
+| `ma2za/many_emotions` | emotion | Licence is "other". de and es are in the language list, which does not cure the licence. |
+| `TIX007/chinese-sentiment` | sentiment | DAIR-emotion derivative built by template expansion. It has no irony, double-negation or contrast labels. The MIT line is a tag, not a grant. |
+| `wangbulehouhouhou/chinese-sentiment` | sentiment | Reupload of TIX007/chinese-sentiment. Same DAIR-template origin, same six emotion labels, no irony. |
+| `lumynex11/chinese-sentiment` | sentiment | Reupload of TIX007/chinese-sentiment. Same DAIR-template origin, same six emotion labels, no irony. |
+| `wickedlin/chinese-sentiment` | sentiment | Reupload of TIX007/chinese-sentiment. Same DAIR-template origin, same six emotion labels, no irony. |
+| `speedxd/nbd-sentiment-dataset` | sentiment | Scraped news headlines, labels from Copilot, no irony or contrast annotation. |
+| `OpenModels/Chinese-Herbal-Medicine-Sentiment` | sentiment | Scraped product reviews. No irony, double-negation or contrast labels, and the MIT tag does not cover the reviewers' text. |
+| `kenhktsui/chinese_sentiment_syn` | sentiment | No licence, unnamed generator, 22 rows, integer labels with no class names. |
+| `sepidmnorozy/Chinese_sentiment` | sentiment | No licence and no dataset card. |
+| `lushan0621/chinese-sentiment-dataset` | sentiment | No licence, no origin, ten rows. |
+| `tyqiangz/multilingual-sentiments` | sentiment | Aggregation of Amazon, Yelp, IMDb, tweets, GoEmotions and DAIR. It is itself an excluded eval source. The Chinese part is product reviews, with no irony gold. |
+| `Youseff1987/multilingual-sentiment-dataset` | sentiment | Amazon-review aggregate. The YAML says MIT and the card body says the licence is unknown. |
+| `leduckhai/Sentiment-Reasoning` | sentiment | Text origin and the rationale generator are unnamed. It is clinical speech and rationales, not Simplified-Chinese irony or contrast. |
+| `left0ver/sentiment-classification` | sentiment | Upstream rights are unknown. No irony, double-negation or contrast labels. Integer labels have no names on the card. |
+| `microsoft/llmail-inject-challenge` | safety | Public prompt-injection benchmark. Labels are attack success, not English hard-negative content safety. Part of the annotation is an unnamed LLM judge, and the victim stack includes GPT-4o mini. |
+| `stindardlogic/refusal-overrefusal-50k` | safety | Generator is unnamed local models. The gold is four assistant responses for DPO, not a safe/unsafe label on English text that looks unsafe. |
+| `Ybakman/synthetic-data-safety-benign` | safety | No licence, no origin, no safe/unsafe label. |
+| `Sakonii/task-over-refusal-dataset` | safety | No licence and no origin. |
+| `fevziegeyurtsevenler/turkish-over-refusal-set` | safety | XSTest-style and OR-Bench-style evaluation set. 120 pairs is an eval, not training data, and the language priority here is English. |
+| `hirundo-io/bloom-over-refusal-free-text` | safety | No licence, no origin, and the label values are undefined. 400 rows. |
+| `longphann/wildchat_over_refusal` | safety | No licence, and the text is WildChat user conversations with OpenAI moderation labels. |
+| `AmberYifan/safetyQA_DPO` | safety | MIT is a YAML tag with no grant and no origin. The columns are DPO responses, not a content-safety label. |
+| `AmazonScience/FalseReject` | safety | CC-BY-NC-4.0. This is the right shape (benign prompts that look unsafe) and the wrong licence. |
+| `jang1563/bio-overrefusal-v0.1` | safety | CC-BY-NC-SA-4.0: no commercial use, and ShareAlike. |
+| `jkminder/xstest-overrefusal` | safety | It is the XSTest safe-prompt test split, with a manual correction of 36 items. A CC-BY tag does not make a benchmark trainable. |
+| `jkminder/or-bench-1k-overrefusal` | safety | OR-Bench derivative. Excluded benchmark. |
+| `MarkrAI/k-overrefusal` | safety | Licence is "other". |
+| `CounterSteer/overrefusal-data` | safety | Licence is "other". |
+| `nikchar/claim_detection_training_set` | fact-check | No licence, no origin, and the label is an unnamed integer. Not one of the 38 previously examined fact-check sets; it is new and it fails. |
 
 # Machine-readable KEEP list
 
