@@ -7,7 +7,7 @@
 #include "statim/security.h"
 
 #ifndef STATIM_VERSION
-#define STATIM_VERSION "0.8.7"
+#define STATIM_VERSION "0.9.0"
 #endif
 
 namespace statim {

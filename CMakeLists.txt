@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(statim VERSION 0.8.7 LANGUAGES C CXX)
+project(statim VERSION 0.9.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +97,11 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME security_http COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/security/test_http.py
       --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf)
     set_tests_properties(security_http PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180)
+    add_test(NAME api_contract COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_api_contract.py
+      --binary $<TARGET_FILE:statim>
+      --english ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-english-f32.gguf
+      --multilingual ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf)
+    set_tests_properties(api_contract PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)
     add_test(NAME server_microbatch COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_microbatch.py
       --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
       --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Statim HTTP API
-  version: 0.8.7
+  version: 0.9.0
   description: 'HTTP API of the Statim decision server. See docs/API.md for the narrative guide and
     complete limit formulas. JSON error bodies are objects with a single string field, detail. GET /ready
     instead returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. Unknown
@@ -2368,7 +2368,7 @@ paths:
                 questionsNotObject:
                   value:
                     detail: '''questions'' must be an object'
-                questionNotObject:
+                notObject:
                   value:
                     detail: expected JSON object
                 duplicateKey:
@@ -3078,7 +3078,7 @@ paths:
                 ok:
                   value:
                     status: ok
-                    version: 0.8.7
+                    version: 0.9.0
         '400':
           $ref: '#/components/responses/NoRequestBody'
         '413':
@@ -3243,7 +3243,7 @@ paths:
 
                 # TYPE statim_model_info gauge
 
-                statim_model_info{model="english",weights="f32",version="0.8.7"} 1
+                statim_model_info{model="english",weights="f32",version="0.9.0"} 1
 
                 '
               x-verify: metrics

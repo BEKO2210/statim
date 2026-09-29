@@ -2,10 +2,52 @@
 
 All notable changes to Statim are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0 the HTTP API may still change
-between minor versions; every change is listed here.
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Since 0.9.0, HTTP API v1 is frozen and
+only additive changes are allowed, enforced by CI; a breaking change requires a new major version.
 
 ## [Unreleased]
+
+## [0.9.0] - 2026-09-29
+
+HTTP API v1 is frozen. From this release on, the API changes only in additive ways until a new
+major version, and CI enforces this.
+
+### Added
+- `docs/api-v1.contract.json`, the frozen contract, generated from `docs/openapi.yaml` by
+  `tools/docs/api_contract.py --write`. It holds:
+  - every operation and documented status;
+  - the request and response schemas with types, required fields, enums, validation bounds and
+    defaults;
+  - the error body shape;
+  - the `/metrics` metric families.
+- `tools/docs/api_contract.py --check`, which runs in CI. It fails on a breaking change:
+  - a removed operation, status or field;
+  - a new or newly required request field;
+  - a narrowed request type or bound;
+  - a changed request default;
+  - a removed request enum value;
+  - a response field removed, made optional, nullable or retyped;
+  - a changed error shape;
+  - a removed or retyped metric family.
+
+  Additive changes pass and are listed. `tools/docs/test_api_contract.py` plants every case.
+- `api_contract`, a ctest against the real server. It sends every documented request example of
+  `docs/openapi.yaml` (46) to a CPU server with both checkpoints.
+  - Error bodies must equal the documented ones exactly.
+  - Successful answers must validate against the JSON Schema and match the documented numbers. They
+    match with a deviation of 0.
+  - It also checks `/health`, `/ready`, `/v1/models`, `/metrics`, the playground and the documented
+    401 answers.
+- `docs/API.md` "Stability: API v1": what is breaking, what is additive, and that error wording is
+  documented but not frozen.
+
+### Changed
+- The CHANGELOG header, README, ROADMAP and CLAUDE.md state the API v1 policy. ROADMAP's 1.0
+  criterion "stable API" is met by this freeze.
+
+### Fixed
+- `docs/openapi.yaml`: the response example for the request example `notObject` was named
+  `questionNotObject`. The contract test found the mismatch.
 
 ## [0.8.7] - 2026-09-29
 
@@ -680,7 +722,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.7...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/BEKO2210/statim/compare/v0.8.7...v0.9.0
 [0.8.7]: https://github.com/BEKO2210/statim/compare/v0.8.6...v0.8.7
 [0.8.6]: https://github.com/BEKO2210/statim/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/BEKO2210/statim/compare/v0.8.4...v0.8.5

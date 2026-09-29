@@ -1,0 +1,1506 @@
+{
+  "annotations": {
+    "$.components.parameters.RequestId.description": "36b446da999255d07d12244806f3402595a342be7a376648f77c29ddbd3d82f7",
+    "$.components.responses.BodyTooLarge.content[\"application/json\"].example": "72f414967c64132e8d42089ac4e5ee7e459dd0acc3f2bcee9963f3b632604cf3",
+    "$.components.responses.BodyTooLarge.description": "5cbda6988c7dfbcf743467e71d522558e33a04dfb25de36d51d46098d7703ae1",
+    "$.components.responses.NoRequestBody.content[\"application/json\"].example": "00d1ea20e7e3b9435ae7750185b657c569f63698cd0176e3d520b68d2bc5dd4e",
+    "$.components.responses.NoRequestBody.description": "dfceb0f70112e5e52d8e90cba341d034310415b020bf6dd6e95828a95baa73f4",
+    "$.components.schemas.BatchRequest.description": "d6a758be958d213031af6d1204e51ce718278db4d1211928871351c33aa43765",
+    "$.components.schemas.BatchRequest.properties.adapter.description": "b0263b2c05c77a0c23bb6c702bb348241c621e1a64dca42a107bfe57668bad6d",
+    "$.components.schemas.BatchRequest.properties.calibrate.description": "78c7aed2512212ec87f7eeb62c399bad99e6c653412f9a5b3a0ded24c57821f6",
+    "$.components.schemas.BatchRequest.properties.ensemble.description": "56657094cee2295292c25bb0bd4d4cd93873c36af87788998edbb7e609b92855",
+    "$.components.schemas.BatchRequest.properties.ensemble_margin.description": "1f8b38f481e7592c54ae83d144371fe7839f729bba7a892aafcdc4da983d955b",
+    "$.components.schemas.BatchRequest.properties.min_confidence.description": "41229c2c65faf22c69729e9ed120c22e8dc87e2c635c7935b1f44842de56265e",
+    "$.components.schemas.BatchRequest.properties.return_logits.description": "78c7aed2512212ec87f7eeb62c399bad99e6c653412f9a5b3a0ded24c57821f6",
+    "$.components.schemas.BatchRequest.properties.states.items.description": "691e0da4d8f125100cb8bcb71d523881f3bc69e95ae8a53b8c5e43673e8d8799",
+    "$.components.schemas.ChoiceAnswer.properties.escalate.description": "77944da29e3cef359814133db88c3574565f20663f344eb050a30c348b9e849f",
+    "$.components.schemas.Model.properties.adapters.description": "58fb8e7d272f92f077cac04be9c5040603032c422b4c79e6ebd6db73435b1166",
+    "$.components.schemas.NoulAnswer.properties.escalate.description": "77944da29e3cef359814133db88c3574565f20663f344eb050a30c348b9e849f",
+    "$.components.schemas.Question.description": "2970535bcb5c158d2caeebb9bfb633d52dd15b3daacbfa5156650f4bfb02fdb9",
+    "$.components.schemas.Question.properties.criteria.description": "6963fb80e96e818ba0be24b3a222d458884706d80fa33e456f0b2e2153de0bd0",
+    "$.components.schemas.Question.properties.instructions.description": "fe288398903b9f9e1674b5fa8329a2db5c6a25365719d547c044d247764e1cfd",
+    "$.components.schemas.Question.properties.labels.description": "0f5b1aca20a6be419b96c528e7e2c4d0d4624bbf9760ad49d4286837ea62cafd",
+    "$.components.schemas.Routing.properties.adapter.description": "6c6d76b0808bc01fc90e469113731b1f83eb2e1e1ba02e732dddb175ce90d145",
+    "$.components.schemas.Routing.properties.adapter_reason.description": "2eaa4c70eea6587a957d78b5a5db81c96a687bd7711c8e50703e24556141032e",
+    "$.components.schemas.ScoreAnswer.properties.escalate.description": "77944da29e3cef359814133db88c3574565f20663f344eb050a30c348b9e849f",
+    "$.components.schemas.SystemOneRequest.description": "d6a758be958d213031af6d1204e51ce718278db4d1211928871351c33aa43765",
+    "$.components.schemas.SystemOneRequest.properties.adapter.description": "b0263b2c05c77a0c23bb6c702bb348241c621e1a64dca42a107bfe57668bad6d",
+    "$.components.schemas.SystemOneRequest.properties.calibrate.description": "78c7aed2512212ec87f7eeb62c399bad99e6c653412f9a5b3a0ded24c57821f6",
+    "$.components.schemas.SystemOneRequest.properties.ensemble.description": "56657094cee2295292c25bb0bd4d4cd93873c36af87788998edbb7e609b92855",
+    "$.components.schemas.SystemOneRequest.properties.ensemble_margin.description": "1f8b38f481e7592c54ae83d144371fe7839f729bba7a892aafcdc4da983d955b",
+    "$.components.schemas.SystemOneRequest.properties.min_confidence.description": "41229c2c65faf22c69729e9ed120c22e8dc87e2c635c7935b1f44842de56265e",
+    "$.components.schemas.SystemOneRequest.properties.return_logits.description": "78c7aed2512212ec87f7eeb62c399bad99e6c653412f9a5b3a0ded24c57821f6",
+    "$.components.schemas.SystemOneRequest.properties.state.description": "c4629f5c1bee0df714d04b6927afd5c959c14ab4c4d519286578612a8a3dd75f",
+    "$.components.securitySchemes.bearerAuth.description": "aa3833a7d015a4c49094a270765907838298d4d22ecc2c5ee97b2ffff19a8d9e",
+    "$.info.description": "2e7967db6ad2000f592d139fcd4375457e4d52e99eddaa6236e62c3454b0aee5",
+    "$.paths[\"/\"].get.responses[\"200\"].content[\"text/html\"].example": "5cb3dea87b923d7890615c973da3171e563ab093b3abc9d3ff62754e643c069f",
+    "$.paths[\"/\"].get.responses[\"200\"].description": "57969e24178e21a9b51db973a225e2161877305b2db9264ae682abeaef46d259",
+    "$.paths[\"/\"].get.responses[\"404\"].content[\"application/json\"].examples": "576462864e67b87891a6ddfe4da52d8f9596002018ee921adcf465bbd9113343",
+    "$.paths[\"/\"].get.responses[\"404\"].description": "ef66ca3c5545332a98fbe02c6ede8cef43c19cb2396d248f132493134bdd33e2",
+    "$.paths[\"/\"].get.summary": "1abfc1582d4a4596583ad312244357584b5085a9f9de4f11ac9a63e5e305221f",
+    "$.paths[\"/health\"].get.responses[\"200\"].content[\"application/json\"].examples": "4ecff00ecdc75943e945bddd7af122bff1b5ef202bfe725d2aeb9869cca9d2bc",
+    "$.paths[\"/health\"].get.responses[\"200\"].description": "5fecde9cb72b55e8a8120ac74f320724237f66076d6146c2221757ae29446b67",
+    "$.paths[\"/health\"].get.summary": "95fe252df6a16dcd1d408195f8212f9cbddf40f3f65e441cf5c96c167e1570bc",
+    "$.paths[\"/metrics\"].get.responses[\"200\"].content[\"text/plain\"].example": "8ec4dda295ae754af1f5eb327e159bd43303dc935de612345a33ce98d064722a",
+    "$.paths[\"/metrics\"].get.responses[\"200\"].description": "1c0463af1663efcb654233816673b892664de4d305745beeba53824a01bea0a4",
+    "$.paths[\"/metrics\"].get.responses[\"401\"].content[\"application/json\"].examples": "a8ee66ae72b52a95eae750989ca3548c66573e742d7ddd6897d21ed053d8097f",
+    "$.paths[\"/metrics\"].get.responses[\"401\"].description": "4ab15c33d74e208beeed0c8428b3499ac2f0a5f0838f83e36473eb30ffa30d24",
+    "$.paths[\"/metrics\"].get.summary": "a6de8e8e417c7463d632a12a1c34f4948d7b8a282d952057d488a717c45ffcd0",
+    "$.paths[\"/ready\"].get.description": "150d949ed845816632b6521c0640ae760cc1f236c27e1d5b6f049276694a96eb",
+    "$.paths[\"/ready\"].get.responses[\"200\"].content[\"application/json\"].examples": "da311218d2ca8ae1fdf693983f436893210e073b972bce6d6c8caeb17405e7ed",
+    "$.paths[\"/ready\"].get.responses[\"200\"].description": "4c86d7e3b7818dd24c6770bcb6eac1213bff521cbd4419cbce23e8a0af0512eb",
+    "$.paths[\"/ready\"].get.responses[\"503\"].content[\"application/json\"].examples": "eba2f750bc8d3f1f7cba7c434eae39f44870abf7a544f135eb7fd66c5a43e346",
+    "$.paths[\"/ready\"].get.responses[\"503\"].description": "2c44bb3d0e5c8b83ecfab2c83dcb5c4fcdf58f1711fee11f00dcd95a27edaba8",
+    "$.paths[\"/ready\"].get.summary": "dae01b8ef8c8eeb8477060b4a59a09c6fe8216ad7d84da3ea1f4e3decf988552",
+    "$.paths[\"/v1/models\"].get.responses[\"200\"].content[\"application/json\"].examples": "0a9e74512288449dd8a65d28ed7d2f1ab47edff3a384c640b220ca84b83ea18a",
+    "$.paths[\"/v1/models\"].get.responses[\"200\"].description": "b6dd195a17aeab384b8ae4b97d471a6f64bae116883dc02f3dbc4fa133629faa",
+    "$.paths[\"/v1/models\"].get.responses[\"401\"].content[\"application/json\"].examples": "8697cc52094b175c24e8ca629e9e056659770e6d6d7f7d62c8d7083733b1882f",
+    "$.paths[\"/v1/models\"].get.responses[\"401\"].description": "4ab15c33d74e208beeed0c8428b3499ac2f0a5f0838f83e36473eb30ffa30d24",
+    "$.paths[\"/v1/models\"].get.summary": "333a82d573c4c4aa97d08fdd2e540ec64c6fe47af3330f2c2927ff2c8274b512",
+    "$.paths[\"/v1/systemone\"].post.description": "a362c0b8f95b5b89372ecbfaf93c5518ca67d4e2d562bde1818d3258830f5441",
+    "$.paths[\"/v1/systemone\"].post.requestBody.content[\"application/json\"].examples": "ab94f2a84403dbd53a9085eeb50f3cf11b992ca43973e2a0c1c6c20891b91791",
+    "$.paths[\"/v1/systemone\"].post.responses[\"200\"].content[\"application/json\"].examples": "b49285b56fb284311aa4346c3334029bbf85b4248662f8603cc2a65c3a180ad3",
+    "$.paths[\"/v1/systemone\"].post.responses[\"200\"].description": "474effe637f3770f29507188b3f33d96cccd7c001453a9de145987aaa52c738d",
+    "$.paths[\"/v1/systemone\"].post.responses[\"200\"].headers[\"Server-Timing\"].description": "7ec2920971cf738019712cb3c974e60174eebbde7c40a6efb93ca4a13987e34a",
+    "$.paths[\"/v1/systemone\"].post.responses[\"200\"].headers[\"X-Inference-Time-Ms\"].description": "75d50c385249b6b1582bc8ef8b38ed46a1d273d52e99a553d3ee2b884cec98e4",
+    "$.paths[\"/v1/systemone\"].post.responses[\"200\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.responses[\"400\"].content[\"application/json\"].examples": "32de317adb1b440901e4737101a6211cff5e89124a8a4790e3c4d849d5877056",
+    "$.paths[\"/v1/systemone\"].post.responses[\"400\"].description": "4b332aaaae1e96efb867c2405b518fc4122c8a86900179407855c90df06ca5fa",
+    "$.paths[\"/v1/systemone\"].post.responses[\"400\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.responses[\"401\"].content[\"application/json\"].examples": "8697cc52094b175c24e8ca629e9e056659770e6d6d7f7d62c8d7083733b1882f",
+    "$.paths[\"/v1/systemone\"].post.responses[\"401\"].description": "a73d59f37c042290d6b316f28001053c1947fca97867da253d8d2e9eafeda770",
+    "$.paths[\"/v1/systemone\"].post.responses[\"413\"].content[\"application/json\"].examples": "ba29d12165449e43314ed855fed1a35cc9bf164392a63a878af015ae61dbaec5",
+    "$.paths[\"/v1/systemone\"].post.responses[\"413\"].description": "2df46d8dd6f42f7369546bed79ee937aca8089aa739df37c8b043d0bb5ff71c2",
+    "$.paths[\"/v1/systemone\"].post.responses[\"413\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.responses[\"422\"].content[\"application/json\"].examples": "7fc52012d6f40835f0ca6049c941e427be9cc25ee26aedbff9e8d86f08857190",
+    "$.paths[\"/v1/systemone\"].post.responses[\"422\"].description": "d38a8c5fcea585e131782f36921be70e598e388d02309da28027d600ac00d1a8",
+    "$.paths[\"/v1/systemone\"].post.responses[\"422\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.responses[\"500\"].content[\"application/json\"].examples": "5aedc3d1f0664c85520a6c0daa0dca6ea4e0edeb9132c4c5ce13d6f4440b4d24",
+    "$.paths[\"/v1/systemone\"].post.responses[\"500\"].description": "a9f44b9b08de3548f939bc7fbf563ea43d91a7102e75562219d26990b16e7a99",
+    "$.paths[\"/v1/systemone\"].post.responses[\"500\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.responses[\"503\"].content[\"application/json\"].examples": "ec0e148fe3f6f92f16af5f53bcc06265f3ab86816a10efc02443a783c90079fe",
+    "$.paths[\"/v1/systemone\"].post.responses[\"503\"].description": "051644da5fb84d6c1e98949fe1cad0a49d3ed3ec4dc4681be40d3e162e4c56e5",
+    "$.paths[\"/v1/systemone\"].post.responses[\"503\"].headers[\"Retry-After\"].description": "5af9b5ba6cc4ae1b34c0ce27efedd970f979107fcf59151a9defa3647024052b",
+    "$.paths[\"/v1/systemone\"].post.responses[\"503\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone\"].post.summary": "c1f83282be32e38acfa4f6d4a7d9bfdbddfcf452cbb16d9bffc833cb83548421",
+    "$.paths[\"/v1/systemone/batch\"].post.description": "949c771ff8cd2b4541b1ae8ad45a782b9d961898d70a93c5bb5b24ee706b3135",
+    "$.paths[\"/v1/systemone/batch\"].post.requestBody.content[\"application/json\"].examples": "1dd14c4ee982a4c79b8c54ae7ef47df5a2da6c798be0a05f64a2338fcc2e61f9",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"200\"].content[\"application/json\"].examples": "c8305b3c19a7e3090a6199b1627c534d8aa351a1201ccd9266509371f0df226e",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"200\"].description": "474effe637f3770f29507188b3f33d96cccd7c001453a9de145987aaa52c738d",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"200\"].headers[\"Server-Timing\"].description": "7ec2920971cf738019712cb3c974e60174eebbde7c40a6efb93ca4a13987e34a",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"200\"].headers[\"X-Inference-Time-Ms\"].description": "75d50c385249b6b1582bc8ef8b38ed46a1d273d52e99a553d3ee2b884cec98e4",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"200\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"400\"].content[\"application/json\"].examples": "c9cdb4f573fdc53a2ba5c9b79745048a26092c5df8652bf7d70405baa1c9cd2c",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"400\"].description": "4b332aaaae1e96efb867c2405b518fc4122c8a86900179407855c90df06ca5fa",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"400\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"401\"].content[\"application/json\"].examples": "8697cc52094b175c24e8ca629e9e056659770e6d6d7f7d62c8d7083733b1882f",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"401\"].description": "a73d59f37c042290d6b316f28001053c1947fca97867da253d8d2e9eafeda770",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"413\"].content[\"application/json\"].examples": "63ea1ff5bce4d21882ffb57fd62b6e459e78486e430fe95f0e9de5b30789aaba",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"413\"].description": "d75aafe711c297da555742ea2e62fd816a2cdbefc8a2d8896321472bb2f9ebdd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"413\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"422\"].content[\"application/json\"].examples": "9f1f421f3aaa10ba403e560a8c8b527e6494c9ef2271050e6aca185d2089889b",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"422\"].description": "6db17b5c17d0aebee85f95cccc32d0fdf33feb79664d78b40b93d0c29acaf3fc",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"422\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"500\"].content[\"application/json\"].examples": "5aedc3d1f0664c85520a6c0daa0dca6ea4e0edeb9132c4c5ce13d6f4440b4d24",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"500\"].description": "a9f44b9b08de3548f939bc7fbf563ea43d91a7102e75562219d26990b16e7a99",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"500\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"503\"].content[\"application/json\"].examples": "ec0e148fe3f6f92f16af5f53bcc06265f3ab86816a10efc02443a783c90079fe",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"503\"].description": "051644da5fb84d6c1e98949fe1cad0a49d3ed3ec4dc4681be40d3e162e4c56e5",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"503\"].headers[\"Retry-After\"].description": "5af9b5ba6cc4ae1b34c0ce27efedd970f979107fcf59151a9defa3647024052b",
+    "$.paths[\"/v1/systemone/batch\"].post.responses[\"503\"].headers[\"X-Request-Id\"].description": "3f151ace343c42da2b22d1a9d3710cc8c8d12291ae0ff390c417a6582ae857dd",
+    "$.paths[\"/v1/systemone/batch\"].post.summary": "0f7195d2a13ed3534e0ff99753b0c726dcf6d7f182d5efe995cac63907c9dc4c",
+    "$.servers[0].description": "3f39266d1f5aa17a0bfc78c0ca01865a792001eb09b21c70541b4218afc61911",
+    "$.tags[0].description": "b422f0306a62820f2cdff076934b2fb4b87e6e741b561f6ba215740f05ea92ca",
+    "$.tags[1].description": "8e688683da664acf9119d2fbfea94fc97237a9ff767fd6174a39f81dd03c67da"
+  },
+  "error": {
+    "additionalProperties": false,
+    "properties": {
+      "detail": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "detail"
+    ],
+    "type": "object"
+  },
+  "format": 1,
+  "metric_families": [
+    {
+      "kind": "summary",
+      "name": "statim_batch_size"
+    },
+    {
+      "kind": "summary",
+      "name": "statim_batch_wait_ms"
+    },
+    {
+      "kind": "gauge",
+      "name": "statim_in_flight"
+    },
+    {
+      "kind": "counter",
+      "name": "statim_input_tokens_total"
+    },
+    {
+      "kind": "gauge",
+      "name": "statim_model_info"
+    },
+    {
+      "kind": "counter",
+      "name": "statim_rejected_busy_total"
+    },
+    {
+      "kind": "histogram",
+      "name": "statim_request_duration_ms"
+    },
+    {
+      "kind": "counter",
+      "name": "statim_requests_total"
+    },
+    {
+      "kind": "gauge",
+      "name": "statim_uptime_seconds"
+    },
+    {
+      "kind": "gauge",
+      "name": "statim_workers_busy"
+    }
+  ],
+  "operations": {
+    "GET /": {
+      "parameters": [],
+      "request": null,
+      "responses": {
+        "200": {
+          "text/html": {
+            "type": "string"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "404": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "GET /health": {
+      "parameters": [],
+      "request": null,
+      "responses": {
+        "200": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "const": "ok"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "GET /metrics": {
+      "parameters": [],
+      "request": null,
+      "responses": {
+        "200": {
+          "text/plain": {
+            "type": "string"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "401": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "GET /ready": {
+      "parameters": [],
+      "request": null,
+      "responses": {
+        "200": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "ready": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ready"
+            ],
+            "type": "object"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "503": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "ready": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ready"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "GET /v1/models": {
+      "parameters": [],
+      "request": null,
+      "responses": {
+        "200": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapters": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alpha": {
+                            "type": "number"
+                          },
+                          "bytes": {
+                            "type": "integer"
+                          },
+                          "categories": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "enum": [
+                              "merge",
+                              "runtime"
+                            ],
+                            "type": "string"
+                          },
+                          "pairs": {
+                            "type": "integer"
+                          },
+                          "pairs_applied": {
+                            "type": "integer"
+                          },
+                          "rank": {
+                            "type": "integer"
+                          },
+                          "source": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "alpha",
+                          "bytes",
+                          "categories",
+                          "id",
+                          "mode",
+                          "pairs",
+                          "pairs_applied",
+                          "rank",
+                          "source"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "device": {
+                      "type": "string"
+                    },
+                    "hidden": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "layers": {
+                      "type": "integer"
+                    },
+                    "max_len": {
+                      "type": "integer"
+                    },
+                    "object": {
+                      "const": "model"
+                    },
+                    "owned_by": {
+                      "const": "statim"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "vocab": {
+                      "type": "integer"
+                    },
+                    "weights": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "device",
+                    "hidden",
+                    "id",
+                    "layers",
+                    "max_len",
+                    "object",
+                    "owned_by",
+                    "source",
+                    "vocab",
+                    "weights"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "object": {
+                "const": "list"
+              }
+            },
+            "required": [
+              "data",
+              "object"
+            ],
+            "type": "object"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "401": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "POST /v1/systemone": {
+      "parameters": [
+        {
+          "in": "header",
+          "name": "X-Request-Id",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "content": {
+          "application/json": {
+            "properties": {
+              "adapter": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "calibrate": {},
+              "ensemble": {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "ensemble_margin": {},
+              "head_max_len": {
+                "maximum": 8192,
+                "minimum": 32,
+                "type": "integer"
+              },
+              "lang": {
+                "type": "string"
+              },
+              "max_len": {
+                "maximum": 8192,
+                "minimum": 32,
+                "type": "integer"
+              },
+              "min_confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              },
+              "questions": {
+                "additionalProperties": {
+                  "properties": {
+                    "criteria": {},
+                    "instructions": {},
+                    "labels": {
+                      "properties": {
+                        "false": {
+                          "type": "string"
+                        },
+                        "true": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "choice",
+                        "noul",
+                        "score"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instructions",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxProperties": 64,
+                "type": "object"
+              },
+              "return_logits": {},
+              "state": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "questions",
+              "state"
+            ],
+            "type": "object"
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "answers": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "action": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "act_probability": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "act_probability"
+                          ],
+                          "type": "object"
+                        },
+                        "answer_confidence": {
+                          "type": "number"
+                        },
+                        "choice": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "escalate": {
+                          "type": "boolean"
+                        },
+                        "logits": {
+                          "items": {
+                            "type": "number"
+                          },
+                          "type": "array"
+                        },
+                        "logits_by_model": {
+                          "additionalProperties": {
+                            "items": {
+                              "type": "number"
+                            },
+                            "type": "array"
+                          },
+                          "type": "object"
+                        },
+                        "probabilities": {
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "const": "choice"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "answer_confidence",
+                        "choice",
+                        "confidence",
+                        "probabilities",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "act_probability": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "act_probability"
+                          ],
+                          "type": "object"
+                        },
+                        "answer_confidence": {
+                          "type": "number"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "escalate": {
+                          "type": "boolean"
+                        },
+                        "legend": {
+                          "additionalProperties": true,
+                          "type": "object"
+                        },
+                        "logits": {
+                          "items": {
+                            "type": "number"
+                          },
+                          "type": "array"
+                        },
+                        "logits_by_model": {
+                          "additionalProperties": {
+                            "items": {
+                              "type": "number"
+                            },
+                            "type": "array"
+                          },
+                          "type": "object"
+                        },
+                        "probabilities": {
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "type": "object"
+                        },
+                        "score": {
+                          "type": "number"
+                        },
+                        "type": {
+                          "const": "score"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "answer_confidence",
+                        "confidence",
+                        "legend",
+                        "probabilities",
+                        "score",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "properties": {
+                        "action": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "act_probability": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "act_probability"
+                          ],
+                          "type": "object"
+                        },
+                        "answer_confidence": {
+                          "type": "number"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "escalate": {
+                          "type": "boolean"
+                        },
+                        "logits": {
+                          "items": {
+                            "type": "number"
+                          },
+                          "type": "array"
+                        },
+                        "logits_by_model": {
+                          "additionalProperties": {
+                            "items": {
+                              "type": "number"
+                            },
+                            "type": "array"
+                          },
+                          "type": "object"
+                        },
+                        "noul": {
+                          "type": "number"
+                        },
+                        "type": {
+                          "const": "noul"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "answer_confidence",
+                        "confidence",
+                        "noul",
+                        "type"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              "model": {
+                "type": "string"
+              },
+              "routing": {
+                "additionalProperties": false,
+                "properties": {
+                  "adapter": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "adapter_reason": {
+                    "type": "string"
+                  },
+                  "engine": {
+                    "const": "statim",
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "enum": [
+                      "adapter",
+                      "consensus",
+                      "default",
+                      "lang:en",
+                      "lang:other",
+                      "requested"
+                    ],
+                    "type": "string"
+                  },
+                  "weights": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "engine",
+                  "model",
+                  "reason",
+                  "weights"
+                ],
+                "type": "object"
+              },
+              "usage": {
+                "additionalProperties": false,
+                "properties": {
+                  "input_tokens": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "output_tokens": {
+                    "const": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "input_tokens",
+                  "output_tokens"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "answers",
+              "model",
+              "routing",
+              "usage"
+            ],
+            "type": "object"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "401": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "422": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "500": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "503": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    "POST /v1/systemone/batch": {
+      "parameters": [
+        {
+          "in": "header",
+          "name": "X-Request-Id",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "request": {
+        "content": {
+          "application/json": {
+            "properties": {
+              "adapter": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "calibrate": {},
+              "ensemble": {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "ensemble_margin": {},
+              "head_max_len": {
+                "maximum": 8192,
+                "minimum": 32,
+                "type": "integer"
+              },
+              "lang": {
+                "type": "string"
+              },
+              "max_len": {
+                "maximum": 8192,
+                "minimum": 32,
+                "type": "integer"
+              },
+              "min_confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              },
+              "questions": {
+                "additionalProperties": {
+                  "properties": {
+                    "criteria": {},
+                    "instructions": {},
+                    "labels": {
+                      "properties": {
+                        "false": {
+                          "type": "string"
+                        },
+                        "true": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "choice",
+                        "noul",
+                        "score"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instructions",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxProperties": 64,
+                "type": "object"
+              },
+              "return_logits": {},
+              "states": {
+                "items": {
+                  "not": {
+                    "type": "null"
+                  }
+                },
+                "maxItems": 256,
+                "type": "array"
+              }
+            },
+            "required": [
+              "questions",
+              "states"
+            ],
+            "type": "object"
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "results": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "answers": {
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "properties": {
+                              "action": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "act_probability": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "act_probability"
+                                ],
+                                "type": "object"
+                              },
+                              "answer_confidence": {
+                                "type": "number"
+                              },
+                              "choice": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "escalate": {
+                                "type": "boolean"
+                              },
+                              "logits": {
+                                "items": {
+                                  "type": "number"
+                                },
+                                "type": "array"
+                              },
+                              "logits_by_model": {
+                                "additionalProperties": {
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "type": "array"
+                                },
+                                "type": "object"
+                              },
+                              "probabilities": {
+                                "additionalProperties": {
+                                  "type": "number"
+                                },
+                                "type": "object"
+                              },
+                              "type": {
+                                "const": "choice"
+                              }
+                            },
+                            "required": [
+                              "action",
+                              "answer_confidence",
+                              "choice",
+                              "confidence",
+                              "probabilities",
+                              "type"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "action": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "act_probability": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "act_probability"
+                                ],
+                                "type": "object"
+                              },
+                              "answer_confidence": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "escalate": {
+                                "type": "boolean"
+                              },
+                              "legend": {
+                                "additionalProperties": true,
+                                "type": "object"
+                              },
+                              "logits": {
+                                "items": {
+                                  "type": "number"
+                                },
+                                "type": "array"
+                              },
+                              "logits_by_model": {
+                                "additionalProperties": {
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "type": "array"
+                                },
+                                "type": "object"
+                              },
+                              "probabilities": {
+                                "additionalProperties": {
+                                  "type": "number"
+                                },
+                                "type": "object"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "score"
+                              }
+                            },
+                            "required": [
+                              "action",
+                              "answer_confidence",
+                              "confidence",
+                              "legend",
+                              "probabilities",
+                              "score",
+                              "type"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "action": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "act_probability": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "act_probability"
+                                ],
+                                "type": "object"
+                              },
+                              "answer_confidence": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "escalate": {
+                                "type": "boolean"
+                              },
+                              "logits": {
+                                "items": {
+                                  "type": "number"
+                                },
+                                "type": "array"
+                              },
+                              "logits_by_model": {
+                                "additionalProperties": {
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "type": "array"
+                                },
+                                "type": "object"
+                              },
+                              "noul": {
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "noul"
+                              }
+                            },
+                            "required": [
+                              "action",
+                              "answer_confidence",
+                              "confidence",
+                              "noul",
+                              "type"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "type": "object"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "routing": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "adapter": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "adapter_reason": {
+                          "type": "string"
+                        },
+                        "engine": {
+                          "const": "statim",
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "enum": [
+                            "adapter",
+                            "consensus",
+                            "default",
+                            "lang:en",
+                            "lang:other",
+                            "requested"
+                          ],
+                          "type": "string"
+                        },
+                        "weights": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "engine",
+                        "model",
+                        "reason",
+                        "weights"
+                      ],
+                      "type": "object"
+                    },
+                    "usage": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "input_tokens": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "const": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "input_tokens",
+                        "output_tokens"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "answers",
+                    "model",
+                    "routing",
+                    "usage"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "results"
+            ],
+            "type": "object"
+          }
+        },
+        "400": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "401": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "413": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "422": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "500": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        },
+        "503": {
+          "application/json": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "title": "Statim HTTP API v1"
+}

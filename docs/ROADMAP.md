@@ -54,5 +54,6 @@ by question family; the first specialist experiment is in docs/ADAPTERS.md)
   across every surface.
 
 **1.0 — release**
-- Stable API, benchmark report against the published state of the art with reproducible scripts,
+- API v1 frozen (0.9.0): contract tests against the real server and a breaking-change check in CI;
+  benchmark report against the published state of the art with reproducible scripts,
   presentation material.

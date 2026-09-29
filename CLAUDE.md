@@ -63,7 +63,9 @@ python3 site/tests/check.py                                                  # a
   seed.
 - **The API is a contract.** Errors keep the `{"detail": ...}` shape. A change to routes, fields,
   errors, metrics or serve flags updates `docs/API.md`, `docs/openapi.yaml` and both SDKs in the
-  same PR. `check_docs.py` compares the documents with the C++ source.
+  same PR. API v1 is frozen in `docs/api-v1.contract.json`; `python3
+  tools/docs/api_contract.py --check` rejects breaking changes. `check_docs.py` compares the
+  documents with the C++ source.
 - **Adapters are bound to their base.** A LoRA adapter records the fingerprint and checkpoint
   SHA-256 of the model it was trained on, and the engine refuses a mismatch. By default adapters
   merge on f32, f16 and bf16 weights and run as runtime LoRA on quantized weights.
@@ -112,8 +114,8 @@ python3 site/tests/check.py                                                  # a
   attaches the binaries and `SHA256SUMS`. Then upload `deploy/hf-space/Dockerfile`, which
   `--set` already moved to the new version, to the demo Space.
 - Semantic Versioning covers the HTTP API, the CLI and the GGUF metadata that the engine reads.
-  Before 1.0 the HTTP API may still change between minor versions, and every change is in the
-  CHANGELOG.
+  Since 0.9.0, HTTP API v1 permits only additive changes; a breaking change requires a new major
+  version. Every change is in the CHANGELOG.
 
 ## Conventions
 
