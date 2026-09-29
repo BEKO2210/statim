@@ -2,9 +2,7 @@
 
 Official Python client for the [Statim](../../README.md) HTTP API. The package
 is named `statim`, uses only the standard library, and targets the API
-documented in [`docs/API.md`](../../docs/API.md) (server 0.8.2), except LoRA
-adapters (0.8.0): requests cannot select an `adapter` yet, and the adapter
-fields of responses and `/v1/models` are not exposed.
+documented in [`docs/API.md`](../../docs/API.md) (server 0.8.3).
 
 ```sh
 pip install ./clients/python
@@ -53,13 +51,24 @@ print(decision.request_id, decision.inference_time_ms)
 | `health()` | `GET /health` |
 | `ready()` | `GET /ready` |
 
-Options are `model`, `lang`, `ensemble`, `ensemble_margin`, `calibrate`,
+Options are `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`, `calibrate`,
 `return_logits`, `min_confidence`, `max_len`, `head_max_len`, and `request_id`. Pass `None` to
-omit a field. Question type `noul` is the yes/no question; the parsed object
-is `YesNoAnswer`. Its `noul` field is the server probability that the
+omit a field; request base weights explicitly with `adapter="none"`. Question
+type `noul` is the yes/no question; the parsed object is `YesNoAnswer`. Its `noul` field is the server probability that the
 statement holds, and `probabilities` is `{"yes": noul, "no": 1 - noul}`.
 Every answer has optional `escalate`, which is `None` unless a positive
 confidence threshold applied to the response.
+
+Select a LoRA adapter by name, or let the server match the question family
+with `adapter="auto"`. A name needs a server started with that adapter, for
+example `--adapter multilingual:emotion=emotion.lora.gguf`. `"auto"` works on
+any server and falls back to the base weights.
+
+```python
+decision = client.decide(state, questions, adapter="auto")
+print(decision.routing.adapter, decision.routing.adapter_reason)  # e.g. emotion auto:emotion
+print([a.id for m in client.models().data for a in m.adapters])
+```
 
 `request_id` is sent as `X-Request-Id`. When omitted, the client generates a
 UUID. The id on the result is the one the server echoed. Values outside 1–128

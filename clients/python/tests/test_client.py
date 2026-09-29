@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from statim import (
+    Adapter,
     AuthenticationError,
     BadRequestError,
     ChoiceAnswer,
@@ -28,6 +29,7 @@ from statim import (
     PayloadTooLargeError,
     ScoreAnswer,
     ServiceUnavailableError,
+    StatimError,
     TransportError,
     UnprocessableEntityError,
     YesNoAnswer,
@@ -36,6 +38,24 @@ from statim import (
 BASE_URL = os.environ.get("STATIM_URL", "http://127.0.0.1:8190")
 AUTH_URL = os.environ.get("STATIM_AUTH_URL", "http://127.0.0.1:8191")
 AUTH_KEY = os.environ.get("STATIM_API_KEY_TEST", "sdk-test-key")
+ADAPTER_URL = os.environ.get("STATIM_ADAPTER_URL")
+ADAPTER_NAME = os.environ.get("STATIM_ADAPTER_NAME")
+AUTO_FAMILIES = {
+    "sentiment",
+    "emotion",
+    "complaint",
+    "nli",
+    "safety",
+    "reading",
+    "similarity",
+    "topic",
+    "intent",
+    "stance",
+    "formality",
+    "urgency",
+    "fact_check",
+    "pii",
+}
 
 NOUL_BODY = {
     "model": "laya-multilingual",
@@ -290,6 +310,168 @@ def test_selective_prediction_transport_serialization_and_parsing(monkeypatch: p
     assert decision.answers["urgency"].escalate is True
     assert batch.results[0].answers["refund"].escalate is True
     assert unchanged.answers["refund"].escalate is None
+
+
+def test_adapter_transport_and_response_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[tuple[str, dict[str, Any]]] = []
+
+    class Response:
+        status = 200
+        headers: dict[str, str] = {}
+
+        def __init__(self, payload: Any) -> None:
+            self.raw = json.dumps(payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return self.raw
+
+    def urlopen(request: Any, timeout: float):
+        del timeout
+        body = json.loads(request.data)
+        requests.append((request.full_url, body))
+        routing = dict(NOUL_BODY["routing"])
+        routing.update(adapter=None, adapter_reason="none")
+        if body.get("adapter") == "emotion":
+            routing.update(reason="adapter", adapter="emotion", adapter_reason="requested")
+        elif body.get("adapter") == "auto":
+            category = next(iter(body["questions"]))
+            if category == "emotion":
+                routing.update(adapter="emotion", adapter_reason="auto:emotion")
+            elif category == "no_family":
+                routing.update(adapter_reason="auto:no-family")
+            else:
+                routing.update(adapter_reason="auto:emotion:no-adapter")
+        payload = {**NOUL_BODY, "routing": routing}
+        return Response({"results": [payload]} if request.full_url.endswith("/batch") else payload)
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    client = Client("http://statim.invalid", max_retries=0)
+    questions = {"emotion": {"type": "noul", "instructions": "Emotion?"}}
+    selected = client.decide("hello", questions, adapter="emotion")
+    batch = client.decide_batch(["hello"], questions, adapter="auto")
+    omitted = client.decide("hello", questions, adapter=None)
+    no_family = client.decide(
+        "hello", {"no_family": {"type": "noul", "instructions": "Unknown?"}}, adapter="auto"
+    )
+    no_adapter = client.decide(
+        "hello", {"emotion_missing": {"type": "noul", "instructions": "Emotion?"}}, adapter="auto"
+    )
+    base = client.decide("hello", questions, adapter="none")
+    long_name = "é" * 129
+    long_adapter = client.decide("hello", questions, adapter=long_name)
+
+    assert requests == [
+        ("http://statim.invalid/v1/systemone", {"state": "hello", "questions": questions, "adapter": "emotion"}),
+        (
+            "http://statim.invalid/v1/systemone/batch",
+            {"states": ["hello"], "questions": questions, "adapter": "auto"},
+        ),
+        ("http://statim.invalid/v1/systemone", {"state": "hello", "questions": questions}),
+        (
+            "http://statim.invalid/v1/systemone",
+            {
+                "state": "hello",
+                "questions": {"no_family": {"type": "noul", "instructions": "Unknown?"}},
+                "adapter": "auto",
+            },
+        ),
+        (
+            "http://statim.invalid/v1/systemone",
+            {
+                "state": "hello",
+                "questions": {"emotion_missing": {"type": "noul", "instructions": "Emotion?"}},
+                "adapter": "auto",
+            },
+        ),
+        ("http://statim.invalid/v1/systemone", {"state": "hello", "questions": questions, "adapter": "none"}),
+        (
+            "http://statim.invalid/v1/systemone",
+            {"state": "hello", "questions": questions, "adapter": long_name},
+        ),
+    ]
+    assert selected.routing.adapter == "emotion"
+    assert selected.routing.adapter_reason == "requested"
+    assert selected.routing.reason == "adapter"
+    assert batch.results[0].routing.adapter == "emotion"
+    assert batch.results[0].routing.adapter_reason == "auto:emotion"
+    assert omitted.routing.adapter is None
+    assert omitted.routing.adapter_reason == "none"
+    assert no_family.routing.adapter is None
+    assert no_family.routing.adapter_reason == "auto:no-family"
+    assert no_adapter.routing.adapter is None
+    assert no_adapter.routing.adapter_reason == "auto:emotion:no-adapter"
+    assert base.routing.adapter is None
+    assert base.routing.adapter_reason == "none"
+    assert long_adapter.routing.adapter is None
+
+    with pytest.raises(TypeError, match="adapter"):
+        client.decide("hello", questions, adapter=12)
+
+
+def test_models_parse_adapters_and_reject_malformed(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = {
+        "id": "multilingual",
+        "object": "model",
+        "owned_by": "statim",
+        "source": "laya-multilingual",
+        "weights": "q8_0",
+        "layers": 22,
+        "hidden": 768,
+        "max_len": 1024,
+        "vocab": 250002,
+        "device": "cpu",
+    }
+    adapter = {
+        "id": "emotion",
+        "source": "emotion-lora",
+        "mode": "runtime",
+        "rank": 4,
+        "alpha": 8.0,
+        "pairs": 88,
+        "pairs_applied": 87,
+        "categories": ["emotion", "sentiment"],
+        "bytes": 3456,
+    }
+    payloads = [
+        {"object": "list", "data": [model, {**model, "id": "with-adapter", "adapters": [adapter]}]},
+        {"object": "list", "data": [{**model, "adapters": None}]},
+        {"object": "list", "data": [{**model, "adapters": {"bad": True}}]},
+        {"object": "list", "data": [{**model, "adapters": [{key: value for key, value in adapter.items() if key != "id"}]}]},
+        {"object": "list", "data": [{**model, "adapters": [{**adapter, "rank": "4"}]}]},
+    ]
+
+    class Response:
+        status = 200
+        headers: dict[str, str] = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(payloads.pop(0)).encode()
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: Response())
+    client = Client("http://statim.invalid", max_retries=0)
+    listed = client.models()
+    assert listed.data[0].adapters == ()
+    parsed = listed.data[1].adapters[0]
+    assert isinstance(parsed, Adapter)
+    assert parsed.id == "emotion"
+    assert parsed.alpha == 8.0
+    assert parsed.categories == ("emotion", "sentiment")
+    assert parsed.bytes == 3456
+    for message in ("adapters must be an array", "adapters must be an array", "missing id", "adapter.rank"):
+        with pytest.raises(StatimError, match=message):
+            client.models()
 
 
 def test_retries_honor_retry_after_and_stop_after_success() -> None:
@@ -600,3 +782,30 @@ def test_authentication_on_the_keyed_server(auth: tuple[str, str]) -> None:
     assert listed.data[0].device == "cpu"
     assert missing.health().status == "ok"
     assert missing.ready().ready is True
+
+
+@pytest.mark.skipif(not ADAPTER_URL or not ADAPTER_NAME, reason="adapter server is not configured")
+def test_adapter_against_the_server() -> None:
+    assert ADAPTER_URL is not None and ADAPTER_NAME is not None
+    client = Client(ADAPTER_URL, timeout=180)
+    listed = client.models()
+    matches = [(model, adapter) for model in listed.data for adapter in model.adapters if adapter.id == ADAPTER_NAME]
+    assert matches, f"adapter {ADAPTER_NAME!r} is not listed"
+    model, adapter = matches[0]
+    assert adapter.categories, f"adapter {ADAPTER_NAME!r} has no categories"
+    category = adapter.categories[0]
+    questions = {category: {"type": "noul", "instructions": f"Is this about {category}?"}}
+
+    requested = client.decide("adapter live test", questions, model=model.id, adapter=ADAPTER_NAME)
+    assert requested.routing.adapter == ADAPTER_NAME
+    assert requested.routing.adapter_reason == "requested"
+
+    base = client.decide("adapter live test", questions, model=model.id, adapter="none")
+    assert base.routing.adapter is None
+    assert base.routing.adapter_reason == "none"
+
+    if category not in AUTO_FAMILIES:
+        pytest.skip(f"adapter category {category!r} is not one of the 14 auto-rule families")
+    automatic = client.decide("adapter live test", questions, model=model.id, adapter="auto")
+    assert automatic.routing.adapter == ADAPTER_NAME
+    assert automatic.routing.adapter_reason == f"auto:{category}"

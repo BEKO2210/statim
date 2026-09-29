@@ -7,6 +7,16 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-09-29
+
+### Added
+- LoRA adapters in the official Python and TypeScript SDKs. `decide` and `decide_batch` take
+  `adapter` (a loaded adapter's name, `"auto"` or `"none"`). Results carry `routing.adapter` and
+  `routing.adapter_reason`, and `models()` lists each model's adapters (`Adapter`: id, source, mode,
+  rank, alpha, pairs, pairs_applied, categories, bytes). Responses from servers without adapters
+  parse as before. Both suites have a live test against a server with an adapter
+  (`STATIM_ADAPTER_URL`, `STATIM_ADAPTER_NAME`).
+
 ## [0.8.2] - 2026-09-29
 
 ### Added
@@ -596,7 +606,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/BEKO2210/statim/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/BEKO2210/statim/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/BEKO2210/statim/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/BEKO2210/statim/compare/v0.7.0...v0.8.0

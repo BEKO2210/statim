@@ -53,17 +53,17 @@ and parity, not one combined benchmark.
 
 ### Download a release
 
-This downloads the v0.8.2 Linux x86-64 CPU binary and the 357 MB multilingual q8_0 model.
+This downloads the v0.8.3 Linux x86-64 CPU binary and the 357 MB multilingual q8_0 model.
 
 ```bash
 git clone https://github.com/BEKO2210/statim && cd statim
 mkdir -p dist && cd dist
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.2/statim-0.8.2-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.2/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.2-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.3/statim-0.8.3-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.3/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.3-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 cd ..
-dist/statim-0.8.2-linux-x86_64-cpu/statim serve \
+dist/statim-0.8.3-linux-x86_64-cpu/statim serve \
   -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080
 ```
 
@@ -224,7 +224,8 @@ decision = client.decide(
 print(decision.answers["refund"].noul, decision.answers["refund"].confidence)
 ```
 
-Both clients provide `decide`, `decide_batch`, `models`, `health`, and `ready`. Yes/no questions use
+Both clients provide `decide`, `decide_batch`, `models`, `health`, and `ready`; both decision methods
+accept an `adapter` option. Yes/no questions use
 wire type `noul` and return `YesNoAnswer`. See the [Python](clients/python/README.md) and
 [TypeScript](clients/js/README.md) guides.
 
@@ -459,8 +460,9 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.8.2: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.8.2 checks every document against
+The current release is v0.8.3: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.8.3 brings LoRA adapters to both
+client SDKs; 0.8.2 checks every document against
 the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
 the comparison with a local LLM and an NLI classifier, fuzzing in CI, load-time model and adapter
