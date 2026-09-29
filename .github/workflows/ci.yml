@@ -9,6 +9,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
+        run: python3 tools/docs/test_check_docs.py && python3 tools/docs/check_docs.py
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user numpy safetensors gguf
       - name: Cache models

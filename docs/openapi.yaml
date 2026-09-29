@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Statim HTTP API
-  version: 0.4.0
+  version: 0.8.1
   description: 'HTTP API of the Statim decision server. See docs/API.md for the narrative guide and
     complete limit formulas. JSON error bodies are objects with a single string field, detail. GET /ready
     instead returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. Unknown
@@ -40,7 +40,10 @@ x-server-configuration:
     --head-max-len: 0 selects checkpoint default; nonzero values must be 32-8192
     --ensemble: 1 (valid range 1-8)
     --min-confidence: unset (number 0-1; 0 disables selective prediction)
+    --batch-window-ms: 0 (off; a positive window packs compatible POST /v1/systemone calls into shared forward passes)
+    --max-batch: 16 states per server-created micro-batch
   other-flags:
+  - -m [name=]model.gguf (repeatable)
   - --host
   - --port
   - --device
@@ -50,6 +53,8 @@ x-server-configuration:
   - --consensus
   - --no-access-log
   - --no-playground
+  - --adapter [model:]name=adapter.gguf (repeatable; see docs/API.md, LoRA adapters)
+  - --adapter-mode merge|runtime
 x-request-limits:
   body-bytes: 2097152
   json-depth: 64 (configurable with --max-json-depth; hard ceiling 128)
@@ -2455,7 +2460,9 @@ paths:
         '422':
           description: model/lang/adapter field validation; unknown adapter; min_confidence validation (0..1); strict integer validation
             of ensemble (1..8), max_len, or head_max_len (32..8192); effective sequence capacity; question
-            validation; option-marker budget; or expiry of the cooperative inference deadline.
+            validation; option-marker budget; expiry of the cooperative inference deadline; or client
+            disconnection while this request waits in a micro-batch (--batch-window-ms). Explicit
+            /v1/systemone/batch calls are never micro-batched, so that case does not apply there.
           content:
             application/json:
               schema:
@@ -2486,6 +2493,11 @@ paths:
                 inferenceDeadline:
                   value:
                     detail: inference deadline exceeded
+                inferenceCancelled:
+                  summary: Client disconnected while queued in a micro-batch (--batch-window-ms)
+                  value:
+                    detail: inference cancelled
+                  x-live: false
                 badType:
                   value:
                     detail: unknown question type; use choice, score or noul
@@ -3066,7 +3078,7 @@ paths:
                 ok:
                   value:
                     status: ok
-                    version: 0.2.1
+                    version: 0.8.1
         '400':
           $ref: '#/components/responses/NoRequestBody'
         '413':
@@ -3171,7 +3183,8 @@ paths:
       responses:
         '200':
           description: Prometheus exposition, version 0.0.4. Counter values change. See docs/API.md for
-            each series.
+            each series. With LoRA adapters loaded, statim_engines, statim_adapter_info and
+            statim_adapter_bytes follow the lines below.
           content:
             text/plain:
               schema:
@@ -3200,6 +3213,22 @@ paths:
 
                 statim_rejected_busy_total 0
 
+                # HELP statim_batch_size States executed in server-created micro-batches.
+
+                # TYPE statim_batch_size summary
+
+                statim_batch_size_sum 0
+
+                statim_batch_size_count 0
+
+                # HELP statim_batch_wait_ms Time an admitted request waited for compatible peers.
+
+                # TYPE statim_batch_wait_ms summary
+
+                statim_batch_wait_ms_sum 0
+
+                statim_batch_wait_ms_count 0
+
                 # TYPE statim_in_flight gauge
 
                 statim_in_flight 0
@@ -3208,9 +3237,13 @@ paths:
 
                 statim_uptime_seconds 0
 
+                # TYPE statim_workers_busy gauge
+
                 statim_workers_busy{model="english"} 0
 
-                statim_model_info{model="english",weights="f32",version="0.2.1"} 1
+                # TYPE statim_model_info gauge
+
+                statim_model_info{model="english",weights="f32",version="0.8.1"} 1
 
                 '
               x-verify: metrics

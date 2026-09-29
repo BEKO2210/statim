@@ -15,6 +15,18 @@ between minor versions; every change is listed here.
   fact-check suite's items and the category pool fingerprint.
 
 ### Added
+- `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match every
+  place that repeats it (server, SDKs, Space Dockerfile, site, README quick start, client READMEs,
+  API reference and OpenAPI spec);
+  CI runs it first, and `--set x.y.z` bumps all of them for a release.
+- `tools/docs/check_docs.py`, run by CI before the build: every tracked Markdown file and the site
+  are checked for links and anchors (also github.com links into the repository), repository paths,
+  `statim` and script flags in documented commands, and release downloads of the current version.
+  `docs/API.md` and `docs/openapi.yaml` are checked against the C++ source: routes, request and
+  question fields, every HTTP error message, the metric families with the `/metrics` example's
+  TYPE and HELP lines, and every serve flag. Published numbers repeated across README, ROADMAP,
+  BASELINES and the site must equal their source (17 facts). `tools/docs/test_check_docs.py`
+  plants each kind of drift and expects the check to report it.
 - LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
   encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no
   `modules_to_save`, no DoRA, `init_lora_weights` true or gaussian), decision head and token
@@ -37,10 +49,20 @@ between minor versions; every change is listed here.
     output), train split at a pinned commit. 9,133 items: per-type probes de 4,710, en 2,151,
     nl 1,746, plus 526 choice items. The loader re-derives the language of PII-free rows, which are
     partly English under a `de` tag.
+  - PII: `Powpowpow23/ru-pii-ner-data` (Apache-2.0; DeepSeek-written templates filled with
+    fictitious Faker/custom-generator values), 104,111 Russian train rows at a pinned commit.
+    Its 25 nested-span types reuse the existing PII vocabulary; probes respect each row's
+    `supervised_types`, and only the 2,400 explicit negative examples supply document-level “no”.
+    The normal per-source cap prevents the large source from dominating the mixture.
   - Fact-check: no source passed the licence and label checks (38 candidates examined). Emotion,
-    sentiment and safety: nothing kept; four checked candidates are recorded as rejected.
-- Offline tests for the Part G loader and adapter and for the evidence and held-out rules
+    sentiment and safety: nothing kept; 41 checked candidates are recorded as rejected.
+- Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
+
+### Fixed
+- `docs/API.md` still gave 0.2.1 and 0.3.0 as the compiled-in version, and its `/metrics` example and
+  check snippet predated the TYPE lines of `statim_workers_busy` and `statim_model_info` (0.8.0), so
+  the snippet failed against a real server.
 
 ## [0.8.1] - 2026-09-29
 

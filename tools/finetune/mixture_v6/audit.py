@@ -62,6 +62,10 @@ ALLOW = {
         "constant-yes-no": "2-4 % of the documents have no PII span after the loader's language check (219 of "
                            "8,966 train rows); on the full split drop_constant_yes_no removes the pii yes/no "
                            "task (97.6 % yes), a 200-row sample can stay just below 97 %; " + BUILD_BALANCES},
+    "Powpowpow23/ru-pii-ner-data::default": {
+        "constant-yes-no": "only the explicit negative_examples family is a valid no-PII class (2,400 of "
+                           "104,111 train rows); other empty span lists are not negatives because supervision "
+                           "is type-bounded; a sample near the 97 % drop threshold can remain skewed; " + BUILD_BALANCES},
     "gretelai/synthetic_pii_finance_multilingual::default": {
         "constant-yes-no": "about 6 % of the documents have no PII span, the only negatives among the PII "
                            "sources; " + BUILD_BALANCES},

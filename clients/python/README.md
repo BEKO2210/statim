@@ -2,7 +2,9 @@
 
 Official Python client for the [Statim](../../README.md) HTTP API. The package
 is named `statim`, uses only the standard library, and targets the API
-documented in [`docs/API.md`](../../docs/API.md) (server 0.3.0).
+documented in [`docs/API.md`](../../docs/API.md) (server 0.8.1), except LoRA
+adapters (0.8.0): requests cannot select an `adapter` yet, and the adapter
+fields of responses and `/v1/models` are not exposed.
 
 ```sh
 pip install ./clients/python
@@ -113,7 +115,8 @@ env -u STATIM_API_KEY ./build/statim serve \
 python3 -m pytest
 ```
 
-`STATIM_URL` and `STATIM_AUTH_URL` override the two base URLs.
+`STATIM_URL` and `STATIM_AUTH_URL` override the two base URLs. `STATIM_API_KEY_TEST`
+overrides the key for port 8191 (default `sdk-test-key`).
 
 The client source is Apache-2.0, the same as the engine. Model weights are
 covered by `LICENSE-MODEL.md`, not by this package.

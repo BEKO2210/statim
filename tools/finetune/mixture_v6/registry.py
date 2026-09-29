@@ -1180,10 +1180,16 @@ def pii_adapter(entry, rows, seed):
         text, kinds = parsed
         lang = infer_lang(entry, rows[i], text=text)
         rng = seeded(seed, source_key(entry), i, text[:80])
-        yield _noul(entry, rows[i], text, bool(kinds), lang, rng, [text], task="pii")
+        # Most PII sources are exhaustively annotated, so an empty span list is a document-level
+        # negative. Sources with explicit supervision metadata opt out: there, only a row marked
+        # by the loader as an intentional negative may answer the broad PII question with "no".
+        bounded = "_v6_pii_supervised" in rows[i]
+        if kinds or not bounded or rows[i].get("_v6_pii_negative"):
+            yield _noul(entry, rows[i], text, bool(kinds), lang, rng, [text], task="pii")
         # Is one given type present? Unambiguous also when a text holds several types (most do).
         # Half the probes name a type the text holds, half one it does not, so the answer is balanced.
-        absent = [k for k in vocab if k not in kinds]
+        supervised = set(rows[i].get("_v6_pii_supervised", vocab))
+        absent = [k for k in vocab if k not in kinds and k in supervised]
         if kinds and absent:
             probe = rng.choice(kinds) if rng.random() < 0.5 else rng.choice(absent)
             yield _noul(entry, rows[i], text, probe in kinds, lang, rng, [text], task="pii_type",

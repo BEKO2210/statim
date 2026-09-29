@@ -593,7 +593,7 @@ def test_egov_rows_name_the_law_field():
 # =========================================================================== Part G sources
 # Sources added for the categories where 0.7.0 trails Qwen3-8B zero-shot (source_part G in v6-keep.json).
 
-PART_G_IDS = {"naeyn/nobody-pii-synth-de"}
+PART_G_IDS = {"naeyn/nobody-pii-synth-de", "Powpowpow23/ru-pii-ner-data"}
 
 
 def test_part_g_sources_are_enabled_with_evidence_and_pinned():
@@ -606,6 +606,15 @@ def test_part_g_sources_are_enabled_with_evidence_and_pinned():
         assert re.fullmatch(r"[0-9a-f]{40}", e["pinned_commit"]), sid
     assert loaders.NOBODY_PII["revision"] == enabled["naeyn/nobody-pii-synth-de"]["pinned_commit"]
     assert loaders.NOBODY_PII["file"] == "data/train.parquet"  # never validation or test
+    assert loaders.RU_PII["revision"] == enabled["Powpowpow23/ru-pii-ner-data"]["pinned_commit"]
+    assert loaders.RU_PII["file"] == "data/train.parquet"  # validation was the author's development split
+    ru = enabled["Powpowpow23/ru-pii-ner-data"]
+    assert ru["languages"] == ["ru"] and ru["label_field"].startswith("entities")
+    assert ru["text_fields"] == ["text"] and ru["test_overlap_note"]
+    assert ru["licence"].startswith("apache-2.0") and "DeepSeek" in ru["provenance"]
+    assert all(ru["pinned_commit"] in url for url in ru["licence_evidence"][:2])
+    assert "104,111" in ru["provenance"] and "2,400" in ru["provenance"]
+    assert "0 exact matches" in ru["test_overlap_note"] and "29,767" in ru["test_overlap_note"]
     rejected = [e for e in raw if e.get("source_part") == "G" and e.get("use") is False]
     assert rejected and all(e["excluded_reason"] for e in rejected)
 
@@ -653,6 +662,53 @@ def test_nobody_pii_adapter_asks_both_answers():
     probes = [it for it in items if it.get("_task") == "pii_type"]
     assert probes and {"yes", "no"} <= set(_golds(probes, "noul"))
 
+
+def test_ru_pii_rows_map_all_types_and_keep_supervision_and_negative_family():
+    assert len(loaders.RU_PII_TYPES) == 25
+    records = [
+        {"text": "ФИО: Анна Петрова, телефон +7 000 111-22-33.",
+         "entities": [{"type": "FULL_NAME", "start": 5, "end": 18},
+                      {"type": "PHONE", "start": 28, "end": 44}],
+         "supervised_types": ["FULL_NAME", "PHONE", "EMAIL"], "source_families": ["scenarios"]},
+        {"text": "Сегодня отделение работает до шести.", "entities": [],
+         "supervised_types": list(loaders.RU_PII_TYPES), "source_families": ["negative_examples"]},
+        {"text": "", "entities": [], "supervised_types": ["EMAIL"], "source_families": []},
+    ]
+    rows = loaders.ru_pii_rows(records)
+    assert rows == [
+        {"text": records[0]["text"],
+         "entities": [{"start": 5, "end": 18, "label": "person"},
+                      {"start": 28, "end": 44, "label": "phone number"}],
+         "_v6_lang": "ru", "_v6_pii_supervised": ["person", "phone number", "email"],
+         "_v6_pii_negative": False},
+        {"text": records[1]["text"], "entities": [], "_v6_lang": "ru",
+         "_v6_pii_supervised": list(loaders.RU_PII_TYPES.values()), "_v6_pii_negative": True},
+    ]
+
+
+def test_ru_pii_adapter_respects_supervised_types_and_explicit_negatives():
+    e = entry("Powpowpow23/ru-pii-ner-data")
+    records = [
+        {"text": "ФИО: Анна Петрова.",
+         "entities": [{"type": "FULL_NAME", "start": 5, "end": 18}],
+         "supervised_types": ["FULL_NAME"], "source_families": ["scenarios"]},
+        {"text": "Напишите на user1@example.invalid.",
+         "entities": [{"type": "EMAIL", "start": 12, "end": 33}],
+         "supervised_types": ["EMAIL", "FULL_NAME"], "source_families": ["scenarios"]},
+        {"text": "В сообщении нет целевых персональных данных.", "entities": [],
+         "supervised_types": list(loaders.RU_PII_TYPES), "source_families": ["negative_examples"]},
+        {"text": "Пустая разметка другого семейства.", "entities": [],
+         "supervised_types": ["EMAIL"], "source_families": ["addresses"]},
+    ]
+    rows = loaders.ru_pii_rows(records)
+    raw = list(registry.ADAPTERS[registry.source_key(e)](e, rows, 7))
+    broad = [it for it in raw if it.get("_task") == "pii"]
+    assert {it["state"] for it in broad} == {records[0]["text"], records[1]["text"], records[2]["text"]}
+    assert _golds(broad, "noul") == {"yes": 2, "no": 1}
+    probes = [it for it in raw if it.get("_task") == "pii_type"]
+    # The FULL_NAME-only row cannot be asked about the email type present elsewhere in the sample.
+    assert not any(it["state"] == records[0]["text"] for it in probes)
+    assert probes and all(it["lang"] == "ru" for it in probes)
 
 
 def test_every_gloss_is_reachable_after_canon():

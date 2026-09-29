@@ -803,6 +803,22 @@ NOBODY_PII = {"repo": "naeyn/nobody-pii-synth-de", "file": "data/train.parquet",
               "revision": "f78fcbcad638f5e7f69bfe55a8ebd508e32c3731"}
 NOBODY_PII_LANGS = ("de", "en", "nl")
 
+# Powpowpow23 uses API-style uppercase labels. Reuse the established human-readable labels from
+# nym (drivers license, tax id, ...) and nobody-pii (person, date of birth, address, phone number)
+# where the meanings match; keep the source's more specific Russian document/address labels.
+RU_PII_TYPES = {
+    "FULL_NAME": "person", "DATE_OF_BIRTH": "date of birth", "BIRTH_PLACE": "birth place",
+    "PASSPORT": "passport", "CITIZENSHIP": "citizenship", "PASSPORT_ISSUER": "passport issuer",
+    "DEPARTMENT_CODE": "department code", "PASSPORT_ISSUE_DATE": "passport issue date",
+    "DRIVER_LICENSE": "drivers license", "ADDRESS": "address", "COUNTRY": "country",
+    "POSTCODE": "zip code", "CITY": "city", "STREET": "street name", "HOUSE": "building number",
+    "APARTMENT": "apartment", "EMAIL": "email", "PHONE": "phone number", "INN": "tax id",
+    "CARD_NUMBER": "credit debit card", "CVV": "cvv", "PIN": "pin",
+    "CARDHOLDER_NAME": "cardholder name", "REGION": "region", "DISTRICT": "district",
+}
+RU_PII = {"repo": "Powpowpow23/ru-pii-ner-data", "file": "data/train.parquet",
+          "revision": "55acbec07fb04a18455111a34337cb515a7f821e"}
+
 
 def nobody_pii_rows(records):
     """(text, entities) rows of naeyn/nobody-pii-synth-de. ``ner`` holds token spans {start, end, label}
@@ -835,6 +851,41 @@ def _load_nobody_pii(limit):
     path = _hub(NOBODY_PII["repo"], NOBODY_PII["file"], NOBODY_PII["revision"])
     records = pq.read_table(path, columns=["text", "ner", "lang"]).to_pylist()
     return _balanced_by(nobody_pii_rows(records), limit, "_v6_lang", "nobody_pii")
+
+
+def ru_pii_rows(records):
+    """Normalise the Russian character spans and retain the row's supervision boundary.
+
+    ``supervised_types`` is essential: a missing entity is negative only for a type in that list.
+    Likewise, only the explicitly generated ``negative_examples`` family is a document-level
+    no-PII example; another row with no entities is neither positive nor negative for that task.
+    """
+    out = []
+    for rec in records:
+        text = str(rec.get("text") or "").strip()
+        entities, supervised = rec.get("entities"), rec.get("supervised_types")
+        families = rec.get("source_families")
+        if not text or not isinstance(entities, list) or not isinstance(supervised, list):
+            continue
+        spans = []
+        for span in entities:
+            if not isinstance(span, dict) or span.get("type") not in RU_PII_TYPES:
+                continue
+            spans.append({"start": span.get("start"), "end": span.get("end"),
+                          "label": RU_PII_TYPES[span["type"]]})
+        supervised = list(dict.fromkeys(RU_PII_TYPES[k] for k in supervised if k in RU_PII_TYPES))
+        if not supervised:
+            continue
+        out.append({"text": text, "entities": spans, "_v6_lang": "ru",
+                    "_v6_pii_supervised": supervised,
+                    "_v6_pii_negative": isinstance(families, list) and "negative_examples" in families})
+    return out
+
+
+def _load_ru_pii(limit):
+    path = _hub(RU_PII["repo"], RU_PII["file"], RU_PII["revision"])
+    records = sample_parquet(path, limit, columns=["text", "entities", "supervised_types", "source_families"])
+    return ru_pii_rows(records)
 
 def _spread(rows, limit):
     if len(rows) <= limit:
@@ -1034,6 +1085,7 @@ _DISPATCH = {
     "hheiden/us-congress-bill-policy-115_117": lambda entry, limit: _load_congress(limit),
     "nlp-waseda/e_gov": lambda entry, limit: _load_egov(limit),
     "naeyn/nobody-pii-synth-de": lambda entry, limit: _load_nobody_pii(limit),
+    "Powpowpow23/ru-pii-ner-data": lambda entry, limit: _load_ru_pii(limit),
 }
 
 
