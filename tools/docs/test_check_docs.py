@@ -98,7 +98,7 @@ class ServerChecks(Tree):
 class FactChecks(Tree):
     def setUp(self):
         super().setUp()
-        for rel in ("docs/ROADMAP.md", "docs/BASELINES.md", "site/index.html"):
+        for rel in sorted({path for _, places in check_docs.FACTS for path, _ in places}):
             (self.tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(REAL / rel, self.tmp / rel)
 
