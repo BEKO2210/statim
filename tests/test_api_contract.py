@@ -32,8 +32,10 @@ try:
     from referencing import Registry, Resource
     from referencing.jsonschema import DRAFT202012
 except ImportError as exc:
-    print(f"SKIP: API contract test requires PyYAML and jsonschema ({exc})", flush=True)
-    raise SystemExit(77)
+    # CI sets STATIM_CONTRACT_REQUIRED=1: there a missing dependency is a failure, not a skip
+    required = os.environ.get("STATIM_CONTRACT_REQUIRED") == "1"
+    print(f"{'FAIL' if required else 'SKIP'}: API contract test requires PyYAML and jsonschema ({exc})", flush=True)
+    raise SystemExit(1 if required else 77)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -290,6 +292,9 @@ def main():
     try:
         reserve_port()
     except PermissionError:
+        if os.environ.get("STATIM_CONTRACT_REQUIRED") == "1":
+            print("FAIL: cannot bind localhost, and STATIM_CONTRACT_REQUIRED=1", flush=True)
+            return 1
         print("SKIP: sandbox cannot bind localhost; static response examples passed", flush=True)
         return 77
 

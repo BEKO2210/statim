@@ -24,9 +24,11 @@ jobs:
         run: tools/fetch_models.sh multilingual english
       - name: Build (portable x86-64-v3)
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF -DPython3_EXECUTABLE="$(command -v python3)"
           cmake --build build
       - name: Parity gates vs. the official Laya package
+        env:
+          STATIM_CONTRACT_REQUIRED: "1"  # the API contract test must run in CI, never skip
         run: ctest --test-dir build --output-on-failure -E lora
       - name: LoRA gates (verbose, so the measured differences stay in the log)
         run: ctest --test-dir build -R lora -V
