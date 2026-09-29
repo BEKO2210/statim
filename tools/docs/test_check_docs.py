@@ -20,7 +20,7 @@ SERVER_FILES = ["src/server.cpp", "src/security.cpp", "src/main.cpp", "src/engin
 
 class Tree(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp()).resolve()  # links resolve symlinks (macOS /var)
         check_docs.ROOT = self.tmp
         check_docs.anchors.__defaults__[0].clear()
         for rel in SERVER_FILES + ["README.md"]:
@@ -155,6 +155,14 @@ class DocChecks(Tree):
         repo = "https://github.com/BEKO2210/statim"
         self.assertEqual(found, ["site/x.html: link to missing anchor %s#no-such-heading" % repo,
                                  "site/x.html: link to missing %s/blob/main/docs/NOPE.md" % repo])
+
+    def test_fences(self):
+        text = ("# Kept\n\n~~~sh\n# not a heading\nstatim serve --turbo\n~~~\n\n    ```\nnot a fence (four spaces)\n"
+                "````\n```\n# still code: a shorter fence does not close\n````\n[a](#kept) [b](#not-a-heading)\n")
+        found = self.run_file("docs/F.md", text)
+        self.assertEqual(len(found), 2)
+        self.assertIn("docs/F.md: link to missing anchor #not-a-heading", found)
+        self.assertTrue(any(p.startswith("docs/F.md: statim does not parse --turbo") for p in found))
 
     def test_paths(self):
         found = self.run_file("docs/X.md", "`docs/API.md` `tools/nope.py` `models/<name>.gguf` `src/server.cpp:12-30`")

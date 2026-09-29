@@ -55,18 +55,38 @@ def slug(heading):
     return text.replace(" ", "-")
 
 
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+
+
+def split_fences(text):
+    """CommonMark fenced code blocks: (the text outside them, [(info string, code), ...]). A fence is
+    ``` or ~~~ (three or more), indented at most three spaces, closed by the same character at least
+    as long; an unclosed fence runs to the end."""
+    prose, blocks, fence, info, code = [], [], None, "", []
+    for line in text.splitlines():
+        m = FENCE.match(line)
+        if fence is None:
+            if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+                fence, info, code = m.group(1), m.group(2).strip(), []
+            else:
+                prose.append(line)
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+            blocks.append((info, "\n".join(code)))
+            fence = None
+        else:
+            code.append(line)
+    if fence is not None:
+        blocks.append((info, "\n".join(code)))
+    return "\n".join(prose), blocks
+
+
 def anchors(path, cache={}):
     if path not in cache:
         text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
         found = set()
         if path.endswith(".md"):
             seen = {}
-            in_code = False
-            for line in text.splitlines():
-                if line.startswith("```"):
-                    in_code = not in_code
-                if in_code:
-                    continue
+            for line in split_fences(text)[0].splitlines():
                 m = re.match(r"#{1,6}\s+(.*?)\s*#*\s*$", line)
                 if m:
                     s = slug(m.group(1))
@@ -80,8 +100,7 @@ def anchors(path, cache={}):
 
 def check_links(path, text, problems):
     if path.endswith(".md"):
-        text = re.sub(r"```.*?```", "", text, flags=re.S)
-        text = re.sub(r"`[^`\n]*`", "", text)
+        text = re.sub(r"`[^`\n]*`", "", split_fences(text)[0])
         targets = re.findall(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", text)
         targets += re.findall(r'(?:href|src|srcset)="([^"]+)"', text)
     else:
@@ -147,12 +166,14 @@ def script_flags(script, cache={}):
 
 def commands(text):
     """Documented shell commands: fenced blocks and inline code, joined across line continuations."""
-    blocks = re.findall(r"```(?:bash|sh|shell|console|text)?\n(.*?)```", text, re.S)
+    prose, blocks = split_fences(text)
     lines = []
-    for b in blocks:
+    for info, b in blocks:
+        if info.split()[:1] not in ([], ["bash"], ["sh"], ["shell"], ["console"], ["text"]):
+            continue
         joined = re.sub(r"\\\n\s*", " ", b)
         lines += [l.strip() for l in joined.splitlines()]
-    lines += re.findall(r"`((?:\./|\.venv[\w-]*/bin/)?(?:python3?|statim|\S*/statim)\s[^`]+)`", text)
+    lines += re.findall(r"`((?:\./|\.venv[\w-]*/bin/)?(?:python3?|statim|\S*/statim)\s[^`]+)`", prose)
     return lines
 
 
@@ -258,7 +279,7 @@ def check_server(problems):
         for name in re.findall(r"# TYPE (statim_\w+)", handler):
             if not token(name, text):
                 problems.append("%s: metric family %s is not mentioned" % (path, name))
-        examples = re.findall(r"```.*?```", text, re.S) if path.endswith(".md") else [text]
+        examples = [code for _, code in split_fences(text)[1]] if path.endswith(".md") else [text]
         for block in examples:
             shown = re.findall(r"# TYPE (statim_\w+) (\w+)", block)
             if shown and shown != families:
@@ -420,7 +441,8 @@ def main():
     v = subprocess.run([sys.executable, str(ROOT / "tools" / "release" / "check_versions.py")],
                        capture_output=True, text=True)
     if v.returncode:
-        problems += ["versions: " + l for l in v.stdout.splitlines() if not l.startswith(version + ":")]
+        found = ["versions: " + l for l in v.stdout.splitlines() if not l.startswith(version + ":")]
+        problems += found or ["versions: check_versions.py exited %d: %s" % (v.returncode, v.stderr.strip()[-500:])]
     for p in problems:
         print(p)
     if a.verbose:
