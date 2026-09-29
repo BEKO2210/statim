@@ -30,9 +30,14 @@ between minor versions; every change is listed here.
     output), train split at a pinned commit. 9,133 items: per-type probes de 4,710, en 2,151,
     nl 1,746, plus 526 choice items. The loader re-derives the language of PII-free rows, which are
     partly English under a `de` tag.
+  - PII: `Powpowpow23/ru-pii-ner-data` (Apache-2.0; DeepSeek-written templates filled with
+    fictitious Faker/custom-generator values), 104,111 Russian train rows at a pinned commit.
+    Its 25 nested-span types reuse the existing PII vocabulary; probes respect each row's
+    `supervised_types`, and only the 2,400 explicit negative examples supply document-level “no”.
+    The normal per-source cap prevents the large source from dominating the mixture.
   - Fact-check: no source passed the licence and label checks (38 candidates examined). Emotion,
     sentiment and safety: nothing kept; four checked candidates are recorded as rejected.
-- Offline tests for the Part G loader and adapter and for the evidence and held-out rules
+- Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
 
 ## [0.8.1] - 2026-09-29

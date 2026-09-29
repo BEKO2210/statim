@@ -5,6 +5,7 @@ import copy
 
 import pytest
 
+from tools.finetune.mixture_v6 import loaders
 from tools.finetune.mixture_v6.build import clean_items, question_key, valid_item
 from tools.finetune.mixture_v6.languages import infer_lang, to_iso
 from tools.finetune.mixture_v6.loaders import choose_explicit_file, script_free_data_files
@@ -36,6 +37,11 @@ SPECIAL_FIXTURES = {
         {"text": "Bitte überweisen Sie den Betrag auf DE35703188546038719758, Kontoinhaber Jan Weber.",
          "entities": [{"label": "iban"}, {"label": "person"}], "_v6_lang": "de"},
         {"text": "Der Geschäftsführer hält auf der Messe eine Keynote.", "entities": [], "_v6_lang": "de"}],
+    "Powpowpow23/ru-pii-ner-data": [
+        {"text": "ФИО: Анна Петрова", "entities": [{"label": "person"}], "_v6_lang": "ru",
+         "_v6_pii_supervised": ["person", "phone number"], "_v6_pii_negative": False},
+        {"text": "Отчёт готов к отправке.", "entities": [], "_v6_lang": "ru",
+         "_v6_pii_supervised": list(loaders.RU_PII_TYPES.values()), "_v6_pii_negative": True}],
     "Wismut/nym-pii-multilingual-data": [
         {"text": _PII_TEXT, "entities": [{"start": 5, "end": 14, "label": "NAME"}]},
         {"text": "The meeting is on the third floor.", "entities": []}],
