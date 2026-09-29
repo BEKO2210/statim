@@ -7,6 +7,15 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Fixed
+- Fact-check options `check worthy` and `non factual` had no description, in the training items and
+  in the held-out suite: their gloss keys kept the hyphen (`check-worthy`, `non-factual`) that
+  `registry.canon()` turns into a space. `templates.describe()` now matches labels regardless of
+  separators, and a test requires every gloss to be reachable in every language. This changes the
+  fact-check suite's items and the category pool fingerprint. The baselines answered the 150
+  fact-check items again: Qwen3-8B 0.493 → 0.513 (its 14-category mean 0.704 → 0.706); Statim
+  (0.313) and mDeBERTa-XNLI (0.347) are unchanged.
+
 ### Added
 - `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match every
   place that repeats it (server, SDKs, Space Dockerfile, site, README quick start, client READMEs,

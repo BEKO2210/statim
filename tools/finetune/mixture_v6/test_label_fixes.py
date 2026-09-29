@@ -709,3 +709,18 @@ def test_ru_pii_adapter_respects_supervised_types_and_explicit_negatives():
     # The FULL_NAME-only row cannot be asked about the email type present elsewhere in the sample.
     assert not any(it["state"] == records[0]["text"] for it in probes)
     assert probes and all(it["lang"] == "ru" for it in probes)
+
+
+def test_every_gloss_is_reachable_after_canon():
+    """describe() receives canonical labels (registry.canon: separators become spaces), while GLOSSES
+    keeps the source spelling ("check-worthy"). Every description must still be found, in every
+    language, and two keys of one table may collapse to the same label only with the same text
+    (toxicity lists "not hate" and "nothate" both)."""
+    from tools.finetune.mixture_v6 import templates
+    for category, by_lang in templates.GLOSSES.items():
+        for lang, table in by_lang.items():
+            seen = {}
+            for key, gloss in table.items():
+                assert seen.setdefault(templates._squash(key), gloss) == gloss, (category, lang, key)
+            for key, gloss in table.items():
+                assert templates.describe(category, registry.canon(key), lang) == gloss, (category, lang, key)
