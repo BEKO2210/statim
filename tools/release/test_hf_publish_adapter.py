@@ -260,6 +260,8 @@ class PublishAdapterTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         card = (self.out / "README.md").read_text(encoding="utf-8")
         self.assertIn("## Checked on the published files", card)
+        self.assertIn("**2.25 SE = ", card)  # the fixture's z, never a hard-coded 2
+        self.assertIn("This run used 2.25 standard errors.", card)
         self.assertIn("| f32 | — | 0.3750 | 0.8750 | +50.00 | yes |", card)
         self.assertIn("| q8_0 | — | 0.3750 | 0.7500 | +37.50 | no |", card)
         for filename in (

@@ -434,20 +434,21 @@ def card(args, name, category_record, train, sources, baselines, adapter_sha, pe
               f"{base_name}-q8_0.gguf")
     repo_id = args.upload or f"{args.base_repo.split('/', 1)[0]}/{name}"
     family = category_record["family"]
+    z_label = f"{args.protocol['z']:g}"
     pooling_keys = ("delta", "se", "flag")
     if all(family["rows"].get(key) == family["suites"].get(key) for key in pooling_keys):
         family_result = (
             f"The pooled family change is **{family['rows']['delta'] * 100:+.2f} points** with "
-            f"**2 SE = {args.protocol['z'] * family['rows']['se'] * 100:.2f} points** "
+            f"**{z_label} SE = {args.protocol['z'] * family['rows']['se'] * 100:.2f} points** "
             f"({family['rows']['flag']})."
         )
     else:
         family_result = (
             f"Pooled by rows, the family change is **{family['rows']['delta'] * 100:+.2f} points** with\n"
-            f"**2 SE = {args.protocol['z'] * family['rows']['se'] * 100:.2f} points** "
+            f"**{z_label} SE = {args.protocol['z'] * family['rows']['se'] * 100:.2f} points** "
             f"({family['rows']['flag']}). Pooled by suites, it is "
             f"**{family['suites']['delta'] * 100:+.2f} points** with\n"
-            f"**2 SE = {args.protocol['z'] * family['suites']['se'] * 100:.2f} points** "
+            f"**{z_label} SE = {args.protocol['z'] * family['suites']['se'] * 100:.2f} points** "
             f"({family['suites']['flag']})."
         )
     version_display = re.sub(r"^statim\s+", "", statim_version, flags=re.I)
@@ -523,9 +524,9 @@ Each cell uses {args.protocol['n']} items (seed {args.protocol['seed']}).
 
 {family_result}
 
-A single cell of {args.protocol['n']} items rarely clears 2 SE on its own; the decision uses the pooled family.
+A single cell of {args.protocol['n']} items rarely clears {z_label} SE on its own; the decision uses the pooled family.
 
-Decision rule: {decision_rule()}
+Decision rule: {decision_rule()}{'' if args.protocol['z'] == 2 else ' This run used ' + z_label + ' standard errors.'}
 
 Statim is trained on this category, while [Qwen3-8B runs zero-shot]({GITHUB}/blob/main/docs/BASELINES.md).
 
