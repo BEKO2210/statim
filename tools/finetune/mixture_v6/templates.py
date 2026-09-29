@@ -1,6 +1,7 @@
 """Deterministic multilingual question templates and option handling."""
 
 import random
+import re
 
 LANGUAGES = ("en", "de", "fr", "es", "it", "pt", "nl", "pl", "tr", "ru", "ar", "hi", "ja", "zh")
 
@@ -2288,6 +2289,12 @@ def instruction(kind, item_lang, rng, category=None, **fmt):
     return _fill(rng.choice(bank), fmt), lang
 
 
+def _squash(label):
+    """A label without case and separators: registry.canon() turns "check-worthy" into "check worthy"
+    and "nothate" into "not hate", while GLOSSES keeps the source's spelling."""
+    return re.sub(r"[\s_./-]+", "", str(label).strip().lower())
+
+
 def describe(category, label, lang):
     """Short description in ``lang`` for a fixed label, otherwise the humanised id."""
     key = str(label).strip().lower()
@@ -2295,6 +2302,9 @@ def describe(category, label, lang):
     table = GLOSSES.get(category or "", {}).get(gloss_lang, {})
     if key in table:
         return table[key]
+    squashed = {_squash(k): v for k, v in table.items()}
+    if _squash(key) in squashed:
+        return squashed[_squash(key)]
     if category == "language_id" and key in _LANG_NAMES:
         names = _LANG_NAMES[key]
         idx = LANGUAGES.index(lang) if lang in LANGUAGES else 0

@@ -7,6 +7,13 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+### Fixed
+- Fact-check options `check worthy` and `non factual` had no description, in the training items and
+  in the held-out suite: their gloss keys kept the hyphen (`check-worthy`, `non-factual`) that
+  `registry.canon()` turns into a space. `templates.describe()` now matches labels regardless of
+  separators, and a test requires every gloss to be reachable in every language. This changes the
+  fact-check suite's items and the category pool fingerprint.
+
 ### Added
 - LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
   encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no

@@ -653,3 +653,18 @@ def test_nobody_pii_adapter_asks_both_answers():
     probes = [it for it in items if it.get("_task") == "pii_type"]
     assert probes and {"yes", "no"} <= set(_golds(probes, "noul"))
 
+
+
+def test_every_gloss_is_reachable_after_canon():
+    """describe() receives canonical labels (registry.canon: separators become spaces), while GLOSSES
+    keeps the source spelling ("check-worthy"). Every description must still be found, in every
+    language, and two keys of one table may collapse to the same label only with the same text
+    (toxicity lists "not hate" and "nothate" both)."""
+    from tools.finetune.mixture_v6 import templates
+    for category, by_lang in templates.GLOSSES.items():
+        for lang, table in by_lang.items():
+            seen = {}
+            for key, gloss in table.items():
+                assert seen.setdefault(templates._squash(key), gloss) == gloss, (category, lang, key)
+            for key, gloss in table.items():
+                assert templates.describe(category, registry.canon(key), lang) == gloss, (category, lang, key)
