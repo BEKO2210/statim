@@ -72,15 +72,15 @@ Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, as
 
 ```bash
 # 1. Download the engine (3 MB) and the multilingual model (357 MB), and verify both
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.7/statim-0.8.7-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.7/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.7-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.0/statim-0.9.0-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.0/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.0-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 
 # 2. Start the server (it keeps running; it is ready when it logs "listening")
-./statim-0.8.7-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
+./statim-0.9.0-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
 
 # 3. In a second terminal: one ticket, three typed questions
 curl -s localhost:8080/v1/systemone -d '{
@@ -189,6 +189,8 @@ hf download Beko2210/statim-decide-en-large statim-decide-en-large-q8_0.gguf --l
 The single-state response returns `model`, `answers`, `usage`, and `routing`. Batch requests use
 shared questions and packed forward passes. The playground is enabled by default. Prometheus covers
 request, latency, token, concurrency, worker, batch, model, and adapter metrics.
+
+API v1 is frozen as of 0.9.0; contract and real-server tests reject breaking changes in CI.
 
 Requests contain `state` and `questions`, with optional `model`, `adapter`, `lang`,
 `min_confidence`, `return_logits`, `calibrate`, and `ensemble`. `model` may select a loaded model or
@@ -417,9 +419,9 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.8.7: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.8.7 makes the README readable on
-phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
+The current release is v0.9.0: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.9.0 freezes HTTP API v1, with contract
+tests against the real server; 0.8.7 makes the README readable on phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
 the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
 the comparison with a local LLM and an NLI classifier, fuzzing in CI, load-time model and adapter
@@ -427,8 +429,8 @@ validation, and a warning when a non-loopback server starts without authenticati
 category adapters are published: PII, emotion and safety ([docs/ADAPTERS.md](docs/ADAPTERS.md)).
 Next, sentiment and fact-check need more data or larger held-out samples.
 
-Before 1.0, the HTTP API may change between minor versions. See the [changelog](CHANGELOG.md) and
-[roadmap](docs/ROADMAP.md).
+Since 0.9.0, API v1 accepts only additive changes; breaking changes require a new major version.
+See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
 
 ## Licence
 
