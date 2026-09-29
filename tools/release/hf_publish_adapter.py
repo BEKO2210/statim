@@ -440,6 +440,10 @@ def card(args, name, category_record, train, sources, baselines, adapter_sha, pe
     args.protocol = {key: args.summary[key] for key in PROTOCOL_KEYS}
     args.protocol["eval_skip"] = args.summary.get("eval_skip", 0)
     args.scored_items = scored_items(cells)
+    expected = args.protocol["n"] - args.protocol["eval_skip"]
+    if args.scored_items != expected:
+        raise ValueError(f"cells scored {args.scored_items} items, but the draw of {args.protocol['n']} "
+                         f"minus skip {args.protocol['eval_skip']} is {expected}")
     head = yaml_front_matter(args, name, cells)
     same_items_as_baselines = args.protocol["eval_skip"] == 0
     if not same_items_as_baselines:
@@ -774,7 +778,9 @@ def main(argv=None):
         adapter_meta = adapter_metadata(required[0])
         registry = read_json(ROOT / "tools" / "finetune" / "sources" / "v6-keep.json")
         sources = source_records(train, registry)
-        baselines = baseline_scores(args.category, [cell["lang"] for cell in record["cells"]])
+        # BASELINES measured the first draw's items; a fresh-item run is not compared with them
+        baselines = ({} if summary.get("eval_skip", 0) > 0 else
+                     baseline_scores(args.category, [cell["lang"] for cell in record["cells"]]))
         version, checks = load_checks(args, required[0], adapter_meta)
         published = published_checks(args, required[4], required[5])
         roots = [ROOT, repo_root(work)]

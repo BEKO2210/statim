@@ -336,6 +336,24 @@ class PublishAdapterTest(unittest.TestCase):
         self.assertEqual(tool.licence_display({"licence": "cc-by-4.0 (upstream README)"}), "CC-BY-4.0")
         self.assertEqual(tool.source_url({"id": "owner/name (a note)"}), "https://huggingface.co/datasets/owner/name")
 
+    def test_scored_count_must_match_draw_minus_skip(self):
+        self.summary["eval_skip"] = 5
+        for cell in self.summary["categories"]["pii"]["cells"]:
+            cell["n_base"] = cell["n_adapter"] = 31  # the draw of 37 minus 5 leaves 32
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("minus skip 5 is 32", run.stderr + run.stdout)
+
+    def test_fresh_items_need_no_baseline_row(self):
+        self.summary["eval_skip"] = 5
+        for cell in self.summary["categories"]["pii"]["cells"]:
+            cell["n_base"] = cell["n_adapter"] = 32
+            cell["lang"] = "xx"  # no BASELINES row has this language
+        (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")
+        run = self.run_tool()
+        self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_single_cell_card_has_no_pooling_sentence(self):
         self.summary["categories"]["pii"]["cells"] = self.summary["categories"]["pii"]["cells"][:1]
         (self.work / "summary.json").write_text(json.dumps(self.summary), encoding="utf-8")

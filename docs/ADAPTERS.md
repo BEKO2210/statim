@@ -133,6 +133,17 @@ on items the first run never scored.
     --statim build-vk/statim --device cuda --server-device vulkan --work models/lora-exp1
 ```
 
+The safety replication reuses the trained adapter (`--skip-train`) in a work dir of its own and
+scores the fresh items:
+
+```sh
+mkdir -p models/lora-exp1-safety-rep && cp -r models/lora-exp1/safety models/lora-exp1-safety-rep/
+.venv-train/bin/python tools/finetune/lora_experiment.py --base-checkpoint models/laya-multilingual-v9 \
+    --base-gguf models/laya-multilingual-v9-f32.gguf --mixture data/mixture-v8.jsonl.gz \
+    --statim build-vk/statim --device cuda --server-device vulkan --categories safety --skip-train \
+    --work models/lora-exp1-safety-rep --n 1500 --eval-skip 150 --seed 20260927
+```
+
 - `models/laya-multilingual-v9` is the 0.7.0 checkpoint, and `models/laya-multilingual-v9-f32.gguf`
   is its conversion (`tools/convert_laya.py`).
 - `data/mixture-v8.jsonl.gz` is the 0.7.0 training mixture
