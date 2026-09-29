@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- `docs/ORT.md` and `bench/ort_export.py` / `bench/ort_compare.py`: a parity-gated, reproducible
+  CPU comparison with ONNX Runtime, including faithful request packing and answer semantics, raw and
+  HTTP protocols, cold-start/RSS and footprint accounting, and generated Markdown tables.
+
 ## [0.9.0] - 2026-09-29
 
 HTTP API v1 is frozen. From this release on, the API changes only in additive ways until a new

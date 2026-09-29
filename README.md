@@ -37,6 +37,7 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
   [category adapters](docs/ADAPTERS.md)
 - **[Ticket triage example](examples/ticket-triage)**: a complete application in ten minutes
 - **[Reproduce every number](REPRODUCE.md)** with the scripts in this repository
+- **[Statim vs ONNX Runtime](docs/ORT.md)**: parity-gated CPU protocol and reproducible comparison
 
 ## At a glance
 
