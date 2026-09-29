@@ -7,6 +7,23 @@ between minor versions; every change is listed here.
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-09-29
+
+### Changed
+- The README reads well on a phone. On narrow screens GitHub squeezes tables, so cells of prose
+  wrapped word by word; "At a glance" took 181 px per row at 390 px width.
+  - Every table now holds short cells. Protocols, conditions and ratios moved to short lists
+    directly below. Rendered with GitHub's own Markdown API at 390 px, no table exceeds 69 px per
+    row or scrolls sideways.
+  - The link line became a list: live demo, models and adapters, the example, and reproduction.
+  - "At a glance" compares Statim with Qwen3-8B.
+  - Models, API, performance, baselines and the model gates use narrow, natural labels.
+  - The licence is a list.
+  - Every number of the previous README is still there and keeps its condition next to it, for
+    example 2.1× with 4 clients. A script and a read-only review checked this.
+- `check_docs.py` FACTS can be scoped to a section heading, so the same label in two README tables
+  is read in its own table. A test covers it.
+
 ## [0.8.6] - 2026-09-29
 
 ### Changed
@@ -663,7 +680,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.6...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.8.7...HEAD
+[0.8.7]: https://github.com/BEKO2210/statim/compare/v0.8.6...v0.8.7
 [0.8.6]: https://github.com/BEKO2210/statim/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/BEKO2210/statim/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/BEKO2210/statim/compare/v0.8.3...v0.8.4

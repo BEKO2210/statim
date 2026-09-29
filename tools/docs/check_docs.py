@@ -334,73 +334,93 @@ ML = r"\[statim-decide-multilingual-base [^]]*\]\([^)]*\)"
 # Every published number that the docs repeat. The first place is the source: after a new model or
 # baseline run, change it there, and this check lists every copy still to update. A place whose
 # wording changed so that its pattern no longer matches is reported too, never skipped.
-FACTS = [
+class _Facts(list):
+    """Published facts whose places are ``(path, pattern)`` or ``(path, pattern, heading)``.
+
+    A heading scopes the search to that Markdown section: from the exact heading line through the
+    line before the next heading at the same or a higher level. Use it when natural labels repeat in
+    different sections of a document.
+    """
+
+
+FACTS = _Facts([
     ("engine binary size", [
-        ("README.md", r"\| Runtime \| Python 3\.10\+, PyTorch, transformers \| One (\d+(?:\.\d+)?) MB binary"),
-        ("README.md", r"\| Runtime footprint \| PyTorch alone ≥ 1\.2 GB \| \*\*(\d+(?:\.\d+)?) MB\*\* binary"),
+        ("README.md", r"Statim uses one (\d+(?:\.\d+)?) MB binary", "## Why Statim"),
+        ("README.md", r"\| Runtime footprint \| PyTorch ≥ 1\.2 GB \| \*\*(\d+(?:\.\d+)?) MB\*\*", "### CPU performance"),
         ("site/index.html", r'content="Choice, score and yes/no answers with calibrated confidence from a (\d+(?:\.\d+)?) MB C\+\+ binary'),
         ("site/index.html", r"<li>(\d+(?:\.\d+)?) MB static binary</li>"),
         ("site/index.html", r'<span class="to">One (\d+(?:\.\d+)?) MB binary and one \.gguf file</span>')]),
     ("en-large typed-decisions", [
-        ("README.md", cell(EN, 2)), ("README.md", after("| English 0.5.0 |", "typed-decisions " + NUM)),
+        ("README.md", cell("typed-decisions", 0), "## Models"),
+        ("README.md", cell("typed-decisions", 0), "### Published model gates"),
         ("docs/ROADMAP.md", after("| typed-decisions test |", NUM + " statim-decide-en-large")),
         ("site/index.html", site_card("Statim Decide EN Large", "typed-decisions"))] + site_strip("typed-decisions")),
     ("en-large Banking77", [
-        ("README.md", cell(EN, 3)), ("README.md", after("| English 0.5.0 |", "Banking77 " + NUM)),
+        ("README.md", cell("Banking77", 0), "## Models"),
+        ("README.md", cell("Banking77", 0), "### Published model gates"),
         ("docs/ROADMAP.md", after("| Banking77, trained on train split |", NUM + " en-large")),
         ("site/index.html", site_card("Statim Decide EN Large", "Banking77"))] + site_strip("Banking77")),
     ("en-large MASSIVE English", [
-        ("README.md", cell(EN, 4)), ("README.md", after("| English 0.5.0 |", "MASSIVE English " + NUM)),
+        ("README.md", cell("MASSIVE", 0), "## Models"),
+        ("README.md", cell("MASSIVE", 0), "### Published model gates"),
         ("docs/ROADMAP.md", after("| MASSIVE, trained |", NUM + " en-large")),
         ("site/index.html", site_card("Statim Decide EN Large", "MASSIVE, English"))]),
     ("en-large AG News zero-shot", [
-        ("README.md", after("| English 0.5.0 |", "AG News " + NUM)),
+        ("README.md", cell(r"AG News \(never trained\)", 0), "### Published model gates"),
         ("docs/ROADMAP.md", after("| AG News, zero-shot (never trained) |", NUM + " en-large"))]
         + site_strip("AG News, zero-shot")),
     ("multilingual-base typed-decisions", [
-        ("README.md", cell(ML, 2)), ("README.md", after("| Multilingual 0.7.0 |", "typed-decisions " + NUM)),
+        ("README.md", cell("typed-decisions", 1), "## Models"),
+        ("README.md", cell("typed-decisions", 1), "### Published model gates"),
         ("docs/ROADMAP.md", after("| typed-decisions test |", NUM + " statim-decide-multilingual-base")),
         ("site/index.html", site_card("Statim Decide Multilingual Base", "typed-decisions"))]),
     ("multilingual-base Banking77", [
-        ("README.md", cell(ML, 3)), ("README.md", after("| Multilingual 0.7.0 |", "Banking77 " + NUM)),
+        ("README.md", cell("Banking77", 1), "## Models"),
+        ("README.md", cell("Banking77", 1), "### Published model gates"),
         ("docs/ROADMAP.md", after("| Banking77, trained on train split |", NUM + " multilingual-base")),
         ("site/index.html", site_card("Statim Decide Multilingual Base", "Banking77"))]),
     ("multilingual-base MASSIVE", [
-        ("README.md", cell(ML, 4)), ("README.md", after("| Multilingual 0.7.0 |", "MASSIVE " + NUM)),
+        ("README.md", cell("MASSIVE", 1), "## Models"),
+        ("README.md", cell("MASSIVE", 1), "### Published model gates"),
         ("docs/ROADMAP.md", after("| MASSIVE, trained |", NUM + " multilingual-base"))]
         + site_strip("MASSIVE, 12 languages")),
     ("multilingual-base AG News zero-shot", [
-        ("README.md", after("| Multilingual 0.7.0 |", "AG News " + NUM)),
+        ("README.md", cell(r"AG News \(never trained\)", 1), "### Published model gates"),
         ("docs/ROADMAP.md", after("| AG News, zero-shot (never trained) |", NUM + " multilingual-base"))]),
     ("14 decision categories, Statim", [
         ("docs/BASELINES.md", cell(r"\*\*mean of categories\*\*", 0)),
         ("docs/BASELINES.md", after("Over 14 decision categories, Statim scores", NUM)),
-        ("README.md", cell("14 decision categories, macro accuracy", 0)),
-        ("README.md", cell("14-category macro accuracy", 0)),
+        ("README.md", cell("14-category macro accuracy", 0), "## At a glance"),
+        ("README.md", cell("14-category macro accuracy", 0), "### Trained Statim versus zero-shot general models"),
         ("docs/ROADMAP.md", after("| 14 decision categories, held out |", NUM + " multilingual-base")),
         ("site/index.html", site_card("Statim Decide Multilingual Base", "Decision categories")),
         ("site/index.html", after("decision categories, Statim scores", NUM + " macro accuracy"))]),
     ("14 decision categories, Qwen3-8B", [
         ("docs/BASELINES.md", cell(r"\*\*mean of categories\*\*", 1)),
         ("docs/BASELINES.md", r"Qwen3-8B, an LLM 26 times its\s+size, scores (\d?\.\d+)"),
-        ("README.md", after("| 14 decision categories, macro accuracy |", "Qwen3-8B " + NUM)),
-        ("README.md", cell("14-category macro accuracy", 1)),
+        ("README.md", cell("14-category macro accuracy", 1), "## At a glance"),
+        ("README.md", cell("14-category macro accuracy", 1), "### Trained Statim versus zero-shot general models"),
         ("docs/ROADMAP.md", after("| 14 decision categories, held out |", NUM + " Qwen3-8B")),
         ("site/index.html", after("macro accuracy to their", NUM))]),
     ("14 decision categories, mDeBERTa-XNLI", [
         ("docs/BASELINES.md", cell(r"\*\*mean of categories\*\*", 2)),
         ("docs/BASELINES.md", r"mDeBERTa-XNLI scores (\d?\.\d+)"),
-        ("README.md", after("| 14 decision categories, macro accuracy |", "XNLI " + NUM)),
-        ("README.md", cell("14-category macro accuracy", 2)),
+        ("README.md", r"mDeBERTa[^\n]*?" + NUM, "## At a glance"),
+        ("README.md", cell("14-category macro accuracy", 2), "### Trained Statim versus zero-shot general models"),
         ("docs/ROADMAP.md", after("| 14 decision categories, held out |", NUM + " mDeBERTa")),
         ("site/index.html", after("macro accuracy to their", r"\d?\.\d+ and " + NUM))]),
-]
+])
 for col, system, lead in ((0, "Statim", ""), (1, "Qwen3-8B", "Qwen3-8B "), (2, "mDeBERTa-XNLI", "XNLI ")):
+    glance = (("README.md", cell("Banking77", col), "## At a glance") if col < 2 else
+              ("README.md", r"mDeBERTa-v3 XNLI scored \d?\.\d+[\s\S]*?and " + NUM +
+               r" on\s+Banking77", "## At a glance"))
     FACTS.append(("Banking77 baseline, " + system, [
-        ("docs/BASELINES.md", cell("test/banking77", col)), ("README.md", cell("Banking77", col)),
-        ("README.md", after("| Banking77, 77 intents |", lead + NUM))]))
+        ("docs/BASELINES.md", cell("test/banking77", col)),
+        ("README.md", cell("Banking77", col), "### Trained Statim versus zero-shot general models"),
+        glance]))
     FACTS.append(("AG News baseline, " + system, [
-        ("docs/BASELINES.md", cell("test/ag_news", col)), ("README.md", cell("AG News", col))]))
+        ("docs/BASELINES.md", cell("test/ag_news", col)),
+        ("README.md", cell("AG News", col), "### Trained Statim versus zero-shot general models")]))
 
 # The five categories where Qwen3-8B leads: ROADMAP repeats BASELINES' category rows.
 for key, name in (("emotion", "emotion"), ("fact_check", "fact-check"), ("sentiment", "sentiment"),
@@ -432,11 +452,26 @@ FACTS += [
 ]
 
 
+def markdown_section(text, heading):
+    """Return the Markdown section beginning at an exact heading line, or an empty string."""
+    start = re.search(r"(?m)^%s[ \t]*$" % re.escape(heading), text)
+    if not start:
+        return ""
+    level = len(heading) - len(heading.lstrip("#"))
+    following = re.search(r"(?m)^#{1,%d}[ \t]+" % level, text[start.end():])
+    end = start.end() + following.start() if following else len(text)
+    return text[start.start():end]
+
+
 def check_facts(problems):
     for name, places in FACTS:
         values = []
-        for path, pattern in places:
-            found = re.findall(pattern, read(path))
+        for place in places:
+            path, pattern = place[:2]
+            text = read(path)
+            if len(place) == 3:
+                text = markdown_section(text, place[2])
+            found = re.findall(pattern, text)
             if not found:
                 problems.append("facts: %s: no match in %s (reworded? update FACTS in tools/docs/check_docs.py)"
                                 % (name, path))
