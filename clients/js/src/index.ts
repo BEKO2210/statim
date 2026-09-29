@@ -12,6 +12,7 @@ export {
 } from "./errors.js";
 export type {
   Action,
+  Adapter,
   Answer,
   BatchRequest,
   BatchResponse,

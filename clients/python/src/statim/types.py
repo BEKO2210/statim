@@ -36,13 +36,17 @@ class Routing:
     """Which checkpoint ran.
 
     ``reason`` is ``requested``, ``lang:en``, ``lang:other``, ``default``,
-    or ``consensus``. ``engine`` is ``statim``.
+    ``consensus``, or ``adapter``. ``engine`` is ``statim``. ``adapter`` is
+    ``None`` for both an absent key and JSON null; ``adapter_reason`` tells
+    them apart with ``None`` or ``"none"``.
     """
 
     model: str
     reason: str
     engine: str
     weights: str
+    adapter: str | None = None
+    adapter_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +144,21 @@ class Ready:
 
 
 @dataclass(frozen=True, slots=True)
+class Adapter:
+    """One LoRA adapter attached to a loaded checkpoint."""
+
+    id: str
+    source: str
+    mode: str
+    rank: int
+    alpha: float
+    pairs: int
+    pairs_applied: int
+    categories: tuple[str, ...]
+    bytes: int
+
+
+@dataclass(frozen=True, slots=True)
 class Model:
     """One loaded checkpoint from ``GET /v1/models``."""
 
@@ -153,6 +172,7 @@ class Model:
     max_len: int
     vocab: int
     device: str
+    adapters: tuple[Adapter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +215,12 @@ def _field(obj: Mapping[str, Any], key: str) -> Any:
     if key not in obj:
         raise _fail(f"missing {key}")
     return obj[key]
+
+
+def _optional_nullable_string(obj: Mapping[str, Any], key: str, name: str) -> str | None:
+    if key not in obj or obj[key] is None:
+        return None
+    return _string(obj[key], name)
 
 
 def _probabilities(value: Any) -> dict[str, float]:
@@ -301,6 +327,12 @@ def parse_decision(value: Any) -> Decision:
             reason=_string(_field(routing_raw, "reason"), "routing.reason"),
             engine=_string(_field(routing_raw, "engine"), "routing.engine"),
             weights=_string(_field(routing_raw, "weights"), "routing.weights"),
+            adapter=_optional_nullable_string(routing_raw, "adapter", "routing.adapter"),
+            adapter_reason=(
+                _string(routing_raw["adapter_reason"], "routing.adapter_reason")
+                if "adapter_reason" in routing_raw
+                else None
+            ),
         ),
     )
 
@@ -330,8 +362,29 @@ def parse_ready(value: Any) -> Ready:
     return Ready(ready=ready)
 
 
+def parse_adapter(value: Any) -> Adapter:
+    obj = _mapping(value, "adapter")
+    categories = _field(obj, "categories")
+    if not isinstance(categories, list):
+        raise _fail("categories must be an array")
+    return Adapter(
+        id=_string(_field(obj, "id"), "adapter.id"),
+        source=_string(_field(obj, "source"), "adapter.source"),
+        mode=_string(_field(obj, "mode"), "adapter.mode"),
+        rank=_integer(_field(obj, "rank"), "adapter.rank"),
+        alpha=_number(_field(obj, "alpha"), "adapter.alpha"),
+        pairs=_integer(_field(obj, "pairs"), "adapter.pairs"),
+        pairs_applied=_integer(_field(obj, "pairs_applied"), "adapter.pairs_applied"),
+        categories=tuple(_string(item, "adapter.categories") for item in categories),
+        bytes=_integer(_field(obj, "bytes"), "adapter.bytes"),
+    )
+
+
 def parse_model(value: Any) -> Model:
     obj = _mapping(value, "model")
+    adapters = obj.get("adapters", [])
+    if not isinstance(adapters, list):
+        raise _fail("adapters must be an array")
     return Model(
         id=_string(_field(obj, "id"), "id"),
         object=_string(_field(obj, "object"), "object"),
@@ -343,6 +396,7 @@ def parse_model(value: Any) -> Model:
         max_len=_integer(_field(obj, "max_len"), "max_len"),
         vocab=_integer(_field(obj, "vocab"), "vocab"),
         device=_string(_field(obj, "device"), "device"),
+        adapters=tuple(parse_adapter(item) for item in adapters),
     )
 
 

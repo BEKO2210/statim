@@ -52,6 +52,7 @@ _DECISION_OPTIONS = frozenset(
         "min_confidence",
         "max_len",
         "head_max_len",
+        "adapter",
         "request_id",
     }
 )
@@ -158,6 +159,13 @@ def _check_request_id(request_id: Any) -> None:
         raise TypeError("request_id must be a string")
 
 
+def _check_adapter(adapter: Any) -> None:
+    if adapter is None:
+        return
+    if not isinstance(adapter, str):
+        raise TypeError("adapter must be a string or None")
+
+
 def _body_options(options: Mapping[str, Any]) -> dict[str, Any]:
     """Drop ``request_id`` and ``None``. ``False`` and ``0`` are sent."""
     return {key: value for key, value in options.items() if key != "request_id" and value is not None}
@@ -215,7 +223,7 @@ class Client:
         ``questions`` maps a question id to an object with ``type``
         (``choice``, ``score``, or ``noul``) and ``instructions``. Choice and
         score questions also need ``criteria``. Optional keyword arguments are
-        ``model``, ``lang``, ``ensemble``, ``ensemble_margin``, ``calibrate``,
+        ``model``, ``adapter``, ``lang``, ``ensemble``, ``ensemble_margin``, ``calibrate``,
         ``return_logits``, ``min_confidence``, ``max_len``, ``head_max_len``,
         and ``request_id``.
         ``None`` omits an optional field. An unknown keyword raises ``TypeError``.
@@ -227,6 +235,7 @@ class Client:
         """
         _check_options(options)
         _check_request_id(options.get("request_id", None))
+        _check_adapter(options.get("adapter", None))
         if not isinstance(questions, Mapping):
             raise TypeError("questions must be a mapping")
         body: dict[str, Any] = {"state": state, "questions": dict(questions)}
@@ -262,6 +271,7 @@ class Client:
         """
         _check_options(options)
         _check_request_id(options.get("request_id", None))
+        _check_adapter(options.get("adapter", None))
         if isinstance(states, (str, bytes)) or not isinstance(states, (list, tuple)):
             raise TypeError("states must be a list")
         if not isinstance(questions, Mapping):

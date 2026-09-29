@@ -23,12 +23,14 @@ export interface Usage {
   output_tokens: number;
 }
 
-/** `reason` is requested, lang:en, lang:other, default, or consensus. */
+/** `reason` is requested, lang:en, lang:other, default, consensus, or adapter. */
 export interface Routing {
   model: string;
   reason: string;
   engine: string;
   weights: string;
+  adapter?: string | null;
+  adapter_reason?: string;
 }
 
 export type ChoiceValue = string | number | boolean | null;
@@ -99,6 +101,7 @@ export interface Question {
 export interface SystemOneRequest {
   state: unknown;
   questions: Record<string, Question>;
+  adapter?: string | null;
   model?: string;
   lang?: string;
   ensemble?: number;
@@ -113,6 +116,7 @@ export interface SystemOneRequest {
 export interface BatchRequest {
   states: unknown[];
   questions: Record<string, Question>;
+  adapter?: string | null;
   model?: string;
   lang?: string;
   ensemble?: number;
@@ -144,6 +148,18 @@ export interface Ready {
   ready: boolean;
 }
 
+export interface Adapter {
+  id: string;
+  source: string;
+  mode: string;
+  rank: number;
+  alpha: number;
+  pairs: number;
+  pairs_applied: number;
+  categories: string[];
+  bytes: number;
+}
+
 export interface Model {
   id: string;
   object: string;
@@ -155,6 +171,7 @@ export interface Model {
   max_len: number;
   vocab: number;
   device: string;
+  adapters: Adapter[];
 }
 
 export interface ModelList {
@@ -163,6 +180,7 @@ export interface ModelList {
 }
 
 export interface DecideOptions {
+  adapter?: string | null;
   model?: string;
   lang?: string;
   ensemble?: number;
@@ -176,6 +194,7 @@ export interface DecideOptions {
 }
 
 const DECISION_OPTIONS = new Set([
+  "adapter",
   "model",
   "lang",
   "ensemble",
@@ -195,6 +214,10 @@ export function assertDecideOptions(options: DecideOptions): void {
   const requestId = options.request_id;
   if (requestId !== undefined && typeof requestId !== "string") {
     throw new TypeError("request_id must be a string");
+  }
+  const adapter = options.adapter;
+  if (adapter !== undefined && adapter !== null) {
+    if (typeof adapter !== "string") throw new TypeError("adapter must be a string or null");
   }
 }
 
@@ -339,11 +362,21 @@ function parseUsage(value: unknown): Usage {
 
 function parseRouting(value: unknown): Routing {
   if (!isRecord(value)) fail("routing must be an object");
+  const adapter = value.adapter;
+  if (adapter !== undefined && adapter !== null && typeof adapter !== "string") {
+    fail("routing.adapter must be a string or null");
+  }
+  const adapterReason = value.adapter_reason;
+  if (adapterReason !== undefined && typeof adapterReason !== "string") {
+    fail("routing.adapter_reason must be a string");
+  }
   return {
     model: str(field(value, "model"), "routing.model"),
     reason: str(field(value, "reason"), "routing.reason"),
     engine: str(field(value, "engine"), "routing.engine"),
     weights: str(field(value, "weights"), "routing.weights"),
+    ...(adapter !== undefined ? { adapter } : {}),
+    ...(adapterReason !== undefined ? { adapter_reason: adapterReason } : {}),
   };
 }
 
@@ -382,8 +415,27 @@ export function parseReady(value: unknown): Ready {
   return { ready };
 }
 
+function parseAdapter(value: unknown): Adapter {
+  if (!isRecord(value)) fail("adapter must be an object");
+  const categories = field(value, "categories");
+  if (!Array.isArray(categories)) fail("adapter.categories must be an array");
+  return {
+    id: str(field(value, "id"), "adapter.id"),
+    source: str(field(value, "source"), "adapter.source"),
+    mode: str(field(value, "mode"), "adapter.mode"),
+    rank: integer(field(value, "rank"), "adapter.rank"),
+    alpha: num(field(value, "alpha"), "adapter.alpha"),
+    pairs: integer(field(value, "pairs"), "adapter.pairs"),
+    pairs_applied: integer(field(value, "pairs_applied"), "adapter.pairs_applied"),
+    categories: categories.map((item) => str(item, "adapter.categories")),
+    bytes: integer(field(value, "bytes"), "adapter.bytes"),
+  };
+}
+
 export function parseModel(value: unknown): Model {
   if (!isRecord(value)) fail("model must be an object");
+  const adapters = "adapters" in value ? value.adapters : [];
+  if (!Array.isArray(adapters)) fail("adapters must be an array");
   return {
     id: str(field(value, "id"), "id"),
     object: str(field(value, "object"), "object"),
@@ -395,6 +447,7 @@ export function parseModel(value: unknown): Model {
     max_len: integer(field(value, "max_len"), "max_len"),
     vocab: integer(field(value, "vocab"), "vocab"),
     device: str(field(value, "device"), "device"),
+    adapters: adapters.map((item) => parseAdapter(item)),
   };
 }
 

@@ -15,6 +15,24 @@ import {
 const BASE_URL = process.env.STATIM_URL ?? "http://127.0.0.1:8190";
 const AUTH_URL = process.env.STATIM_AUTH_URL ?? "http://127.0.0.1:8191";
 const AUTH_KEY = process.env.STATIM_API_KEY_TEST ?? "sdk-test-key";
+const ADAPTER_URL = process.env.STATIM_ADAPTER_URL;
+const ADAPTER_NAME = process.env.STATIM_ADAPTER_NAME;
+const AUTO_FAMILIES = new Set([
+  "sentiment",
+  "emotion",
+  "complaint",
+  "nli",
+  "safety",
+  "reading",
+  "similarity",
+  "topic",
+  "intent",
+  "stance",
+  "formality",
+  "urgency",
+  "fact_check",
+  "pii",
+]);
 
 const NOUL_BODY = {
   model: "laya-multilingual",
@@ -83,6 +101,7 @@ test("declarations export the OpenAPI answer types", () => {
   const dts = fs.readFileSync(new URL("../dist/index.d.ts", import.meta.url), "utf8");
   for (const name of [
     "ChoiceAnswer",
+    "Adapter",
     "ScoreAnswer",
     "YesNoAnswer",
     "NoulAnswer",
@@ -197,6 +216,115 @@ test("selective prediction transport serialization and parsing", async () => {
     assert.equal(decision.answers.urgency.escalate, true);
     assert.equal(batch.results[0].answers.refund.escalate, true);
     assert.equal(unchanged.answers.refund.escalate, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("adapter transport and response parsing", async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push([String(url), body]);
+    const routing = { ...NOUL_BODY.routing, adapter: null, adapter_reason: "none" };
+    if (body.adapter === "emotion") {
+      Object.assign(routing, { reason: "adapter", adapter: "emotion", adapter_reason: "requested" });
+    }
+    if (body.adapter === "auto") {
+      const category = Object.keys(body.questions)[0];
+      if (category === "emotion") Object.assign(routing, { adapter: "emotion", adapter_reason: "auto:emotion" });
+      else if (category === "no_family") Object.assign(routing, { adapter_reason: "auto:no-family" });
+      else Object.assign(routing, { adapter_reason: "auto:emotion:no-adapter" });
+    }
+    const payload = { ...NOUL_BODY, routing };
+    return new Response(JSON.stringify(String(url).endsWith("/batch") ? { results: [payload] } : payload));
+  };
+  try {
+    const client = new Client("http://statim.invalid", null, 5, { max_retries: 0 });
+    const questions = { emotion: { type: "noul", instructions: "Emotion?" } };
+    const selected = await client.decide("hello", questions, { adapter: "emotion" });
+    const batch = await client.decide_batch(["hello"], questions, { adapter: "auto" });
+    const omitted = await client.decide("hello", questions, { adapter: null });
+    const noFamilyQuestions = { no_family: { type: "noul", instructions: "Unknown?" } };
+    const noFamily = await client.decide("hello", noFamilyQuestions, { adapter: "auto" });
+    const noAdapterQuestions = { emotion_missing: { type: "noul", instructions: "Emotion?" } };
+    const noAdapter = await client.decide("hello", noAdapterQuestions, { adapter: "auto" });
+    const base = await client.decide("hello", questions, { adapter: "none" });
+    const longName = "é".repeat(129);
+    const longAdapter = await client.decide("hello", questions, { adapter: longName });
+    assert.deepEqual(requests, [
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions, adapter: "emotion" }],
+      ["http://statim.invalid/v1/systemone/batch", { states: ["hello"], questions, adapter: "auto" }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions: noFamilyQuestions, adapter: "auto" }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions: noAdapterQuestions, adapter: "auto" }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions, adapter: "none" }],
+      ["http://statim.invalid/v1/systemone", { state: "hello", questions, adapter: longName }],
+    ]);
+    assert.equal(selected.routing.adapter, "emotion");
+    assert.equal(selected.routing.adapter_reason, "requested");
+    assert.equal(selected.routing.reason, "adapter");
+    assert.equal(batch.results[0].routing.adapter, "emotion");
+    assert.equal(batch.results[0].routing.adapter_reason, "auto:emotion");
+    assert.equal(omitted.routing.adapter, null);
+    assert.equal(omitted.routing.adapter_reason, "none");
+    assert.equal(noFamily.routing.adapter, null);
+    assert.equal(noFamily.routing.adapter_reason, "auto:no-family");
+    assert.equal(noAdapter.routing.adapter, null);
+    assert.equal(noAdapter.routing.adapter_reason, "auto:emotion:no-adapter");
+    assert.equal(base.routing.adapter, null);
+    assert.equal(base.routing.adapter_reason, "none");
+    assert.equal(longAdapter.routing.adapter, null);
+    await assert.rejects(() => client.decide("hello", questions, { adapter: 12 }), TypeError);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("models parse adapters and reject malformed adapters", async () => {
+  const model = {
+    id: "multilingual",
+    object: "model",
+    owned_by: "statim",
+    source: "laya-multilingual",
+    weights: "q8_0",
+    layers: 22,
+    hidden: 768,
+    max_len: 1024,
+    vocab: 250002,
+    device: "cpu",
+  };
+  const adapter = {
+    id: "emotion",
+    source: "emotion-lora",
+    mode: "runtime",
+    rank: 4,
+    alpha: 8,
+    pairs: 88,
+    pairs_applied: 87,
+    categories: ["emotion", "sentiment"],
+    bytes: 3456,
+  };
+  const adapterWithoutId = Object.fromEntries(Object.entries(adapter).filter(([key]) => key !== "id"));
+  const payloads = [
+    { object: "list", data: [model, { ...model, id: "with-adapter", adapters: [adapter] }] },
+    { object: "list", data: [{ ...model, adapters: null }] },
+    { object: "list", data: [{ ...model, adapters: { bad: true } }] },
+    { object: "list", data: [{ ...model, adapters: [adapterWithoutId] }] },
+    { object: "list", data: [{ ...model, adapters: [{ ...adapter, rank: "4" }] }] },
+  ];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(payloads.shift()));
+  try {
+    const client = new Client("http://statim.invalid", null, 5, { max_retries: 0 });
+    const listed = await client.models();
+    assert.deepEqual(listed.data[0].adapters, []);
+    assert.deepEqual(listed.data[1].adapters[0], adapter);
+    await assert.rejects(() => client.models(), /adapters must be an array/);
+    await assert.rejects(() => client.models(), /adapters must be an array/);
+    await assert.rejects(() => client.models(), /missing id/);
+    await assert.rejects(() => client.models(), /adapter.rank must be an integer/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -541,3 +669,43 @@ test("authentication on the keyed server", async () => {
   assert.equal((await missing.health()).status, "ok");
   assert.equal((await missing.ready()).ready, true);
 });
+
+test(
+  "adapter against the server",
+  { skip: !ADAPTER_URL || !ADAPTER_NAME },
+  async (t) => {
+    const client = new Client(ADAPTER_URL, null, 180);
+    const listed = await client.models();
+    const match = listed.data
+      .flatMap((model) => model.adapters.map((adapter) => ({ model, adapter })))
+      .find(({ adapter }) => adapter.id === ADAPTER_NAME);
+    assert.ok(match, `adapter ${ADAPTER_NAME} is not listed`);
+    assert.ok(match.adapter.categories.length > 0, `adapter ${ADAPTER_NAME} has no categories`);
+    const category = match.adapter.categories[0];
+    const questions = { [category]: { type: "noul", instructions: `Is this about ${category}?` } };
+
+    const requested = await client.decide("adapter live test", questions, {
+      model: match.model.id,
+      adapter: ADAPTER_NAME,
+    });
+    assert.equal(requested.routing.adapter, ADAPTER_NAME);
+    assert.equal(requested.routing.adapter_reason, "requested");
+
+    const base = await client.decide("adapter live test", questions, { model: match.model.id, adapter: "none" });
+    assert.equal(base.routing.adapter, null);
+    assert.equal(base.routing.adapter_reason, "none");
+
+    await t.test(
+      "auto routes a documented family",
+      { skip: AUTO_FAMILIES.has(category) ? false : `category ${category} is not one of the 14 auto-rule families` },
+      async () => {
+        const automatic = await client.decide("adapter live test", questions, {
+          model: match.model.id,
+          adapter: "auto",
+        });
+        assert.equal(automatic.routing.adapter, ADAPTER_NAME);
+        assert.equal(automatic.routing.adapter_reason, `auto:${category}`);
+      },
+    );
+  },
+);

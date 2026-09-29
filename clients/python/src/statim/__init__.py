@@ -18,6 +18,7 @@ from statim.errors import (
 )
 from statim.types import (
     Action,
+    Adapter,
     BatchResult,
     ChoiceAnswer,
     Decision,
@@ -33,6 +34,7 @@ from statim.types import (
 
 __all__ = [
     "Action",
+    "Adapter",
     "AuthenticationError",
     "BadRequestError",
     "BatchResult",

@@ -3,9 +3,7 @@
 Official TypeScript client for the [Statim](../../README.md) HTTP API. ESM,
 `fetch`, no runtime dependencies. Declaration files come from `tsc` and follow
 the schemas in [`docs/openapi.yaml`](../../docs/openapi.yaml). The package
-targets the same API as server 0.8.2, except LoRA adapters (0.8.0): requests
-cannot select an `adapter` yet, and the adapter fields of responses and
-`/v1/models` are not exposed.
+targets the same API as server 0.8.3.
 
 ```sh
 npm install
@@ -55,13 +53,24 @@ console.log(decision.request_id, decision.inference_time_ms);
 | `health()` | `GET /health` |
 | `ready()` | `GET /ready` |
 
-Options match the Python client: `model`, `lang`, `ensemble`, `ensemble_margin`,
+Options match the Python client: `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`,
 `calibrate`, `return_logits`, `min_confidence`, `max_len`, `head_max_len`, `request_id`. `null`
-and `undefined` omit a field. Question type `noul` is returned as
-`YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's
+and `undefined` omit a field; request base weights explicitly with
+`{ adapter: "none" }`. Question type `noul` is returned as `YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's
 `noul` value and `probabilities.no` is `1 - noul`.
 Every answer type has optional `escalate`, present only when a positive
 confidence threshold applied to the response.
+
+Select a LoRA adapter by name, or use `{ adapter: "auto" }` to match the
+question family. A name needs a server started with that adapter, for example
+`--adapter multilingual:emotion=emotion.lora.gguf`. `"auto"` works on any
+server and falls back to the base weights.
+
+```js
+const result = await client.decide(state, questions, { adapter: "auto" });
+console.log(result.routing.adapter, result.routing.adapter_reason); // e.g. emotion auto:emotion
+console.log((await client.models()).data.flatMap((m) => m.adapters.map((a) => a.id)));
+```
 
 `request_id` is sent as `X-Request-Id`. When omitted, the client generates a
 UUID. The id on the result is the one the server echoed.
