@@ -336,11 +336,11 @@ ML = r"\[statim-decide-multilingual-base [^]]*\]\([^)]*\)"
 # wording changed so that its pattern no longer matches is reported too, never skipped.
 FACTS = [
     ("engine binary size", [
-        ("README.md", r"\| Runtime \| Python 3\.10\+, PyTorch, transformers \| One (\d?\.\d+) MB binary"),
-        ("README.md", r"\| Runtime footprint \| PyTorch alone ≥ 1\.2 GB \| \*\*(\d?\.\d+) MB\*\* binary"),
-        ("site/index.html", r'content="Choice, score and yes/no answers with calibrated confidence from a (\d?\.\d+) MB C\+\+ binary'),
-        ("site/index.html", r"<li>(\d?\.\d+) MB static binary</li>"),
-        ("site/index.html", r'<span class="to">One (\d?\.\d+) MB binary and one \.gguf file</span>')]),
+        ("README.md", r"\| Runtime \| Python 3\.10\+, PyTorch, transformers \| One (\d+(?:\.\d+)?) MB binary"),
+        ("README.md", r"\| Runtime footprint \| PyTorch alone ≥ 1\.2 GB \| \*\*(\d+(?:\.\d+)?) MB\*\* binary"),
+        ("site/index.html", r'content="Choice, score and yes/no answers with calibrated confidence from a (\d+(?:\.\d+)?) MB C\+\+ binary'),
+        ("site/index.html", r"<li>(\d+(?:\.\d+)?) MB static binary</li>"),
+        ("site/index.html", r'<span class="to">One (\d+(?:\.\d+)?) MB binary and one \.gguf file</span>')]),
     ("en-large typed-decisions", [
         ("README.md", cell(EN, 2)), ("README.md", after("| English 0.5.0 |", "typed-decisions " + NUM)),
         ("docs/ROADMAP.md", after("| typed-decisions test |", NUM + " statim-decide-en-large")),

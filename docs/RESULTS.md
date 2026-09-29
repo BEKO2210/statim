@@ -8,7 +8,8 @@ This page contains the method, charts, and experiments behind the summary in the
 A new model replaces the one it was trained from only through the promotion gate
 (`tools/finetune/gate.py`). The validation mean may fall by at most one point. No held-out suite may
 drop significantly after Holm-Bonferroni correction for the number of suites (family-wise error
-5 %). No suite family may decline when pooled, and at least one family must improve significantly.
+5 %). No suite family may decline significantly when pooled (more than two standard errors), and at
+least one family must improve significantly.
 
 The first four suites use 2,000 deterministic test rows; MASSIVE and HWU64 cells use 150 seeded
 stratified rows. See [REPRODUCE.md](../REPRODUCE.md#3-a-published-models-evaluation).
@@ -86,6 +87,7 @@ Five epochs take 35 minutes on an RTX 3070.
 
 ```bash
 python -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 datasets
+python -m venv .venv && .venv/bin/pip install numpy safetensors gguf    # the converter's environment
 .venv-train/bin/python tools/finetune/train_banking77.py models/laya-multilingual models/laya-multilingual-banking77 --distill 6000 --epochs 5
 .venv/bin/python tools/convert_laya.py models/laya-multilingual-banking77 -o models/laya-multilingual-banking77-f32.gguf --type f32 --embd-type f16
 .venv-train/bin/python tools/finetune/eval_laya.py models/laya-multilingual-banking77 --n 2000 --head-max-len 512
