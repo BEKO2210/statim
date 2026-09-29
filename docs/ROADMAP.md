@@ -43,8 +43,10 @@ by question family; the specialist-versus-generalist experiment is next)
 - CUDA backend with exact f32 parity gates; Vulkan vs CUDA measured (f32, f16, q8_0). Batching tuned for GPU remains open.
 
 **0.9 — product**
-- Brand applied everywhere (the 0.2.0 logo, icons and social preview), documentation site, OpenAPI spec, client SDKs, Docker images (CPU + GPU), packaged releases,
-  security review, model cards and licence notices for published weights.
+- OpenAPI spec, client SDKs, Docker images (CPU + GPU), packaged releases, a security review, and
+  model cards and licence notices for published weights shipped between 0.1.0 and 0.5.0. Still
+  open: a documentation site and full brand consistency (the 0.2.0 logo, icons and social preview)
+  across every surface.
 
 **1.0 — release**
 - Stable API, benchmark report against the published state of the art with reproducible scripts,

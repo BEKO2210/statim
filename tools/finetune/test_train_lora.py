@@ -33,6 +33,15 @@ def _entries():
     return [e for e in json.loads(REGISTRY.read_text(encoding="utf-8")) if e.get("use") is True]
 
 
+def test_converter_categories_match():
+    import ast
+    # convert_lora imports numpy and gguf, which the offline job lacks: read its CATEGORIES from the source
+    tree = ast.parse((ROOT / "tools" / "convert_lora.py").read_text(encoding="utf-8"))
+    value = next(n.value for n in tree.body if isinstance(n, ast.Assign)
+                 and any(getattr(t, "id", None) == "CATEGORIES" for t in n.targets))
+    assert tuple(ast.literal_eval(value)) == train_lora.CATEGORIES
+
+
 def test_categories_match_the_held_out_suites():
     import eval_categories
     from mixture_v6 import registry

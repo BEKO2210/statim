@@ -1,5 +1,8 @@
 # Statim – hier weitermachen
 
+> Historischer Stand vom 26.09.2026, wird nicht mehr gepflegt. Aktuell: [README](../README.md),
+> [ROADMAP](ROADMAP.md), [CHANGELOG](../CHANGELOG.md).
+
 Stand: 26.09.2026, nachts gebaut auf belkis-home. Repo: https://github.com/BEKO2210/statim (öffentlich seit 27.09.2026).
 
 ## Was steht

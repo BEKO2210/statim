@@ -1514,7 +1514,7 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
 | `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
 
-All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--threads`, `--calibrate`, `--consensus`, `--no-access-log`, `--no-playground`, and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--no-access-log`, `--no-playground`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
 
 Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 
@@ -1605,6 +1605,14 @@ statim_request_duration_ms_count N
 statim_input_tokens_total N
 # TYPE statim_rejected_busy_total counter
 statim_rejected_busy_total N
+# HELP statim_batch_size States executed in server-created micro-batches.
+# TYPE statim_batch_size summary
+statim_batch_size_sum N
+statim_batch_size_count N
+# HELP statim_batch_wait_ms Time an admitted request waited for compatible peers.
+# TYPE statim_batch_wait_ms summary
+statim_batch_wait_ms_sum N
+statim_batch_wait_ms_count N
 # TYPE statim_in_flight gauge
 statim_in_flight N
 # TYPE statim_uptime_seconds gauge
@@ -1647,6 +1655,14 @@ required = [
     "statim_input_tokens_total ",
     "# TYPE statim_rejected_busy_total counter",
     "statim_rejected_busy_total ",
+    "# HELP statim_batch_size States executed in server-created micro-batches.",
+    "# TYPE statim_batch_size summary",
+    "statim_batch_size_sum ",
+    "statim_batch_size_count ",
+    "# HELP statim_batch_wait_ms Time an admitted request waited for compatible peers.",
+    "# TYPE statim_batch_wait_ms summary",
+    "statim_batch_wait_ms_sum ",
+    "statim_batch_wait_ms_count ",
     "# TYPE statim_in_flight gauge",
     "statim_in_flight ",
     "# TYPE statim_uptime_seconds gauge",

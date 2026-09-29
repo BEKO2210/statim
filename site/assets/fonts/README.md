@@ -3,7 +3,7 @@
 Sora, IBM Plex Mono and Instrument Serif, each licensed under the SIL Open Font License 1.1
 (https://openfontlicense.org). Self-hosted so the site loads nothing from third parties.
 
-The files are subset to Latin, Latin-1 and the symbols the pages use (arrows, ×, Δ, ≤, dashes,
+The files are subset to Latin, Latin-1 and a few symbols (arrows, ×, Δ, ≤, dashes,
 quotes), which cuts them from 460 kB to about 100 kB:
 
     pyftsubset ORIGINAL.woff2 --flavor=woff2 --layout-features='*' \

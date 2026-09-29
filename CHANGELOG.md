@@ -8,9 +8,18 @@ between minor versions; every change is listed here.
 ## [Unreleased]
 
 ### Added
-- `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match the 20
-  places that repeat it (server, SDKs, Space Dockerfile, site, README quick start, API reference);
+- `tools/release/check_versions.py`: the engine version in `CMakeLists.txt` must match every
+  place that repeats it (server, SDKs, Space Dockerfile, site, README quick start, client READMEs,
+  API reference and OpenAPI spec);
   CI runs it first, and `--set x.y.z` bumps all of them for a release.
+- `tools/docs/check_docs.py`, run by CI before the build: every tracked Markdown file and the site
+  are checked for links and anchors (also github.com links into the repository), repository paths,
+  `statim` and script flags in documented commands, and release downloads of the current version.
+  `docs/API.md` and `docs/openapi.yaml` are checked against the C++ source: routes, request and
+  question fields, every HTTP error message, the metric families with the `/metrics` example's
+  TYPE and HELP lines, and every serve flag. Published numbers repeated across README, ROADMAP,
+  BASELINES and the site must equal their source (17 facts). `tools/docs/test_check_docs.py`
+  plants each kind of drift and expects the check to report it.
 - LoRA training for per-category specialists (`tools/finetune/train_lora.py`): PEFT LoRA on the
   encoder's `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo` (88 modules; `bias="none"`, no
   `modules_to_save`, no DoRA, `init_lora_weights` true or gaussian), decision head and token
@@ -39,7 +48,7 @@ between minor versions; every change is listed here.
     `supervised_types`, and only the 2,400 explicit negative examples supply document-level “no”.
     The normal per-source cap prevents the large source from dominating the mixture.
   - Fact-check: no source passed the licence and label checks (38 candidates examined). Emotion,
-    sentiment and safety: nothing kept; four checked candidates are recorded as rejected.
+    sentiment and safety: nothing kept; 41 checked candidates are recorded as rejected.
 - Offline tests for the Part G loaders and adapters and for the evidence and held-out rules
   (`test_label_fixes.py`).
 
