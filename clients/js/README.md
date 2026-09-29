@@ -3,7 +3,7 @@
 Official TypeScript client for the [Statim](../../README.md) HTTP API. ESM,
 `fetch`, no runtime dependencies. Declaration files come from `tsc` and follow
 the schemas in [`docs/openapi.yaml`](../../docs/openapi.yaml). The package
-targets the same API as server 0.8.4.
+targets the same API as server 0.8.5.
 
 ```sh
 npm install

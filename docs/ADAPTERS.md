@@ -11,22 +11,25 @@ it.
 |---|---|---|---|
 | PII | [Beko2210/statim-decide-multilingual-base-pii](https://huggingface.co/Beko2210/statim-decide-multilingual-base-pii) | `statim-decide-multilingual-base-pii.lora.gguf` | `2991a33b5d9db4f5b679081885faab1f84289d6eae7660830447e790bd168b29` |
 | Emotion | [Beko2210/statim-decide-multilingual-base-emotion](https://huggingface.co/Beko2210/statim-decide-multilingual-base-emotion) | `statim-decide-multilingual-base-emotion.lora.gguf` | `c832dc6aada9bf0b07e7f481b554d51ddff2fe0c1365ba49145de13f3952bdc8` |
+| Safety | [Beko2210/statim-decide-multilingual-base-safety](https://huggingface.co/Beko2210/statim-decide-multilingual-base-safety) | `statim-decide-multilingual-base-safety.lora.gguf` | `9620969cef129a9ede45816db575a6c5b9ecf27574443b0110259bec1b703202` |
 
-Both adapt statim-decide-multilingual-base 0.7.0 and are bound to it by its fingerprint. They were
-checked on the published base files. On f32, merged at load, they reproduce the experiment below
-cell for cell. On q8_0, as runtime LoRA, the mean change over the language cells is +5.52 points for
-PII and +5.33 for emotion. Each repository carries its evaluation files, training record, PEFT
+All three adapt statim-decide-multilingual-base 0.7.0 and are bound to it by its fingerprint. They
+were checked on the published base files. On f32, merged at load, they reproduce the measurements
+below cell for cell: the experiment for PII and emotion, and the replication for safety. On q8_0, as
+runtime LoRA, the mean change over the language cells is +5.52 points for PII, +5.33 for emotion and
++10.30 for safety. Each repository carries its evaluation files, training record, PEFT
 source and checksums. `tools/release/hf_publish_adapter.py` builds them from the experiment's
 outputs and refuses an adapter the gate did not promote.
 
 ```sh
 statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf \
     --adapter multilingual:pii=statim-decide-multilingual-base-pii.lora.gguf \
-    --adapter multilingual:emotion=statim-decide-multilingual-base-emotion.lora.gguf
+    --adapter multilingual:emotion=statim-decide-multilingual-base-emotion.lora.gguf \
+    --adapter multilingual:safety=statim-decide-multilingual-base-safety.lora.gguf
 ```
 
-With `"adapter": "auto"`, PII and emotion questions use their adapter, and every other question
-uses the base weights.
+With `"adapter": "auto"`, PII, emotion and safety questions use their adapter, and every other
+question uses the base weights.
 
 ## Specialists for the weak categories (2026-09-29)
 
@@ -86,7 +89,8 @@ No language cell regressed in any category. Accuracy per cell for the two promot
   training data in the 0.7.0 mixture: their sources were registered later. Without them the gain is
   +5.34 points (2 SE 4.47), still a promotion.
 - **Safety and fact-check need larger samples.** Each has one language cell of 150 items, so a gain
-  must exceed about 10 points to count. Safety's +8.0 is the candidate for a larger held-out sample.
+  must exceed about 10 points to count. Safety's +8.0 was the candidate for a larger held-out
+  sample. The replication below confirms it.
 - **Fact-check needs a new run.** The fact-check adapter was trained and measured while two of its
   three options had no description, a lookup bug fixed after this run. It needs a rebuilt mixture.
 
@@ -110,6 +114,16 @@ on items the first run never scored.
 - **Power:** at the first run's accuracies, 2 SE is about 3.2 points.
 - **Decision:** `gate.adapter_decision` with z = 2, on the fresh items alone. A promotion means the
   adapter is published as the third one; a rejection means it is not. Both runs are reported here.
+
+**Result: promote.**
+
+- On the 1,350 fresh items, accuracy rises from 0.708 to 0.806: +9.78 points, 2 SE 3.28, and no
+  regression.
+- The converted file is byte-identical to the registered one (the SHA-256 above).
+- The first run's +8.0 on 150 items was therefore an underpowered true effect, not noise.
+- The adapter is published (see above).
+- A zero-shot Qwen3-8B was measured only on the first 150 items (0.753), so no comparison on the
+  fresh items is claimed.
 
 ### Reproduce
 

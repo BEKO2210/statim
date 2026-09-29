@@ -246,7 +246,17 @@ def load_checks(args, adapter_path, adapter_meta):
 def yaml_front_matter(args, name, cells):
     repo_id = args.upload or f"{args.base_repo.split('/', 1)[0]}/{name}"
     results = []
-    protocol = f"n={args.protocol['n']}, seed={args.protocol['seed']}, z={args.protocol['z']}, alpha={args.protocol['alpha']}"
+    if args.protocol["eval_skip"] > 0:
+        protocol = (
+            f"n={args.scored_items} fresh: draw {args.protocol['n']}, "
+            f"skip {args.protocol['eval_skip']}, seed={args.protocol['seed']}, "
+            f"z={args.protocol['z']}, alpha={args.protocol['alpha']}"
+        )
+    else:
+        protocol = (
+            f"n={args.scored_items}, seed={args.protocol['seed']}, "
+            f"z={args.protocol['z']}, alpha={args.protocol['alpha']}"
+        )
     for cell in cells:
         results.append({
             "task": {"type": "text-classification"},
@@ -282,7 +292,7 @@ def source_url(entry):
     for field in ("url", "homepage", "pinned_url"):
         if entry.get(field):
             return entry[field]
-    source_id = entry["id"]
+    source_id = public_name(entry["id"])
     match = re.fullmatch(r"github:([^/\s]+)/([^/\s]+)", source_id)
     if match:
         return f"https://github.com/{match.group(1)}/{match.group(2)}"
@@ -294,9 +304,19 @@ def source_url(entry):
     return None
 
 
+def public_name(text):
+    """A registry id or licence without its trailing working note in parentheses."""
+    return re.sub(r"\s*\([^()]*\)\s*$", "", text).strip()
+
+
+def licence_display(entry):
+    licence = public_name(entry["licence"])
+    return LICENCE_NAMES.get(licence.lower(), licence)
+
+
 def source_link(entry):
     url = source_url(entry)
-    return f"[`{entry['id']}`]({url})" if url else f"`{entry['id']}`"
+    return f"[`{public_name(entry['id'])}`]({url})" if url else f"`{public_name(entry['id'])}`"
 
 
 def jsonl_cells(path):
@@ -358,11 +378,12 @@ def adapter_notice(title, args, sources):
     repeated = {entry["id"] for _, _, entry in sources
                 if sum(other["id"] == entry["id"] for _, _, other in sources) > 1}
     for _, counts, entry in sources:
-        licence = LICENCE_NAMES.get(entry["licence"].lower(), entry["licence"])
+        licence = licence_display(entry)
         wording = (f"licensed under CC BY {licence.removeprefix('CC-BY-')}"
                    if licence.startswith("CC-BY-") else f"licensed under {licence}")
         link = source_url(entry)
-        name = f"{entry['id']} ({entry['config']})" if entry["id"] in repeated else entry["id"]
+        name = (f"{public_name(entry['id'])} ({entry['config']})" if entry["id"] in repeated
+                else public_name(entry["id"]))
         linked = f"{name}, {link}" if link else name
         lines.append(f"- {linked}: {wording}; {counts['rows']:,} rows used.")
     return "\n".join(lines) + "\n"
@@ -393,16 +414,42 @@ def resolved_name(args):
     return name
 
 
+def scored_items(cells):
+    counts = []
+    for cell in cells:
+        base = cell.get("n_base")
+        adapter = cell.get("n_adapter")
+        if base != adapter:
+            raise ValueError(
+                f"scored item counts differ for {cell.get('lang', '<unknown>')}: "
+                f"n_base={base!r}, n_adapter={adapter!r}"
+            )
+        if not isinstance(base, int) or isinstance(base, bool) or base < 1:
+            raise ValueError(
+                f"invalid scored item count for {cell.get('lang', '<unknown>')}: {base!r}"
+            )
+        counts.append(base)
+    if len(set(counts)) != 1:
+        raise ValueError(f"scored item counts differ between cells: {counts}")
+    return counts[0]
+
+
 def card(args, name, category_record, train, sources, baselines, adapter_sha, peft_sha,
          statim_version, checks, adapter_meta, published):
     cells = category_record["cells"]
     args.protocol = {key: args.summary[key] for key in PROTOCOL_KEYS}
+    args.protocol["eval_skip"] = args.summary.get("eval_skip", 0)
+    args.scored_items = scored_items(cells)
     head = yaml_front_matter(args, name, cells)
+    same_items_as_baselines = args.protocol["eval_skip"] == 0
+    if not same_items_as_baselines:
+        baselines = {}
     rows = []
     for cell in cells:
+        qwen = fmt(baselines[cell["lang"]], 3) if same_items_as_baselines else ""
         rows.append(
             f"| {cell['lang']} | {fmt(cell['base_acc'])} | **{fmt(cell['adapter_acc'])}** | "
-            f"{cell['delta'] * 100:+.2f} | {cell['verdict']} | {fmt(baselines[cell['lang']], 3)} |"
+            f"{cell['delta'] * 100:+.2f} | {cell['verdict']}" + (f" | {qwen} |" if same_items_as_baselines else " |")
         )
     base_mean = sum(cell["base_acc"] for cell in cells) / len(cells)
     adapter_mean = sum(cell["adapter_acc"] for cell in cells) / len(cells)
@@ -411,12 +458,21 @@ def card(args, name, category_record, train, sources, baselines, adapter_sha, pe
     qwen_mean = (sum(qwen_values) / len(qwen_values)
                  if all(value is not None for value in qwen_values) else None)
     rows.append(
-        f"| **Mean** | {fmt(base_mean)} | **{fmt(adapter_mean)}** | "
-        f"{delta_mean * 100:+.2f} | — | {'' if qwen_mean is None else fmt(qwen_mean, 3)} |"
+        f"| **Mean** | {fmt(base_mean)} | **{fmt(adapter_mean)}** | {delta_mean * 100:+.2f} | —"
+        + (f" | {'' if qwen_mean is None else fmt(qwen_mean, 3)} |" if same_items_as_baselines else " |")
     )
+    table_head = ("| Language | Base | Adapter | Change (points) | Verdict | Qwen3-8B zero-shot |\n"
+                  "|---|---:|---:|---:|---|---:|" if same_items_as_baselines else
+                  "| Language | Base | Adapter | Change (points) | Verdict |\n|---|---:|---:|---:|---|")
+    pooled_note = ("A single cell of {} items rarely clears {} SE on its own; the decision uses the pooled "
+                   "family.\n\n".format(args.scored_items, f"{args.protocol['z']:g}") if len(cells) > 1 else "")
+    qwen_note = ("Statim is trained on this category, while [Qwen3-8B runs zero-shot]"
+                 f"({GITHUB}/blob/main/docs/BASELINES.md)." if same_items_as_baselines else
+                 "Qwen3-8B was measured on the first draw's items only ([BASELINES.md]"
+                 f"({GITHUB}/blob/main/docs/BASELINES.md)), so it is not shown next to these fresh items.")
     source_rows = [
         f"| {source_link(entry)} (`{entry['config']}`) | {counts['rows']:,} | "
-        f"{LICENCE_NAMES.get(entry['licence'].lower(), entry['licence'])} |"
+        f"{licence_display(entry)} |"
         for _, counts, entry in sources
     ]
     lora = train["lora"]
@@ -488,6 +544,15 @@ def card(args, name, category_record, train, sources, baselines, adapter_sha, pe
     request_json = json.dumps({"state": state, "questions": questions, "adapter": args.category}, ensure_ascii=False)
     auto_request_json = json.dumps({"state": state, "questions": questions, "adapter": "auto"}, ensure_ascii=False)
     targets = ", ".join(f"`{module}`" for module in lora["target_modules"])
+    if args.protocol["eval_skip"] > 0:
+        results_intro = (
+            f"Each cell uses {args.scored_items} fresh items: a seeded stratified draw of "
+            f"{args.protocol['n']} (seed {args.protocol['seed']}) whose first "
+            f"{args.protocol['eval_skip']} items, scored by an earlier run, are skipped. "
+            "That earlier run is reported in docs/ADAPTERS.md."
+        )
+    else:
+        results_intro = f"Each cell uses {args.scored_items} items (seed {args.protocol['seed']})."
     return head + f"""
 # {base_info['display']}: {category_display(args.category)} adapter
 
@@ -516,19 +581,16 @@ client.decide({state_json}, {questions_json}, adapter="{args.category}")
 
 ## Results (experiment's f32 run)
 
-Each cell uses {args.protocol['n']} items (seed {args.protocol['seed']}).
+{results_intro}
 
-| Language | Base | Adapter | Change (points) | Verdict | Qwen3-8B zero-shot |
-|---|---:|---:|---:|---|---:|
+{table_head}
 {chr(10).join(rows)}
 
 {family_result}
 
-A single cell of {args.protocol['n']} items rarely clears {z_label} SE on its own; the decision uses the pooled family.
+{pooled_note}Decision rule: {decision_rule()}{'' if args.protocol['z'] == 2 else ' This run used ' + z_label + ' standard errors.'}
 
-Decision rule: {decision_rule()}{'' if args.protocol['z'] == 2 else ' This run used ' + z_label + ' standard errors.'}
-
-Statim is trained on this category, while [Qwen3-8B runs zero-shot]({GITHUB}/blob/main/docs/BASELINES.md).
+{qwen_note}
 
 ## Checked on the published files
 
@@ -572,7 +634,7 @@ instructions: [REPRODUCE.md]({GITHUB}/blob/main/REPRODUCE.md).
 - This adapter only helps its category; route requests with `"{args.category}"` or `"auto"`.
 - Bound to `{args.base_repo}` {args.base_version} by the base fingerprint `{adapter_meta['base_fingerprint'][:16]}…` (`statim.lora.base_fingerprint`, SHA-256 over the checkpoint's norm and bias tensors); Statim refuses the adapter on a base whose fingerprint differs.{(' The full checkpoint SHA-256 is also checked when both the adapter and base file carry `statim.lora.base_checkpoint_sha256`.' if adapter_meta.get('base_checkpoint_sha256') else '')}
 - Languages outside the evaluated list are untested.
-- Each language cell has {args.protocol['n']} items.
+- Each language cell has {args.scored_items} items.
 - Do not automate decisions about people without human review.{untrained_line}
 
 ## Licence
@@ -718,7 +780,9 @@ def main(argv=None):
         roots = [ROOT, repo_root(work)]
         clean_record = sanitize(record, roots)
         clean_summary = sanitize(
-            {key: summary[key] for key in PROTOCOL_KEYS} | {"category": args.category} | record,
+            {key: summary[key] for key in PROTOCOL_KEYS}
+            | {"eval_skip": summary.get("eval_skip", 0), "category": args.category}
+            | record,
             roots,
         )
         clean_train = sanitize(train, roots)

@@ -22,9 +22,11 @@ Gaps we measure and work on next: a zero-shot Qwen3-8B still leads in five of th
 emotion (0.586 vs 0.726), fact-check (0.313 vs 0.513), sentiment (0.800 vs 0.873), safety (0.727 vs
 0.753) and PII (0.856 vs 0.878) (docs/BASELINES.md), and Belebele reading is near chance. The first
 per-category LoRA adapters ([ADAPTERS.md](ADAPTERS.md)) pass the gate for PII (0.856 to 0.910, above
-Qwen3-8B) and emotion (0.586 to 0.639); both are published on Hugging Face, and the SDKs select
-adapters. Safety, sentiment and fact-check stay within noise. Next:
-- larger held-out samples for the categories with one language cell (safety, fact-check);
+Qwen3-8B) and emotion (0.586 to 0.639). In a pre-registered replication on 1,350 fresh items,
+safety passes too (0.708 to 0.806). All three are published on Hugging Face, and the SDKs select
+adapters. Sentiment and fact-check stay within noise. Next:
+- a larger held-out sample for fact-check, the other category with one language cell, after its
+  retraining;
 - more licence-clean data for the rest, generated locally where no human-labelled data exists.
 
 ## Milestones
