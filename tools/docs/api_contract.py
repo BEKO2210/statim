@@ -5,10 +5,12 @@ The normalized contract records operations, request and response schemas, the
 Error shape, query/header parameters, validation bounds, defaults, and the
 documented /metrics families.  Breaking changes are removed operations or
 statuses; removed request fields; newly-required request fields; narrowed or
-changed request types, validation, or defaults; removed request enum values;
+changed request types, validation, or defaults; removed request enum values or
+an enum added to a request field that had none;
 removed response fields; response fields made optional or changed in type; any
 Error-shape change; and removed, renamed, or retyped metric families.  New
-operations, optional request fields, response fields, statuses, enum values,
+operations, optional request fields, response fields, statuses, enum values on
+fields that already had an enum,
 looser request bounds, and metric families are additive.  Response-bound and
 response-default changes, descriptions, and examples are reported as notes.
 """
