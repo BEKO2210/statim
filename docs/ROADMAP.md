@@ -7,7 +7,7 @@ claim reproducible from this repository, shipped as a polished product.
 zero-shot results against zero-shot systems (Jev, GLiClass, NLI classifiers, LLMs), fine-tuned
 results against supervised baselines (MASSIVE paper, Banking77 literature).
 
-## Where we stand (0.8.0)
+## Where we stand (0.8.2)
 
 | Field | Statim | Best published, same protocol |
 |---|---|---|
@@ -20,9 +20,12 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 
 Gaps we measure and work on next: a zero-shot Qwen3-8B still leads in five of the 14 categories,
 emotion (0.586 vs 0.726), fact-check (0.313 vs 0.513), sentiment (0.800 vs 0.873), safety (0.727 vs
-0.753) and PII (0.856 vs 0.878) (docs/BASELINES.md), and Belebele reading is near chance. Next: more
-licence-clean data for these categories and per-category LoRA adapters (engine support since 0.8.0),
-compared with the generalist on the same held-out suites.
+0.753) and PII (0.856 vs 0.878) (docs/BASELINES.md), and Belebele reading is near chance. The first
+per-category LoRA adapters ([ADAPTERS.md](ADAPTERS.md)) pass the gate for PII (0.856 to 0.910, above
+Qwen3-8B) and emotion (0.586 to 0.639). Safety, sentiment and fact-check stay within noise. Next:
+- publish the two adapters with the model, and add adapter support to the client SDKs;
+- larger held-out samples for the categories with one language cell (safety, fact-check);
+- more licence-clean data for the rest, generated locally where no human-labelled data exists.
 
 ## Milestones
 
@@ -34,7 +37,7 @@ compared with the generalist on the same held-out suites.
   with 3–5 datasets held out to measure true zero-shot generalisation.
 
 **0.4 — experts and routing** (engine side done in 0.8.0: per-category LoRA adapters, chosen by name or
-by question family; the specialist-versus-generalist experiment is next)
+by question family; the first specialist experiment is in docs/ADAPTERS.md)
 - Router over domain experts with the generalist as fallback; evaluated against the single model on
   the same validation data.
 - Option-isolated attention and per-option positions (UniMC) in the engine, if the ablation pays.

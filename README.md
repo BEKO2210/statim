@@ -53,17 +53,17 @@ and parity, not one combined benchmark.
 
 ### Download a release
 
-This downloads the v0.8.1 Linux x86-64 CPU binary and the 357 MB multilingual q8_0 model.
+This downloads the v0.8.2 Linux x86-64 CPU binary and the 357 MB multilingual q8_0 model.
 
 ```bash
 git clone https://github.com/BEKO2210/statim && cd statim
 mkdir -p dist && cd dist
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.1/statim-0.8.1-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.1/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.1-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.2/statim-0.8.2-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.2/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.2-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 cd ..
-dist/statim-0.8.1-linux-x86_64-cpu/statim serve \
+dist/statim-0.8.2-linux-x86_64-cpu/statim serve \
   -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080
 ```
 
@@ -189,7 +189,8 @@ checkpoint's f32 and quantized files, and the engine refuses an adapter whose ba
 `--adapter-mode merge|runtime` overrides this choice. `"adapter": "auto"` matches the 14 category
 keywords in every question ID, then its instructions; mixed or unmatched families use the base.
 See [docs/API.md#lora-adapters](docs/API.md#lora-adapters) for constraints, routing, measurements,
-responses, metrics, and tests.
+responses, metrics, and tests. Trained adapters and the evidence for each are in
+[docs/ADAPTERS.md](docs/ADAPTERS.md). On 0.7.0, the PII and emotion adapters pass the gate.
 
 ### Authentication, limits, and operations
 
@@ -458,12 +459,14 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.8.1: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.8.1 binds each LoRA adapter to the
+The current release is v0.8.2: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.8.2 checks every document against
+the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
 the comparison with a local LLM and an NLI classifier, fuzzing in CI, load-time model and adapter
-validation, and a warning when a non-loopback server starts without authentication. Next: adapters
-trained for the categories where Qwen3-8B still leads (emotion, fact-check, sentiment, safety, PII).
+validation, and a warning when a non-loopback server starts without authentication. Next: the
+first category adapters ([docs/ADAPTERS.md](docs/ADAPTERS.md)). PII and emotion pass the gate and
+will be published; safety, sentiment and fact-check need more data or larger held-out samples.
 
 Before 1.0, the HTTP API may change between minor versions. See the [changelog](CHANGELOG.md) and
 [roadmap](docs/ROADMAP.md).

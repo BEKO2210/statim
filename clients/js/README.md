@@ -3,7 +3,7 @@
 Official TypeScript client for the [Statim](../../README.md) HTTP API. ESM,
 `fetch`, no runtime dependencies. Declaration files come from `tsc` and follow
 the schemas in [`docs/openapi.yaml`](../../docs/openapi.yaml). The package
-targets the same API as server 0.8.1, except LoRA adapters (0.8.0): requests
+targets the same API as server 0.8.2, except LoRA adapters (0.8.0): requests
 cannot select an `adapter` yet, and the adapter fields of responses and
 `/v1/models` are not exposed.
 
