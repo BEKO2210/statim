@@ -286,12 +286,19 @@ def compare_schema(old, new, path, mode, breaks, notes):
 
     old_enum = set(map(json.dumps, old.get("enum", [])))
     new_enum = set(map(json.dumps, new.get("enum", [])))
+    if mode == "request" and "enum" in new and "enum" not in old:
+        # a field that accepted any value of its type now accepts only the listed ones
+        breaks.append(f"{jpath(path, 'enum')}: request enum added: values now restricted to {sorted(new_enum)}")
+        old_enum = new_enum
     for value in sorted(old_enum - new_enum):
         breaks.append(f"{jpath(path, 'enum')}: {mode} enum value removed: {value}")
     for value in sorted(new_enum - old_enum):
         notes.append(f"{jpath(path, 'enum')}: {mode} enum value added: {value}")
     if old.get("const", MISSING) != new.get("const", MISSING):
-        breaks.append(f"{jpath(path, 'const')}: {mode} constant changed")
+        if mode == "response" and "const" not in old:
+            notes.append(f"{jpath(path, 'const')}: response constant added")
+        else:
+            breaks.append(f"{jpath(path, 'const')}: {mode} constant changed")
 
     for keyword in MAX_BOUNDS:
         compare_bound(old, new, path, keyword, "max", mode, breaks, notes)

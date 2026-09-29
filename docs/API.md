@@ -211,7 +211,7 @@ HTTP framing and declared body size, bearer authentication, and route lookup hap
 API v1 is the HTTP interface described by `docs/openapi.yaml` and frozen as of 0.9.0 in
 `docs/api-v1.contract.json`. Removing an operation, documented status, or request field; requiring
 a previously optional or new request field; narrowing or changing a request type; removing a
-request enum value; adding or tightening a request validation bound; adding or changing a request
+request enum value or adding an enum to a request field that had none; adding or tightening a request validation bound; adding or changing a request
 `pattern` or `format`; adding, removing, or changing a request field default; removing a response
 field, making one optional, or changing its type; removing or renaming a documented `/metrics`
 family or changing its kind; and any change to the `Error` body shape are breaking changes. A

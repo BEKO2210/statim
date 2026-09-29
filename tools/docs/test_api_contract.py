@@ -80,6 +80,15 @@ class ContractCompatibilityTests(unittest.TestCase):
         self.check_mutation(lambda d: d["components"]["schemas"]["SystemOneRequest"]
                             ["properties"].pop("lang"), True, "lang")
 
+    def test_request_enum_added_to_free_field(self):
+        # "model" accepts any string today; an enum would reject every other value
+        self.check_mutation(lambda d: d["components"]["schemas"]["SystemOneRequest"]["properties"]["model"]
+                            .__setitem__("enum", ["english"]), True, "request enum added")
+
+    def test_response_enum_added_is_a_note(self):
+        self.check_mutation(lambda d: d["components"]["schemas"]["Routing"]["properties"]["engine"]
+                            .__setitem__("enum", ["statim"]), False, "response enum value added")
+
     def test_request_field_made_required(self):
         self.check_mutation(lambda d: d["components"]["schemas"]["SystemOneRequest"]
                             ["required"].append("lang"), True, "request field made required")
