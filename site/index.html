@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Statim">
 <meta property="og:title" content="Statim: typed decisions in one forward pass">
-<meta property="og:description" content="Choice, score and yes/no answers with calibrated confidence from a 3.3 MB C++ binary, on CPU or GPU.">
+<meta property="og:description" content="Choice, score and yes/no answers with calibrated confidence from a 5.5 MB C++ binary, on CPU or GPU.">
 <meta property="og:url" content="https://beko2210.github.io/statim/">
 <meta property="og:image" content="https://beko2210.github.io/statim/og.jpg">
 <meta property="og:image:width" content="1280">
@@ -31,7 +31,7 @@
 <script type="application/ld+json">
 {"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Statim",
  "applicationCategory": "DeveloperApplication", "operatingSystem": "Linux",
- "softwareVersion": "0.8.5", "url": "https://beko2210.github.io/statim/",
+ "softwareVersion": "0.8.6", "url": "https://beko2210.github.io/statim/",
  "description": "A native C++ engine for decision models: choice, score and yes/no answers with calibrated confidence in one forward pass, on CPU or GPU.",
  "license": "https://www.apache.org/licenses/LICENSE-2.0",
  "author": {"@type": "Person", "name": "Belkis Aslani"},
@@ -88,7 +88,7 @@
         <a class="btn" href="#start">Get started</a>
       </div>
       <ul class="facts">
-        <li>3.3 MB static binary</li>
+        <li>5.5 MB static binary</li>
         <li>No Python at runtime</li>
         <li>Apache-2.0 engine</li>
       </ul>
@@ -329,7 +329,7 @@
     <p class="note" style="margin-top:14px">Laya is the Python reference server. Measured on a 2015-class laptop CPU with the multilingual checkpoint in f32, 30 states with 8 questions each; method and raw numbers in the <a href="https://github.com/BEKO2210/statim#cpu-performance">README</a>.</p>
 
     <dl class="spec">
-      <div><dt>Runtime</dt><dd><span class="from">Python 3.10+, PyTorch, transformers</span><span class="to">One 3.3 MB binary and one .gguf file</span></dd></div>
+      <div><dt>Runtime</dt><dd><span class="from">Python 3.10+, PyTorch, transformers</span><span class="to">One 5.5 MB binary and one .gguf file</span></dd></div>
       <div><dt>Peak memory, one request</dt><dd><span class="from">2,667 MB</span><span class="to">585 MB in f32, 234 MB in q8_0</span></dd></div>
       <div><dt>Deploy</dt><dd><span class="from">pip or Docker with PyTorch</span><span class="to">Static binary, distroless image or systemd unit</span></dd></div>
     </dl>
@@ -539,7 +539,7 @@ tools/fetch_models.sh multilingual english
         <div><h2>Legal</h2><ul><li><a href="impressum/">Impressum</a></li><li><a href="datenschutz/">Datenschutz</a></li></ul></div>
       </div>
     </div>
-    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.8.5. Engine Apache-2.0; weights PolyForm Noncommercial, Small Business or Free Trial, or a commercial licence.</span></div>
+    <div class="legal"><span>© 2026 Belkis Aslani, Freiberg am Neckar</span><span>Statim 0.8.6. Engine Apache-2.0; weights PolyForm Noncommercial, Small Business or Free Trial, or a commercial licence.</span></div>
   </div>
 </footer>
 </body>

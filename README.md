@@ -23,9 +23,10 @@
   <a href="https://beko2210.github.io/statim/#film"><b>Watch the 60-second film</b></a>
 </p>
 
-Statim is a native C++20 engine for System-1 decision models. It turns text or JSON into typed
-`choice`, `score`, and `noul` decisions in one encoder forward pass and serves them from one static
-binary. It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
+Statim answers typed questions about text or JSON: pick one of several labels (`choice`), rate on a
+scale (`score`), or give a yes/no probability (`noul`). It is a native C++20 engine for System-1
+decision models and computes all answers in one encoder forward pass, served from one static binary.
+It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by changing the base URL.
 
 > *statim* (Latin): immediately, at once.
@@ -51,41 +52,21 @@ and parity, not one combined benchmark.
 
 ## Quick start
 
-### Download a release
-
-This downloads the v0.8.5 Linux x86-64 CPU binary and the 357 MB multilingual q8_0 model.
+Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, ask.
 
 ```bash
-git clone https://github.com/BEKO2210/statim && cd statim
-mkdir -p dist && cd dist
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.5/statim-0.8.5-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.5/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.5-linux-x86_64-cpu.tar.gz
+# 1. Download the engine (3 MB) and the multilingual model (357 MB), and verify both
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.6/statim-0.8.6-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.8.6/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.8.6-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
-cd ..
-dist/statim-0.8.5-linux-x86_64-cpu/statim serve \
-  -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080
-```
+curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS.model
 
-### Build from source
+# 2. Start the server (it keeps running; it is ready when it logs "listening")
+./statim-0.8.6-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
 
-```bash
-git clone --recursive https://github.com/BEKO2210/statim && cd statim
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
-pip install numpy safetensors gguf            # converter only; not needed at runtime
-tools/fetch_models.sh multilingual english    # download from Hugging Face + convert to GGUF
-ctest --test-dir build                        # parity gates against the official package (as a regular user, see REPRODUCE.md)
-./build/statim serve -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf --consensus
-  # open http://127.0.0.1:8080/ for the playground
-```
-
-Quantized variants: `build/statim-quantize models/laya-multilingual-f32.gguf out.gguf q8_0`. See
-[quantization results](#consensus-calibration-and-quantization) before choosing 4-bit weights.
-
-### Make one request
-
-```bash
-statim serve -m multilingual=laya-multilingual-f32.gguf --port 8080
+# 3. In a second terminal: one ticket, three typed questions
 curl -s localhost:8080/v1/systemone -d '{
   "state": {"subject": "Duplicate charge on invoice #4411",
             "body": "We were billed twice for March. Please refund the duplicate today or we will cancel."},
@@ -98,7 +79,20 @@ curl -s localhost:8080/v1/systemone -d '{
     "refund":     {"type": "noul", "instructions": "Does the user explicitly request a refund?"}}}'
 ```
 
-The playground is at `http://127.0.0.1:8080/`. For a complete application, see the
+The answer (statim-decide-multilingual-base, q8_0; excerpt):
+
+```json
+{"answers": {
+  "department": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.9948, "technical": 0.0011, "sales": 0.0014, "other": 0.0026}},
+  "urgency": {"type": "score", "score": 1.585, "legend": {"0": "not urgent", "1": "soon", "2": "critical deadline or blocking issue"}, "probabilities": {"0": 0.0617, "1": 0.2916, "2": 0.6467}},
+  "refund": {"type": "noul", "noul": 0.9224}}}
+```
+
+`choice` returns the winning label, `score` the expected level on the `legend` scale, and `noul` the
+probability that the answer is yes.
+
+The playground is at `http://127.0.0.1:8080/`. To build from source (any other OS or CPU), use a GPU,
+or quantize a model, see [docs/BUILD.md](docs/BUILD.md). A complete application is in the
 [ticket-triage example](examples/ticket-triage/README.md).
 
 ## How it works
@@ -116,7 +110,7 @@ the tokenizer in GGUF, making each model a self-describing artifact.
 
 | | Laya (Python) | Statim |
 |---|---|---|
-| Runtime | Python 3.10+, PyTorch, transformers | One 3.3 MB binary and one `.gguf` file |
+| Runtime | Python 3.10+, PyTorch, transformers | One 5.5 MB binary and one `.gguf` file |
 | Answers | Reference | 240/240 token sequences; answers within 1e-4 |
 | Tokenizer | HF `tokenizers` (Rust) | Native C++; identical on 3,906 cases plus 140k fuzz strings, about 10× faster |
 | Cold start to first answer | 11.35 s | **0.76 s** |
@@ -126,7 +120,7 @@ the tokenizer in GGUF, making each model a self-describing artifact.
 | Deployment | pip or Docker | Static binary, distroless Docker, hardened systemd unit |
 
 The comparison uses the laptop CPU protocol under [CPU performance](#cpu-performance). Consensus
-across the two base checkpoints is reported separately under [Results](#base-checkpoint-consensus).
+across the two base checkpoints is reported separately in [the research results](docs/RESULTS.md#base-checkpoint-consensus).
 
 ## Models
 
@@ -249,7 +243,7 @@ best thread count. Scripts are in `bench/`.
 | Server resident memory | 3,915 MB | **650 MB** | 6× less |
 | Cold start to first answer | 11.35 s | **0.76 s** | 15× faster |
 | Peak memory, one shot | 2,667 MB | **585 MB** f32; **234 MB** q8_0 | 4.6–11× less |
-| Runtime footprint | PyTorch alone ≥ 1.2 GB | **3.3 MB** binary | |
+| Runtime footprint | PyTorch alone ≥ 1.2 GB | **5.5 MB** binary | |
 
 On AVX2 without VNNI, q8_0 halves the file and cuts memory 2.5× but is slower than f32. Its logits
 move by up to ~0.4 and 2 of 240 parity answers change. ARM dotprod/i8mm and AVX-512-VNNI are the
@@ -257,14 +251,7 @@ intended int8 CPU targets. Four-bit weights are not recommended for this model f
 
 ### GPU performance
 
-GPU support is optional. Vulkan requires Vulkan headers, `glslc`, SPIR-V headers, and a runtime
-driver. CUDA requires the CUDA toolkit and `-DSTATIM_CUDA=ON`.
-
-```bash
-cmake -S . -B build-vk -DSTATIM_VULKAN=ON && cmake --build build-vk
-ctest --test-dir build-vk                      # CPU gates + the same gates on the GPU (*_vulkan)
-./build-vk/statim serve --device vulkan -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf
-```
+GPU build and launch instructions are in [docs/BUILD.md](docs/BUILD.md#gpu-backends).
 
 `--device` accepts `cpu`, `gpu`, `vulkan`, `cuda`, or a name such as `Vulkan0`; `STATIM_DEVICE` sets
 the default. Both f32 checkpoints use about 3.3 GB of VRAM. On an RTX 3070 and Ryzen 7 5800X, f32,
@@ -329,118 +316,15 @@ Qwen3-8B leads on emotion, fact-check, sentiment, safety, and PII. See
 
 ### Published model gates
 
-A new model replaces the one it was trained from only through the promotion gate
-(`tools/finetune/gate.py`). The validation mean may fall by at most one point. No held-out suite may
-drop significantly after Holm-Bonferroni correction for the number of suites (family-wise error
-5 %). No suite family may decline when pooled, and at least one family must improve significantly.
+Published models must pass validation, held-out-suite, and pooled-family promotion gates before
+replacing their base. The full method and charts are in [docs/RESULTS.md](docs/RESULTS.md#published-model-gates).
 
 | Model | Trained suites | Never-trained suites | Gate versus base |
 |---|---|---|---|
 | English 0.5.0 | typed-decisions 0.768; Banking77 0.928; MASSIVE English 0.867; HWU64 0.833 | AG News 0.939; Emotion 0.588 | 54 suites: 11 significant gains, 0 regressions; zero-shot family within noise |
 | Multilingual 0.7.0 | typed-decisions 0.763; Banking77 0.914; MASSIVE 0.800 over 12 languages | AG News 0.9295; Emotion 0.504 | 89 suites: 23 significant gains, 66 within noise, 0 regressions; 14-category macro 0.748 (0.4.0: 0.559) |
 
-The first four suites use 2,000 deterministic test rows; MASSIVE and HWU64 cells use 150 seeded
-stratified rows. See [REPRODUCE.md](REPRODUCE.md#3-a-published-models-evaluation).
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.5.0-dark.svg">
-  <img alt="Statim 0.5.0 English model vs. the English base checkpoint: Banking77 0.550 to 0.928, MASSIVE English 0.533 to 0.867, typed decisions 0.361 to 0.768, HWU64 0.607 to 0.833; zero-shot suites within noise." src="assets/diagrams/results-0.5.0-light.svg" width="100%">
-</picture>
-
-```bash
-.venv-train/bin/python tools/finetune/train_multitask.py models/laya models/laya-english-big1 --clean \
-    --mixture data/mixture-v5.jsonl.gz --massive-langs en --massive-per-lang 11000 --max-len 1024 \
-    --epochs 12 --patience 3 --distill 12000 --budget banking77=12000,massive=8000,mixture=20000,typed=4000,distill=6000 \
-    --warmup 0.06 --ema 0 --optim adamw8bit --max-tokens 3072 --accum 6
-.venv-train/bin/python tools/finetune/gate.py eval models/laya-english-big1
-.venv-train/bin/python tools/finetune/gate.py compare models/laya models/laya-english-big1
-```
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/results-0.4.0-dark.svg">
-  <img alt="Statim 0.4.0 vs. the base checkpoint: MASSIVE 0.340 to 0.772, Banking77 0.517 to 0.903, typed decisions 0.351 to 0.758, zero-shot suites within noise." src="assets/diagrams/results-0.4.0-light.svg" width="100%">
-</picture>
-
-```bash
-.venv-train/bin/python tools/finetune/build_mixture.py --out data/mixture-v4.jsonl.gz --per-source 2000 --audit tools/finetune/licence_audit.json
-.venv-train/bin/python tools/finetune/build_extra.py --out data/extra-v1.jsonl.gz   # then merge v4 + extra into data/mixture-v5.jsonl.gz
-.venv-train/bin/python tools/finetune/train_multitask.py models/laya-multilingual models/laya-multilingual-big1 --clean \
-    --mixture data/mixture-v5.jsonl.gz --massive-per-lang 2000 --epochs 20 --patience 3 \
-    --budget banking77=12000,massive=16000,mixture=20000,typed=4000,distill=3000 --warmup 0.06 --ema 0.999
-.venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-big1
-.venv-train/bin/python tools/finetune/gate.py compare models/laya-multilingual-clean models/laya-multilingual-big1
-```
-
-### Base-checkpoint consensus
-
-This separate experiment uses the first 400 test rows, identical prompts, CPU, and fp32. It uses
-the original Laya checkpoints, not the fine-tuned Statim Decide models. Reproduce it with
-`bench/eval_accuracy.py`.
-
-| Suite, 400 cases | Jev, published¹ | Laya English² | Laya multilingual² | Consensus |
-|---|---:|---:|---:|---:|
-| AG News, 4 labels | 0.910 | 0.950 | 0.935 | **0.950** |
-| DAIR Emotion, 6 labels | 0.480 | 0.5925 | 0.5375 | **0.600** |
-| Banking77, all 77 labels | 0.870, 72 labels | 0.425 | 0.470 | **0.4875** |
-
-| Emotion calibration | NLL | ECE | Brier |
-|---|---:|---:|---:|
-| Laya English | 2.019 | 0.306 | 0.696 |
-| Consensus | **1.865** | **0.286** | **0.686** |
-
-¹ Third-party published values quoted by Laya use different samples and prompts. ² Measured through
-Statim exact mode; Laya reports 0.953 / 0.600 for English in its own run. Consensus averages option
-log-probabilities and costs 1.25–1.4× the English checkpoint alone.
-
-### Consensus, calibration, and quantization
-
-- Option-order ensembling changed multilingual Emotion from 0.5375 to 0.525. It remains available
-  as `ensemble: K` for choice questions; ordinal score levels are never rotated.
-- Contextual calibration added 2.0 points on multilingual Emotion, was neutral to slightly negative
-  elsewhere, and improved Banking77 ECE. Enable it with `calibrate: true`.
-- q4_0 and q4_K changed 1–2 of 16 parity answers. f32 is the reference; q8_0 halves memory with
-  smaller logit drift.
-
-### Many-option tasks and Banking77 fine-tuning
-
-When options exceed `head_max_len` (192 English, 256 multilingual), Laya cuts each option to
-`(head_max_len - 16) / k` tokens. With 77 intents, that is one or two subwords per intent. Setting
-`"head_max_len": 512` or `--head-max-len 512` needs no training and preserves at least 128 state
-tokens.
-
-The recipe trains on Banking77 train with shuffled option order, replays typed-decisions train,
-freezes token embeddings, selects the best epoch on held-out development data, and refits
-temperatures. Distillation adds generic tweets and news labeled by the base model's distributions.
-Five epochs take 35 minutes on an RTX 3070.
-
-```bash
-python -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 datasets
-.venv-train/bin/python tools/finetune/train_banking77.py models/laya-multilingual models/laya-multilingual-banking77 --distill 6000 --epochs 5
-.venv/bin/python tools/convert_laya.py models/laya-multilingual-banking77 -o models/laya-multilingual-banking77-f32.gguf --type f32 --embd-type f16
-.venv-train/bin/python tools/finetune/eval_laya.py models/laya-multilingual-banking77 --n 2000 --head-max-len 512
-```
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/finetune-dark.svg">
-  <img alt="Banking77 accuracy rises from 0.4885 to 0.8655 while held-out AG News and Emotion stay flat; calibration error falls from 0.372 to 0.043." src="assets/diagrams/finetune-light.svg" width="100%">
-</picture>
-
-Protocol: first 2,000 test rows per suite, never trained on, with ±1.1 points standard error around
-0.5, plus 2,000 typed-decisions test decisions.
-
-| | Base | + budget 512 | 3 epochs | + distillation, 5 epochs |
-|---|---:|---:|---:|---:|
-| Banking77 accuracy | 0.4885 | 0.5175 | 0.8435 | **0.8655** |
-| Banking77 ECE | 0.372 | 0.352 | 0.052 | **0.043** |
-| AG News, held out | 0.938 | 0.938 | 0.941 | **0.9385** |
-| Emotion, held out | 0.532 | 0.532 | 0.502 | **0.528** |
-| Emotion ECE | 0.336 | 0.336 | 0.210 | **0.155** |
-| typed-decisions test | 0.351 | 0.351 | 0.6665¹ | **0.7015¹** |
-
-¹ In-domain because its train split is replay data. AG News and Emotion were never trained on.
-Without distillation, Emotion lost 3 points; with it, each held-out suite stays within noise while
-Banking77 gains 35 points. Statim and Laya score 0.8675 versus 0.870 on the first 400 Banking77 rows,
-bf16 versus f32. The weights are not committed; the script reproduces them.
+Category-adapter results and promotion evidence are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
 
 ## Security and robustness
 
@@ -462,9 +346,9 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.8.5: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.8.5 publishes the safety adapter
-after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
+The current release is v0.8.6: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.8.6 gives the README a three-step
+quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
 the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
 the comparison with a local LLM and an NLI classifier, fuzzing in CI, load-time model and adapter
