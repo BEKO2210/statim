@@ -24,8 +24,10 @@ top of 0.7.0, close that gap?
   - 150 items per language cell, seed 20260927.
   - Items whose text occurs in the training mixture are removed.
   - The same server answers every item twice: once without the adapter and once with it.
-- **Decision** (`gate.adapter_decision`): promote when the pooled category gain exceeds 2 standard
-  errors and no language cell regresses after Holm-Bonferroni (family-wise 5 %).
+- **Decision** (`gate.adapter_decision`): promote when the category family gains more than 2
+  standard errors, pooled by rows or by suites, and nothing regresses. A regression is a pooled drop
+  beyond 2 standard errors under either pooling, or a drop in one language cell that stays
+  significant after Holm-Bonferroni (family-wise 5 %).
 
 ### Results
 
