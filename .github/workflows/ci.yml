@@ -2,21 +2,25 @@ name: ci
 on:
   push:
   pull_request:
+
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
         run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/docs/check_docs.py
       - name: Toolchain
-        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user numpy safetensors gguf PyYAML 'jsonschema>=4.18'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
       - name: API v1 contract compatibility
         run: python3 tools/docs/test_api_contract.py && python3 tools/docs/api_contract.py --check
       - name: Cache models
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: models
           key: laya-models-v2
@@ -38,13 +42,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev
       - name: Cache Laya tokenizers
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             models/laya/tokenizer
@@ -58,7 +62,7 @@ jobs:
               "https://huggingface.co/convaiinnovations/$repo/resolve/main/tokenizer/tokenizer.json"
           done
       - name: Restore the grown fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: build-fuzz/corpus-*
           key: fuzz-corpus-${{ github.run_id }}
@@ -78,7 +82,7 @@ jobs:
         run: fuzz/run.sh gguf 60 build-fuzz
       - name: Upload crash inputs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-artifacts
           path: build-fuzz/artifacts/

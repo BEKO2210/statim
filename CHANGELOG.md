@@ -7,6 +7,15 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Security
+- Hardened CI and release workflows against supply-chain tampering ([docs/SECURITY.md](docs/SECURITY.md#supply-chain)):
+  - Every GitHub Actions action across `.github/workflows/` pinned to an immutable full commit SHA with version comments.
+  - Least-privilege permissions applied across all workflows: `contents: read` default, with elevated permissions (`contents: write`, `id-token: write`, `attestations: write`) scoped strictly to release asset publishing and provenance attestation.
+  - Release archives accompanied by SPDX 2.3 JSON Software Bills of Materials (SBOMs) generated with Syft (`anchore/sbom-action/download-syft`) and attached to GitHub releases.
+  - Build provenance attestations generated for all release archives using `actions/attest-build-provenance` and verifiable with `gh attestation verify`.
+  - Added weekly Dependabot updates (`.github/dependabot.yml`) for GitHub Actions.
+  - CI Python dependencies pinned to exact versions with SHA-256 integrity hashes in `requirements-ci.txt` and verified via `--require-hashes`.
+
 ## [0.9.2] - 2026-09-30
 
 Statim is now level with or faster than ONNX Runtime on short f32 inputs, where 0.9.1 was up to 16 %

@@ -75,3 +75,20 @@ counts). Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Re
 - `git diff --check` and Python syntax compilation passed.
 
 Findings come from an independent review of 0.2.1 (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
+
+## Supply chain
+
+Statim hardens its continuous integration and release pipeline against supply-chain tampering:
+
+- **Pinned actions.** Every workflow action (`uses:`) across `.github/workflows/` is pinned to an immutable full commit SHA, resolved directly from the action's official repository, with the semantic release tag recorded in a trailing comment. Action pins are monitored and kept current weekly via Dependabot (`.github/dependabot.yml`).
+- **Least privilege.** Workflows declare `contents: read` by default. Elevated permissions are scoped strictly to the specific jobs that require them: `contents: write` for uploading release assets, and `id-token: write` / `attestations: write` for generating artifact attestations.
+- **Pinned CI dependencies.** Python tooling dependencies in CI are pinned to exact versions with SHA-256 integrity hashes (`requirements-ci.txt`) and installed with `--require-hashes`.
+- **Software Bill of Materials (SBOM).** Each release archive has a companion SPDX 2.3 JSON SBOM generated at build time with Syft (`anchore/sbom-action/download-syft`) and published alongside the release assets (for example, `statim-0.9.2-linux-x86_64-cpu.spdx.json`).
+- **Build provenance.** Release archives are signed with build provenance attestations via `actions/attest-build-provenance`. Provenance can be verified using the GitHub CLI:
+  ```bash
+  gh attestation verify statim-0.9.2-linux-x86_64-cpu.tar.gz --owner BEKO2210
+  ```
+- **Checksums.** Each release attaches `SHA256SUMS` covering all released archives:
+  ```bash
+  sha256sum --check --ignore-missing SHA256SUMS
+  ```
