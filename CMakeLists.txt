@@ -19,13 +19,12 @@ if(STATIM_FUZZ)
     message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
   endif()
   # ASan + UBSan for every object, ggml included, so memory errors our inputs cause inside ggml are
-  # reported; coverage feedback only for statim_core / statim_tokenizer (below), which keeps
+  # reported; coverage feedback only for Statim's parsers/runtime (below), which keeps
   # the kernels fast enough to run real forward passes per input.
   # -fno-sanitize=function: ggml calls typed converters through void* function pointers (upstream idiom).
-  # signed-integer-overflow and enum stay recoverable only so fuzz/ubsan.supp can name two upstream
-  # ggml cases; the fuzzers run with UBSAN_OPTIONS=halt_on_error=1, so every other report aborts.
+  # UBSAN_OPTIONS=halt_on_error=1 makes every report abort; malformed GGUF is structurally checked
+  # before it reaches ggml.
   add_compile_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined
-                      -fsanitize-recover=signed-integer-overflow,enum
                       -fno-omit-frame-pointer -g)
   add_link_options(-fsanitize=address,undefined -fno-sanitize=function)
   set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
@@ -47,6 +46,10 @@ set(GGML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/ggml EXCLUDE_FROM_ALL)
 
+add_library(statim_gguf_preflight STATIC src/gguf_preflight.cpp)
+target_include_directories(statim_gguf_preflight PUBLIC include)
+target_link_libraries(statim_gguf_preflight PUBLIC ggml)
+
 # ---- tokenizer
 # Unicode data lives in src/unicode_tables.inc (generated from HF behavior by
 # tools/gen_unicode_tables.py); no external Unicode library needed.
@@ -57,9 +60,10 @@ target_include_directories(statim_tokenizer PUBLIC include PRIVATE third_party s
 add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp src/sha256.cpp)
 set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
-target_link_libraries(statim_core PUBLIC statim_tokenizer ggml)
+target_link_libraries(statim_core PUBLIC statim_tokenizer ggml statim_gguf_preflight)
 if(STATIM_FUZZ)
   target_compile_options(statim_tokenizer PRIVATE -fsanitize=fuzzer-no-link)
+  target_compile_options(statim_gguf_preflight PRIVATE -fsanitize=fuzzer-no-link)
   target_compile_options(statim_core PRIVATE -fsanitize=fuzzer-no-link)
 endif()
 
@@ -92,6 +96,10 @@ if(STATIM_BUILD_TESTS)
   target_include_directories(test_model_validation PRIVATE third_party/ggml/src)
   target_link_libraries(test_model_validation PRIVATE statim_core)
   add_test(NAME model_validation COMMAND test_model_validation ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/data/tiny-metaspace.gguf)
+  add_executable(test_gguf_preflight tests/test_gguf_preflight.cpp)
+  target_link_libraries(test_gguf_preflight PRIVATE statim_core)
+  add_test(NAME gguf_preflight COMMAND test_gguf_preflight ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(gguf_preflight PROPERTIES SKIP_RETURN_CODE 77)
   find_package(Python3 COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
     add_test(NAME security_http COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/security/test_http.py
@@ -167,7 +175,7 @@ endif()
 # ---- tools
 add_executable(statim-quantize tools/quantize.cpp)
 target_include_directories(statim-quantize PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(statim-quantize PRIVATE ggml)
+target_link_libraries(statim-quantize PRIVATE ggml statim_gguf_preflight)
 if(STATIM_BUILD_TESTS AND Python3_Interpreter_FOUND)
   add_test(NAME quantize_types COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_quantize_types.py
     --binary $<TARGET_FILE:statim-quantize>

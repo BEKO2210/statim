@@ -7,13 +7,6 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
-### Fixed
-- ORT comparison tooling, after review: `bench/compare_predictions.py` refuses empty or mismatched
-  runs (each prediction now records an item hash); `bench/ort_compare.py` gates f32 parity on the
-  timed inputs, sizes the artifacts it actually ran, reads `--ort-provider=VALUE`, and counts
-  context switches over all server threads; `bench/ort_export.py` accepts relative paths.
-  `docs/ORT.md` no longer compares context switches, which were counted on the main thread only.
-
 ### Added
 - [docs/ORT.md](docs/ORT.md): Statim compared with ONNX Runtime on the CPU, on the shipped
   multilingual model, with ORT given its best measured configuration.
@@ -33,6 +26,22 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - `bench/eval_categories.py --predictions` writes one record per item, and
   `bench/compare_predictions.py` compares two such runs pairwise: changed decisions, discordant
   pairs, and an exact McNemar test.
+
+### Fixed
+- ORT comparison tooling, after review: `bench/compare_predictions.py` refuses empty or mismatched
+  runs (each prediction now records an item hash); `bench/ort_compare.py` gates f32 parity on the
+  timed inputs, sizes the artifacts it actually ran, reads `--ort-provider=VALUE`, and counts
+  context switches over all server threads; `bench/ort_export.py` accepts relative paths.
+  `docs/ORT.md` no longer compares context switches, which were counted on the main thread only.
+
+### Security
+- Added an overflow-safe structural GGUF preflight before every ggml file load. It bounds all
+  strings and arrays, validates metadata and tensor types as integers, checks tensor shape and byte
+  arithmetic, and enforces the aligned data layout. Hostile shapes and out-of-range enum values are
+  now rejected before they can trigger undefined behaviour in ggml's parser.
+- Avoid uploading an unused attention-mask input when every encoder layer uses the other attention
+  mode, a fuzz-found configuration that previously reached a ggml assertion after loading.
+
 
 ## [0.9.0] - 2026-09-29
 

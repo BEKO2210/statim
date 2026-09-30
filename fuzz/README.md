@@ -10,8 +10,8 @@ party can hand the server, plus the model files an operator loads:
 | `fuzz_gguf` | a whole model file | `Model::load`; if the file is accepted, an `Engine` and two requests (choice, score, noul; ensemble; calibration) | a crash or abort (`GGML_ASSERT`), a sanitizer report, a leak, a hang. Rejecting with an exception is the expected outcome. |
 
 Everything, vendored ggml included, is built with AddressSanitizer and UndefinedBehaviorSanitizer
-(`-fno-sanitize-recover`). Coverage feedback is limited to `statim_core` and `statim_tokenizer`, so
-ggml's kernels run fast enough for real forward passes per input while memory errors that our
+(`-fno-sanitize-recover`). Coverage feedback is limited to Statim's preflight, core and tokenizer,
+so ggml's kernels run fast enough for real forward passes per input while memory errors that our
 inputs cause inside ggml are still reported.
 
 ## Run
@@ -24,8 +24,8 @@ cmake --build build-fuzz --target fuzz_request fuzz_tokenizer fuzz_gguf
 fuzz/run.sh request 1800          # seconds; also: tokenizer, gguf
 ```
 
-`fuzz/run.sh` sets the sanitizer options (`halt_on_error=1`, `detect_leaks=1`, the suppressions
-below), the request dictionary, a 25 s per-input timeout and a 4 GiB RSS cap. New corpus entries go
+`fuzz/run.sh` sets the sanitizer options (`halt_on_error=1`, `detect_leaks=1`, `fuzz/ubsan.supp`),
+the request dictionary, a 25 s per-input timeout and a 4 GiB RSS cap. New corpus entries go
 to `build-fuzz/corpus-<name>/`; crash inputs to `build-fuzz/artifacts/`. CI runs every harness for
 60 s on each push (`.github/workflows/ci.yml`, job `fuzz`).
 
@@ -42,7 +42,7 @@ driver of an ordinary build: `build/fuzz_replay_<name> <file-or-dir>...`.
 | `regressions/<name>/` | every input that once crashed, named after the bug; also replayed by ctest |
 | `data/tiny-*.gguf` | tiny deterministic models written by `make_tiny_model.py`, the gguf seeds. `tiny-metaspace.gguf` and `tiny-bytelevel.gguf` are 16-wide, 2-layer f32/f16 models (Metaspace and ByteLevel BPE). `tiny-metaspace-q4_0.gguf` and `tiny-metaspace-q8_0.gguf` are the metaspace model with `head.layers.*.linear2.weight` in q4_0 and q8_0: that matrix has `ne[0] = 32` (one block) and `ne[1] = 16` (`ne[1] % 8 == 0`), so `repack_weights` runs on AVX2 for q4_0 and on ARM dotprod/i8mm for q4_0 and q8_0 |
 | `request.dict` | libFuzzer dictionary of request field names and values |
-| `ubsan.supp` | UBSan suppressions — confirmed upstream ggml issues only, one line each with the reason |
+| `ubsan.supp` | UBSan suppressions: empty since the GGUF preflight closed U1/U2; only confirmed upstream issues belong here, one line each with the reason |
 
 Regenerate the tiny models with `python3 fuzz/make_tiny_model.py fuzz/data` (needs `numpy` and
 `gguf`); they are deterministic. When a fuzzer finds a bug: fix it, copy the input to

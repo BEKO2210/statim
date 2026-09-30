@@ -2,7 +2,6 @@
 #pragma once
 
 // A direct reproduction (build-fuzz/fuzz_<name> <file>) without fuzz/run.sh must also stop at the first
-// UBSan report: signed-integer-overflow and enum are built recoverable only for fuzz/ubsan.supp.
 extern "C" const char* __ubsan_default_options() { return "halt_on_error=1:print_stacktrace=1"; }
 #include <cstdio>
 #include <cstdlib>

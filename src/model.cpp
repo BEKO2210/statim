@@ -1,4 +1,5 @@
 #include "statim/model.h"
+#include "statim/gguf_preflight.h"
 #include "statim/security.h"
 
 #include "kernels.h"
@@ -402,6 +403,11 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     if (!M.on_cpu())
         M.device_desc = std::string(ggml_backend_dev_name(M.dev)) + " (" + ggml_backend_dev_description(M.dev) + ")";
 
+    try {
+        gguf_preflight(path);
+    } catch (const std::exception& e) {  // keep the load error's usual prefix and name the file
+        fail("cannot read GGUF model '" + path + "': " + e.what());
+    }
     gguf_init_params gp{/*no_alloc=*/true, &M.ctx_w};
     M.gguf = gguf_init_from_file(path.c_str(), gp);
     if (!M.gguf) fail("cannot read GGUF model '" + path + "'");
@@ -621,6 +627,11 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     if (n_threads <= 0) n_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
 
     // the adapter file is small: read it fully into memory
+    try {
+        gguf_preflight(path);
+    } catch (const std::exception& e) {
+        fail("cannot read LoRA adapter '" + path + "': " + e.what());
+    }
     ggml_context* ctx_file = nullptr;
     gguf_init_params gp{/*no_alloc=*/false, &ctx_file};
     gguf_context* g = gguf_init_from_file(path.c_str(), gp);
@@ -1092,8 +1103,9 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_backend_tensor_set(io.pos, pos.data(), 0, ggml_nbytes(io.pos));
     std::vector<ggml_fp16_t> mg, ml;
     build_masks(seqs, L, h.local_window, mg, ml);
-    ggml_backend_tensor_set(io.mask_global, mg.data(), 0, ggml_nbytes(io.mask_global));
-    ggml_backend_tensor_set(io.mask_local, ml.data(), 0, ggml_nbytes(io.mask_local));
+    // An all-local or all-global checkpoint leaves the other mask outside the allocated graph.
+    if (io.mask_global->buffer) ggml_backend_tensor_set(io.mask_global, mg.data(), 0, ggml_nbytes(io.mask_global));
+    if (io.mask_local->buffer) ggml_backend_tensor_set(io.mask_local, ml.data(), 0, ggml_nbytes(io.mask_local));
     const bool pruned = !M.head.empty();
     std::vector<int32_t> qt(B), rows, pool(B), qrows(static_cast<size_t>(Qn) * B, 0);
     std::vector<ggml_fp16_t> mq(static_cast<size_t>(L) * Qn * B, ggml_fp32_to_fp16(-INFINITY));
