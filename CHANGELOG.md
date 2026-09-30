@@ -7,6 +7,24 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- f32 encoder projections on x86-64 CPUs with AVX2 and FMA run on Statim's own packed GEMM: 6×16
+  microkernel, activations packed once per call, each thread's weight block packed into a buffer
+  that stays in L2. Short inputs got faster: the 29 short golden states take 1,438 instead of
+  1,651 ms at 1 thread, 419 instead of 470 ms at 4 threads, and 257 instead of 272 ms at 8. ORT
+  on the same machine: 1,419, 433 and 266 ms. Every f32 decision is unchanged: 0 of 2,850
+  held-out decisions differ from 0.9.1 or from ONNX Runtime. `STATIM_SGEMM=0` restores ggml's
+  path. [docs/ORT.md](docs/ORT.md) is measured again with this build.
+
+### Added
+- `STATIM_PROFILE=FILE` records the time of every graph node, and `bench/profile_short.py`
+  compares Statim with ONNX Runtime per operation ([docs/BUILD.md](docs/BUILD.md#cpu-performance-switches)).
+
+### Fixed
+- Model loading in 0.9.1 was about 0.8 s slower than in 0.9.0. The GGUF preflight skipped each
+  tokenizer string with a stream seek; it now reads through one buffer, and the first answer after
+  start is back to 0.45 s.
+
 ## [0.9.1] - 2026-09-30
 
 Statim compared with ONNX Runtime on the CPU, and a structural GGUF check that runs before ggml

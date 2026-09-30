@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md"}
 # Files whose release download URLs pin the version a recorded run used (with the reason).
 PINNED = {"docs/reproductions/clean-room.md": "a dated clean-room reproduction of v0.6.0",
-          "docs/ORT.md": "the ONNX Runtime comparison, measured with the v0.9.0 release binary"}
+          "docs/ORT.md": "the ONNX Runtime comparison, measured with a release-flag build of v0.9.2"}
 GENERATED = ("build", "build-", "models/", "data/", "dist/", "logs/", "runs/", "out/")
 
 

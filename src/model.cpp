@@ -11,13 +11,16 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <map>
 #include <cmath>
 #include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -832,22 +835,86 @@ struct GraphIO {
     ggml_tensor *logits, *pooled, *hidden;
 };
 
-ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b, float eps) {
-    x = ggml_norm(c, x, eps);
-    x = ggml_mul(c, x, w);
-    return b ? ggml_add(c, x, b) : x;
+ggml_tensor* named(ggml_tensor* x, const std::string& name) {
+    ggml_set_name(x, name.c_str());
+    return x;
 }
 
-ggml_tensor* linear(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b = nullptr) {
-    x = ggml_mul_mat(c, w, x);
-    return b ? ggml_add(c, x, b) : x;
+std::string json_quote(const char* text) {
+    std::ostringstream out;
+    out << '"';
+    for (const unsigned char ch : std::string(text ? text : "")) {
+        switch (ch) {
+            case '"': out << "\\\""; break;
+            case '\\': out << "\\\\"; break;
+            case '\b': out << "\\b"; break;
+            case '\f': out << "\\f"; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (ch < 0x20) out << "\\u" << std::hex << std::setw(4) << std::setfill('0') << int(ch) << std::dec;
+                else out << ch;
+        }
+    }
+    out << '"';
+    return out.str();
+}
+
+ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b, float eps,
+                        const std::string& name) {
+    x = named(ggml_norm(c, x, eps), name + ".norm");
+    x = named(ggml_mul(c, x, w), name + ".scale");
+    return b ? named(ggml_add(c, x, b), name + ".bias") : x;
+}
+
+bool sgemm_enabled() {
+    const char* value = std::getenv("STATIM_SGEMM");
+    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
+}
+
+// W*x for activations [d,L,B,...].  Flattening exposes all L*B rows to one GEMM.
+// Name the actual compute node (not a trailing reshape), so STATIM_PROFILE keeps
+// projection time in its projection category.
+ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
+                     const std::string& name, SgemmOpSync* sync = nullptr) {
+    const bool flat = ggml_n_dims(w) <= 2 && ggml_is_contiguous(x) && x->ne[2] * x->ne[3] != 1;
+    ggml_tensor* x2 = flat ? ggml_reshape_2d(c, x, x->ne[0], x->ne[1] * x->ne[2] * x->ne[3]) : x;
+    // x need not be flattened: a single sequence [d, L, 1, 1] is already one [d, L] matrix
+    const bool use_custom = sync && ggml_n_dims(w) <= 2 && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
+                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
+    ggml_tensor* y;
+    if (use_custom) {
+        sync->workspace_floats = packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]);
+        ggml_tensor* args[] = {w, x2};
+        y = ggml_custom_4d(c, GGML_TYPE_F32, w->ne[1], x->ne[1], x->ne[2], x->ne[3],
+                           args, 2, sgemm_custom_op, GGML_N_TASKS_MAX, sync);
+        return named(y, name + ".matmul");
+    }
+    y = named(ggml_mul_mat(c, w, x2), name + ".matmul");
+    return flat ? ggml_reshape_4d(c, y, w->ne[1], x->ne[1], x->ne[2], x->ne[3]) : y;
+}
+
+ggml_tensor* linear(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b,
+                    const std::string& name) {
+    x = project(c, w, x, name);
+    return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
 // Encoder projection i of layer L, plus B·(A·x) when a runtime LoRA adapter targets it.
-ggml_tensor* enc_proj(ggml_context* c, ggml_tensor* x, const EncLayer& L, int i, ggml_tensor* w) {
-    ggml_tensor* y = ggml_mul_mat(c, w, x);
+ggml_tensor* enc_proj(ggml_context* c, ggml_tensor* x, const EncLayer& L, int i, ggml_tensor* w,
+                      const std::string& name, bool cpu,
+                      std::vector<std::unique_ptr<SgemmOpSync>>& syncs) {
+    SgemmOpSync* sync = nullptr;
+    if (cpu) {
+        syncs.push_back(std::make_unique<SgemmOpSync>());
+        sync = syncs.back().get();
+    }
+    ggml_tensor* y = project(c, w, x, name, sync);
     if (!L.lora_a[i]) return y;
-    return ggml_add(c, y, ggml_mul_mat(c, L.lora_b[i], ggml_mul_mat(c, L.lora_a[i], x)));
+    ggml_tensor* a = named(ggml_mul_mat(c, L.lora_a[i], x), name + ".lora_a");
+    ggml_tensor* b = named(ggml_mul_mat(c, L.lora_b[i], a), name + ".lora_b");
+    return named(ggml_add(c, y, b), name + ".lora_add");
 }
 
 void geglu_op(ggml_tensor* dst, int ith, int nth, void*) {
@@ -859,19 +926,20 @@ void geglu_op(ggml_tensor* dst, int ith, int nth, void*) {
 
 // q, k, v: [hd, n_head, L, B] -> [n_embd, L, B]
 ggml_tensor* attention(ggml_context* c, ggml_tensor* q, ggml_tensor* k, ggml_tensor* v, ggml_tensor* mask,
-                       int hd, int n_head, int L, int B, bool flash) {
+                       int hd, int n_head, int L, int B, bool flash, const std::string& name) {
     const float scale = 1.0f / std::sqrt(static_cast<float>(hd));
     q = ggml_permute(c, q, 0, 2, 1, 3);  // [hd, L, nh, B]
     k = ggml_permute(c, k, 0, 2, 1, 3);
     if (flash) {
         v = ggml_permute(c, v, 0, 2, 1, 3);  // [hd, L, nh, B]
-        ggml_tensor* o = ggml_flash_attn_ext(c, q, k, v, mask, scale, 0.0f, 0.0f);  // [hd, nh, L, B]
+        ggml_tensor* o = named(ggml_flash_attn_ext(c, q, k, v, mask, scale, 0.0f, 0.0f),
+                               name + ".flash");  // [hd, nh, L, B]
         return ggml_reshape_3d(c, o, hd * n_head, L, B);
     }
-    ggml_tensor* kq = ggml_mul_mat(c, k, q);  // [L_k, L_q, nh, B]
-    kq = ggml_soft_max_ext(c, kq, mask, scale, 0.0f);
-    ggml_tensor* vt = ggml_cont(c, ggml_permute(c, v, 1, 2, 0, 3));  // [L, hd, nh, B]
-    ggml_tensor* o = ggml_mul_mat(c, vt, kq);                        // [hd, L_q, nh, B]
+    ggml_tensor* kq = named(ggml_mul_mat(c, k, q), name + ".scores");  // [L_k, L_q, nh, B]
+    kq = named(ggml_soft_max_ext(c, kq, mask, scale, 0.0f), name + ".softmax");
+    ggml_tensor* vt = named(ggml_cont(c, ggml_permute(c, v, 1, 2, 0, 3)), name + ".v_transpose");
+    ggml_tensor* o = named(ggml_mul_mat(c, vt, kq), name + ".weighted_sum");
     o = ggml_permute(c, o, 0, 2, 1, 3);                              // [hd, nh, L, B]
     return ggml_cont_3d(c, o, hd * n_head, L, B);
 }
@@ -884,6 +952,7 @@ struct Runner::Impl {
     ggml_backend_t backend = nullptr;
     ggml_gallocr_t galloc = nullptr;
     std::vector<uint8_t> meta_buf;
+    std::vector<float> sgemm_workspace;  // shared by this runner's packed projections
 
     ~Impl() {
         if (galloc) ggml_gallocr_free(galloc);
@@ -936,6 +1005,8 @@ static void build_masks(const std::vector<const std::vector<int32_t>*>& seqs, in
 }
 
 std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
+    const char* profile_path = std::getenv("STATIM_PROFILE");
+    const auto total_t0 = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
     if (items.empty()) return {};
     const Model::Impl& M = *model_->impl();
@@ -985,43 +1056,49 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_set_input(io.pool_rows);
 
     // ---- ModernBERT encoder
-    ggml_tensor* x = ggml_get_rows(c, M.tok_embd, io.ids);  // [d, L*B]
+    // Per-node barriers live until this graph has executed. The packed activations go to one
+    // runner-owned workspace: the graph runs one node at a time, and a graph input tensor per
+    // projection would stay allocated for the whole graph.
+    std::vector<std::unique_ptr<SgemmOpSync>> sgemm_syncs;
+    sgemm_syncs.reserve(static_cast<size_t>(h.n_layer) * 4);
+    ggml_tensor* x = named(ggml_get_rows(c, M.tok_embd, io.ids), "embedding.token");  // [d, L*B]
     x = ggml_reshape_3d(c, x, d, L, B);
-    x = layer_norm(c, x, M.embd_norm, nullptr, h.norm_eps);
+    x = layer_norm(c, x, M.embd_norm, nullptr, h.norm_eps, "embedding.layernorm");
     for (int l = 0; l < h.n_layer; ++l) {
         const EncLayer& Ly = M.enc[l];
         const bool glob = h.layer_is_global[l];
-        ggml_tensor* a = Ly.attn_norm ? layer_norm(c, x, Ly.attn_norm, nullptr, h.norm_eps) : x;
-        ggml_tensor* qkv = enc_proj(c, a, Ly, 0, Ly.wqkv);  // [3d, L, B]
+        const std::string p = "encoder." + std::to_string(l);
+        ggml_tensor* a = Ly.attn_norm ? layer_norm(c, x, Ly.attn_norm, nullptr, h.norm_eps, p + ".attn.layernorm") : x;
+        ggml_tensor* qkv = enc_proj(c, a, Ly, 0, Ly.wqkv, p + ".attn.qkv", M.on_cpu(), sgemm_syncs);  // [3d, L, B]
         const size_t es = ggml_element_size(qkv);
         auto view = [&](int part) {
             return ggml_view_4d(c, qkv, hd, h.n_head, L, B, hd * es, qkv->nb[1], qkv->nb[2], part * d * es);
         };
-        ggml_tensor* q = ggml_cont(c, view(0));
-        ggml_tensor* k = ggml_cont(c, view(1));
-        ggml_tensor* v = ggml_cont(c, view(2));
+        ggml_tensor* q = named(ggml_cont(c, view(0)), p + ".attn.q.copy");
+        ggml_tensor* k = named(ggml_cont(c, view(1)), p + ".attn.k.copy");
+        ggml_tensor* v = named(ggml_cont(c, view(2)), p + ".attn.v.copy");
         const float theta = glob ? h.rope_theta_global : h.rope_theta_local;
-        q = ggml_rope_ext(c, q, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-        k = ggml_rope_ext(c, k, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-        ggml_tensor* o = attention(c, q, k, v, glob ? io.mask_global : io.mask_local, hd, h.n_head, L, B, flash);
-        x = ggml_add(c, x, enc_proj(c, o, Ly, 1, Ly.wo));
+        q = named(ggml_rope_ext(c, q, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f), p + ".attn.q.rotary");
+        k = named(ggml_rope_ext(c, k, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f), p + ".attn.k.rotary");
+        ggml_tensor* o = attention(c, q, k, v, glob ? io.mask_global : io.mask_local, hd, h.n_head, L, B, flash, p + ".attn");
+        x = named(ggml_add(c, x, enc_proj(c, o, Ly, 1, Ly.wo, p + ".attn.output", M.on_cpu(), sgemm_syncs)), p + ".attn.residual");
 
-        ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps);
-        m = enc_proj(c, m, Ly, 2, Ly.wi);  // [2*ff, L, B]; first half = input, second half = gate
+        ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps, p + ".mlp.layernorm");
+        m = enc_proj(c, m, Ly, 2, Ly.wi, p + ".mlp.up", M.on_cpu(), sgemm_syncs);  // [2*ff, L, B]; first half = input, second half = gate
         if (M.on_cpu()) {
             ggml_tensor* args[] = {m};
-            m = ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr);
+            m = named(ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr), p + ".mlp.geglu");
         } else {
-            m = ggml_geglu_erf(c, m);  // same math; custom ops only run on the CPU backend
+            m = named(ggml_geglu_erf(c, m), p + ".mlp.geglu");  // same math; custom ops only run on the CPU backend
         }
-        x = ggml_add(c, x, enc_proj(c, m, Ly, 3, Ly.wo_mlp));
+        x = named(ggml_add(c, x, enc_proj(c, m, Ly, 3, Ly.wo_mlp, p + ".mlp.down", M.on_cpu(), sgemm_syncs)), p + ".mlp.residual");
     }
-    x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps);
+    x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps, "encoder.final_layernorm");
     io.hidden = x;
 
     // ---- decision head: type embedding + pre-norm transformer (ReLU FFN, biased projections)
-    ggml_tensor* te = ggml_get_rows(c, M.type_emb, io.qtype);  // [d, B]
-    x = ggml_add(c, x, ggml_reshape_3d(c, te, d, 1, B));
+    ggml_tensor* te = named(ggml_get_rows(c, M.type_emb, io.qtype), "head.type_embedding");  // [d, B]
+    x = named(ggml_add(c, x, ggml_reshape_3d(c, te, d, 1, B)), "head.type_embedding.add");
     const int hhd = d / h.head_n_head;
     // Only [CLS] and the [MASK] rows of the last head layer are read, so that layer computes its
     // queries, output projection and FFN for those rows alone (keys/values still span all tokens).
@@ -1035,64 +1112,87 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     int rows_per_seq = L;  // rows of x per sequence: L until the pruned layer, Qn after it
     for (int li = 0; li < n_head_layers; ++li) {
         const HeadLayer& Ly = M.head[li];
-        ggml_tensor* a = layer_norm(c, x, Ly.norm1_w, Ly.norm1_b, 1e-5f);
+        const std::string p = "head." + std::to_string(li);
+        ggml_tensor* a = layer_norm(c, x, Ly.norm1_w, Ly.norm1_b, 1e-5f, p + ".attn.layernorm");
         if (li + 1 < n_head_layers) {
-            ggml_tensor* qkv = linear(c, a, Ly.in_w, Ly.in_b);
+            ggml_tensor* qkv = linear(c, a, Ly.in_w, Ly.in_b, p + ".attn.qkv");
             const size_t es = ggml_element_size(qkv);
             auto view = [&](int part) {
                 return ggml_view_4d(c, qkv, hhd, h.head_n_head, L, B, hhd * es, qkv->nb[1], qkv->nb[2], part * d * es);
             };
-            ggml_tensor* o = attention(c, ggml_cont(c, view(0)), ggml_cont(c, view(1)), ggml_cont(c, view(2)),
-                                       io.mask_global, hhd, h.head_n_head, L, B, flash);
-            x = ggml_add(c, x, linear(c, o, Ly.out_w, Ly.out_b));
+            ggml_tensor* o = attention(c, named(ggml_cont(c, view(0)), p + ".attn.q.copy"),
+                                       named(ggml_cont(c, view(1)), p + ".attn.k.copy"),
+                                       named(ggml_cont(c, view(2)), p + ".attn.v.copy"),
+                                       io.mask_global, hhd, h.head_n_head, L, B, flash, p + ".attn");
+            x = named(ggml_add(c, x, linear(c, o, Ly.out_w, Ly.out_b, p + ".attn.output")), p + ".attn.residual");
         } else {
             ggml_tensor* wq = ggml_view_2d(c, Ly.in_w, d, d, Ly.in_w->nb[1], 0);
             ggml_tensor* wkv = ggml_view_2d(c, Ly.in_w, d, 2 * d, Ly.in_w->nb[1], d * Ly.in_w->nb[1]);
             ggml_tensor* bq = ggml_view_1d(c, Ly.in_b, d, 0);
             ggml_tensor* bkv = ggml_view_1d(c, Ly.in_b, 2 * d, d * ggml_element_size(Ly.in_b));
-            ggml_tensor* kv = linear(c, a, wkv, bkv);  // [2d, L, B]
+            ggml_tensor* kv = linear(c, a, wkv, bkv, p + ".attn.kv");  // [2d, L, B]
             const size_t es = ggml_element_size(kv);
             ggml_tensor* k = ggml_cont(c, ggml_view_4d(c, kv, hhd, h.head_n_head, L, B, hhd * es, kv->nb[1], kv->nb[2], 0));
             ggml_tensor* v = ggml_cont(c, ggml_view_4d(c, kv, hhd, h.head_n_head, L, B, hhd * es, kv->nb[1], kv->nb[2], d * es));
             ggml_tensor* aq = ggml_get_rows(c, ggml_reshape_2d(c, a, d, static_cast<int64_t>(L) * B), io.qrows);
-            ggml_tensor* q = ggml_reshape_4d(c, linear(c, aq, wq, bq), hhd, h.head_n_head, Qn, B);
+            ggml_tensor* q = ggml_reshape_4d(c, linear(c, aq, wq, bq, p + ".attn.q"), hhd, h.head_n_head, Qn, B);
             // attention() expects equal query/key lengths; call the kernels directly
             const float scale = 1.0f / std::sqrt(static_cast<float>(hhd));
             ggml_tensor* qp = ggml_permute(c, q, 0, 2, 1, 3), *kp = ggml_permute(c, k, 0, 2, 1, 3);
             ggml_tensor* o;
             if (flash) {
-                o = ggml_flash_attn_ext(c, qp, kp, ggml_permute(c, v, 0, 2, 1, 3), io.mask_q, scale, 0.0f, 0.0f);
+                o = named(ggml_flash_attn_ext(c, qp, kp, ggml_permute(c, v, 0, 2, 1, 3), io.mask_q, scale, 0.0f, 0.0f), p + ".attn.flash");
                 o = ggml_reshape_3d(c, o, d, Qn, B);
             } else {
-                ggml_tensor* kq = ggml_soft_max_ext(c, ggml_mul_mat(c, kp, qp), io.mask_q, scale, 0.0f);
-                ggml_tensor* vt = ggml_cont(c, ggml_permute(c, v, 1, 2, 0, 3));
-                o = ggml_cont_3d(c, ggml_permute(c, ggml_mul_mat(c, vt, kq), 0, 2, 1, 3), d, Qn, B);
+                ggml_tensor* kq = named(ggml_mul_mat(c, kp, qp), p + ".attn.scores");
+                kq = named(ggml_soft_max_ext(c, kq, io.mask_q, scale, 0.0f), p + ".attn.softmax");
+                ggml_tensor* vt = named(ggml_cont(c, ggml_permute(c, v, 1, 2, 0, 3)), p + ".attn.v_transpose");
+                o = ggml_cont_3d(c, ggml_permute(c, named(ggml_mul_mat(c, vt, kq), p + ".attn.weighted_sum"), 0, 2, 1, 3), d, Qn, B);
             }
             ggml_tensor* xq = ggml_get_rows(c, ggml_reshape_2d(c, x, d, static_cast<int64_t>(L) * B), io.qrows);
-            x = ggml_add(c, ggml_reshape_3d(c, xq, d, Qn, B), linear(c, o, Ly.out_w, Ly.out_b));
+            x = named(ggml_add(c, ggml_reshape_3d(c, xq, d, Qn, B), linear(c, o, Ly.out_w, Ly.out_b, p + ".attn.output")), p + ".attn.residual");
             rows_per_seq = Qn;
         }
-        ggml_tensor* f = layer_norm(c, x, Ly.norm2_w, Ly.norm2_b, 1e-5f);
-        f = ggml_relu(c, linear(c, f, Ly.l1_w, Ly.l1_b));
-        x = ggml_add(c, x, linear(c, f, Ly.l2_w, Ly.l2_b));
+        ggml_tensor* f = layer_norm(c, x, Ly.norm2_w, Ly.norm2_b, 1e-5f, p + ".mlp.layernorm");
+        f = named(ggml_relu(c, linear(c, f, Ly.l1_w, Ly.l1_b, p + ".mlp.up")), p + ".mlp.relu");
+        x = named(ggml_add(c, x, linear(c, f, Ly.l2_w, Ly.l2_b, p + ".mlp.down")), p + ".mlp.residual");
     }
 
     // ---- scorer on the marker rows, pooled [CLS] rows for the act head
     ggml_tensor* flat = ggml_reshape_2d(c, x, d, static_cast<int64_t>(rows_per_seq) * B);
     ggml_tensor* mk = ggml_get_rows(c, flat, io.gather_rows);  // [d, n_markers]
-    mk = layer_norm(c, mk, M.sc_norm_w, M.sc_norm_b, 1e-5f);
-    mk = ggml_gelu_erf(c, linear(c, mk, M.sc1_w, M.sc1_b));
-    io.logits = linear(c, mk, M.sc2_w, M.sc2_b);  // [1, n_markers]
+    mk = layer_norm(c, mk, M.sc_norm_w, M.sc_norm_b, 1e-5f, "decision.layernorm");
+    mk = named(ggml_gelu_erf(c, linear(c, mk, M.sc1_w, M.sc1_b, "decision.hidden")), "decision.gelu");
+    io.logits = linear(c, mk, M.sc2_w, M.sc2_b, "decision.logits");  // [1, n_markers]
     io.pooled = ggml_get_rows(c, flat, io.pool_rows);  // [d, B]
     ggml_set_output(io.logits);
     ggml_set_output(io.pooled);
     ggml_build_forward_expand(gf, io.logits);
     ggml_build_forward_expand(gf, io.pooled);
+    size_t sgemm_floats = 0;
+    for (const auto& sync : sgemm_syncs) sgemm_floats = std::max(sgemm_floats, sync->workspace_floats);
+    if (impl_->sgemm_workspace.size() < sgemm_floats) impl_->sgemm_workspace.resize(sgemm_floats);
+    for (const auto& sync : sgemm_syncs) sync->workspace = impl_->sgemm_workspace.data();
 
+    // Explicit semantic names above cover compute-heavy nodes. Name any remaining view/copy
+    // plumbing deterministically so a profile never contains an unattributed node.
+    if (profile_path) {
+        for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
+            ggml_tensor* node = ggml_graph_node(gf, i);
+            if (!ggml_get_name(node)[0]) {
+                const std::string name = "graph." + std::to_string(i) + "." + ggml_op_name(node->op);
+                ggml_set_name(node, name.c_str());
+            }
+        }
+    }
+    const auto graph_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+
+    const auto allocation_t0 = graph_done;
     if (!ggml_gallocr_alloc_graph(impl_->galloc, gf)) {
         ggml_free(c);
         fail("out of memory while allocating the compute graph");
     }
+    const auto allocation_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
     // ---- inputs
     std::vector<int32_t> ids(static_cast<size_t>(L) * B, h.pad_id);
@@ -1132,14 +1232,18 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_backend_tensor_set(io.qtype, qt.data(), 0, ggml_nbytes(io.qtype));
     if (!rows.empty()) ggml_backend_tensor_set(io.gather_rows, rows.data(), 0, ggml_nbytes(io.gather_rows));
     ggml_backend_tensor_set(io.pool_rows, pool.data(), 0, ggml_nbytes(io.pool_rows));
+    const auto upload_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
     if (std::chrono::steady_clock::now() >= impl_->deadline) {
         ggml_free(c);
         throw HttpError(422, "inference deadline exceeded");
     }
-    if (std::getenv("STATIM_PROFILE")) {
-        // per-op timing: evaluate the graph one node at a time
-        std::map<std::string, double> by_op;
+    std::unique_ptr<std::ostringstream> profile_nodes;
+    if (profile_path) {
+        profile_nodes = std::make_unique<std::ostringstream>();
+        *profile_nodes << '[';
+        // Evaluate dependencies in graph order, one node per view. Synchronization makes this
+        // wall-clock timing valid for asynchronous backends as well as CPU.
         for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
             ggml_cgraph gv = ggml_graph_view(gf, i, i + 1);
             auto t0 = std::chrono::steady_clock::now();
@@ -1148,19 +1252,35 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
                 if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
                 fail("graph compute failed");
             }
+            ggml_backend_synchronize(impl_->backend);
+            const auto t1 = std::chrono::steady_clock::now();
             ggml_tensor* n = ggml_graph_node(gf, i);
-            std::string k = ggml_op_desc(n);
-            if (n->op == GGML_OP_MUL_MAT)
-                k += std::string(n->src[0]->buffer == nullptr || std::strchr(ggml_get_name(n->src[0]), '.') ? "(W " : "(A ") +
-                     ggml_type_name(n->src[0]->type) + ")";
-            by_op[k] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            if (i) *profile_nodes << ',';
+            *profile_nodes << "{\"index\":" << i << ",\"name\":" << json_quote(ggml_get_name(n))
+                          << ",\"op\":" << json_quote(ggml_op_name(n->op))
+                          << ",\"type\":" << json_quote(ggml_type_name(n->type)) << ",\"shape\":[";
+            for (int d = 0; d < GGML_MAX_DIMS; ++d) *profile_nodes << (d ? "," : "") << n->ne[d];
+            *profile_nodes << "],\"sources\":[";
+            bool first_source = true;
+            for (ggml_tensor* src : n->src) {
+                if (!src) continue;
+                *profile_nodes << (first_source ? "" : ",") << "{\"name\":" << json_quote(ggml_get_name(src))
+                              << ",\"type\":" << json_quote(ggml_type_name(src->type)) << ",\"shape\":[";
+                for (int d = 0; d < GGML_MAX_DIMS; ++d) *profile_nodes << (d ? "," : "") << src->ne[d];
+                *profile_nodes << "]}";
+                first_source = false;
+            }
+            *profile_nodes << "],\"threads\":" << (impl_->opts.n_threads > 0 ? impl_->opts.n_threads :
+                static_cast<int>(std::max(1u, std::thread::hardware_concurrency())))
+                          << ",\"ns\":" << std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count()
+                          << '}';
         }
-        for (auto& [k, v] : by_op) std::fprintf(stderr, "  %-22s %9.1f ms\n", k.c_str(), v);
     } else if (ggml_backend_graph_compute(impl_->backend, gf) != GGML_STATUS_SUCCESS) {
         ggml_free(c);
         if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
         fail("graph compute failed");
     }
+    const auto compute_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
     if (std::chrono::steady_clock::now() >= impl_->deadline) {
         ggml_free(c);
@@ -1214,6 +1334,26 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         for (float& v : act) as += (v = std::exp(v - amx));
         for (float& v : act) v /= as;
         out[b].act_probs = std::move(act);
+    }
+    if (profile_path) {
+        *profile_nodes << ']';
+        const auto total_done = std::chrono::steady_clock::now();
+        const auto ns = [](auto a, auto b) {
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count();
+        };
+        std::ofstream profile(profile_path, std::ios::app);
+        if (!profile) fail(std::string("cannot open profile output '") + profile_path + "'");
+        profile << "{\"batch\":" << B << ",\"length\":" << L << ",\"threads\":"
+                << (impl_->opts.n_threads > 0 ? impl_->opts.n_threads :
+                    static_cast<int>(std::max(1u, std::thread::hardware_concurrency())))
+                << ",\"nodes\":" << profile_nodes->str() << ",\"phases\":{" /* phase timings */
+                << "\"graph_build_ns\":" << ns(total_t0, graph_done)
+                << ",\"allocation_ns\":" << ns(allocation_t0, allocation_done)
+                << ",\"input_upload_ns\":" << ns(allocation_done, upload_done)
+                << ",\"compute_wall_ns\":" << ns(upload_done, compute_done)
+                << ",\"output_read_ns\":" << ns(compute_done, total_done)
+                << ",\"total_ns\":" << ns(total_t0, total_done) << "}}\n";
+        if (!profile) fail(std::string("cannot write profile output '") + profile_path + "'");
     }
     return out;
 }
