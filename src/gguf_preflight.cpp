@@ -1,5 +1,6 @@
 #include "statim/gguf_preflight.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -38,22 +39,32 @@ public:
     uint64_t pos() const { return pos_; }
     uint64_t remaining() const { return size_ - pos_; }
 
+    // Reads go through one large buffer: a tokenizer holds ~256k short strings, and an ifstream
+    // seek per string would refill its small buffer each time (seconds for a large vocabulary).
     void bytes(void* dst, uint64_t n, const std::string& field) {
         if (n > remaining()) reject(field + " length", std::to_string(n), std::to_string(remaining()) + " remaining bytes");
-        if (n > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max()))
-            reject(field + " length", std::to_string(n), "stream read maximum");
-        if (n != 0) {
-            in_.read(static_cast<char*>(dst), static_cast<std::streamsize>(n));
-            if (!in_) throw std::runtime_error("GGUF preflight: failed reading " + field);
+        auto* out = static_cast<char*>(dst);
+        while (n > 0) {
+            if (head_ == buf_.size()) refill(field);
+            const size_t take = static_cast<size_t>(std::min<uint64_t>(n, buf_.size() - head_));
+            std::memcpy(out, buf_.data() + head_, take);
+            out += take;
+            head_ += take;
+            n -= take;
+            pos_ += take;
         }
-        pos_ += n;
     }
 
     void skip(uint64_t n, const std::string& field) {
         if (n > remaining()) reject(field + " length", std::to_string(n), std::to_string(remaining()) + " remaining bytes");
-        if (n != 0) {
-            in_.seekg(static_cast<std::streamoff>(n), std::ios::cur);
+        if (n <= buf_.size() - head_) {  // within the buffer: no I/O
+            head_ += static_cast<size_t>(n);
+        } else {                          // tensor data and other large skips: one seek
+            in_.clear();
+            in_.seekg(static_cast<std::streamoff>(pos_ + n), std::ios::beg);
             if (!in_) throw std::runtime_error("GGUF preflight: failed reading " + field);
+            buf_.clear();
+            head_ = 0;
         }
         pos_ += n;
     }
@@ -96,7 +107,29 @@ public:
         skip(n, field);
     }
 
+    // skip_string for element i of an array: the label is built only for an error message.
+    void skip_string_at(const std::string& field, uint64_t i) {
+        const uint64_t n = remaining() >= 8 ? u64(field) : u64(field + "[" + std::to_string(i) + "] length");
+        if (n > remaining() || n > kMaxStringLength) {
+            const std::string label = field + "[" + std::to_string(i) + "]";
+            if (n > remaining()) reject(label + " length", std::to_string(n), std::to_string(remaining()) + " remaining bytes");
+            reject(label + " length", std::to_string(n), std::to_string(kMaxStringLength));
+        }
+        skip(n, field);
+    }
+
 private:
+    void refill(const std::string& field) {
+        buf_.resize(kBufferBytes);
+        in_.read(buf_.data(), static_cast<std::streamsize>(buf_.size()));
+        buf_.resize(static_cast<size_t>(in_.gcount()));
+        head_ = 0;
+        if (buf_.empty()) throw std::runtime_error("GGUF preflight: failed reading " + field);
+    }
+
+    static constexpr size_t kBufferBytes = size_t(1) << 20;
+    std::vector<char> buf_;
+    size_t head_ = 0;
     std::ifstream in_;
     uint64_t size_ = 0;
     uint64_t pos_ = 0;
@@ -165,7 +198,7 @@ void read_array(Reader& r, uint32_t type, uint64_t count, const std::string& fie
             reject(field + " count", std::to_string(count), std::to_string(kMaxArrayElements));
         if (header_bytes > r.remaining())
             reject(field + " string-header byte count", std::to_string(header_bytes), std::to_string(r.remaining()) + " remaining bytes");
-        for (uint64_t i = 0; i < count; ++i) r.skip_string(field + "[" + std::to_string(i) + "]");
+        for (uint64_t i = 0; i < count; ++i) r.skip_string_at(field, i);
         return;
     }
     const size_t element_size = scalar_size(type);

@@ -103,13 +103,14 @@ int main() {
             ggml_context* ctx = ggml_init(params);
             ggml_tensor* w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, GK, GM);
             ggml_tensor* x = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, GK, GN);
-            ggml_tensor* scratch = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,
-                static_cast<int64_t>(statim::packed_sgemm_workspace_floats(GM, GN, GK)));
+            std::vector<float> workspace(statim::packed_sgemm_workspace_floats(GM, GN, GK));
             std::copy(gw.begin(), gw.end(), static_cast<float*>(w->data));
             std::copy(gx.begin(), gx.end(), static_cast<float*>(x->data));
             statim::SgemmOpSync sync;
-            ggml_tensor* args[] = {w, x, scratch};
-            ggml_tensor* y = ggml_custom_4d(ctx, GGML_TYPE_F32, GM, GN, 1, 1, args, 3,
+            sync.workspace = workspace.data();
+            sync.workspace_floats = workspace.size();
+            ggml_tensor* args[] = {w, x};
+            ggml_tensor* y = ggml_custom_4d(ctx, GGML_TYPE_F32, GM, GN, 1, 1, args, 2,
                                             statim::sgemm_custom_op, GGML_N_TASKS_MAX, &sync);
             ggml_cgraph* gf = ggml_new_graph(ctx);
             ggml_build_forward_expand(gf, y);

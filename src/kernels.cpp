@@ -245,12 +245,11 @@ void packed_sgemm_compute(float*, const float*, const float*, int64_t, int64_t, 
 void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
     const ggml_tensor* w = dst->src[0];
     const ggml_tensor* x = dst->src[1];
-    ggml_tensor* scratch = dst->src[2];
     auto* sync = static_cast<SgemmOpSync*>(userdata);
     const int64_t M = w->ne[1], N = ggml_nrows(x), K = w->ne[0];
     // Read the generation before arriving, so the last arriver's publish is always seen as a change.
     const uint32_t generation = sync->generation.load(std::memory_order_acquire);
-    packed_sgemm_pack(static_cast<float*>(scratch->data), static_cast<const float*>(x->data),
+    packed_sgemm_pack(sync->workspace, static_cast<const float*>(x->data),
                       static_cast<const float*>(w->data), M, N, K, ith, nth);
     if (sync->arrived.fetch_add(1, std::memory_order_acq_rel) == nth - 1) {
         sync->arrived.store(0, std::memory_order_relaxed);  // ready for the next evaluation
@@ -259,7 +258,7 @@ void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
     } else {
         sync->generation.wait(generation, std::memory_order_acquire);
     }
-    packed_sgemm_compute(static_cast<float*>(dst->data), static_cast<const float*>(scratch->data),
+    packed_sgemm_compute(static_cast<float*>(dst->data), sync->workspace,
                          static_cast<const float*>(w->data), M, N, K, ith, nth);
 }
 

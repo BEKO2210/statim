@@ -885,11 +885,10 @@ ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
                             ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
     ggml_tensor* y;
     if (use_custom) {
-        ggml_tensor* scratch = ggml_new_tensor_1d(c, GGML_TYPE_F32,
-            packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]));
-        ggml_tensor* args[] = {w, x2, scratch};
+        sync->workspace_floats = packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]);
+        ggml_tensor* args[] = {w, x2};
         y = ggml_custom_4d(c, GGML_TYPE_F32, w->ne[1], x->ne[1], x->ne[2], x->ne[3],
-                           args, 3, sgemm_custom_op, GGML_N_TASKS_MAX, sync);
+                           args, 2, sgemm_custom_op, GGML_N_TASKS_MAX, sync);
         return named(y, name + ".matmul");
     }
     y = named(ggml_mul_mat(c, w, x2), name + ".matmul");
@@ -953,6 +952,7 @@ struct Runner::Impl {
     ggml_backend_t backend = nullptr;
     ggml_gallocr_t galloc = nullptr;
     std::vector<uint8_t> meta_buf;
+    std::vector<float> sgemm_workspace;  // shared by this runner's packed projections
 
     ~Impl() {
         if (galloc) ggml_gallocr_free(galloc);
@@ -1056,8 +1056,9 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_set_input(io.pool_rows);
 
     // ---- ModernBERT encoder
-    // Per-node barriers live until this graph has executed; packed operands live
-    // in graph scratch tensors and are reclaimed/reused by ggml's allocator.
+    // Per-node barriers live until this graph has executed. The packed activations go to one
+    // runner-owned workspace: the graph runs one node at a time, and a graph input tensor per
+    // projection would stay allocated for the whole graph.
     std::vector<std::unique_ptr<SgemmOpSync>> sgemm_syncs;
     sgemm_syncs.reserve(static_cast<size_t>(h.n_layer) * 4);
     ggml_tensor* x = named(ggml_get_rows(c, M.tok_embd, io.ids), "embedding.token");  // [d, L*B]
@@ -1168,6 +1169,10 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_set_output(io.pooled);
     ggml_build_forward_expand(gf, io.logits);
     ggml_build_forward_expand(gf, io.pooled);
+    size_t sgemm_floats = 0;
+    for (const auto& sync : sgemm_syncs) sgemm_floats = std::max(sgemm_floats, sync->workspace_floats);
+    if (impl_->sgemm_workspace.size() < sgemm_floats) impl_->sgemm_workspace.resize(sgemm_floats);
+    for (const auto& sync : sgemm_syncs) sync->workspace = impl_->sgemm_workspace.data();
 
     // Explicit semantic names above cover compute-heavy nodes. Name any remaining view/copy
     // plumbing deterministically so a profile never contains an unattributed node.

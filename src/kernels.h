@@ -16,12 +16,16 @@ bool packed_sgemm_available();
 size_t packed_sgemm_workspace_floats(int64_t M, int64_t N, int64_t K);
 void packed_sgemm_pack(float* workspace, const float* x, const float* w,
                        int64_t M, int64_t N, int64_t K, int ith, int nth);
-// ggml custom-op body for dst = W·x with src = {W [K, M], x [K, N...], scratch}: every thread
+// ggml custom-op body for dst = W·x with src = {W [K, M], x [K, N...]}: every thread
 // packs its share of x, waits at the barrier, then computes its output tiles. userdata is a
 // SgemmOpSync owned by the graph; it may be reused for any number of evaluations.
 struct SgemmOpSync {
     std::atomic<int> arrived{0};
     std::atomic<uint32_t> generation{0};
+    // Packed-activation workspace. The graph runs one node at a time, so every projection of a
+    // graph shares one buffer; a graph tensor would stay allocated for the whole graph instead.
+    float* workspace = nullptr;
+    size_t workspace_floats = 0;  // needed by this node; the shared buffer is at least this large
 };
 void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata);
 
