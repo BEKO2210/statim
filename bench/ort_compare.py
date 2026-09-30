@@ -466,6 +466,88 @@ def ort_raw(path: Path, rows: list[dict], threads: int, repeats: int, invocation
                     "max_abs_act": max_act}
 
 
+def parity_pass(parity: dict, tolerance: float = 1e-3) -> bool:
+    return parity["argmax_agree"] == parity["items"] and parity["max_abs_logit"] <= tolerance
+
+
+def length_sweep_rows(engine: ORTEngine, inputs_path: Path,
+                      lengths: list[int]) -> tuple[dict[int, list[dict]], list[dict]]:
+    data = json.loads(inputs_path.read_text())
+    questions = [(name, internal_question(qdef)) for name, qdef in data["questions"].items()]
+    max_len = int(engine.cfg.get("max_len", 512))
+    text_parts = [state if isinstance(state, str) else json.dumps(state, ensure_ascii=False)
+                  for state in data["states"]]
+    long_text = "\n".join(text_parts)
+    while len(engine.encode(long_text)) < max(lengths, default=0):
+        long_text += "\n" + "\n".join(text_parts)
+    state_ids = engine.encode(long_text)
+    batches, skipped = {}, []
+    for length in lengths:
+        if length > max_len:
+            skipped.append({"length": length, "reason": f"exceeds model max_len {max_len}"})
+            continue
+        rows, too_long = [], []
+        for name, question in questions:
+            head_ids, _ = engine.build(long_text, question, [], max_len=max_len)
+            if len(head_ids) > length:
+                too_long.append(name)
+                continue
+            ids, markers = engine.build(long_text, question, state_ids, max_len=length)
+            if len(ids) != length:
+                raise RuntimeError(f"could not build {name!r} at exactly {length} tokens (got {len(ids)})")
+            rows.append({"state_index": 0, "question": name, "ids": ids, "markers": markers,
+                         "qtype": QTYPES[question["t"]]})
+        if too_long:
+            skipped.append({"length": length, "reason": "question head exceeds target",
+                            "questions": too_long})
+        else:
+            batches[length] = rows
+    return batches, skipped
+
+
+def add_reference(rows: list[dict], engine: ORTEngine) -> None:
+    logits, act_logits = engine.sess.run(["logits", "act_logits"], collate(rows, engine.ids["pad"]))
+    acts = softmax(act_logits)
+    for row, row_logits, row_act in zip(rows, logits, acts):
+        row["logits"] = row_logits[:len(row["markers"])].tolist()
+        row["act"] = row_act.tolist()
+
+
+def run_length_sweep(args) -> dict:
+    reference = ORTEngine(args.model_dir, args.onnx_f32, min(args.thread_counts), args.ort_provider)
+    batches, skipped = length_sweep_rows(reference, args.inputs, args.lengths)
+    for rows in batches.values():
+        add_reference(rows, reference)
+    del reference
+    output_rows = []
+    for threads in args.thread_counts:
+        for length, rows in batches.items():
+            result = {"length": length, "threads": threads,
+                      "sequence_lengths": [len(row["ids"]) for row in rows], "timings": {}, "parity": {}}
+            pairs = (("f32", args.gguf_f32, args.onnx_f32),
+                     ("quantized", args.gguf_q8, args.onnx_int8))
+            for pair, gguf, onnx in pairs:
+                scratch = OUT / f"length-sweep-l{length}-{pair}-t{threads}.jsonl"
+                statim_timing, statim_parity = statim_raw(
+                    args.statim_parity, gguf, rows, threads, args.repeats, scratch)
+                invocation = [str(args.ort_python), str(Path(__file__).resolve()), "--length-sweep",
+                              "--lengths", *map(str, args.lengths), "--thread-counts", str(threads),
+                              "--repeats", str(args.repeats), "--ort-provider", args.ort_provider,
+                              "--out", str(args.out)]
+                ort_timing, ort_parity = ort_raw(
+                    onnx, rows, threads, args.repeats, invocation, args.ort_provider)
+                if pair == "f32":
+                    statim_parity["pass"] = parity_pass(statim_parity)
+                    ort_parity["pass"] = parity_pass(ort_parity)
+                    if not statim_parity["pass"]:
+                        raise RuntimeError(f"Statim f32 parity failed at length {length}, threads {threads}")
+                result["timings"][pair] = {"statim": statim_timing, "ort": ort_timing}
+                result["parity"][pair] = {"statim": statim_parity, "ort": ort_parity}
+            output_rows.append(result)
+    return {"lengths": args.lengths, "questions": 8, "repeats": args.repeats,
+            "warmup_passes": 1, "rows": output_rows, "skipped": skipped}
+
+
 def file_set(path: Path) -> list[Path]:
     return [item for item in (path, path.with_suffix(path.suffix + ".data")) if item.exists()]
 
@@ -632,6 +714,16 @@ def socket_benchmark(args) -> dict:
                         rows.append({"variant": variant, "engine": engine, "threads": threads,
                                      "microbatch": False, "command": command,
                                      **load_test(url, bodies, concurrency, args.requests)})
+            for workers in args.statim_workers:
+                command = [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
+                           "--workers", str(workers), "--host", "127.0.0.1",
+                           "--port", str(args.statim_port), "-m", "multilingual=" + str(gguf)]
+                with running_server(command, args.statim_port, bodies[0]) as (url, _cold_ms, _peak):
+                    for i in range(args.warmup_requests):
+                        post(url, bodies[i % len(bodies)])
+                    rows.append({"variant": variant, "engine": "statim", "threads": threads,
+                                 "workers": workers, "microbatch": False, "command": command,
+                                 **load_test(url, bodies, 4, args.requests)})
             command = [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
                        "--host", "127.0.0.1", "--port", str(args.statim_port), "--batch-window-ms", "2",
                        "--max-batch", "16", "-m", "multilingual=" + str(gguf)]
@@ -652,7 +744,16 @@ def markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(lines)
 
 
-def render_md(path: Path) -> str:
+def raw_state_lengths(golden_path: Path) -> list[int]:
+    return [max(len(row["ids"]) for row in group) for group in state_groups(json_rows(golden_path))]
+
+
+def category_mean(row: dict, state_lengths: list[int], predicate) -> str:
+    values = [value for value, length in zip(row["per_state_ms"], state_lengths) if predicate(length)]
+    return f"{statistics.mean(values):.2f}" if values else "—"
+
+
+def render_md(path: Path, golden_path: Path = V9_GOLDEN, long_threshold: int = 256) -> str:
     result = json.loads(path.read_text())
     lines = ["## Generated comparison tables", "", "### Parity", ""]
     parity = result.get("export", {}).get("parity", {})
@@ -662,16 +763,41 @@ def render_md(path: Path) -> str:
     lines += ["", "### Raw scoring", ""]
     raw = result.get("raw")
     if raw:
-        lines.append(markdown_table(["Pair", "Engine", "Threads", "Mean ms", "p50 ms", "p95 ms"],
+        state_lengths = raw_state_lengths(golden_path)
+        state_count = max((len(row.get("per_state_ms", [])) for row in raw), default=0)
+        used_lengths = state_lengths[:state_count]
+        short_count = sum(length <= long_threshold for length in used_lengths)
+        long_count = sum(length > long_threshold for length in used_lengths)
+        lines.append(markdown_table(["Pair", "Engine", "Threads", "Mean ms", "p50 ms", "p95 ms",
+                                     f"L≤{long_threshold} mean ms ({short_count} states)",
+                                     f"L>{long_threshold} mean ms ({long_count} states)"],
             [[row["pair"], row["engine"], row["threads"], f"{row['mean_ms']:.2f}",
-              f"{row['p50_ms']:.2f}", f"{row['p95_ms']:.2f}"] for row in raw]))
+              f"{row['p50_ms']:.2f}", f"{row['p95_ms']:.2f}",
+              category_mean(row, used_lengths, lambda length: length <= long_threshold),
+              category_mean(row, used_lengths, lambda length: length > long_threshold)] for row in raw]))
+    else:
+        lines.append("pending: reviewer run")
+    lines += ["", "### Sequence-length sweep", ""]
+    sweep = result.get("length_sweep")
+    if isinstance(sweep, dict) and sweep.get("rows"):
+        sweep_rows = []
+        for row in sweep["rows"]:
+            f32, quantized = row["timings"]["f32"], row["timings"]["quantized"]
+            sf, of = f32["statim"]["p50_ms"], f32["ort"]["p50_ms"]
+            sq, oq = quantized["statim"]["p50_ms"], quantized["ort"]["p50_ms"]
+            sweep_rows.append([row["length"], row["threads"], f"{sf:.2f}", f"{of:.2f}",
+                               f"{sf / of:.2f}", f"{sq:.2f}", f"{oq:.2f}", f"{sq / oq:.2f}"])
+        lines.append(markdown_table(["Length", "Threads", "Statim f32 ms", "ORT f32 ms", "Ratio",
+                                     "Statim q8_0 ms", "ORT int8 ms", "Ratio"], sweep_rows))
+        for skipped in sweep.get("skipped", []):
+            lines.append(f"\nSkipped length {skipped['length']}: {skipped['reason']}.")
     else:
         lines.append("pending: reviewer run")
     lines += ["", "### HTTP end to end", ""]
     socket = result.get("socket")
     if isinstance(socket, dict) and socket.get("rows"):
-        lines.append(markdown_table(["Variant", "Engine", "Threads", "Clients", "Microbatch", "p50 ms", "p95 ms", "req/s"],
-            [[row["variant"], row["engine"], row["threads"], row["concurrency"], row["microbatch"],
+        lines.append(markdown_table(["Variant", "Engine", "Threads", "Workers", "Clients", "Microbatch", "p50 ms", "p95 ms", "req/s"],
+            [[row["variant"], row["engine"], row["threads"], row.get("workers", 1), row["concurrency"], row["microbatch"],
               f"{row['p50_ms']:.2f}", f"{row['p95_ms']:.2f}", f"{row['throughput_rps']:.2f}"]
              for row in socket["rows"]]))
     else:
@@ -707,6 +833,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--serve-ort", action="store_true")
     ap.add_argument("--socket-benchmark", action="store_true")
+    ap.add_argument("--length-sweep", action="store_true")
     ap.add_argument("--ort-only", action="store_true", help="omit Statim rows (for pending GPU EP runs)")
     ap.add_argument("--ort-provider", choices=("cpu", "cuda", "tensorrt"), default="cpu")
     ap.add_argument("--checks-only", action="store_true")
@@ -718,6 +845,9 @@ def main() -> int:
     ap.add_argument("--ort-port", type=int, default=8092)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--thread-counts", type=int, nargs="+", default=[1, 4, 8, 16])
+    ap.add_argument("--lengths", type=int, nargs="+", default=[128, 256, 512, 1024])
+    ap.add_argument("--long-threshold", type=int, default=256)
+    ap.add_argument("--statim-workers", type=int, nargs="+", default=[2, 4])
     ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument("--max-states", type=int, default=0, help="smoke-test subset; 0 means all 30")
     ap.add_argument("--requests", type=int, default=60)
@@ -740,7 +870,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=OUT / "compare-results.json")
     args = ap.parse_args()
     if args.render_md:
-        print(render_md(args.render_md), end="")
+        print(render_md(args.render_md, args.golden, args.long_threshold), end="")
         return 0
     if args.serve_ort:
         serve_ort(args)
@@ -749,6 +879,12 @@ def main() -> int:
         ap.error("--repeats must be positive and --max-states non-negative")
     if any(value < 1 or value > 16 for value in args.thread_counts):
         ap.error("--thread-counts values must be in 1..16")
+    if any(value < 1 for value in args.lengths):
+        ap.error("--lengths values must be positive")
+    if args.long_threshold < 1:
+        ap.error("--long-threshold must be positive")
+    if any(value < 1 or value > 64 for value in args.statim_workers):
+        ap.error("--statim-workers values must be in 1..64")
 
     export = require_parity(args.report)
     base = {"cpu_only": True, "machine": machine_info(), "versions": versions(export, args.statim),
@@ -769,6 +905,10 @@ def main() -> int:
     elif args.socket_benchmark:
         base["raw"] = None
         base["socket"] = socket_benchmark(args)
+    elif args.length_sweep:
+        base["raw"] = None
+        base["length_sweep"] = run_length_sweep(args)
+        base["socket"] = "pending: reviewer run"
     else:
         rows, raw, parity_results = subset_rows(json_rows(args.golden), args.max_states), [], {}
         pairs = [("f32", args.gguf_f32, args.onnx_f32), ("quantized", args.gguf_q8, args.onnx_int8)]
