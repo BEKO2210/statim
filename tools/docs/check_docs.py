@@ -37,7 +37,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # Records of the past: their links are still checked, but not their paths, versions and flags.
 HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md"}
 # Files whose release download URLs pin the version a recorded run used (with the reason).
-PINNED = {"docs/reproductions/clean-room.md": "a dated clean-room reproduction of v0.6.0"}
+PINNED = {"docs/reproductions/clean-room.md": "a dated clean-room reproduction of v0.6.0",
+          "docs/ORT.md": "the ONNX Runtime comparison, measured with the v0.9.0 release binary"}
 GENERATED = ("build", "build-", "models/", "data/", "dist/", "logs/", "runs/", "out/")
 
 
