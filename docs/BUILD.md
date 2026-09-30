@@ -30,3 +30,12 @@ cmake -S . -B build-vk -DSTATIM_VULKAN=ON && cmake --build build-vk
 ctest --test-dir build-vk                      # CPU gates + the same gates on the GPU (*_vulkan)
 ./build-vk/statim serve --device vulkan -m english=models/laya-english-f32.gguf -m multilingual=models/laya-multilingual-f32.gguf
 ```
+
+### CPU performance switches
+
+- **f32 projections.** On x86-64 CPUs with AVX2 and FMA, Statim computes the encoder's f32
+  projections with its own packed GEMM (`src/kernels.cpp`). `STATIM_SGEMM=0` falls back to ggml's
+  matrix multiply, for A/B measurements.
+- **Profiling.** `STATIM_PROFILE=FILE` writes the time of every graph node, one JSON record per
+  scoring call. `bench/profile_short.py` uses it to compare Statim with ONNX Runtime per operation
+  ([docs/ORT.md](ORT.md)).

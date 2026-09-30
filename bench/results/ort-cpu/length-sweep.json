@@ -22,6 +22,13 @@
           "build-ort/laya-multilingual-v9-q8_0.gguf"
         ]
       },
+      "shipped_onnx_8bit_blockwise": {
+        "bytes": 934132444,
+        "files": [
+          "build-ort/laya-multilingual-v9-8bit-blockwise.onnx",
+          "build-ort/laya-multilingual-v9-8bit-blockwise.onnx.data"
+        ]
+      },
       "shipped_onnx_f32": {
         "bytes": 1290434224,
         "files": [
@@ -34,6 +41,13 @@
         "files": [
           "build-ort/laya-multilingual-v9-int8.onnx",
           "build-ort/laya-multilingual-v9-int8.onnx.data"
+        ]
+      },
+      "shipped_onnx_int8_dynamic": {
+        "bytes": 325559474,
+        "files": [
+          "build-ort/laya-multilingual-v9-int8-dynamic.onnx",
+          "build-ort/laya-multilingual-v9-int8-dynamic.onnx.data"
         ]
       }
     },
@@ -62,6 +76,12 @@
         "pass": true,
         "tolerance": 0.001
       },
+      "shipped_ort_8bit_blockwise": {
+        "argmax_agree": 236,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 0.19004106521606445
+      },
       "shipped_ort_f32": {
         "argmax_agree": 240,
         "items": 240,
@@ -76,6 +96,12 @@
         "max_abs_act": 0.0,
         "max_abs_logit": 7.957531929016113
       },
+      "shipped_ort_int8_dynamic": {
+        "argmax_agree": 195,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 4.310174465179443
+      },
       "shipped_statim_f32": {
         "argmax_agree": 240,
         "command": [
@@ -83,7 +109,7 @@
           "models/laya-multilingual-v9-f32.gguf",
           "build-ort/golden_v9.jsonl",
           "0.001",
-          "1"
+          "4"
         ],
         "exit_code": 0,
         "items": 240,
@@ -99,7 +125,7 @@
           "build-ort/laya-multilingual-v9-q8_0.gguf",
           "build-ort/golden_v9.jsonl",
           "1000000000.0",
-          "1"
+          "4"
         ],
         "exit_code": 1,
         "items": 240,
@@ -123,11 +149,12 @@
       "gguf_f32": 908307008,
       "gguf_q8_0": 356674176,
       "onnx_f32": 1324804952,
-      "onnx_int8": 968501070
+      "onnx_int8": 968503172,
+      "onnx_int8_dynamic": 359930202
     },
     "artifact_files": {
       "gguf_f32": [
-        "models/laya-multilingual-v9-f32.gguf"
+        "../statim/models/laya-multilingual-v9-f32.gguf"
       ],
       "gguf_q8_0": [
         "build-ort/laya-multilingual-v9-q8_0.gguf"
@@ -135,14 +162,20 @@
       "onnx_f32": [
         "build-ort/laya-multilingual-v9-f32.onnx",
         "build-ort/laya-multilingual-v9-f32.onnx.data",
-        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
-        "models/laya-multilingual-v9/rl_agent_config.json"
+        "../statim/models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "../statim/models/laya-multilingual-v9/rl_agent_config.json"
       ],
       "onnx_int8": [
-        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
-        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx.data",
-        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
-        "models/laya-multilingual-v9/rl_agent_config.json"
+        "build-ort/laya-multilingual-v9-8bit-blockwise.onnx",
+        "build-ort/laya-multilingual-v9-8bit-blockwise.onnx.data",
+        "../statim/models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "../statim/models/laya-multilingual-v9/rl_agent_config.json"
+      ],
+      "onnx_int8_dynamic": [
+        "build-ort/laya-multilingual-v9-int8-dynamic.onnx",
+        "build-ort/laya-multilingual-v9-int8-dynamic.onnx.data",
+        "../statim/models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "../statim/models/laya-multilingual-v9/rl_agent_config.json"
       ]
     },
     "cpython": {
@@ -185,7 +218,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 5.72e-06,
+              "max_abs_logit": 1.24e-05,
               "pass": true
             }
           },
@@ -236,18 +269,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 2163.318390958011,
-              "p50_ms": 2163.318390958011,
-              "p95_ms": 2163.318390958011,
+              "mean_ms": 2110.5656109866686,
+              "p50_ms": 2110.5656109866686,
+              "p95_ms": 2110.5656109866686,
               "per_state_ms": [
-                2163.318390958011
+                2110.5656109866686
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 553.3829900086857,
+              "session_load_ms": 480.0225750077516,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -262,11 +295,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 2417.9,
-              "p50_ms": 2417.9,
-              "p95_ms": 2417.9,
+              "mean_ms": 2102.4,
+              "p50_ms": 2102.4,
+              "p95_ms": 2102.4,
               "per_state_ms": [
-                2417.9
+                2102.4
               ],
               "repeats": 3,
               "states": 1,
@@ -276,7 +309,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -293,18 +326,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 2446.185973007232,
-              "p50_ms": 2446.185973007232,
-              "p95_ms": 2446.185973007232,
+              "mean_ms": 2450.3259459743276,
+              "p50_ms": 2450.3259459743276,
+              "p95_ms": 2450.3259459743276,
               "per_state_ms": [
-                2446.185973007232
+                2450.3259459743276
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 296.26803897554055,
+              "session_load_ms": 289.07387400977314,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -319,11 +352,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 2670.8,
-              "p50_ms": 2670.8,
-              "p95_ms": 2670.8,
+              "mean_ms": 2693.9,
+              "p50_ms": 2693.9,
+              "p95_ms": 2693.9,
               "per_state_ms": [
-                2670.8
+                2693.9
               ],
               "repeats": 3,
               "states": 1,
@@ -349,7 +382,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 7.87e-06,
+              "max_abs_logit": 1.14e-05,
               "pass": true
             }
           },
@@ -400,18 +433,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 4713.5746909771115,
-              "p50_ms": 4713.5746909771115,
-              "p95_ms": 4713.5746909771115,
+              "mean_ms": 4685.969053010922,
+              "p50_ms": 4685.969053010922,
+              "p95_ms": 4685.969053010922,
               "per_state_ms": [
-                4713.5746909771115
+                4685.969053010922
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 480.67966295639053,
+              "session_load_ms": 479.6695249970071,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -426,11 +459,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 4918.7,
-              "p50_ms": 4918.7,
-              "p95_ms": 4918.7,
+              "mean_ms": 4382.0,
+              "p50_ms": 4382.0,
+              "p95_ms": 4382.0,
               "per_state_ms": [
-                4918.7
+                4382.0
               ],
               "repeats": 3,
               "states": 1,
@@ -440,7 +473,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -457,18 +490,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 5130.830376001541,
-              "p50_ms": 5130.830376001541,
-              "p95_ms": 5130.830376001541,
+              "mean_ms": 5119.345039012842,
+              "p50_ms": 5119.345039012842,
+              "p95_ms": 5119.345039012842,
               "per_state_ms": [
-                5130.830376001541
+                5119.345039012842
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 297.3185209557414,
+              "session_load_ms": 288.591513002757,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -483,11 +516,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 5539.2,
-              "p50_ms": 5539.2,
-              "p95_ms": 5539.2,
+              "mean_ms": 5643.5,
+              "p50_ms": 5643.5,
+              "p95_ms": 5643.5,
               "per_state_ms": [
-                5539.2
+                5643.5
               ],
               "repeats": 3,
               "states": 1,
@@ -513,7 +546,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.31e-05,
+              "max_abs_logit": 2.19e-05,
               "pass": true
             }
           },
@@ -564,18 +597,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 10757.348570041358,
-              "p50_ms": 10757.348570041358,
-              "p95_ms": 10757.348570041358,
+              "mean_ms": 10826.652004965581,
+              "p50_ms": 10826.652004965581,
+              "p95_ms": 10826.652004965581,
               "per_state_ms": [
-                10757.348570041358
+                10826.652004965581
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 481.7045640083961,
+              "session_load_ms": 485.6247660354711,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -590,11 +623,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 10605.0,
-              "p50_ms": 10605.0,
-              "p95_ms": 10605.0,
+              "mean_ms": 9425.3,
+              "p50_ms": 9425.3,
+              "p95_ms": 9425.3,
               "per_state_ms": [
-                10605.0
+                9425.3
               ],
               "repeats": 3,
               "states": 1,
@@ -604,7 +637,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -621,18 +654,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 11497.575292014517,
-              "p50_ms": 11497.575292014517,
-              "p95_ms": 11497.575292014517,
+              "mean_ms": 11536.387210013345,
+              "p50_ms": 11536.387210013345,
+              "p95_ms": 11536.387210013345,
               "per_state_ms": [
-                11497.575292014517
+                11536.387210013345
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 290.93196598114446,
+              "session_load_ms": 284.98156199930236,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -647,11 +680,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 11928.3,
-              "p50_ms": 11928.3,
-              "p95_ms": 11928.3,
+              "mean_ms": 11867.8,
+              "p50_ms": 11867.8,
+              "p95_ms": 11867.8,
               "per_state_ms": [
-                11928.3
+                11867.8
               ],
               "repeats": 3,
               "states": 1,
@@ -677,7 +710,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.35e-05,
+              "max_abs_logit": 1.43e-05,
               "pass": true
             }
           },
@@ -728,18 +761,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 28067.10790802026,
-              "p50_ms": 28067.10790802026,
-              "p95_ms": 28067.10790802026,
+              "mean_ms": 28199.897231010254,
+              "p50_ms": 28199.897231010254,
+              "p95_ms": 28199.897231010254,
               "per_state_ms": [
-                28067.10790802026
+                28199.897231010254
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 477.7036649757065,
+              "session_load_ms": 480.2688650088385,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -754,11 +787,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 23330.5,
-              "p50_ms": 23330.5,
-              "p95_ms": 23330.5,
+              "mean_ms": 21770.8,
+              "p50_ms": 21770.8,
+              "p95_ms": 21770.8,
               "per_state_ms": [
-                23330.5
+                21770.8
               ],
               "repeats": 3,
               "states": 1,
@@ -768,7 +801,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -785,18 +818,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 29449.98703803867,
-              "p50_ms": 29449.98703803867,
-              "p95_ms": 29449.98703803867,
+              "mean_ms": 29620.598042034544,
+              "p50_ms": 29620.598042034544,
+              "p95_ms": 29620.598042034544,
               "per_state_ms": [
-                29449.98703803867
+                29620.598042034544
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 294.7225199895911,
+              "session_load_ms": 284.8760220222175,
               "states": 1,
               "threads": 1,
               "warmup_passes": 1
@@ -811,11 +844,11 @@
                 "1"
               ],
               "engine": "statim",
-              "mean_ms": 26545.4,
-              "p50_ms": 26545.4,
-              "p95_ms": 26545.4,
+              "mean_ms": 26190.9,
+              "p50_ms": 26190.9,
+              "p95_ms": 26190.9,
               "per_state_ms": [
-                26545.4
+                26190.9
               ],
               "repeats": 3,
               "states": 1,
@@ -841,7 +874,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 5.72e-06,
+              "max_abs_logit": 1.24e-05,
               "pass": true
             }
           },
@@ -892,18 +925,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 638.1295699975453,
-              "p50_ms": 638.1295699975453,
-              "p95_ms": 638.1295699975453,
+              "mean_ms": 637.6964789815247,
+              "p50_ms": 637.6964789815247,
+              "p95_ms": 637.6964789815247,
               "per_state_ms": [
-                638.1295699975453
+                637.6964789815247
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 484.3416060321033,
+              "session_load_ms": 481.85234499396756,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -918,11 +951,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 675.6,
-              "p50_ms": 675.6,
-              "p95_ms": 675.6,
+              "mean_ms": 606.0,
+              "p50_ms": 606.0,
+              "p95_ms": 606.0,
               "per_state_ms": [
-                675.6
+                606.0
               ],
               "repeats": 3,
               "states": 1,
@@ -932,7 +965,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -949,18 +982,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 773.8078249967657,
-              "p50_ms": 773.8078249967657,
-              "p95_ms": 773.8078249967657,
+              "mean_ms": 760.7519059674814,
+              "p50_ms": 760.7519059674814,
+              "p95_ms": 760.7519059674814,
               "per_state_ms": [
-                773.8078249967657
+                760.7519059674814
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 292.1742200269364,
+              "session_load_ms": 288.9351829653606,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -975,11 +1008,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 736.4,
-              "p50_ms": 736.4,
-              "p95_ms": 736.4,
+              "mean_ms": 751.8,
+              "p50_ms": 751.8,
+              "p95_ms": 751.8,
               "per_state_ms": [
-                736.4
+                751.8
               ],
               "repeats": 3,
               "states": 1,
@@ -1005,7 +1038,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 7.87e-06,
+              "max_abs_logit": 1.14e-05,
               "pass": true
             }
           },
@@ -1056,18 +1089,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 1601.702322019264,
-              "p50_ms": 1601.702322019264,
-              "p95_ms": 1601.702322019264,
+              "mean_ms": 1590.322877978906,
+              "p50_ms": 1590.322877978906,
+              "p95_ms": 1590.322877978906,
               "per_state_ms": [
-                1601.702322019264
+                1590.322877978906
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 479.90318801021203,
+              "session_load_ms": 485.8070859918371,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1082,11 +1115,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 1404.5,
-              "p50_ms": 1404.5,
-              "p95_ms": 1404.5,
+              "mean_ms": 1278.6,
+              "p50_ms": 1278.6,
+              "p95_ms": 1278.6,
               "per_state_ms": [
-                1404.5
+                1278.6
               ],
               "repeats": 3,
               "states": 1,
@@ -1096,7 +1129,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1113,18 +1146,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 1765.4091950389557,
-              "p50_ms": 1765.4091950389557,
-              "p95_ms": 1765.4091950389557,
+              "mean_ms": 1775.9888879954815,
+              "p50_ms": 1775.9888879954815,
+              "p95_ms": 1775.9888879954815,
               "per_state_ms": [
-                1765.4091950389557
+                1775.9888879954815
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 292.3656089697033,
+              "session_load_ms": 288.1937029887922,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1139,11 +1172,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 1571.4,
-              "p50_ms": 1571.4,
-              "p95_ms": 1571.4,
+              "mean_ms": 1586.4,
+              "p50_ms": 1586.4,
+              "p95_ms": 1586.4,
               "per_state_ms": [
-                1571.4
+                1586.4
               ],
               "repeats": 3,
               "states": 1,
@@ -1169,7 +1202,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.31e-05,
+              "max_abs_logit": 2.19e-05,
               "pass": true
             }
           },
@@ -1220,18 +1253,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 4301.38021503808,
-              "p50_ms": 4301.38021503808,
-              "p95_ms": 4301.38021503808,
+              "mean_ms": 4310.508161026519,
+              "p50_ms": 4310.508161026519,
+              "p95_ms": 4310.508161026519,
               "per_state_ms": [
-                4301.38021503808
+                4310.508161026519
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 482.84919594880193,
+              "session_load_ms": 488.23421698762104,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1246,11 +1279,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 3028.1,
-              "p50_ms": 3028.1,
-              "p95_ms": 3028.1,
+              "mean_ms": 2830.6,
+              "p50_ms": 2830.6,
+              "p95_ms": 2830.6,
               "per_state_ms": [
-                3028.1
+                2830.6
               ],
               "repeats": 3,
               "states": 1,
@@ -1260,7 +1293,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1277,18 +1310,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 4474.818165006582,
-              "p50_ms": 4474.818165006582,
-              "p95_ms": 4474.818165006582,
+              "mean_ms": 4558.841465972364,
+              "p50_ms": 4558.841465972364,
+              "p95_ms": 4558.841465972364,
               "per_state_ms": [
-                4474.818165006582
+                4558.841465972364
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 295.08773901034147,
+              "session_load_ms": 291.05464403983206,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1303,11 +1336,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 3376.4,
-              "p50_ms": 3376.4,
-              "p95_ms": 3376.4,
+              "mean_ms": 3404.0,
+              "p50_ms": 3404.0,
+              "p95_ms": 3404.0,
               "per_state_ms": [
-                3376.4
+                3404.0
               ],
               "repeats": 3,
               "states": 1,
@@ -1333,7 +1366,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.35e-05,
+              "max_abs_logit": 1.43e-05,
               "pass": true
             }
           },
@@ -1384,18 +1417,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 12426.121206954122,
-              "p50_ms": 12426.121206954122,
-              "p95_ms": 12426.121206954122,
+              "mean_ms": 12496.8918079976,
+              "p50_ms": 12496.8918079976,
+              "p95_ms": 12496.8918079976,
               "per_state_ms": [
-                12426.121206954122
+                12496.8918079976
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 490.4041250119917,
+              "session_load_ms": 484.2638149857521,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1410,11 +1443,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 6804.8,
-              "p50_ms": 6804.8,
-              "p95_ms": 6804.8,
+              "mean_ms": 6448.3,
+              "p50_ms": 6448.3,
+              "p95_ms": 6448.3,
               "per_state_ms": [
-                6804.8
+                6448.3
               ],
               "repeats": 3,
               "states": 1,
@@ -1424,7 +1457,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1441,18 +1474,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 12997.425828012638,
-              "p50_ms": 12997.425828012638,
-              "p95_ms": 12997.425828012638,
+              "mean_ms": 13024.554641975556,
+              "p50_ms": 13024.554641975556,
+              "p95_ms": 13024.554641975556,
               "per_state_ms": [
-                12997.425828012638
+                13024.554641975556
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 294.8912890278734,
+              "session_load_ms": 290.27219902491197,
               "states": 1,
               "threads": 4,
               "warmup_passes": 1
@@ -1467,11 +1500,11 @@
                 "4"
               ],
               "engine": "statim",
-              "mean_ms": 7576.1,
-              "p50_ms": 7576.1,
-              "p95_ms": 7576.1,
+              "mean_ms": 7619.5,
+              "p50_ms": 7619.5,
+              "p95_ms": 7619.5,
               "per_state_ms": [
-                7576.1
+                7619.5
               ],
               "repeats": 3,
               "states": 1,
@@ -1497,7 +1530,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 5.72e-06,
+              "max_abs_logit": 1.24e-05,
               "pass": true
             }
           },
@@ -1548,18 +1581,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 404.9814600148238,
-              "p50_ms": 404.9814600148238,
-              "p95_ms": 404.9814600148238,
+              "mean_ms": 415.9517219522968,
+              "p50_ms": 415.9517219522968,
+              "p95_ms": 415.9517219522968,
               "per_state_ms": [
-                404.9814600148238
+                415.9517219522968
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 494.9414739967324,
+              "session_load_ms": 493.42010996770114,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1574,11 +1607,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 380.4,
-              "p50_ms": 380.4,
-              "p95_ms": 380.4,
+              "mean_ms": 370.6,
+              "p50_ms": 370.6,
+              "p95_ms": 370.6,
               "per_state_ms": [
-                380.4
+                370.6
               ],
               "repeats": 3,
               "states": 1,
@@ -1588,7 +1621,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1605,18 +1638,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 509.1463709832169,
-              "p50_ms": 509.1463709832169,
-              "p95_ms": 509.1463709832169,
+              "mean_ms": 496.5755809680559,
+              "p50_ms": 496.5755809680559,
+              "p95_ms": 496.5755809680559,
               "per_state_ms": [
-                509.1463709832169
+                496.5755809680559
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 298.8947780104354,
+              "session_load_ms": 301.1255100136623,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1631,11 +1664,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 433.1,
-              "p50_ms": 433.1,
-              "p95_ms": 433.1,
+              "mean_ms": 441.0,
+              "p50_ms": 441.0,
+              "p95_ms": 441.0,
               "per_state_ms": [
-                433.1
+                441.0
               ],
               "repeats": 3,
               "states": 1,
@@ -1661,7 +1694,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 7.87e-06,
+              "max_abs_logit": 1.14e-05,
               "pass": true
             }
           },
@@ -1712,18 +1745,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 1152.5959799764678,
-              "p50_ms": 1152.5959799764678,
-              "p95_ms": 1152.5959799764678,
+              "mean_ms": 1191.6233209776692,
+              "p50_ms": 1191.6233209776692,
+              "p95_ms": 1191.6233209776692,
               "per_state_ms": [
-                1152.5959799764678
+                1191.6233209776692
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 498.5392530215904,
+              "session_load_ms": 490.33786001382396,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1738,11 +1771,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 807.2,
-              "p50_ms": 807.2,
-              "p95_ms": 807.2,
+              "mean_ms": 811.7,
+              "p50_ms": 811.7,
+              "p95_ms": 811.7,
               "per_state_ms": [
-                807.2
+                811.7
               ],
               "repeats": 3,
               "states": 1,
@@ -1752,7 +1785,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1769,18 +1802,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 1326.1306500062346,
-              "p50_ms": 1326.1306500062346,
-              "p95_ms": 1326.1306500062346,
+              "mean_ms": 1314.6153640118428,
+              "p50_ms": 1314.6153640118428,
+              "p95_ms": 1314.6153640118428,
               "per_state_ms": [
-                1326.1306500062346
+                1314.6153640118428
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 305.1172969862819,
+              "session_load_ms": 291.869510023389,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1795,11 +1828,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 917.7,
-              "p50_ms": 917.7,
-              "p95_ms": 917.7,
+              "mean_ms": 953.0,
+              "p50_ms": 953.0,
+              "p95_ms": 953.0,
               "per_state_ms": [
-                917.7
+                953.0
               ],
               "repeats": 3,
               "states": 1,
@@ -1825,7 +1858,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.31e-05,
+              "max_abs_logit": 2.19e-05,
               "pass": true
             }
           },
@@ -1876,18 +1909,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 3658.8717160047963,
-              "p50_ms": 3658.8717160047963,
-              "p95_ms": 3658.8717160047963,
+              "mean_ms": 3740.7987500191666,
+              "p50_ms": 3740.7987500191666,
+              "p95_ms": 3740.7987500191666,
               "per_state_ms": [
-                3658.8717160047963
+                3740.7987500191666
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 483.09286701260135,
+              "session_load_ms": 484.34764897683635,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1902,11 +1935,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 1780.1,
-              "p50_ms": 1780.1,
-              "p95_ms": 1780.1,
+              "mean_ms": 1853.8,
+              "p50_ms": 1853.8,
+              "p95_ms": 1853.8,
               "per_state_ms": [
-                1780.1
+                1853.8
               ],
               "repeats": 3,
               "states": 1,
@@ -1916,7 +1949,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -1933,18 +1966,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 3961.028723977506,
-              "p50_ms": 3961.028723977506,
-              "p95_ms": 3961.028723977506,
+              "mean_ms": 3977.968304010574,
+              "p50_ms": 3977.968304010574,
+              "p95_ms": 3977.968304010574,
               "per_state_ms": [
-                3961.028723977506
+                3977.968304010574
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 296.87413800274953,
+              "session_load_ms": 294.7389299515635,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -1959,11 +1992,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 2143.3,
-              "p50_ms": 2143.3,
-              "p95_ms": 2143.3,
+              "mean_ms": 2153.0,
+              "p50_ms": 2153.0,
+              "p95_ms": 2153.0,
               "per_state_ms": [
-                2143.3
+                2153.0
               ],
               "repeats": 3,
               "states": 1,
@@ -1989,7 +2022,7 @@
               "exit_code": 0,
               "items": 32,
               "max_abs_act": 0.0,
-              "max_abs_logit": 1.35e-05,
+              "max_abs_logit": 1.43e-05,
               "pass": true
             }
           },
@@ -2040,18 +2073,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 11310.093501000665,
-              "p50_ms": 11310.093501000665,
-              "p95_ms": 11310.093501000665,
+              "mean_ms": 11421.191559988074,
+              "p50_ms": 11421.191559988074,
+              "p95_ms": 11421.191559988074,
               "per_state_ms": [
-                11310.093501000665
+                11421.191559988074
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 489.91913499776274,
+              "session_load_ms": 485.31968996394426,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -2066,11 +2099,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 4038.4,
-              "p50_ms": 4038.4,
-              "p95_ms": 4038.4,
+              "mean_ms": 4399.1,
+              "p50_ms": 4399.1,
+              "p95_ms": 4399.1,
               "per_state_ms": [
-                4038.4
+                4399.1
               ],
               "repeats": 3,
               "states": 1,
@@ -2080,7 +2113,7 @@
           },
           "quantized": {
             "ort": {
-              "artifact": "laya-v9-int8-nbits-b32-acc0.onnx",
+              "artifact": "laya-multilingual-v9-8bit-blockwise.onnx",
               "command": [
                 "build-ort/venv-server/bin/python",
                 "bench/ort_compare.py",
@@ -2097,18 +2130,18 @@
                 "--ort-provider",
                 "cpu",
                 "--out",
-                "build-ort/cpu-length-sweep-results.json"
+                "build-ort/v092b-sweep.json"
               ],
               "engine": "ort",
-              "mean_ms": 11699.256803025492,
-              "p50_ms": 11699.256803025492,
-              "p95_ms": 11699.256803025492,
+              "mean_ms": 11659.462684008759,
+              "p50_ms": 11659.462684008759,
+              "p95_ms": 11659.462684008759,
               "per_state_ms": [
-                11699.256803025492
+                11659.462684008759
               ],
               "provider": "cpu",
               "repeats": 3,
-              "session_load_ms": 294.9238380533643,
+              "session_load_ms": 291.6052599903196,
               "states": 1,
               "threads": 8,
               "warmup_passes": 1
@@ -2123,11 +2156,11 @@
                 "8"
               ],
               "engine": "statim",
-              "mean_ms": 4757.1,
-              "p50_ms": 4757.1,
-              "p95_ms": 4757.1,
+              "mean_ms": 4819.9,
+              "p50_ms": 4819.9,
+              "p95_ms": 4819.9,
               "per_state_ms": [
-                4757.1
+                4819.9
               ],
               "repeats": 3,
               "states": 1,
@@ -2181,14 +2214,17 @@
   "raw": null,
   "socket": "pending: reviewer run",
   "versions": {
+    "benchmark_numpy": "2.5.3",
+    "benchmark_onnxruntime": "1.30.0",
     "benchmark_python": "3.12.3",
-    "git_commit": "37f564602b3ea4b2d6660d7070c0d722ca513c58",
+    "benchmark_tokenizers": "0.23.2",
+    "git_commit": "2a3d76155738efdfa9463dc265c700264026f554",
     "laya": "0.3.20",
     "numpy": "2.5.3",
     "onnx": "1.23.0",
     "onnxruntime": "1.30.0",
     "python": "3.12.3",
-    "statim": "statim 0.9.0",
+    "statim": "statim 0.9.1",
     "torch": "2.14.0+cu130"
   }
 }
