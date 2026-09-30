@@ -7,6 +7,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- ORT comparison tooling, after review: `bench/compare_predictions.py` refuses empty or mismatched
+  runs (each prediction now records an item hash); `bench/ort_compare.py` gates f32 parity on the
+  timed inputs, sizes the artifacts it actually ran, reads `--ort-provider=VALUE`, and counts
+  context switches over all server threads; `bench/ort_export.py` accepts relative paths.
+  `docs/ORT.md` no longer compares context switches, which were counted on the main thread only.
+
 ### Added
 - [docs/ORT.md](docs/ORT.md): Statim compared with ONNX Runtime on the CPU, on the shipped
   multilingual model, with ORT given its best measured configuration.
@@ -19,8 +26,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
     long sequences and with more threads, up to 2.8× at 1,024 tokens on 8 threads. Its default
     server answers 10–34 % more requests per second on the same cores, and starts in 0.45 s
     against ORT's 1.95 s.
-  - **8-bit.** Statim's q8_0 keeps the f32 decisions; ORT's dynamic int8 costs 1.7 accuracy points
-    (exact McNemar p = 0.009).
+  - **8-bit.** Statim's q8_0 changes 30 of 2,850 held-out decisions with no measurable accuracy change
+    (exact McNemar p = 0.523); ORT's dynamic int8 costs 1.7 accuracy points (p = 0.00883).
   - **Scripts.** `bench/ort_export.py` and `bench/ort_compare.py`; the results are in
     `bench/results/ort-cpu/`.
 - `bench/eval_categories.py --predictions` writes one record per item, and

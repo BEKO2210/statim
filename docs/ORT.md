@@ -228,35 +228,34 @@ This compares Statim's server with a Python `ThreadingHTTPServer` around ORT, wh
 and renders in Python. Both are pinned to the same physical cores
 (`bench/results/ort-cpu/http-pinned.json`).
 
-- **Busy cores** is the server's CPU time divided by wall time.
+- **Busy cores** is the server's CPU time divided by wall time. The context-switch counts in the JSON
+  cover only each server's main thread, so they are not compared here.
 - **p99** over 60 requests is the slowest request.
-- **Context switches per request** are about 1 for Statim and 4–5 for ORT. The difference between
-  4 and 5 is rounding.
 - **Omitted rows.** The table leaves out Statim's 8-bit one-worker four-client rows: p95 7,078 ms
   on 4 cores and 4,323 ms on 8 cores. They are in the JSON with every other row.
 
-| Variant | Cores | Server | Clients | p50 ms | p95 ms | p99 (max) ms | req/s | Busy cores | Context switches / request |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| f32 | 4 | Statim, 1 worker | 1 | 460 | 774 | 4,864 | 1.60 | 3.88 | 1 |
-| f32 | 4 | ORT | 1 | 420 | 740 | 8,072 | 1.46 | 3.83 | 5 |
-| f32 | 4 | Statim, 1 worker | 4 | 1,825 | 6,315 | 6,529 | 1.60 | 3.89 | 1 |
-| f32 | 4 | Statim, 2 workers | 4 | 1,812 | 3,068 | 10,347 | 1.47 | 3.52 | 1 |
-| f32 | 4 | Statim, 4 workers | 4 | 1,829 | 3,084 | 18,973 | 1.24 | 2.98 | 1 |
-| f32 | 4 | ORT | 4 | 1,884 | 3,245 | 21,392 | 1.45 | 3.93 | 5 |
-| f32 | 8 | Statim, 1 worker | 1 | 286 | 481 | 3,009 | 2.58 | 7.29 | 1 |
-| f32 | 8 | ORT | 1 | 257 | 471 | 7,188 | 2.00 | 7.42 | 4 |
-| f32 | 8 | Statim, 1 worker | 4 | 1,137 | 3,883 | 4,000 | 2.61 | 7.41 | 1 |
-| f32 | 8 | Statim, 2 workers | 4 | 1,076 | 1,816 | 5,950 | 2.54 | 6.82 | 1 |
-| f32 | 8 | Statim, 4 workers | 4 | 1,045 | 1,775 | 10,751 | 2.21 | 5.98 | 1 |
-| f32 | 8 | ORT | 4 | 1,186 | 2,010 | 15,084 | 2.07 | 7.74 | 4 |
-| 8-bit | 4 | Statim q8_0, 1 worker | 1 | 509 | 875 | 5,471 | 1.44 | 3.85 | 1 |
-| 8-bit | 4 | ORT blockwise | 1 | 503 | 877 | 8,402 | 1.28 | 3.85 | 5 |
-| 8-bit | 4 | Statim q8_0, 2 workers | 4 | 1,967 | 3,376 | 11,640 | 1.34 | 3.50 | 1 |
-| 8-bit | 4 | ORT blockwise | 4 | 2,359 | 3,572 | 22,835 | 1.23 | 3.94 | 5 |
-| 8-bit | 8 | Statim q8_0, 1 worker | 1 | 310 | 486 | 3,375 | 2.36 | 6.82 | 1 |
-| 8-bit | 8 | ORT blockwise | 1 | 319 | 576 | 7,445 | 1.76 | 7.50 | 5 |
-| 8-bit | 8 | Statim q8_0, 2 workers | 4 | 1,172 | 2,018 | 6,630 | 2.32 | 6.59 | 1 |
-| 8-bit | 8 | ORT blockwise | 4 | 1,556 | 2,419 | 15,989 | 1.76 | 7.79 | 4 |
+| Variant | Cores | Server | Clients | p50 ms | p95 ms | p99 (max) ms | req/s | Busy cores |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| f32 | 4 | Statim, 1 worker | 1 | 460 | 774 | 4,864 | 1.60 | 3.88 |
+| f32 | 4 | ORT | 1 | 420 | 740 | 8,072 | 1.46 | 3.83 |
+| f32 | 4 | Statim, 1 worker | 4 | 1,825 | 6,315 | 6,529 | 1.60 | 3.89 |
+| f32 | 4 | Statim, 2 workers | 4 | 1,812 | 3,068 | 10,347 | 1.47 | 3.52 |
+| f32 | 4 | Statim, 4 workers | 4 | 1,829 | 3,084 | 18,973 | 1.24 | 2.98 |
+| f32 | 4 | ORT | 4 | 1,884 | 3,245 | 21,392 | 1.45 | 3.93 |
+| f32 | 8 | Statim, 1 worker | 1 | 286 | 481 | 3,009 | 2.58 | 7.29 |
+| f32 | 8 | ORT | 1 | 257 | 471 | 7,188 | 2.00 | 7.42 |
+| f32 | 8 | Statim, 1 worker | 4 | 1,137 | 3,883 | 4,000 | 2.61 | 7.41 |
+| f32 | 8 | Statim, 2 workers | 4 | 1,076 | 1,816 | 5,950 | 2.54 | 6.82 |
+| f32 | 8 | Statim, 4 workers | 4 | 1,045 | 1,775 | 10,751 | 2.21 | 5.98 |
+| f32 | 8 | ORT | 4 | 1,186 | 2,010 | 15,084 | 2.07 | 7.74 |
+| 8-bit | 4 | Statim q8_0, 1 worker | 1 | 509 | 875 | 5,471 | 1.44 | 3.85 |
+| 8-bit | 4 | ORT blockwise | 1 | 503 | 877 | 8,402 | 1.28 | 3.85 |
+| 8-bit | 4 | Statim q8_0, 2 workers | 4 | 1,967 | 3,376 | 11,640 | 1.34 | 3.50 |
+| 8-bit | 4 | ORT blockwise | 4 | 2,359 | 3,572 | 22,835 | 1.23 | 3.94 |
+| 8-bit | 8 | Statim q8_0, 1 worker | 1 | 310 | 486 | 3,375 | 2.36 | 6.82 |
+| 8-bit | 8 | ORT blockwise | 1 | 319 | 576 | 7,445 | 1.76 | 7.50 |
+| 8-bit | 8 | Statim q8_0, 2 workers | 4 | 1,172 | 2,018 | 6,630 | 2.32 | 6.59 |
+| 8-bit | 8 | ORT blockwise | 4 | 1,556 | 2,419 | 15,989 | 1.76 | 7.79 |
 
 - **Throughput.** With its default single worker, Statim's throughput is higher than ORT's in all
   eight pinned one-worker comparisons, by 10 % (f32, 4 cores, 1 client) to 34 % (8-bit, 8 cores,

@@ -230,6 +230,9 @@ def main() -> int:
     ap.add_argument("--tolerance", type=float, default=1e-3)
     ap.add_argument("--skip-export", action="store_true", help="reuse existing f32 ONNX files")
     args = ap.parse_args()
+    for name, value in vars(args).items():  # the report stores paths relative to the repository
+        if isinstance(value, Path):
+            setattr(args, name, value.resolve())
     if not 1 <= args.threads <= 4:
         ap.error("--threads must be in 1..4 while exporting")
     try:
