@@ -61,6 +61,7 @@ add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src
 set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml statim_gguf_preflight)
+find_package(Threads REQUIRED)
 if(STATIM_FUZZ)
   target_compile_options(statim_tokenizer PRIVATE -fsanitize=fuzzer-no-link)
   target_compile_options(statim_gguf_preflight PRIVATE -fsanitize=fuzzer-no-link)
@@ -81,6 +82,10 @@ if(STATIM_BUILD_TESTS)
   target_link_libraries(test_engine_parity PRIVATE statim_core)
   add_executable(test_batch_parity tests/test_batch_parity.cpp)
   target_link_libraries(test_batch_parity PRIVATE statim_core)
+
+  add_executable(test_sgemm tests/test_sgemm.cpp)
+  target_include_directories(test_sgemm PRIVATE src)
+  target_link_libraries(test_sgemm PRIVATE statim_core Threads::Threads)
 
   add_executable(test_lora tests/test_lora.cpp)
   target_include_directories(test_lora PRIVATE src)
@@ -147,6 +152,7 @@ if(STATIM_BUILD_TESTS)
   set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)
   add_test(NAME security_model COMMAND test_security ${M}/laya-multilingual-f32.gguf)
   add_test(NAME tokenizer COMMAND test_tokenizer)
+  add_test(NAME sgemm COMMAND test_sgemm)
   add_test(NAME model_parity_multilingual COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
   add_test(NAME engine_parity_multilingual COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl)
   add_test(NAME batch_parity_multilingual COMMAND test_batch_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json)
@@ -184,7 +190,6 @@ if(STATIM_BUILD_TESTS AND Python3_Interpreter_FOUND)
 endif()
 
 # ---- statim binary (CLI + HTTP server)
-find_package(Threads REQUIRED)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/playground.inc
   COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/playground.html -DDST=${CMAKE_CURRENT_BINARY_DIR}/playground.inc
           -P ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.playground.cmake

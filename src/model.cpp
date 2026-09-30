@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
@@ -867,16 +868,71 @@ ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_te
     return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
+struct SgemmOpSync {
+    std::atomic<int> arrived{0};
+    std::atomic<bool> ready{false};
+};
+
+void sgemm_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
+    const ggml_tensor* w = dst->src[0];
+    const ggml_tensor* x = dst->src[1];
+    ggml_tensor* scratch = dst->src[2];
+    auto* sync = static_cast<SgemmOpSync*>(userdata);
+    packed_sgemm_pack(static_cast<float*>(scratch->data), static_cast<const float*>(x->data),
+                      static_cast<const float*>(w->data), w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
+    if (sync->arrived.fetch_add(1, std::memory_order_acq_rel) == nth - 1) {
+        sync->ready.store(true, std::memory_order_release);
+        sync->ready.notify_all();
+    } else {
+        sync->ready.wait(false, std::memory_order_acquire);
+    }
+    packed_sgemm_compute(static_cast<float*>(dst->data), static_cast<const float*>(scratch->data),
+                         w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
+}
+
+bool sgemm_enabled() {
+    const char* value = std::getenv("STATIM_SGEMM");
+    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
+}
+
+// W*x for activations [d,L,B,...].  Flattening exposes all L*B rows to one GEMM.
+// Name the actual compute node (not a trailing reshape), so STATIM_PROFILE keeps
+// projection time in its projection category.
+ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
+                     const std::string& name, SgemmOpSync* sync = nullptr) {
+    const bool flat = ggml_n_dims(w) <= 2 && ggml_is_contiguous(x) && x->ne[2] * x->ne[3] != 1;
+    ggml_tensor* x2 = flat ? ggml_reshape_2d(c, x, x->ne[0], x->ne[1] * x->ne[2] * x->ne[3]) : x;
+    const bool use_custom = sync && flat && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
+                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
+    ggml_tensor* y;
+    if (use_custom) {
+        ggml_tensor* scratch = ggml_new_tensor_1d(c, GGML_TYPE_F32,
+            packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]));
+        ggml_tensor* args[] = {w, x2, scratch};
+        y = ggml_custom_4d(c, GGML_TYPE_F32, w->ne[1], x->ne[1], x->ne[2], x->ne[3],
+                           args, 3, sgemm_op, GGML_N_TASKS_MAX, sync);
+        return named(y, name + ".matmul");
+    }
+    y = named(ggml_mul_mat(c, w, x2), name + ".matmul");
+    return flat ? ggml_reshape_4d(c, y, w->ne[1], x->ne[1], x->ne[2], x->ne[3]) : y;
+}
+
 ggml_tensor* linear(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_tensor* b,
                     const std::string& name) {
-    x = named(ggml_mul_mat(c, w, x), name + ".matmul");
+    x = project(c, w, x, name);
     return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
 // Encoder projection i of layer L, plus B·(A·x) when a runtime LoRA adapter targets it.
 ggml_tensor* enc_proj(ggml_context* c, ggml_tensor* x, const EncLayer& L, int i, ggml_tensor* w,
-                      const std::string& name) {
-    ggml_tensor* y = named(ggml_mul_mat(c, w, x), name + ".matmul");
+                      const std::string& name, bool cpu,
+                      std::vector<std::unique_ptr<SgemmOpSync>>& syncs) {
+    SgemmOpSync* sync = nullptr;
+    if (cpu) {
+        syncs.push_back(std::make_unique<SgemmOpSync>());
+        sync = syncs.back().get();
+    }
+    ggml_tensor* y = project(c, w, x, name, sync);
     if (!L.lora_a[i]) return y;
     ggml_tensor* a = named(ggml_mul_mat(c, L.lora_a[i], x), name + ".lora_a");
     ggml_tensor* b = named(ggml_mul_mat(c, L.lora_b[i], a), name + ".lora_b");
@@ -1021,6 +1077,10 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_set_input(io.pool_rows);
 
     // ---- ModernBERT encoder
+    // Per-node barriers live until this graph has executed; packed operands live
+    // in graph scratch tensors and are reclaimed/reused by ggml's allocator.
+    std::vector<std::unique_ptr<SgemmOpSync>> sgemm_syncs;
+    sgemm_syncs.reserve(static_cast<size_t>(h.n_layer) * 4);
     ggml_tensor* x = named(ggml_get_rows(c, M.tok_embd, io.ids), "embedding.token");  // [d, L*B]
     x = ggml_reshape_3d(c, x, d, L, B);
     x = layer_norm(c, x, M.embd_norm, nullptr, h.norm_eps, "embedding.layernorm");
@@ -1029,7 +1089,7 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         const bool glob = h.layer_is_global[l];
         const std::string p = "encoder." + std::to_string(l);
         ggml_tensor* a = Ly.attn_norm ? layer_norm(c, x, Ly.attn_norm, nullptr, h.norm_eps, p + ".attn.layernorm") : x;
-        ggml_tensor* qkv = enc_proj(c, a, Ly, 0, Ly.wqkv, p + ".attn.qkv");  // [3d, L, B]
+        ggml_tensor* qkv = enc_proj(c, a, Ly, 0, Ly.wqkv, p + ".attn.qkv", M.on_cpu(), sgemm_syncs);  // [3d, L, B]
         const size_t es = ggml_element_size(qkv);
         auto view = [&](int part) {
             return ggml_view_4d(c, qkv, hd, h.n_head, L, B, hd * es, qkv->nb[1], qkv->nb[2], part * d * es);
@@ -1041,17 +1101,17 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         q = named(ggml_rope_ext(c, q, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f), p + ".attn.q.rotary");
         k = named(ggml_rope_ext(c, k, io.pos, nullptr, hd, GGML_ROPE_TYPE_NEOX, h.max_position, theta, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f), p + ".attn.k.rotary");
         ggml_tensor* o = attention(c, q, k, v, glob ? io.mask_global : io.mask_local, hd, h.n_head, L, B, flash, p + ".attn");
-        x = named(ggml_add(c, x, enc_proj(c, o, Ly, 1, Ly.wo, p + ".attn.output")), p + ".attn.residual");
+        x = named(ggml_add(c, x, enc_proj(c, o, Ly, 1, Ly.wo, p + ".attn.output", M.on_cpu(), sgemm_syncs)), p + ".attn.residual");
 
         ggml_tensor* m = layer_norm(c, x, Ly.mlp_norm, nullptr, h.norm_eps, p + ".mlp.layernorm");
-        m = enc_proj(c, m, Ly, 2, Ly.wi, p + ".mlp.up");  // [2*ff, L, B]; first half = input, second half = gate
+        m = enc_proj(c, m, Ly, 2, Ly.wi, p + ".mlp.up", M.on_cpu(), sgemm_syncs);  // [2*ff, L, B]; first half = input, second half = gate
         if (M.on_cpu()) {
             ggml_tensor* args[] = {m};
             m = named(ggml_custom_4d(c, GGML_TYPE_F32, h.n_ff, L, B, 1, args, 1, geglu_op, GGML_N_TASKS_MAX, nullptr), p + ".mlp.geglu");
         } else {
             m = named(ggml_geglu_erf(c, m), p + ".mlp.geglu");  // same math; custom ops only run on the CPU backend
         }
-        x = named(ggml_add(c, x, enc_proj(c, m, Ly, 3, Ly.wo_mlp, p + ".mlp.down")), p + ".mlp.residual");
+        x = named(ggml_add(c, x, enc_proj(c, m, Ly, 3, Ly.wo_mlp, p + ".mlp.down", M.on_cpu(), sgemm_syncs)), p + ".mlp.residual");
     }
     x = layer_norm(c, x, M.final_norm, nullptr, h.norm_eps, "encoder.final_layernorm");
     io.hidden = x;
