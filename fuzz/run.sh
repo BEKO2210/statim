@@ -15,8 +15,9 @@ build=${3:-build-fuzz}
 shift $(( $# < 3 ? $# : 3 ))
 work="$build/corpus-$name"
 mkdir -p "$work" "$build/artifacts"
+# the suppressions path is quoted: sanitizer option values may not contain spaces otherwise
 export ASAN_OPTIONS=${ASAN_OPTIONS:-detect_leaks=1:abort_on_error=1}
-export UBSAN_OPTIONS=${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1:suppressions=$PWD/fuzz/ubsan.supp}
+export UBSAN_OPTIONS=${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1:suppressions=\"$PWD/fuzz/ubsan.supp\"}
 args=(-max_total_time="$secs" -timeout=25 -rss_limit_mb=4096 -print_final_stats=1
       -artifact_prefix="$build/artifacts/$name-")
 [ "$name" = request ] && args+=(-dict=fuzz/request.dict)

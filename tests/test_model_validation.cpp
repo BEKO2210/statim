@@ -56,6 +56,33 @@ static void expect_rejected(const std::string& src, const char* what, const std:
     std::remove(path);
 }
 
+static void expect_runnable(const std::string& src, const char* what, const std::function<void(gguf_context*)>& edit) {
+    if (only && !std::strstr(what, only)) return;
+    gguf_context* g = gguf_init_from_file(src.c_str(), {/*no_alloc=*/true, nullptr});
+    if (!g) throw std::runtime_error("cannot read " + src);
+    const size_t data_off = gguf_get_data_offset(g);
+    edit(g);
+    char path[] = "/tmp/statim-model-validation-XXXXXX";
+    const int fd = mkstemp(path);
+    if (fd < 0) throw std::runtime_error("mkstemp failed");
+    close(fd);
+    const bool written = gguf_write_to_file(g, path, /*only_meta=*/true);
+    gguf_free(g);
+    if (!written) throw std::runtime_error("cannot write test model");
+    {
+        std::ifstream in(src, std::ios::binary);
+        in.seekg(static_cast<std::streamoff>(data_off));
+        std::ofstream out(path, std::ios::binary | std::ios::app);
+        out << in.rdbuf();
+    }
+    auto m = Model::load(path, "cpu");
+    Engine e(m);
+    auto result = e.decide(ojson("the and"), ojson::parse(R"({"q":{"type":"noul","instructions":"ok?"}})"));
+    if (!result.contains("answers")) throw std::runtime_error(std::string(what) + " did not answer");
+    std::printf("ok   %-44s runnable\n", what);
+    std::remove(path);
+}
+
 int main(int argc, char** argv) try {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s tiny-model.gguf\n", argv[0]);
@@ -137,6 +164,11 @@ int main(int argc, char** argv) try {
     });
     expect_rejected(src, "non-finite norm_eps", [](gguf_context* g) {
         gguf_set_val_f32(g, "laya.encoder.norm_eps", -1.0f);
+    });
+    // A graph with no local-attention layer does not allocate the unused local mask input.
+    expect_runnable(src, "all encoder layers use global attention", [](gguf_context* g) {
+        const bool global[] = {true, true};
+        gguf_set_arr_data(g, "laya.encoder.layer_is_global", GGUF_TYPE_BOOL, global, 2);
     });
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "all malformed models rejected", failures);
     return failures ? 1 : 0;

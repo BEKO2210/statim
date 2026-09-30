@@ -1,13 +1,2 @@
 # UBSan suppressions for the fuzzers (UBSAN_OPTIONS=suppressions=fuzz/ubsan.supp).
 # Keep this list to confirmed upstream issues in vendored code, one line each, with a reason.
-
-# ggml gguf.cpp gguf_init_from_reader(): the "total number of elements is representable" guard
-# first calls ggml_nelements(), i.e. performs the very multiplication it guards, so a hostile
-# tensor shape overflows int64_t before the check rejects it. Wraps on every supported compiler
-# and the file is then rejected; regression input: fuzz/regressions/gguf/ggml-nelements-overflow-in-guard.gguf
-signed-integer-overflow:ggml_nelements
-
-# ggml gguf.cpp gguf_init_from_reader(): reads the tensor type straight into `enum ggml_type` and
-# range-checks it afterwards (loading an out-of-range enum value is UB); the check then rejects the
-# file. Found by fuzz_gguf.
-enum:gguf_init_from_reader

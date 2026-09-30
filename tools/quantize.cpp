@@ -13,6 +13,7 @@
 #include "ggml-cpu.h"
 #include "ggml.h"
 #include "gguf.h"
+#include "statim/gguf_preflight.h"
 #include "weight_types.h"
 
 static ggml_type parse_type(const std::string& s) {
@@ -50,6 +51,12 @@ int main(int argc, char** argv) {
         if (!std::strcmp(argv[i], "--embd")) et = parse_type(argv[i + 1]);
 
     ggml_cpu_init();
+    try {
+        statim::gguf_preflight(argv[1]);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "cannot read %s: %s\n", argv[1], e.what());
+        return 1;
+    }
     ggml_context* ctx = nullptr;
     gguf_context* in = gguf_init_from_file(argv[1], {/*no_alloc=*/false, &ctx});
     if (!in) {
