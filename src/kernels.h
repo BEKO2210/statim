@@ -13,6 +13,6 @@ bool packed_sgemm_available();
 size_t packed_sgemm_workspace_floats(int64_t M, int64_t N, int64_t K);
 void packed_sgemm_pack(float* workspace, const float* x, const float* w,
                        int64_t M, int64_t N, int64_t K, int ith, int nth);
-void packed_sgemm_compute(float* y, const float* workspace,
+void packed_sgemm_compute(float* y, const float* workspace, const float* w,
                           int64_t M, int64_t N, int64_t K, int ith, int nth);
 }

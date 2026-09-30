@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
@@ -132,86 +133,72 @@ size_t apack_floats(int64_t N, int64_t K) {
     return static_cast<size_t>((K + kKC - 1) / kKC * ((N + kNR - 1) / kNR) * kKC * kNR);
 }
 
-STATIM_AVX2_FMA void pack_avx2(float* workspace, const float* x, const float* w,
-                                int64_t M, int64_t N, int64_t K, int ith, int nth) {
-    const int64_t mt = (M + kMR - 1) / kMR;
+// Packs the K block p of weight tile tj ([16 outputs, K]) into dst as [kb, 16].
+STATIM_AVX2_FMA void pack_w_tile(float* dst, const float* w, int64_t M, int64_t K, int64_t p, int64_t tj) {
+    const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
+    const int64_t m0 = tj * kMR;
+    int k = 0;
+    for (; k + 8 <= kb; k += 8) {
+        __m256 lo[8], hi[8];
+        for (int j = 0; j < 8; ++j) {
+            lo[j] = m0 + j < M ? _mm256_loadu_ps(w + (m0 + j) * K + p * kKC + k) : _mm256_setzero_ps();
+            hi[j] = m0 + 8 + j < M ? _mm256_loadu_ps(w + (m0 + 8 + j) * K + p * kKC + k) : _mm256_setzero_ps();
+        }
+        transpose8x8(lo);
+        transpose8x8(hi);
+        for (int q = 0; q < 8; ++q) {
+            _mm256_storeu_ps(dst + (k + q) * kMR, lo[q]);
+            _mm256_storeu_ps(dst + (k + q) * kMR + 8, hi[q]);
+        }
+    }
+    for (; k < kb; ++k)
+        for (int j = 0; j < kMR; ++j)
+            dst[k * kMR + j] = m0 + j < M ? w[(m0 + j) * K + p * kKC + k] : 0.0f;
+}
+
+// Phase 1, all threads: pack the activations once, as [K block][6-row tile][kb, 6]. They are
+// shared by every thread and fit in L3 for the sequence lengths Statim serves.
+STATIM_AVX2_FMA void pack_avx2(float* workspace, const float* x, int64_t N, int64_t K, int ith, int nth) {
     const int64_t nt = (N + kNR - 1) / kNR;
     const int64_t kp = (K + kKC - 1) / kKC;
-    float* apack = workspace;
-    float* bpack = workspace + apack_floats(N, K);
     for (int64_t index = ith; index < kp * nt; index += nth) {
         const int64_t p = index / nt, ti = index % nt;
         const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
-        float* dst = apack + index * kKC * kNR;
+        float* dst = workspace + index * kKC * kNR;
         const int64_t n0 = ti * kNR;
         for (int k = 0; k < kb; ++k)
             for (int r = 0; r < kNR; ++r)
                 dst[k * kNR + r] = n0 + r < N ? x[(n0 + r) * K + p * kKC + k] : 0.0f;
     }
-    for (int64_t index = ith; index < kp * mt; index += nth) {
-        const int64_t p = index / mt, ti = index % mt;
-        const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
-        float* dst = bpack + index * kKC * kMR;
-        const int64_t m0 = ti * kMR;
-        int k = 0;
-        for (; k + 8 <= kb; k += 8) {
-            __m256 lo[8], hi[8];
-            for (int j = 0; j < 8; ++j) {
-                lo[j] = m0 + j < M ? _mm256_loadu_ps(w + (m0 + j) * K + p * kKC + k)
-                                    : _mm256_setzero_ps();
-                hi[j] = m0 + 8 + j < M ? _mm256_loadu_ps(w + (m0 + 8 + j) * K + p * kKC + k)
-                                        : _mm256_setzero_ps();
-            }
-            transpose8x8(lo);
-            transpose8x8(hi);
-            for (int q = 0; q < 8; ++q) {
-                _mm256_storeu_ps(dst + (k + q) * kMR, lo[q]);
-                _mm256_storeu_ps(dst + (k + q) * kMR + 8, hi[q]);
-            }
-        }
-        for (; k < kb; ++k)
-            for (int j = 0; j < kMR; ++j)
-                dst[k * kMR + j] = m0 + j < M ? w[(m0 + j) * K + p * kKC + k] : 0.0f;
-    }
 }
 
-STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace,
+// Phase 2: each thread owns a contiguous range of 16-output tiles. Per K block it packs one
+// MC x KC weight block into a thread-local buffer that stays in L2 and streams every activation
+// tile through it (GotoBLAS order), so the weights cross memory once and are never written back.
+STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace, const float* w,
                                    int64_t M, int64_t N, int64_t K, int ith, int nth) {
     const int64_t mt = (M + kMR - 1) / kMR;
     const int64_t nt = (N + kNR - 1) / kNR;
-    // A 2-D worker grid avoids making every core stream the entire activation
-    // panel.  Prefer a small N split so each worker still has ample M tiles.
-    int ng = 1;
-    for (int candidate = 2; candidate * candidate <= nth; ++candidate)
-        if (nth % candidate == 0) ng = candidate;
-    const int mg = nth / ng;
-    const int im = ith % mg, in = ith / mg;
-    const int64_t mbeg = mt * im / mg;
-    const int64_t mend = mt * (im + 1) / mg;
-    const int64_t nbeg = nt * in / ng;
-    const int64_t nend = nt * (in + 1) / ng;
+    const int64_t mbeg = mt * ith / nth;
+    const int64_t mend = mt * (ith + 1) / nth;
     if (mbeg == mend) return;
     const int64_t kp = (K + kKC - 1) / kKC;
-    const float* apack = workspace;
-    const float* bpack = workspace + apack_floats(N, K);
     const int64_t mc_tiles = kMC / kMR;
-    const int64_t nc_tiles = kNC / kNR;
+    thread_local std::vector<float> wbuf;
+    wbuf.resize(static_cast<size_t>(mc_tiles * kKC * kMR));
     for (int64_t p = 0; p < kp; ++p) {
         const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
         for (int64_t mt0 = mbeg; mt0 < mend; mt0 += mc_tiles) {
             const int64_t mt1 = std::min(mend, mt0 + mc_tiles);
-            for (int64_t nt0 = nbeg; nt0 < nend; nt0 += nc_tiles) {
-                const int64_t nt1 = std::min(nend, nt0 + nc_tiles);
-                // Keep one 16 KiB B micro-panel hot in L1 while it is
-                // multiplied by every A micro-panel in this N block.
+            for (int64_t tj = mt0; tj < mt1; ++tj)
+                pack_w_tile(wbuf.data() + (tj - mt0) * kKC * kMR, w, M, K, p, tj);
+            for (int64_t ti = 0; ti < nt; ++ti) {
+                const float* a = workspace + (p * nt + ti) * kKC * kNR;
+                const int nr = static_cast<int>(std::min<int64_t>(kNR, N - ti * kNR));
                 for (int64_t tj = mt0; tj < mt1; ++tj) {
-                    const float* b = bpack + (p * mt + tj) * kKC * kMR;
-                    for (int64_t ti = nt0; ti < nt1; ++ti) {
-                        const float* a = apack + (p * nt + ti) * kKC * kNR;
-                        const int nr = static_cast<int>(std::min<int64_t>(kNR, N - ti * kNR));
-                        const int mr = static_cast<int>(std::min<int64_t>(kMR, M - tj * kMR));
-                        microkernel_6x16(y + ti * kNR * M + tj * kMR, M, a, b, kb, p == 0, nr, mr);
-                    }
+                    const int mr = static_cast<int>(std::min<int64_t>(kMR, M - tj * kMR));
+                    microkernel_6x16(y + ti * kNR * M + tj * kMR, M, a, wbuf.data() + (tj - mt0) * kKC * kMR,
+                                     kb, p == 0, nr, mr);
                 }
             }
         }
@@ -229,20 +216,19 @@ bool packed_sgemm_available() {
 #endif
 }
 
-size_t packed_sgemm_workspace_floats(int64_t M, int64_t N, int64_t K) {
-    const int64_t kp = (K + kKC - 1) / kKC;
-    const int64_t mt = (M + kMR - 1) / kMR;
-    return apack_floats(N, K) + static_cast<size_t>(kp * mt * kKC * kMR);
+size_t packed_sgemm_workspace_floats(int64_t, int64_t N, int64_t K) {
+    return apack_floats(N, K);
 }
 
 void packed_sgemm_pack(float* workspace, const float* x, const float* w,
                        int64_t M, int64_t N, int64_t K, int ith, int nth) {
-    pack_avx2(workspace, x, w, M, N, K, ith, nth);
+    (void)w; (void)M;
+    pack_avx2(workspace, x, N, K, ith, nth);
 }
 
-void packed_sgemm_compute(float* y, const float* workspace,
+void packed_sgemm_compute(float* y, const float* workspace, const float* w,
                           int64_t M, int64_t N, int64_t K, int ith, int nth) {
-    compute_avx2(y, workspace, M, N, K, ith, nth);
+    compute_avx2(y, workspace, w, M, N, K, ith, nth);
 }
 
 #else
@@ -250,7 +236,7 @@ void packed_sgemm_compute(float* y, const float* workspace,
 bool packed_sgemm_available() { return false; }
 size_t packed_sgemm_workspace_floats(int64_t, int64_t, int64_t) { return 0; }
 void packed_sgemm_pack(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
-void packed_sgemm_compute(float*, const float*, int64_t, int64_t, int64_t, int, int) {}
+void packed_sgemm_compute(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
 
 #endif
 

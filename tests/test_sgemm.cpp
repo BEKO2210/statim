@@ -35,7 +35,7 @@ std::vector<float> run(const std::vector<float>& x, const std::vector<float>& w,
     for (auto& worker : workers) worker.join();
     workers.clear();
     for (int ith = 0; ith < nth; ++ith)
-        workers.emplace_back([&, ith] { statim::packed_sgemm_compute(y.data(), workspace.data(), M, N, K, ith, nth); });
+        workers.emplace_back([&, ith] { statim::packed_sgemm_compute(y.data(), workspace.data(), w.data(), M, N, K, ith, nth); });
     for (auto& worker : workers) worker.join();
     return y;
 }

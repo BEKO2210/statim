@@ -887,7 +887,7 @@ void sgemm_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
         sync->ready.wait(false, std::memory_order_acquire);
     }
     packed_sgemm_compute(static_cast<float*>(dst->data), static_cast<const float*>(scratch->data),
-                         w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
+                         static_cast<const float*>(w->data), w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
 }
 
 bool sgemm_enabled() {
