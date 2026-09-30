@@ -46,7 +46,7 @@ last column.
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
-| 15 | A tested `deploy/nginx.conf` (`nginx -t`); TLS stays at the proxy | S | open |
+| 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | open |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
 | 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | open |
 | 18 | Secret-scanning push protection, plus a CI scan of the diff | S | partly: push protection is on |
@@ -75,7 +75,7 @@ last column.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 29 | `deploy/alerts.yaml`, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
+| 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
 | 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | open |
 | 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | open |
 | 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | open |
@@ -86,7 +86,7 @@ last column.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 34 | A line-coverage artifact for `src/security.cpp`, `http_security.h` and `src/server.cpp`, with a baseline | M | open |
-| 35 | A performance and memory regression gate against the latest release (`bench/perf_gate.py`) | M | in progress |
+| 35 | A performance and memory regression gate against the latest release (bench/perf_gate.py, planned) | M | in progress |
 | 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | open |
 | 37 | The Python and TypeScript clients' tests run in CI, both the hermetic cases and live cases against a started server | M | open |
 
