@@ -224,8 +224,9 @@ def make_table(result: dict) -> str:
 
 
 def render_report(results: list[dict]) -> str:
+    repeats = results[0]["repeats"] if results else 0
     out = ["# Short-input CPU profile", "",
-           "CPU-only f32 runs; each result is the median of five runs after one warm-up. "
+           f"CPU-only f32 runs; each result is the median of {repeats} runs after one warm-up. "
            "Statim uses one-node `ggml_graph_view` execution; ORT uses its kernel profiler. "
            "Times therefore include profiler dispatch overhead and are diagnostic, not replacement benchmark numbers.", ""]
     for r in results:
@@ -272,6 +273,11 @@ def main() -> None:
     p.add_argument("--out", type=Path, default=ROOT / "build-ort/profile-short.json")
     p.add_argument("--report", type=Path, default=ROOT / "build-ort/profile-short.md")
     args = p.parse_args()
+    # the Statim subprocess runs in ROOT, so every path must be absolute before it is passed on
+    for name in ("statim", "gguf", "onnx", "out", "report"):
+        setattr(args, name, getattr(args, name).resolve())
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.report.parent.mkdir(parents=True, exist_ok=True)
     reference = ORTEngine(MODEL_DIR, args.onnx, min(args.threads))
     batches, skipped = length_sweep_rows(reference, INPUTS, args.lengths)
     if skipped:

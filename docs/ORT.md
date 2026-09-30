@@ -23,7 +23,7 @@ source file of every number.
 - **Raw scoring, f32.**
   - At 1 thread, Statim and ORT are level on short inputs: within 1.3 % on the golden states,
     0.4 % at 128 tokens.
-  - From 4 threads on, Statim is faster at every length measured: by 3–5 % on short inputs at 4
+  - At 4 and 8 threads, Statim is faster at every length measured: by 3–5 % on short inputs at 4
     threads, and 2.6× at 1,024 tokens on 8 threads.
   - At 16 threads, where SMT is in play, Statim takes 25 % longer than ORT on the short golden
     states.
