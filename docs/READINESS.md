@@ -1,0 +1,151 @@
+# Readiness for 1.0
+
+Statim 1.0 ships only when every item marked P0 below is closed and each closure is backed by a
+reproducible proof: a CI job, a test, a measurement with its protocol, or an API query. A new
+feature cannot substitute for a proof. The external review of 0.9.0 summed up the current state
+as "production-shaped, not production-proven". This list is how that changes.
+
+The items come from a read-only audit of 0.9.2 in eight areas:
+
+- security;
+- supply chain;
+- reliability;
+- operability;
+- correctness;
+- evaluation;
+- documentation;
+- platform coverage.
+
+**Priorities.** P0 blocks 1.0. P1 should be in 1.0. Items are closed only with the proof in the
+last column.
+
+**Effort.** S is up to a day, M a few days, L a week or more.
+
+## P0 — blocks 1.0
+
+| # | Item | Area | Effort | Status | Proof |
+|---|---|---|---|---|---|
+| 1 | A server bound to a non-loopback address refuses to start without an API key, including the container's default `--host 0.0.0.0`. Only `--allow-unauthenticated` keeps today's warning. | Security | M | open | test in `tests/security/test_http.py` |
+| 2 | On a CPU without the build's instruction set (AVX2, FMA, F16C, BMI2 for the x86-64 release), Statim exits with a message naming the missing features before any inference, instead of `Illegal instruction`. | Reliability, platform | M | open | run on an i5-2520M and an i3-3227U (no AVX2), where 0.9.2 dies with exit 132 |
+| 3 | `main` accepts changes only through pull requests with green `build-test` and `fuzz`, and nobody can bypass that. Release tags cannot be deleted or moved. | Supply chain | S | **closed** (2026-09-30) | see [Proofs](#proofs) |
+| 4 | Every GitHub Action is pinned to a full commit SHA. | Supply chain | S | **closed** (#51) | `.github/workflows/*.yml`; Dependabot keeps the pins current |
+| 5 | A root `SECURITY.md` gives the contact, an acknowledgement window and the supported versions; private vulnerability reporting is on. | Security | S | partly: private reporting is on | `SECURITY.md` in the root |
+| 6 | CI fails on a known high or critical CVE in the vendored ggml, cpp-httplib and nlohmann/json. | Security | M | open | a CI job, with a planted advisory in its test |
+| 7 | The security, validation, GGUF-preflight and fuzz-regression tests run under ASan and UBSan in CI, not only the 60-second fuzz job. | Security | M | open | a CI job |
+| 8 | The support matrix in the README equals what CI builds and tests and what the release ships. ARM NEON and CUDA are claimed but not tested today. | Documentation, platform | S | open | README against the CI jobs |
+| 9 | The model promotion gate uses paired statistics (McNemar or a paired bootstrap) on stored per-item outcomes, and a test fails if the unpaired formula returns. The published "0 regressions" is recomputed or withdrawn. | Evaluation | L | open | `tools/finetune/test_gate.py`; recomputed gate reports |
+
+## P1 — should be in 1.0
+
+### Security
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | open |
+| 11 | CI fails when `security_http` skips | S | open |
+| 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
+| 13 | API keys shorter than 32 characters are rejected | S | open |
+| 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
+| 15 | A tested `deploy/nginx.conf` (`nginx -t`); TLS stays at the proxy | S | open |
+| 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
+| 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | open |
+| 18 | Secret-scanning push protection, plus a CI scan of the diff | S | partly: push protection is on |
+
+### Supply chain
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 19 | A release archive built twice has an identical SHA-256; the compiler package is pinned | M | open |
+| 20 | An SPDX SBOM next to `SHA256SUMS` | S | done in #51; proven by the next release |
+| 21 | Build-provenance attestations on the release archives, with the verify command documented | M | done in #51; proven by the next release |
+| 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | partly: the Python CI tools are hash-locked (#51) |
+
+### Reliability
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 23 | A 24 h soak with an RSS ceiling and a `/ready` poll | M | open |
+| 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200 | M | open |
+| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences | M | open |
+| 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal | M | open |
+| 27 | A client dropped mid-request, then the same request again, gives an identical 200 | M | open |
+| 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
+
+### Operability
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 29 | `deploy/alerts.yaml`, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
+| 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | open |
+| 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | open |
+| 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | open |
+| 33 | A request counter labelled by adapter | S | open |
+
+### Correctness
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 34 | A line-coverage artifact for `src/security.cpp`, `http_security.h` and `src/server.cpp`, with a baseline | M | open |
+| 35 | A performance and memory regression gate against the latest release (`bench/perf_gate.py`) | M | in progress |
+| 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | open |
+| 37 | The Python and TypeScript clients' tests run in CI, both the hermetic cases and live cases against a started server | M | open |
+
+### Evaluation
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 38 | A contamination report for the 1.0 weights: exact matches and near-duplicates against every evaluation split, as a release gate | M | open |
+| 39 | A specialist baseline on the same items, or no "same protocol" wording for external supervised numbers | L | open |
+| 40 | The glance table names model 0.7.0 and trained against zero-shot | S | open |
+
+### Documentation
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 41 | A deprecation policy: one minor version of warning, removal only in a major | S | open |
+| 42 | A commercial term sheet, or no wording that implies the paid terms are in the repository | M | open |
+
+### Platform coverage
+
+| # | Item | Effort | Status |
+|---|---|---|---|
+| 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | open |
+| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | open |
+
+## Proofs
+
+### P0 #3: branch and tag protection (2026-09-30)
+
+The repository rulesets:
+
+- **24274330, "main: PR and green CI".** Pull requests only, squash merges only, required checks
+  `build-test` and `fuzz`, no force pushes, no deletion. There are no bypass actors:
+  `gh api repos/BEKO2210/statim/rulesets/24274330` reports `"current_user_can_bypass": "never"`
+  for the owner's admin account. #51 was the first merge under this rule.
+- **24274331, "release tags are immutable".** Tags `v*` cannot be deleted, updated or
+  force-pushed, and there are no bypass actors. Tested with the admin account on a throwaway tag
+  `v0.0.0-ruleset-test`:
+  - the delete was rejected with `422 Cannot delete this tag`;
+  - the move to another commit was rejected with `422 Cannot force-push to this tag`.
+
+  Creating new release tags stays allowed.
+- **Break glass.** A tag or `main` can only be changed against these rules by setting the ruleset's
+  enforcement to disabled, acting, and setting it back to active. That is recorded in the
+  repository's audit log. It was used once, to delete the test tag.
+
+### P0 #4: pinned actions (#51)
+
+Every `uses:` line is a full commit SHA, with its version as a comment. Each SHA was resolved from
+the action's own repository (`gh api`, `git ls-remote`) and equals the commit that its floating
+major tag pointed to on 2026-09-30. The checkout action was corrected from an older v4.2.2 to
+v4.4.0 in review. Dependabot (`.github/dependabot.yml`) proposes updates weekly.
+
+## Test machines
+
+| Machine | CPU | Role |
+|---|---|---|
+| pop-os | AMD Ryzen 7 5800X, Zen 3, AVX2 | development and reference measurements |
+| belkis-home | Intel Xeon E3-1505M v5, Skylake, AVX2 | second x86 platform, soak and load tests |
+| lenovo | Intel Core i5-2520M, Sandy Bridge, no AVX2 | unsupported-CPU behaviour (P0 #2) |
+| homemini2 | Intel Core i3-3227U, Ivy Bridge, no AVX2 | light functional and container tests |
+| Galaxy A15, Galaxy Tab S9 Ultra | ARMv8.2 and ARMv9 (dotprod, i8mm) | ARM proof (P1 #44) |

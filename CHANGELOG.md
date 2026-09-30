@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
+  of 0.9.2. It holds 9 P0 items that block 1.0 and 35 P1 items, each with its status and proof.
+  Branch and tag protection are closed with a recorded test; pinned actions are closed by #51.
+
 ### Security
 - Hardened CI and release workflows against supply-chain tampering ([docs/SECURITY.md](docs/SECURITY.md#supply-chain)):
   - Every GitHub Actions action across `.github/workflows/` pinned to an immutable full commit SHA with version comments.
