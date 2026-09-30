@@ -1,0 +1,236 @@
+{
+  "accuracy": "pending: reviewer run; held-out splits may require network",
+  "binding_overhead": [
+    {
+      "calls": 90,
+      "max_overhead_us": 55.24600453302264,
+      "median_model_run_us": 1378935.0,
+      "median_overhead_share": 3.51198460216673e-05,
+      "median_overhead_us": 48.56402004510164,
+      "median_wall_us": 1378984.749026131,
+      "repeats": 3,
+      "threads": 1,
+      "warmup_passes": 1
+    },
+    {
+      "calls": 90,
+      "max_overhead_us": 63.12495552748442,
+      "median_model_run_us": 267797.0,
+      "median_overhead_share": 0.00019696512998204917,
+      "median_overhead_us": 52.79249778203666,
+      "median_wall_us": 267850.3045171965,
+      "repeats": 3,
+      "threads": 8,
+      "warmup_passes": 1
+    }
+  ],
+  "cpu_only": true,
+  "export": {
+    "artifacts": {
+      "original_onnx_f32": {
+        "bytes": 1290433721,
+        "files": [
+          "build-ort/laya-multilingual-f32.onnx",
+          "build-ort/laya-multilingual-f32.onnx.data"
+        ]
+      },
+      "shipped_gguf_f32": {
+        "bytes": 908307008,
+        "files": [
+          "models/laya-multilingual-v9-f32.gguf"
+        ]
+      },
+      "shipped_gguf_q8_0": {
+        "bytes": 356674176,
+        "files": [
+          "build-ort/laya-multilingual-v9-q8_0.gguf"
+        ]
+      },
+      "shipped_onnx_f32": {
+        "bytes": 1290434224,
+        "files": [
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx.data"
+        ]
+      },
+      "shipped_onnx_int8": {
+        "bytes": 324807526,
+        "files": [
+          "build-ort/laya-multilingual-v9-int8.onnx",
+          "build-ort/laya-multilingual-v9-int8.onnx.data"
+        ]
+      }
+    },
+    "checkpoints": {
+      "original": {
+        "model_safetensors_sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+        "path": "models/laya-multilingual"
+      },
+      "shipped_v9": {
+        "model_safetensors_sha256": "c44425f14ac9d55508f73a6f371e4e2802ed59e646287c3abbec10b653a19840",
+        "path": "models/laya-multilingual-v9"
+      }
+    },
+    "f32_gates_pass": true,
+    "goldens": {
+      "original": "tests/data/golden_laya-multilingual.jsonl",
+      "shipped_v9": "build-ort/golden_v9.jsonl"
+    },
+    "opset": 18,
+    "parity": {
+      "original_ort_f32": {
+        "argmax_agree": 240,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 9.441375732421875e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_ort_f32": {
+        "argmax_agree": 240,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 1.0073184967041016e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_ort_int8": {
+        "argmax_agree": 196,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 7.957531929016113
+      },
+      "shipped_statim_f32": {
+        "argmax_agree": 240,
+        "command": [
+          "build-rel/test_model_parity",
+          "models/laya-multilingual-v9-f32.gguf",
+          "build-ort/golden_v9.jsonl",
+          "0.001",
+          "1"
+        ],
+        "exit_code": 0,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 1.38e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_statim_q8_0": {
+        "argmax_agree": 235,
+        "command": [
+          "build-rel/test_model_parity",
+          "build-ort/laya-multilingual-v9-q8_0.gguf",
+          "build-ort/golden_v9.jsonl",
+          "1000000000.0",
+          "1"
+        ],
+        "exit_code": 1,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 0.309,
+        "pass": false,
+        "tolerance": 1000000000.0
+      }
+    },
+    "versions": {
+      "laya": "0.3.20",
+      "numpy": "2.5.3",
+      "onnx": "1.23.0",
+      "onnxruntime": "1.30.0",
+      "python": "3.12.3",
+      "torch": "2.14.0+cu130"
+    }
+  },
+  "inventory": {
+    "artifact_bytes": {
+      "gguf_f32": 908307008,
+      "gguf_q8_0": 356674176,
+      "onnx_f32": 1324804952,
+      "onnx_int8": 968501070
+    },
+    "artifact_files": {
+      "gguf_f32": [
+        "models/laya-multilingual-v9-f32.gguf"
+      ],
+      "gguf_q8_0": [
+        "build-ort/laya-multilingual-v9-q8_0.gguf"
+      ],
+      "onnx_f32": [
+        "build-ort/laya-multilingual-v9-f32.onnx",
+        "build-ort/laya-multilingual-v9-f32.onnx.data",
+        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "models/laya-multilingual-v9/rl_agent_config.json"
+      ],
+      "onnx_int8": [
+        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx.data",
+        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "models/laya-multilingual-v9/rl_agent_config.json"
+      ]
+    },
+    "cpython": {
+      "executable": "build-ort/venv/bin/python",
+      "executable_bytes": 8020928,
+      "runtime_bytes": 61276800,
+      "stdlib": "/usr/lib/python3.12",
+      "stdlib_bytes": 53255872,
+      "version": "3.12.3"
+    },
+    "install_bytes": {
+      "ort_server_venv_without_cpython": 195401377,
+      "statim_extracted_binary": 5460960,
+      "statim_release_tarball": 2986871
+    }
+  },
+  "machine": {
+    "cpu_governor": [
+      "performance"
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "kernel": "6.18.7-76061807-generic",
+    "logical_threads": 16,
+    "physical_cores": 8,
+    "platform": "Linux-6.18.7-76061807-generic-x86_64-with-glibc2.39",
+    "ram_bytes": 16685232128
+  },
+  "preflight": {
+    "answers": {
+      "command": [
+        "build-rel/statim",
+        "decide",
+        "-m",
+        "models/laya-multilingual-v9-f32.gguf",
+        "--device",
+        "cpu",
+        "--threads",
+        "4"
+      ],
+      "matched_states": 30,
+      "mismatches": [],
+      "pass": true,
+      "questions_per_state": 8,
+      "states": 30,
+      "tolerance": 0.001
+    },
+    "packing": {
+      "items": 240,
+      "matched": 240,
+      "mismatches": [],
+      "pass": true
+    }
+  },
+  "raw": null,
+  "socket": "pending: reviewer run",
+  "versions": {
+    "benchmark_python": "3.12.3",
+    "git_commit": "37f564602b3ea4b2d6660d7070c0d722ca513c58",
+    "laya": "0.3.20",
+    "numpy": "2.5.3",
+    "onnx": "1.23.0",
+    "onnxruntime": "1.30.0",
+    "python": "3.12.3",
+    "statim": "statim 0.9.0",
+    "torch": "2.14.0+cu130"
+  }
+}

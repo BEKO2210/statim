@@ -1,0 +1,1162 @@
+{
+  "accuracy": "pending: reviewer run; held-out splits may require network",
+  "cpu_only": true,
+  "export": {
+    "artifacts": {
+      "original_onnx_f32": {
+        "bytes": 1290433721,
+        "files": [
+          "build-ort/laya-multilingual-f32.onnx",
+          "build-ort/laya-multilingual-f32.onnx.data"
+        ]
+      },
+      "shipped_gguf_f32": {
+        "bytes": 908307008,
+        "files": [
+          "models/laya-multilingual-v9-f32.gguf"
+        ]
+      },
+      "shipped_gguf_q8_0": {
+        "bytes": 356674176,
+        "files": [
+          "build-ort/laya-multilingual-v9-q8_0.gguf"
+        ]
+      },
+      "shipped_onnx_f32": {
+        "bytes": 1290434224,
+        "files": [
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx.data"
+        ]
+      },
+      "shipped_onnx_int8": {
+        "bytes": 324807526,
+        "files": [
+          "build-ort/laya-multilingual-v9-int8.onnx",
+          "build-ort/laya-multilingual-v9-int8.onnx.data"
+        ]
+      }
+    },
+    "checkpoints": {
+      "original": {
+        "model_safetensors_sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+        "path": "models/laya-multilingual"
+      },
+      "shipped_v9": {
+        "model_safetensors_sha256": "c44425f14ac9d55508f73a6f371e4e2802ed59e646287c3abbec10b653a19840",
+        "path": "models/laya-multilingual-v9"
+      }
+    },
+    "f32_gates_pass": true,
+    "goldens": {
+      "original": "tests/data/golden_laya-multilingual.jsonl",
+      "shipped_v9": "build-ort/golden_v9.jsonl"
+    },
+    "opset": 18,
+    "parity": {
+      "original_ort_f32": {
+        "argmax_agree": 240,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 9.441375732421875e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_ort_f32": {
+        "argmax_agree": 240,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 1.0073184967041016e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_ort_int8": {
+        "argmax_agree": 196,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 7.957531929016113
+      },
+      "shipped_statim_f32": {
+        "argmax_agree": 240,
+        "command": [
+          "build-rel/test_model_parity",
+          "models/laya-multilingual-v9-f32.gguf",
+          "build-ort/golden_v9.jsonl",
+          "0.001",
+          "1"
+        ],
+        "exit_code": 0,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 1.38e-05,
+        "pass": true,
+        "tolerance": 0.001
+      },
+      "shipped_statim_q8_0": {
+        "argmax_agree": 235,
+        "command": [
+          "build-rel/test_model_parity",
+          "build-ort/laya-multilingual-v9-q8_0.gguf",
+          "build-ort/golden_v9.jsonl",
+          "1000000000.0",
+          "1"
+        ],
+        "exit_code": 1,
+        "items": 240,
+        "max_abs_act": 0.0,
+        "max_abs_logit": 0.309,
+        "pass": false,
+        "tolerance": 1000000000.0
+      }
+    },
+    "versions": {
+      "laya": "0.3.20",
+      "numpy": "2.5.3",
+      "onnx": "1.23.0",
+      "onnxruntime": "1.30.0",
+      "python": "3.12.3",
+      "torch": "2.14.0+cu130"
+    }
+  },
+  "inventory": {
+    "artifact_bytes": {
+      "gguf_f32": 908307008,
+      "gguf_q8_0": 356674176,
+      "onnx_f32": 1324804952,
+      "onnx_int8": 968501070
+    },
+    "artifact_files": {
+      "gguf_f32": [
+        "models/laya-multilingual-v9-f32.gguf"
+      ],
+      "gguf_q8_0": [
+        "build-ort/laya-multilingual-v9-q8_0.gguf"
+      ],
+      "onnx_f32": [
+        "build-ort/laya-multilingual-v9-f32.onnx",
+        "build-ort/laya-multilingual-v9-f32.onnx.data",
+        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "models/laya-multilingual-v9/rl_agent_config.json"
+      ],
+      "onnx_int8": [
+        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+        "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx.data",
+        "models/laya-multilingual-v9/tokenizer/tokenizer.json",
+        "models/laya-multilingual-v9/rl_agent_config.json"
+      ]
+    },
+    "cpython": {
+      "executable": "build-ort/venv/bin/python",
+      "executable_bytes": 8020928,
+      "runtime_bytes": 61276800,
+      "stdlib": "/usr/lib/python3.12",
+      "stdlib_bytes": 53255872,
+      "version": "3.12.3"
+    },
+    "install_bytes": {
+      "ort_server_venv_without_cpython": 195401377,
+      "statim_extracted_binary": 5460960,
+      "statim_release_tarball": 2986871
+    }
+  },
+  "machine": {
+    "cpu_governor": [
+      "performance"
+    ],
+    "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+    "kernel": "6.18.7-76061807-generic",
+    "logical_threads": 16,
+    "physical_cores": 8,
+    "platform": "Linux-6.18.7-76061807-generic-x86_64-with-glibc2.39",
+    "ram_bytes": 16685232128
+  },
+  "preflight": {
+    "answers": {
+      "command": [
+        "build-rel/statim",
+        "decide",
+        "-m",
+        "models/laya-multilingual-v9-f32.gguf",
+        "--device",
+        "cpu",
+        "--threads",
+        "4"
+      ],
+      "matched_states": 30,
+      "mismatches": [],
+      "pass": true,
+      "questions_per_state": 8,
+      "states": 30,
+      "tolerance": 0.001
+    },
+    "packing": {
+      "items": 240,
+      "matched": 240,
+      "mismatches": [],
+      "pass": true
+    }
+  },
+  "raw": null,
+  "socket": {
+    "cold_start_memory": [
+      {
+        "cold_start_to_first_answer_ms": 622.8253620211035,
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "engine": "statim",
+        "peak_rss_bytes": 657735680,
+        "threads": 4,
+        "variant": "f32"
+      },
+      {
+        "cold_start_to_first_answer_ms": 2316.0186789464206,
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "engine": "ort",
+        "peak_rss_bytes": 760115200,
+        "threads": 4,
+        "variant": "f32"
+      },
+      {
+        "cold_start_to_first_answer_ms": 431.8415670422837,
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "engine": "statim",
+        "peak_rss_bytes": 658886656,
+        "threads": 8,
+        "variant": "f32"
+      },
+      {
+        "cold_start_to_first_answer_ms": 1991.4494630065747,
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "engine": "ort",
+        "peak_rss_bytes": 760487936,
+        "threads": 8,
+        "variant": "f32"
+      },
+      {
+        "cold_start_to_first_answer_ms": 677.1540769841522,
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "engine": "statim",
+        "peak_rss_bytes": 294002688,
+        "threads": 4,
+        "variant": "quantized"
+      },
+      {
+        "cold_start_to_first_answer_ms": 2173.1102390331216,
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "engine": "ort",
+        "peak_rss_bytes": 596652032,
+        "threads": 4,
+        "variant": "quantized"
+      },
+      {
+        "cold_start_to_first_answer_ms": 467.87162497639656,
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "engine": "statim",
+        "peak_rss_bytes": 294608896,
+        "threads": 8,
+        "variant": "quantized"
+      },
+      {
+        "cold_start_to_first_answer_ms": 1902.2342649986967,
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "engine": "ort",
+        "peak_rss_bytes": 596963328,
+        "threads": 8,
+        "variant": "quantized"
+      }
+    ],
+    "rows": [
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 1,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 469.06527399551123,
+        "p95_ms": 793.2855119579472,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.578621983895523,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1865.8421565196477,
+        "p95_ms": 6355.235119001009,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.5776084910376673,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 1,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 422.2530820115935,
+        "p95_ms": 766.0689679905772,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.4472505239685458,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 4,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 1149.8208604753017,
+        "p95_ms": 1881.1086640344001,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 2.0634706469653334,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--workers",
+          "2",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1877.4057450063992,
+        "p95_ms": 3195.037705998402,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.4499032822653626,
+        "variant": "f32",
+        "workers": 2
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--workers",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1838.353165978333,
+        "p95_ms": 3104.4680170016363,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.236043303484415,
+        "variant": "f32",
+        "workers": 4
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "--batch-window-ms",
+          "2",
+          "--max-batch",
+          "16",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": true,
+        "p50_ms": 1974.4399240007624,
+        "p95_ms": 6855.865023972001,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.3950366038477446,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 1,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 305.06900150794536,
+        "p95_ms": 486.81139800464734,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.4579951801574906,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1187.492414494045,
+        "p95_ms": 3992.2156459651887,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.492411614812166,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 1,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 260.60132749262266,
+        "p95_ms": 485.1357379811816,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.0019094591449647,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/laya-multilingual-v9-f32.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 4,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 1159.4384624622762,
+        "p95_ms": 1999.0456140367314,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.1971361066922763,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--workers",
+          "2",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1149.5899370056577,
+        "p95_ms": 1965.643147006631,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.4180538506630507,
+        "variant": "f32",
+        "workers": 2
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--workers",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1073.5404915176332,
+        "p95_ms": 1798.1982229975984,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.1702429351941905,
+        "variant": "f32",
+        "workers": 4
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "--batch-window-ms",
+          "2",
+          "--max-batch",
+          "16",
+          "-m",
+          "multilingual=models/laya-multilingual-v9-f32.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": true,
+        "p50_ms": 1179.107133008074,
+        "p95_ms": 4157.311069022398,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.318700621956796,
+        "variant": "f32"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 1,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 517.9408940020949,
+        "p95_ms": 878.7582280347124,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.4227296448578495,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 2039.145421993453,
+        "p95_ms": 7060.373676009476,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.4324936405668558,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 1,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 513.4590684901923,
+        "p95_ms": 881.375967990607,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.2695190136572423,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 4,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 1548.678152525099,
+        "p95_ms": 2512.0301870047115,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.7418885402894788,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--workers",
+          "2",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 2023.667053959798,
+        "p95_ms": 3447.2887869924307,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.3266776984308146,
+        "variant": "quantized",
+        "workers": 2
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--workers",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1947.1799884922802,
+        "p95_ms": 3365.2276099892333,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.1385483179820317,
+        "variant": "quantized",
+        "workers": 4
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "--batch-window-ms",
+          "2",
+          "--max-batch",
+          "16",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": true,
+        "p50_ms": 2165.0339319894556,
+        "p95_ms": 7630.30996103771,
+        "requests": 60,
+        "threads": 4,
+        "throughput_rps": 1.2622788328629255,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 1,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 343.02831947570667,
+        "p95_ms": 558.5372819914483,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.1902572580072395,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1430.5373084789608,
+        "p95_ms": 4721.206382964738,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.1258429285314286,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 1,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 323.47059549647383,
+        "p95_ms": 565.1735439896584,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 1.7671607317611027,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/venv-server/bin/python",
+          "bench/ort_compare.py",
+          "--serve-ort",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8092",
+          "--onnx",
+          "build-ort/advocate/laya-v9-int8-nbits-b32-acc0.onnx",
+          "--model-dir",
+          "models/laya-multilingual-v9",
+          "--ort-provider",
+          "cpu"
+        ],
+        "concurrency": 4,
+        "engine": "ort",
+        "microbatch": false,
+        "p50_ms": 1342.255330993794,
+        "p95_ms": 2482.8398209647276,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 1.8835418751766475,
+        "variant": "quantized"
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--workers",
+          "2",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1370.4385419841856,
+        "p95_ms": 2208.7855560239404,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.0761600277103116,
+        "variant": "quantized",
+        "workers": 2
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--workers",
+          "4",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": false,
+        "p50_ms": 1141.3291505014058,
+        "p95_ms": 1968.5560580110177,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 1.995695708045145,
+        "variant": "quantized",
+        "workers": 4
+      },
+      {
+        "command": [
+          "build-ort/release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim",
+          "serve",
+          "--device",
+          "cpu",
+          "--threads",
+          "8",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8091",
+          "--batch-window-ms",
+          "2",
+          "--max-batch",
+          "16",
+          "-m",
+          "multilingual=build-ort/laya-multilingual-v9-q8_0.gguf"
+        ],
+        "concurrency": 4,
+        "engine": "statim",
+        "microbatch": true,
+        "p50_ms": 1338.4666299971286,
+        "p95_ms": 4894.5005289861,
+        "requests": 60,
+        "threads": 8,
+        "throughput_rps": 2.0084957560817323,
+        "variant": "quantized"
+      }
+    ],
+    "warmup_requests": 4
+  },
+  "versions": {
+    "benchmark_python": "3.12.3",
+    "git_commit": "37f564602b3ea4b2d6660d7070c0d722ca513c58",
+    "laya": "0.3.20",
+    "numpy": "2.5.3",
+    "onnx": "1.23.0",
+    "onnxruntime": "1.30.0",
+    "python": "3.12.3",
+    "statim": "statim 0.9.0",
+    "torch": "2.14.0+cu130"
+  }
+}
