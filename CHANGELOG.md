@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-30
+
+Statim is now level with or faster than ONNX Runtime on short f32 inputs, where 0.9.1 was up to 16 %
+slower, and it starts as fast as 0.9.0 again. Every decision is unchanged.
+
 ### Changed
 - f32 encoder projections on x86-64 CPUs with AVX2 and FMA run on Statim's own packed GEMM: 6×16
   microkernel, activations packed once per call, each thread's weight block packed into a buffer
@@ -781,7 +786,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/BEKO2210/statim/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/BEKO2210/statim/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/BEKO2210/statim/compare/v0.8.7...v0.9.0
 [0.8.7]: https://github.com/BEKO2210/statim/compare/v0.8.6...v0.8.7

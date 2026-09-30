@@ -18,15 +18,15 @@ gitignored.
 git clone https://github.com/BEKO2210/statim && cd statim
 mkdir -p dist && cd dist
 # binary (Linux x86-64; or build from source, see docs/BUILD.md)
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.1/statim-0.9.1-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.1/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.1-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.2/statim-0.9.2-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.2/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.2-linux-x86_64-cpu.tar.gz
 # model (q8_0 for CPU, 357 MB) and its checksum list from the model repository
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 cd ..
-dist/statim-0.9.1-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
+dist/statim-0.9.2-linux-x86_64-cpu/statim serve --device cpu -m multilingual=dist/statim-decide-multilingual-base-q8_0.gguf --port 8080 &
 until curl -sf localhost:8080/health; do sleep 1; done
 python3 examples/ticket-triage/triage.py eval --limit 500 --concurrency 2 --seed 0
 ```
