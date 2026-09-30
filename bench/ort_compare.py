@@ -648,6 +648,11 @@ def versions(export: dict, statim: Path) -> dict:
     out = dict(export.get("versions", {}))
     out.update({"benchmark_python": platform.python_version(), "statim": statim_version,
                 "git_commit": commit})
+    for package in ("onnxruntime", "tokenizers", "numpy"):  # the ORT server's packages, as benchmarked
+        try:
+            out["benchmark_" + package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            pass
     return out
 
 
