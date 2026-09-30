@@ -32,8 +32,17 @@ from typing import Any
 
 # CPU is mandatory unless the reviewer explicitly names a GPU EP. This keeps
 # every default and every subprocess in the published CPU protocol GPU-blind.
-_provider_arg = sys.argv[sys.argv.index("--ort-provider") + 1] if "--ort-provider" in sys.argv else "cpu"
-if _provider_arg == "cpu":
+def _provider_from_argv(argv: list[str]) -> str:
+    """The --ort-provider value in either argparse form; the parser rejects bad values later."""
+    for i, arg in enumerate(argv):
+        if arg.startswith("--ort-provider="):
+            return arg.split("=", 1)[1]
+        if arg == "--ort-provider" and i + 1 < len(argv):
+            return argv[i + 1]
+    return "cpu"
+
+
+if _provider_from_argv(sys.argv[1:]) == "cpu":
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 os.environ["ORT_TELEMETRY_DISABLED"] = "1"
 
@@ -593,10 +602,18 @@ def du_bytes(path: Path) -> int:
     return int(proc.stdout.split()[0])
 
 
-def inventory() -> dict:
-    loaded = [MODEL_DIR / "tokenizer/tokenizer.json", MODEL_DIR / "rl_agent_config.json"]
-    artifacts = {"onnx_f32": file_set(ONNX_F32) + loaded, "onnx_int8": file_set(ONNX_INT8) + loaded,
-                 "gguf_f32": [GGUF_F32], "gguf_q8_0": [GGUF_Q8]}
+def display_path(path: Path) -> str:
+    resolved = path.resolve()
+    return str(resolved.relative_to(ROOT)) if resolved.is_relative_to(ROOT) else str(resolved)
+
+
+def inventory(args) -> dict:
+    """Sizes of the artifacts this run actually uses (the parsed paths, not the defaults)."""
+    loaded = [args.model_dir / "tokenizer/tokenizer.json", args.model_dir / "rl_agent_config.json"]
+    artifacts = {"onnx_f32": file_set(args.onnx_f32) + loaded, "onnx_int8": file_set(args.onnx_int8) + loaded,
+                 "gguf_f32": [args.gguf_f32], "gguf_q8_0": [args.gguf_q8]}
+    if args.onnx_int8_dynamic and args.onnx_int8_dynamic.exists():
+        artifacts["onnx_int8_dynamic"] = file_set(args.onnx_int8_dynamic) + loaded
     tarball = OUT / "release-0.9.0/statim-0.9.0-linux-x86_64-cpu.tar.gz"
     venv = OUT / "venv-server"
     stdlib = Path(sysconfig.get_path("stdlib"))
@@ -604,7 +621,7 @@ def inventory() -> dict:
     stdlib_bytes = du_bytes(stdlib)
     return {
         "artifact_bytes": {name: disk_bytes(files) for name, files in artifacts.items()},
-        "artifact_files": {name: [str(path.relative_to(ROOT)) for path in files] for name, files in artifacts.items()},
+        "artifact_files": {name: [display_path(path) for path in files] for name, files in artifacts.items()},
         "install_bytes": {"statim_release_tarball": tarball.stat().st_size,
                           "statim_extracted_binary": RELEASE.stat().st_size,
                           "ort_server_venv_without_cpython": du_bytes(venv)},
@@ -673,6 +690,21 @@ def wait_first(url: str, body: bytes, process: subprocess.Popen, started: float)
     raise TimeoutError("server did not answer within 600 seconds")
 
 
+def context_switches(pid: int) -> int:
+    """Voluntary plus involuntary context switches summed over every thread of a process
+    (psutil's num_ctx_switches reads only the main thread's /proc/PID/status). Threads that
+    exit during the window are not counted."""
+    total = 0
+    for status in Path(f"/proc/{pid}/task").glob("*/status"):
+        try:
+            for line in status.read_text().splitlines():
+                if line.startswith(("voluntary_ctxt_switches:", "nonvoluntary_ctxt_switches:")):
+                    total += int(line.split(":")[1])
+        except OSError:
+            continue
+    return total
+
+
 def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int, server=None) -> dict:
     """Closed-loop load. With the server's psutil.Process, also report the CPU time it used, as
     average busy cores: thread settings are not comparable across engines under concurrency
@@ -680,7 +712,7 @@ def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int, se
     to the intra-op pool)."""
     times = []
     cpu_before = server.cpu_times() if server else None
-    ctx_before = server.num_ctx_switches() if server else None
+    ctx_before = context_switches(server.pid) if server else None
     start = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = []
@@ -696,9 +728,9 @@ def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int, se
               "p50_ms": statistics.median(times), "p95_ms": percentile(times, 0.95),
               "p99_ms": percentile(times, 0.99)}
     if server:
-        cpu_after, ctx_after = server.cpu_times(), server.num_ctx_switches()
+        cpu_after, ctx_after = server.cpu_times(), context_switches(server.pid)
         cpu = (cpu_after.user - cpu_before.user) + (cpu_after.system - cpu_before.system)
-        switches = (ctx_after.voluntary - ctx_before.voluntary) + (ctx_after.involuntary - ctx_before.involuntary)
+        switches = ctx_after - ctx_before
         result.update({"server_cpu_seconds": cpu, "avg_busy_cores": cpu / wall,
                        "context_switches_per_request": switches / requests})
     return result
@@ -995,7 +1027,7 @@ def main() -> int:
 
     export = require_parity(args.report)
     base = {"cpu_only": True, "machine": machine_info(), "versions": versions(export, args.statim),
-            "inventory": inventory(), "export": export}
+            "inventory": inventory(args), "export": export}
     if args.inventory_only:
         print(json.dumps(base, indent=2, sort_keys=True))
         return 0
@@ -1041,6 +1073,11 @@ def main() -> int:
                 ort_timing, ort_p = ort_raw(onnx, rows, threads, args.repeats, invocation, args.ort_provider)
                 raw.append({"pair": pair, **ort_timing})
                 parity_results[f"{pair}_ort_t{threads}"] = ort_p
+                if pair == "f32":  # the export gate covered the export's inputs; gate the timed inputs too
+                    failed = [name for name, result in ((f"statim t{threads}", None if args.ort_only else statim_p),
+                                                        (f"ort t{threads}", ort_p)) if result and not parity_pass(result)]
+                    if failed:
+                        raise RuntimeError(f"f32 parity failed on the timed inputs ({', '.join(failed)}); refusing to report timings")
             if args.onnx_int8_dynamic and args.onnx_int8_dynamic.exists():
                 invocation = [str(args.ort_python), str(Path(__file__).resolve()), "--thread-counts", str(threads),
                               "--repeats", str(args.repeats), "--ort-provider", args.ort_provider,

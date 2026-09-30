@@ -935,7 +935,12 @@ def main(argv=None):
                               head_max_len=a.head_max_len, adapter=a.adapter)
             if predictions:
                 for i, (item, p) in enumerate(zip(items, probs)):
-                    predictions.write(json.dumps({"suite": suite, "lang": lang, "i": i, "gold": gold_index(item),
+                    # "item" identifies the text and question, so paired comparisons can refuse
+                    # two runs whose samples differ (a missing source, another --exclude-mixture)
+                    identity = json.dumps([item["state"], item["q"]], sort_keys=True, ensure_ascii=False)
+                    predictions.write(json.dumps({"suite": suite, "lang": lang, "i": i,
+                                                  "item": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16],
+                                                  "gold": gold_index(item),
                                                   "pred": max(range(len(p)), key=p.__getitem__)}) + "\n")
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
             row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra,

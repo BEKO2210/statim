@@ -20,12 +20,14 @@ import sys
 from pathlib import Path
 
 
-def load(path: Path) -> dict[tuple[str, str, int], tuple[int, int]]:
+def load(path: Path) -> dict[tuple[str, str, int], tuple[int, int, str | None]]:
     items = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             row = json.loads(line)
-            items[(row["suite"], row["lang"], int(row["i"]))] = (int(row["gold"]), int(row["pred"]))
+            items[(row["suite"], row["lang"], int(row["i"]))] = (int(row["gold"]), int(row["pred"]), row.get("item"))
+    if not items:
+        raise SystemExit(f"{path}: no predictions (did the evaluation fail before its first cell?)")
     return items
 
 
@@ -40,14 +42,16 @@ def mcnemar_exact(b: int, c: int) -> float:
 
 def compare(base: dict, other: dict, suites: list[str] | None = None) -> dict:
     keys = sorted(k for k in base if suites is None or k[0] in suites)
+    if not keys:
+        raise SystemExit(f"no items for suites {suites}")
     missing = [k for k in keys if k not in other]
     if missing:
         raise SystemExit(f"{len(missing)} base items missing from the other run, e.g. {missing[0]}")
     changed = b = c = 0
     for key in keys:
-        (gold, p0), (gold1, p1) = base[key], other[key]
-        if gold != gold1:
-            raise SystemExit(f"gold label differs at {key}: the runs did not use the same sample")
+        (gold, p0, item0), (gold1, p1, item1) = base[key], other[key]
+        if gold != gold1 or (item0 and item1 and item0 != item1):
+            raise SystemExit(f"item {key} differs between the runs: they did not use the same sample")
         changed += p0 != p1
         b += p0 == gold and p1 != gold
         c += p0 != gold and p1 == gold
