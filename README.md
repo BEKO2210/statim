@@ -73,15 +73,15 @@ Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, as
 
 ```bash
 # 1. Download the engine (3 MB) and the multilingual model (357 MB), and verify both
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.0/statim-0.9.0-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.0/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.0-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.1/statim-0.9.1-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.1/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.1-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 
 # 2. Start the server (it keeps running; it is ready when it logs "listening")
-./statim-0.9.0-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
+./statim-0.9.1-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
 
 # 3. In a second terminal: one ticket, three typed questions
 curl -s localhost:8080/v1/systemone -d '{
@@ -420,8 +420,9 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 
 ## Status and roadmap
 
-The current release is v0.9.0: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.9.0 freezes HTTP API v1, with contract
+The current release is v0.9.1: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
+and CUDA, two published models, client SDKs, and a public demo. 0.9.1 adds the [comparison with ONNX Runtime](docs/ORT.md) and a structural GGUF check before
+ggml parses a model file; 0.9.0 freezes HTTP API v1, with contract
 tests against the real server; 0.8.7 makes the README readable on phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
 the code in CI and records the first category-adapter experiment; 0.8.1 binds each LoRA adapter to the
 exact checkpoint it was trained on; 0.8.0 added per-category LoRA adapters,
