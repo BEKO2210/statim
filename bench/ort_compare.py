@@ -48,8 +48,8 @@ MODEL_DIR = ROOT / "models/laya-multilingual-v9"
 GGUF_F32 = ROOT / "models/laya-multilingual-v9-f32.gguf"
 GGUF_Q8 = OUT / "laya-multilingual-v9-q8_0.gguf"
 ONNX_F32 = OUT / "laya-multilingual-v9-f32.onnx"
-ONNX_INT8 = OUT / "advocate/laya-v9-int8-nbits-b32-acc0.onnx"  # MatMulNBits 8-bit, block 32: faster and closer to f32 than accuracy_level 4 here
-ONNX_INT8_DYNAMIC = OUT / "advocate/laya-v9-int8-perchannel-reducerange.onnx"
+ONNX_INT8 = OUT / "laya-multilingual-v9-8bit-blockwise.onnx"  # MatMulNBits 8-bit, block 32, f32 compute (accuracy_level 0)
+ONNX_INT8_DYNAMIC = OUT / "laya-multilingual-v9-int8-dynamic.onnx"  # quantize_dynamic, per channel, reduce_range
 RELEASE = OUT / "release-0.9.0/statim-0.9.0-linux-x86_64-cpu/statim"
 INPUT_NAMES = ["input_ids", "attention_mask", "marker_pos", "marker_mask", "qtype"]
 QTYPES = {"choice": 0, "score": 1, "noul": 2}
@@ -92,15 +92,20 @@ def summarize(per_state: list[float]) -> dict:
             "p95_ms": percentile(per_state, 0.95), "per_state_ms": per_state}
 
 
-def session(path: Path, threads: int, provider: str = "cpu"):
+def session(path: Path, threads: int, provider: str = "cpu", profile: bool = False, spinning: bool = True):
     import onnxruntime as ort
 
     opts = ort.SessionOptions()
+    if profile:
+        opts.enable_profiling = True
+        opts.profile_file_prefix = str(OUT / "ort-profile")
     opts.intra_op_num_threads = threads
     opts.inter_op_num_threads = 1
     opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     opts.add_session_config_entry("session.set_denormal_as_zero", "1")
+    # ORT's default; the HTTP benchmark also measures it off as a sensitivity check
+    opts.add_session_config_entry("session.intra_op.allow_spinning", "1" if spinning else "0")
     providers = {
         "cpu": ["CPUExecutionProvider"],
         "cuda": ["CUDAExecutionProvider"],
@@ -159,14 +164,14 @@ def internal_question(qdef: dict) -> dict:
 
 
 class ORTEngine:
-    def __init__(self, model_dir: Path, model: Path, threads: int, provider: str = "cpu"):
+    def __init__(self, model_dir: Path, model: Path, threads: int, provider: str = "cpu", spinning: bool = True):
         from tokenizers import Tokenizer
 
         self.cfg = json.loads((model_dir / "rl_agent_config.json").read_text())
         self.tok = Tokenizer.from_file(str(model_dir / "tokenizer/tokenizer.json"))
         self.ids = {name: self.tok.token_to_id(token) for name, token in
                     {"pad": "<pad>", "cls": "<bos>", "sep": "<eos>", "mask": "<mask>"}.items()}
-        self.sess = session(model, threads, provider)
+        self.sess = session(model, threads, provider, spinning=spinning)
 
     def encode(self, text: str) -> list[int]:
         return self.tok.encode(text.replace("<mask>", " "), add_special_tokens=False).ids
@@ -273,7 +278,7 @@ class ORTEngine:
 
 
 def serve_ort(args) -> None:
-    engine = ORTEngine(args.model_dir, args.onnx, args.threads, args.ort_provider)
+    engine = ORTEngine(args.model_dir, args.onnx, args.threads, args.ort_provider, spinning=bool(args.ort_spinning))
     if INPUTS.exists():
         try:
             warm_data = json.loads(INPUTS.read_text())
@@ -466,6 +471,33 @@ def ort_raw(path: Path, rows: list[dict], threads: int, repeats: int, invocation
                     "max_abs_act": max_act}
 
 
+def binding_overhead(path: Path, rows: list[dict], threads: int, repeats: int) -> dict:
+    """Cost of calling ORT from Python: wall time around session.run minus ORT's own profiled
+    model_run time for the same call. Profiling bookkeeping outside model_run counts as overhead
+    too, so this is an upper bound for the binding cost."""
+    sess = session(path, threads, profile=True)
+    groups, walls = state_groups(rows), []
+    for pass_index in range(repeats + 1):
+        for group in groups:
+            feed = collate(group)
+            start = time.perf_counter()
+            sess.run(["logits", "act_logits"], feed)
+            if pass_index:
+                walls.append((time.perf_counter() - start) * 1e6)
+    trace_path = Path(sess.end_profiling())
+    runs = [event["dur"] for event in json.loads(trace_path.read_text())
+            if event.get("cat") == "Session" and event.get("name") == "model_run"]
+    trace_path.unlink()
+    runs = runs[len(groups):]  # drop the warm-up pass
+    if len(runs) != len(walls):
+        raise RuntimeError(f"profile has {len(runs)} measured model_run events, expected {len(walls)}")
+    overhead = [wall - run for wall, run in zip(walls, runs)]
+    return {"threads": threads, "calls": len(overhead), "repeats": repeats, "warmup_passes": 1,
+            "median_wall_us": statistics.median(walls), "median_model_run_us": statistics.median(runs),
+            "median_overhead_us": statistics.median(overhead), "max_overhead_us": max(overhead),
+            "median_overhead_share": statistics.median(o / w for o, w in zip(overhead, walls))}
+
+
 def parity_pass(parity: dict, tolerance: float = 1e-3) -> bool:
     return parity["argmax_agree"] == parity["items"] and parity["max_abs_logit"] <= tolerance
 
@@ -636,8 +668,14 @@ def wait_first(url: str, body: bytes, process: subprocess.Popen, started: float)
     raise TimeoutError("server did not answer within 600 seconds")
 
 
-def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int) -> dict:
+def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int, server=None) -> dict:
+    """Closed-loop load. With the server's psutil.Process, also report the CPU time it used, as
+    average busy cores: thread settings are not comparable across engines under concurrency
+    (Statim divides --threads among its workers; each concurrent ORT run adds its calling thread
+    to the intra-op pool)."""
     times = []
+    cpu_before = server.cpu_times() if server else None
+    ctx_before = server.num_ctx_switches() if server else None
     start = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = []
@@ -649,8 +687,16 @@ def load_test(url: str, bodies: list[bytes], concurrency: int, requests: int) ->
             _, elapsed = future.result()
             times.append(elapsed)
     wall = time.perf_counter() - start
-    return {"concurrency": concurrency, "requests": requests, "throughput_rps": requests / wall,
-            "p50_ms": statistics.median(times), "p95_ms": percentile(times, 0.95)}
+    result = {"concurrency": concurrency, "requests": requests, "throughput_rps": requests / wall,
+              "p50_ms": statistics.median(times), "p95_ms": percentile(times, 0.95),
+              "p99_ms": percentile(times, 0.99)}
+    if server:
+        cpu_after, ctx_after = server.cpu_times(), server.num_ctx_switches()
+        cpu = (cpu_after.user - cpu_before.user) + (cpu_after.system - cpu_before.system)
+        switches = (ctx_after.voluntary - ctx_before.voluntary) + (ctx_after.involuntary - ctx_before.involuntary)
+        result.update({"server_cpu_seconds": cpu, "avg_busy_cores": cpu / wall,
+                       "context_switches_per_request": switches / requests})
+    return result
 
 
 @contextmanager
@@ -675,7 +721,7 @@ def running_server(command: list[str], port: int, body: bytes):
     url = f"http://127.0.0.1:{port}"
     try:
         cold = wait_first(url, body, proc, started)
-        yield url, cold, peak
+        yield url, cold, peak, psutil.Process(proc.pid)
     finally:
         stop.set()
         proc.terminate()
@@ -686,6 +732,26 @@ def running_server(command: list[str], port: int, body: bytes):
         sampler.join(timeout=1)
 
 
+def cpu_layout(threads: int, available: set[int]) -> tuple[list[int], list[int]]:
+    """Server CPUs: one logical CPU on each of the first `threads` physical cores, so every server
+    thread has a core to itself. Client CPUs: the logical CPUs of the remaining cores, or, when the
+    server takes every core, the SMT siblings of the server's CPUs."""
+    cores: dict[tuple[int, int], list[int]] = {}
+    for cpu in sorted(available):
+        topo = Path(f"/sys/devices/system/cpu/cpu{cpu}/topology")
+        key = (int((topo / "physical_package_id").read_text()), int((topo / "core_id").read_text()))
+        cores.setdefault(key, []).append(cpu)
+    ordered = [cpus for _, cpus in sorted(cores.items())]
+    if threads > len(ordered):
+        raise RuntimeError(f"--pin needs {threads} physical cores, this machine has {len(ordered)}")
+    server = [cpus[0] for cpus in ordered[:threads]]
+    client = [cpu for cpus in ordered[threads:] for cpu in cpus] or \
+             [cpu for cpus in ordered[:threads] for cpu in cpus[1:]]
+    if not client:
+        raise RuntimeError("--pin found no CPU left for the load generator")
+    return server, client
+
+
 def socket_benchmark(args) -> dict:
     data = json.loads(args.inputs.read_text())
     states = data["states"][:args.max_states or None]
@@ -693,47 +759,59 @@ def socket_benchmark(args) -> dict:
               for state in states]
     variants = {"f32": (args.gguf_f32, args.onnx_f32), "quantized": (args.gguf_q8, args.onnx_int8)}
     rows, cold = [], []
+    own_affinity = os.sched_getaffinity(0)
     for variant, (gguf, onnx) in variants.items():
         for threads in args.thread_counts:
+            prefix, placement = [], {}
+            if args.pin:
+                server_cpus, client_cpus = cpu_layout(threads, own_affinity)  # not the narrowed client set
+                prefix = ["taskset", "-c", ",".join(map(str, server_cpus))]
+                os.sched_setaffinity(0, client_cpus)
+                placement = {"server_cpus": server_cpus, "client_cpus": client_cpus}
             configs = [
-                ("statim", [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
-                            "--host", "127.0.0.1", "--port", str(args.statim_port),
-                            "-m", "multilingual=" + str(gguf)], args.statim_port),
-                ("ort", [str(args.ort_python), str(Path(__file__).resolve()), "--serve-ort", "--threads", str(threads),
-                         "--host", "127.0.0.1", "--port", str(args.ort_port), "--onnx", str(onnx),
-                         "--model-dir", str(args.model_dir), "--ort-provider", args.ort_provider], args.ort_port),
+                ("statim", {}, prefix + [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
+                                         "--host", "127.0.0.1", "--port", str(args.statim_port),
+                                         "-m", "multilingual=" + str(gguf)], args.statim_port),
             ]
-            for engine, command, port in configs:
-                with running_server(command, port, bodies[0]) as (url, cold_ms, peak):
+            for spinning in args.ort_spinning_variants:
+                configs.append(("ort", {"ort_spinning": spinning},
+                                prefix + [str(args.ort_python), str(Path(__file__).resolve()), "--serve-ort",
+                                          "--threads", str(threads), "--host", "127.0.0.1", "--port", str(args.ort_port),
+                                          "--onnx", str(onnx), "--model-dir", str(args.model_dir),
+                                          "--ort-provider", args.ort_provider, "--ort-spinning", str(spinning)],
+                                args.ort_port))
+            for engine, extra, command, port in configs:
+                with running_server(command, port, bodies[0]) as (url, cold_ms, peak, server):
                     for i in range(args.warmup_requests):
                         post(url, bodies[i % len(bodies)])
-                    cold.append({"variant": variant, "engine": engine, "threads": threads,
+                    cold.append({"variant": variant, "engine": engine, "threads": threads, **extra, **placement,
                                  "cold_start_to_first_answer_ms": cold_ms, "peak_rss_bytes": peak[0],
                                  "command": command})
                     for concurrency in (1, 4):
-                        rows.append({"variant": variant, "engine": engine, "threads": threads,
+                        rows.append({"variant": variant, "engine": engine, "threads": threads, **extra, **placement,
                                      "microbatch": False, "command": command,
-                                     **load_test(url, bodies, concurrency, args.requests)})
+                                     **load_test(url, bodies, concurrency, args.requests, server)})
             for workers in args.statim_workers:
-                command = [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
+                command = prefix + [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
                            "--workers", str(workers), "--host", "127.0.0.1",
                            "--port", str(args.statim_port), "-m", "multilingual=" + str(gguf)]
-                with running_server(command, args.statim_port, bodies[0]) as (url, _cold_ms, _peak):
+                with running_server(command, args.statim_port, bodies[0]) as (url, _cold_ms, _peak, server):
                     for i in range(args.warmup_requests):
                         post(url, bodies[i % len(bodies)])
-                    rows.append({"variant": variant, "engine": "statim", "threads": threads,
+                    rows.append({"variant": variant, "engine": "statim", "threads": threads, **placement,
                                  "workers": workers, "microbatch": False, "command": command,
-                                 **load_test(url, bodies, 4, args.requests)})
-            command = [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
+                                 **load_test(url, bodies, 4, args.requests, server)})
+            command = prefix + [str(args.release_statim), "serve", "--device", "cpu", "--threads", str(threads),
                        "--host", "127.0.0.1", "--port", str(args.statim_port), "--batch-window-ms", "2",
                        "--max-batch", "16", "-m", "multilingual=" + str(gguf)]
-            with running_server(command, args.statim_port, bodies[0]) as (url, _cold_ms, _peak):
+            with running_server(command, args.statim_port, bodies[0]) as (url, _cold_ms, _peak, server):
                 for i in range(args.warmup_requests):
                     post(url, bodies[i % len(bodies)])
-                rows.append({"variant": variant, "engine": "statim", "threads": threads,
+                rows.append({"variant": variant, "engine": "statim", "threads": threads, **placement,
                              "microbatch": True, "command": command,
-                             **load_test(url, bodies, 4, args.requests)})
-    return {"warmup_requests": args.warmup_requests, "rows": rows, "cold_start_memory": cold}
+                             **load_test(url, bodies, 4, args.requests, server)})
+    os.sched_setaffinity(0, own_affinity)
+    return {"warmup_requests": args.warmup_requests, "pinned": args.pin, "rows": rows, "cold_start_memory": cold}
 
 
 def markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
@@ -793,21 +871,38 @@ def render_md(path: Path, golden_path: Path = V9_GOLDEN, long_threshold: int = 2
             lines.append(f"\nSkipped length {skipped['length']}: {skipped['reason']}.")
     else:
         lines.append("pending: reviewer run")
+    overhead = result.get("binding_overhead")
+    if overhead:
+        lines += ["", "### ORT Python-binding overhead", ""]
+        lines.append(markdown_table(["Threads", "Calls", "Median session.run ms", "Median model_run ms",
+                                     "Median overhead µs", "Max overhead µs", "Median share"],
+            [[row["threads"], row["calls"], f"{row['median_wall_us'] / 1000:.2f}",
+              f"{row['median_model_run_us'] / 1000:.2f}", f"{row['median_overhead_us']:.0f}",
+              f"{row['max_overhead_us']:.0f}", f"{row['median_overhead_share']:.4%}"] for row in overhead]))
     lines += ["", "### HTTP end to end", ""]
     socket = result.get("socket")
     if isinstance(socket, dict) and socket.get("rows"):
-        lines.append(markdown_table(["Variant", "Engine", "Threads", "Workers", "Clients", "Microbatch", "p50 ms", "p95 ms", "req/s"],
-            [[row["variant"], row["engine"], row["threads"], row.get("workers", 1), row["concurrency"], row["microbatch"],
-              f"{row['p50_ms']:.2f}", f"{row['p95_ms']:.2f}", f"{row['throughput_rps']:.2f}"]
+        if socket.get("pinned"):
+            first = socket["rows"][0]
+            lines.append(f"Pinned: server CPUs {first.get('server_cpus')}, load generator CPUs {first.get('client_cpus')} "
+                         "(first row; per row in the JSON).\n")
+        lines.append(markdown_table(["Variant", "Engine", "Threads", "Workers", "ORT spin", "Clients", "Microbatch",
+                                     "p50 ms", "p95 ms", "p99 ms", "req/s", "Busy cores", "Ctx switches/req"],
+            [[row["variant"], row["engine"], row["threads"], row.get("workers", 1) if row["engine"] == "statim" else "—",
+              row.get("ort_spinning", 1) if row["engine"] == "ort" else "—", row["concurrency"], row["microbatch"],
+              f"{row['p50_ms']:.2f}", f"{row['p95_ms']:.2f}",
+              f"{row['p99_ms']:.2f}" if "p99_ms" in row else "—", f"{row['throughput_rps']:.2f}",
+              f"{row['avg_busy_cores']:.2f}" if "avg_busy_cores" in row else "—",
+              f"{row['context_switches_per_request']:.0f}" if "context_switches_per_request" in row else "—"]
              for row in socket["rows"]]))
     else:
         lines.append("pending: reviewer run")
     lines += ["", "### Cold start and peak RSS", ""]
     cold = socket.get("cold_start_memory") if isinstance(socket, dict) else None
     if cold:
-        lines.append(markdown_table(["Variant", "Engine", "Threads", "First answer ms", "Peak RSS MiB"],
-            [[row["variant"], row["engine"], row["threads"], f"{row['cold_start_to_first_answer_ms']:.2f}",
-              f"{row['peak_rss_bytes'] / 2**20:.1f}"] for row in cold]))
+        lines.append(markdown_table(["Variant", "Engine", "Threads", "ORT spin", "First answer ms", "Peak RSS MiB"],
+            [[row["variant"], row["engine"], row["threads"], row.get("ort_spinning", 1) if row["engine"] == "ort" else "—",
+              f"{row['cold_start_to_first_answer_ms']:.2f}", f"{row['peak_rss_bytes'] / 2**20:.1f}"] for row in cold]))
     else:
         lines.append("pending: reviewer run")
     inv = result.get("inventory", {})
@@ -834,6 +929,8 @@ def main() -> int:
     ap.add_argument("--serve-ort", action="store_true")
     ap.add_argument("--socket-benchmark", action="store_true")
     ap.add_argument("--length-sweep", action="store_true")
+    ap.add_argument("--binding-overhead", action="store_true",
+                    help="measure the Python-binding cost of ORT session.run against its profiled model_run time")
     ap.add_argument("--ort-only", action="store_true", help="omit Statim rows (for pending GPU EP runs)")
     ap.add_argument("--ort-provider", choices=("cpu", "cuda", "tensorrt"), default="cpu")
     ap.add_argument("--checks-only", action="store_true")
@@ -848,6 +945,11 @@ def main() -> int:
     ap.add_argument("--lengths", type=int, nargs="+", default=[128, 256, 512, 1024])
     ap.add_argument("--long-threshold", type=int, default=256)
     ap.add_argument("--statim-workers", type=int, nargs="+", default=[2, 4])
+    ap.add_argument("--pin", action="store_true",
+                    help="HTTP benchmark: pin each server to one logical CPU per physical core (taskset) and the load generator to other CPUs")
+    ap.add_argument("--ort-spinning", type=int, choices=(0, 1), default=1, help="--serve-ort: intra-op thread spinning")
+    ap.add_argument("--ort-spinning-variants", type=int, nargs="+", choices=(0, 1), default=[1],
+                    help="HTTP benchmark: ORT server rows per spinning setting")
     ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument("--max-states", type=int, default=0, help="smoke-test subset; 0 means all 30")
     ap.add_argument("--requests", type=int, default=60)
@@ -905,6 +1007,12 @@ def main() -> int:
     elif args.socket_benchmark:
         base["raw"] = None
         base["socket"] = socket_benchmark(args)
+    elif args.binding_overhead:
+        base["raw"] = None
+        rows = subset_rows(json_rows(args.golden), args.max_states)
+        base["binding_overhead"] = [binding_overhead(args.onnx_f32, rows, threads, args.repeats)
+                                    for threads in args.thread_counts]
+        base["socket"] = "pending: reviewer run"
     elif args.length_sweep:
         base["raw"] = None
         base["length_sweep"] = run_length_sweep(args)

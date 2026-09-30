@@ -8,9 +8,24 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
-- `docs/ORT.md` and `bench/ort_export.py` / `bench/ort_compare.py`: a parity-gated, reproducible
-  CPU comparison with ONNX Runtime, including faithful request packing and answer semantics, raw and
-  HTTP protocols, cold-start/RSS and footprint accounting, and generated Markdown tables.
+- [docs/ORT.md](docs/ORT.md): Statim compared with ONNX Runtime on the CPU, on the shipped
+  multilingual model, with ORT given its best measured configuration.
+  - **Method.** Parity gates before any timing: ORT f32 and Statim f32 reproduce the PyTorch
+    reference within 1.4e-5, and make the same decision on all 2,850 held-out items. The rest is
+    measured under the same protocol for both: raw scoring at 1–16 threads, a sequence-length
+    sweep from 128 to 1,024 tokens, HTTP serving with both servers pinned to the same cores, start
+    time, memory, file sizes, and paired held-out accuracy for the 8-bit variants.
+  - **Result.** ORT is faster on short sequences at 1–4 threads, by up to 16 %. Statim is faster on
+    long sequences and with more threads, up to 2.8× at 1,024 tokens on 8 threads. Its default
+    server answers 10–34 % more requests per second on the same cores, and starts in 0.45 s
+    against ORT's 1.95 s.
+  - **8-bit.** Statim's q8_0 keeps the f32 decisions; ORT's dynamic int8 costs 1.7 accuracy points
+    (exact McNemar p = 0.009).
+  - **Scripts.** `bench/ort_export.py` and `bench/ort_compare.py`; the results are in
+    `bench/results/ort-cpu/`.
+- `bench/eval_categories.py --predictions` writes one record per item, and
+  `bench/compare_predictions.py` compares two such runs pairwise: changed decisions, discordant
+  pairs, and an exact McNemar test.
 
 ## [0.9.0] - 2026-09-29
 

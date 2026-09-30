@@ -244,6 +244,8 @@ def main() -> int:
     original_onnx = args.out_dir / "laya-multilingual-f32.onnx"
     shipped_onnx = args.out_dir / "laya-multilingual-v9-f32.onnx"
     int8_onnx = args.out_dir / "laya-multilingual-v9-int8.onnx"
+    dynamic_onnx = args.out_dir / "laya-multilingual-v9-int8-dynamic.onnx"
+    blockwise_onnx = args.out_dir / "laya-multilingual-v9-8bit-blockwise.onnx"
     v9_golden_path = args.out_dir / "golden_v9.jsonl"
     q8_path = args.out_dir / "laya-multilingual-v9-q8_0.gguf"
     report_path = args.out_dir / "export-report.json"
@@ -293,6 +295,27 @@ def main() -> int:
     shipped_int8 = parity(int8_onnx, v9_rows, 0, args.threads)
     print(json.dumps({"variant": "shipped_ort_int8", **shipped_int8}, sort_keys=True), flush=True)
 
+    # The ORT advocate's two alternatives (docs/ORT.md): the most accurate dynamic int8 setting on
+    # AVX2 without VNNI, and 8-bit blockwise weights (block 32, f32 compute), ORT's closest
+    # counterpart of q8_0. bench/ort_compare.py uses these two by default.
+    from onnxruntime.quantization.matmul_nbits_quantizer import MatMulNBitsQuantizer
+
+    for path in (dynamic_onnx, blockwise_onnx):
+        path.unlink(missing_ok=True)
+        path.with_suffix(path.suffix + ".data").unlink(missing_ok=True)
+    quantize_dynamic(str(shipped_onnx), str(dynamic_onnx), weight_type=QuantType.QInt8,
+                     per_channel=True, reduce_range=True, use_external_data_format=True)
+    externalize(dynamic_onnx)
+    shipped_dynamic = parity(dynamic_onnx, v9_rows, 0, args.threads)
+    print(json.dumps({"variant": "shipped_ort_int8_dynamic", **shipped_dynamic}, sort_keys=True), flush=True)
+    quantizer = MatMulNBitsQuantizer(model=str(shipped_onnx), bits=8, block_size=32, is_symmetric=True,
+                                     accuracy_level=0)
+    quantizer.process()
+    quantizer.model.save_model_to_file(str(blockwise_onnx), use_external_data_format=True)
+    externalize(blockwise_onnx)
+    shipped_blockwise = parity(blockwise_onnx, v9_rows, 0, args.threads)
+    print(json.dumps({"variant": "shipped_ort_8bit_blockwise", **shipped_blockwise}, sort_keys=True), flush=True)
+
     subprocess.run([str(args.statim_quantize), str(args.shipped_gguf), str(q8_path), "q8_0"], cwd=ROOT,
                    env={**os.environ, "CUDA_VISIBLE_DEVICES": ""}, check=True)
     shipped_q8 = statim_parity(args.statim_parity, q8_path, v9_golden_path, 1e9, args.threads)
@@ -310,11 +333,14 @@ def main() -> int:
                     "shipped_v9": str(v9_golden_path.relative_to(ROOT))},
         "parity": {"original_ort_f32": original, "shipped_ort_f32": shipped_ort,
                    "shipped_statim_f32": shipped_statim, "shipped_ort_int8": shipped_int8,
+                   "shipped_ort_int8_dynamic": shipped_dynamic, "shipped_ort_8bit_blockwise": shipped_blockwise,
                    "shipped_statim_q8_0": shipped_q8},
         "artifacts": {
             "original_onnx_f32": artifact([original_onnx, original_onnx.with_suffix(".onnx.data")]),
             "shipped_onnx_f32": artifact([shipped_onnx, shipped_onnx.with_suffix(".onnx.data")]),
             "shipped_onnx_int8": artifact([int8_onnx, int8_onnx.with_suffix(".onnx.data")]),
+            "shipped_onnx_int8_dynamic": artifact([dynamic_onnx, dynamic_onnx.with_suffix(".onnx.data")]),
+            "shipped_onnx_8bit_blockwise": artifact([blockwise_onnx, blockwise_onnx.with_suffix(".onnx.data")]),
             "shipped_gguf_f32": artifact([args.shipped_gguf]), "shipped_gguf_q8_0": artifact([q8_path]),
         },
     }

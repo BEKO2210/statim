@@ -882,6 +882,9 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--head-max-len", type=int, default=512)
     ap.add_argument("--out", default=None, help="JSONL, one record per suite/language plus one macro line per suite")
+    ap.add_argument("--predictions", default=None, metavar="PATH",
+                    help="JSONL, one record per item (gold and predicted option index), for paired comparisons "
+                         "between runs over the same sample")
     ap.add_argument("--rebuild", action="store_true", help="fetch the held-out splits again")
     ap.add_argument("--strict", action="store_true", help="fail if any configured source is unavailable")
     ap.add_argument("--exclude-mixture", default=None, metavar="PATH",
@@ -919,6 +922,9 @@ def main(argv=None):
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     out = open(a.out, "w", encoding="utf-8") if a.out else None
+    if a.predictions:
+        os.makedirs(os.path.dirname(os.path.abspath(a.predictions)) or ".", exist_ok=True)
+    predictions = open(a.predictions, "w", encoding="utf-8") if a.predictions else None
     records, by_suite = [], collections.defaultdict(list)
     label = "%s:%s" % (a.model, a.adapter) if a.adapter else a.model  # base and adapter runs stay apart
     extra = {"adapter": a.adapter} if a.adapter else {}
@@ -927,6 +933,10 @@ def main(argv=None):
             t0 = time.time()
             probs = run_items(a.url, items, model=a.model, api_key=os.environ.get("STATIM_API_KEY"),
                               head_max_len=a.head_max_len, adapter=a.adapter)
+            if predictions:
+                for i, (item, p) in enumerate(zip(items, probs)):
+                    predictions.write(json.dumps({"suite": suite, "lang": lang, "i": i, "gold": gold_index(item),
+                                                  "pred": max(range(len(p)), key=p.__getitem__)}) + "\n")
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
             row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra,
                    "n": len(items), "seed": a.seed, "skip": a.skip,
@@ -962,6 +972,8 @@ def main(argv=None):
     finally:
         if out:
             out.close()
+        if predictions:
+            predictions.close()
     print_table(records)
     return 0
 

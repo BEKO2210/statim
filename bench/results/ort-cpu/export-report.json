@@ -1,0 +1,143 @@
+{
+  "artifacts": {
+    "original_onnx_f32": {
+      "bytes": 1290433721,
+      "files": [
+        "build-ort/laya-multilingual-f32.onnx",
+        "build-ort/laya-multilingual-f32.onnx.data"
+      ]
+    },
+    "shipped_gguf_f32": {
+      "bytes": 908307008,
+      "files": [
+        "models/laya-multilingual-v9-f32.gguf"
+      ]
+    },
+    "shipped_gguf_q8_0": {
+      "bytes": 356674176,
+      "files": [
+        "build-ort/laya-multilingual-v9-q8_0.gguf"
+      ]
+    },
+    "shipped_onnx_8bit_blockwise": {
+      "bytes": 934132444,
+      "files": [
+        "build-ort/laya-multilingual-v9-8bit-blockwise.onnx",
+        "build-ort/laya-multilingual-v9-8bit-blockwise.onnx.data"
+      ]
+    },
+    "shipped_onnx_f32": {
+      "bytes": 1290434224,
+      "files": [
+        "build-ort/laya-multilingual-v9-f32.onnx",
+        "build-ort/laya-multilingual-v9-f32.onnx.data"
+      ]
+    },
+    "shipped_onnx_int8": {
+      "bytes": 324807526,
+      "files": [
+        "build-ort/laya-multilingual-v9-int8.onnx",
+        "build-ort/laya-multilingual-v9-int8.onnx.data"
+      ]
+    },
+    "shipped_onnx_int8_dynamic": {
+      "bytes": 325559474,
+      "files": [
+        "build-ort/laya-multilingual-v9-int8-dynamic.onnx",
+        "build-ort/laya-multilingual-v9-int8-dynamic.onnx.data"
+      ]
+    }
+  },
+  "checkpoints": {
+    "original": {
+      "model_safetensors_sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+      "path": "models/laya-multilingual"
+    },
+    "shipped_v9": {
+      "model_safetensors_sha256": "c44425f14ac9d55508f73a6f371e4e2802ed59e646287c3abbec10b653a19840",
+      "path": "models/laya-multilingual-v9"
+    }
+  },
+  "f32_gates_pass": true,
+  "goldens": {
+    "original": "tests/data/golden_laya-multilingual.jsonl",
+    "shipped_v9": "build-ort/golden_v9.jsonl"
+  },
+  "opset": 18,
+  "parity": {
+    "original_ort_f32": {
+      "argmax_agree": 240,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 9.441375732421875e-05,
+      "pass": true,
+      "tolerance": 0.001
+    },
+    "shipped_ort_8bit_blockwise": {
+      "argmax_agree": 236,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 0.19004106521606445
+    },
+    "shipped_ort_f32": {
+      "argmax_agree": 240,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 1.0073184967041016e-05,
+      "pass": true,
+      "tolerance": 0.001
+    },
+    "shipped_ort_int8": {
+      "argmax_agree": 196,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 7.957531929016113
+    },
+    "shipped_ort_int8_dynamic": {
+      "argmax_agree": 195,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 4.310174465179443
+    },
+    "shipped_statim_f32": {
+      "argmax_agree": 240,
+      "command": [
+        "build-rel/test_model_parity",
+        "models/laya-multilingual-v9-f32.gguf",
+        "build-ort/golden_v9.jsonl",
+        "0.001",
+        "4"
+      ],
+      "exit_code": 0,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 1.38e-05,
+      "pass": true,
+      "tolerance": 0.001
+    },
+    "shipped_statim_q8_0": {
+      "argmax_agree": 235,
+      "command": [
+        "build-rel/test_model_parity",
+        "build-ort/laya-multilingual-v9-q8_0.gguf",
+        "build-ort/golden_v9.jsonl",
+        "1000000000.0",
+        "4"
+      ],
+      "exit_code": 1,
+      "items": 240,
+      "max_abs_act": 0.0,
+      "max_abs_logit": 0.309,
+      "pass": false,
+      "tolerance": 1000000000.0
+    }
+  },
+  "versions": {
+    "laya": "0.3.20",
+    "numpy": "2.5.3",
+    "onnx": "1.23.0",
+    "onnxruntime": "1.30.0",
+    "python": "3.12.3",
+    "torch": "2.14.0+cu130"
+  }
+}

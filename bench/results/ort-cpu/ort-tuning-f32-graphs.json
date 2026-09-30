@@ -1,0 +1,90 @@
+{
+  "offline_enable_all_block_base_4": {
+    "candidate": "offline_enable_all",
+    "setting": "block_base_4",
+    "mean_ms": 534.7341820015572,
+    "p50_ms": 295.75247448519804,
+    "p95_ms": 575.8277999702841,
+    "load_ms": 1123.056000971701,
+    "max_diff": 1.049041748046875e-05,
+    "agree": 240,
+    "elapsed_s": 66.4843499660492
+  },
+  "offline_enable_all_daz_1": {
+    "candidate": "offline_enable_all",
+    "setting": "daz_1",
+    "mean_ms": 534.1798929303574,
+    "p50_ms": 301.29477599984966,
+    "p95_ms": 582.4128660024144,
+    "load_ms": 452.95270800124854,
+    "max_diff": 1.049041748046875e-05,
+    "agree": 240,
+    "elapsed_s": 64.94500946998596
+  },
+  "offline_enable_all_spin_0": {
+    "candidate": "offline_enable_all",
+    "setting": "spin_0",
+    "mean_ms": 616.4728697661,
+    "p50_ms": 373.0924845149275,
+    "p95_ms": 719.084708020091,
+    "load_ms": 253.7615789915435,
+    "max_diff": 1.049041748046875e-05,
+    "agree": 240,
+    "elapsed_s": 74.76303482055664
+  },
+  "offline_enable_all_best_combo": {
+    "candidate": "offline_enable_all",
+    "setting": "best_combo",
+    "mean_ms": 535.3573581708284,
+    "p50_ms": 301.46134551614523,
+    "p95_ms": 567.9288459941745,
+    "load_ms": 259.21039597596973,
+    "max_diff": 1.049041748046875e-05,
+    "agree": 240,
+    "elapsed_s": 65.03344583511353
+  },
+  "transformer_opt_block_base_4": {
+    "candidate": "transformer_opt",
+    "setting": "block_base_4",
+    "mean_ms": 523.2034311028352,
+    "p50_ms": 292.99369151704013,
+    "p95_ms": 551.0948779992759,
+    "load_ms": 875.100246979855,
+    "max_diff": 1.1444091796875e-05,
+    "agree": 240,
+    "elapsed_s": 64.30371117591858
+  },
+  "transformer_opt_daz_1": {
+    "candidate": "transformer_opt",
+    "setting": "daz_1",
+    "mean_ms": 525.0279923978572,
+    "p50_ms": 296.37820899370126,
+    "p95_ms": 567.1512159751728,
+    "load_ms": 259.0826660161838,
+    "max_diff": 1.1444091796875e-05,
+    "agree": 240,
+    "elapsed_s": 63.43812155723572
+  },
+  "transformer_opt_spin_0": {
+    "candidate": "transformer_opt",
+    "setting": "spin_0",
+    "mean_ms": 612.491440291827,
+    "p50_ms": 369.33459248393774,
+    "p95_ms": 721.4908069581725,
+    "load_ms": 255.84979797713459,
+    "max_diff": 1.1444091796875e-05,
+    "agree": 240,
+    "elapsed_s": 73.59689211845398
+  },
+  "transformer_opt_best_combo": {
+    "candidate": "transformer_opt",
+    "setting": "best_combo",
+    "mean_ms": 522.9155897318075,
+    "p50_ms": 292.68000699812546,
+    "p95_ms": 549.6433789958246,
+    "load_ms": 261.2274239654653,
+    "max_diff": 1.1444091796875e-05,
+    "agree": 240,
+    "elapsed_s": 63.482417345047
+  }
+}
