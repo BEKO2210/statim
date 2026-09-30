@@ -868,28 +868,6 @@ ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_te
     return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
-struct SgemmOpSync {
-    std::atomic<int> arrived{0};
-    std::atomic<bool> ready{false};
-};
-
-void sgemm_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
-    const ggml_tensor* w = dst->src[0];
-    const ggml_tensor* x = dst->src[1];
-    ggml_tensor* scratch = dst->src[2];
-    auto* sync = static_cast<SgemmOpSync*>(userdata);
-    packed_sgemm_pack(static_cast<float*>(scratch->data), static_cast<const float*>(x->data),
-                      static_cast<const float*>(w->data), w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
-    if (sync->arrived.fetch_add(1, std::memory_order_acq_rel) == nth - 1) {
-        sync->ready.store(true, std::memory_order_release);
-        sync->ready.notify_all();
-    } else {
-        sync->ready.wait(false, std::memory_order_acquire);
-    }
-    packed_sgemm_compute(static_cast<float*>(dst->data), static_cast<const float*>(scratch->data),
-                         static_cast<const float*>(w->data), w->ne[1], ggml_nrows(x), w->ne[0], ith, nth);
-}
-
 bool sgemm_enabled() {
     const char* value = std::getenv("STATIM_SGEMM");
     return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
@@ -902,7 +880,8 @@ ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
                      const std::string& name, SgemmOpSync* sync = nullptr) {
     const bool flat = ggml_n_dims(w) <= 2 && ggml_is_contiguous(x) && x->ne[2] * x->ne[3] != 1;
     ggml_tensor* x2 = flat ? ggml_reshape_2d(c, x, x->ne[0], x->ne[1] * x->ne[2] * x->ne[3]) : x;
-    const bool use_custom = sync && flat && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
+    // x need not be flattened: a single sequence [d, L, 1, 1] is already one [d, L] matrix
+    const bool use_custom = sync && ggml_n_dims(w) <= 2 && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
                             ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
     ggml_tensor* y;
     if (use_custom) {
@@ -910,7 +889,7 @@ ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
             packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]));
         ggml_tensor* args[] = {w, x2, scratch};
         y = ggml_custom_4d(c, GGML_TYPE_F32, w->ne[1], x->ne[1], x->ne[2], x->ne[3],
-                           args, 3, sgemm_op, GGML_N_TASKS_MAX, sync);
+                           args, 3, sgemm_custom_op, GGML_N_TASKS_MAX, sync);
         return named(y, name + ".matmul");
     }
     y = named(ggml_mul_mat(c, w, x2), name + ".matmul");

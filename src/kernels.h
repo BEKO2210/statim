@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <atomic>
 #include <cstdint>
+
+struct ggml_tensor;
 
 namespace statim {
 void geglu_rows(float* dst, const float* src, long rows, long ff, long row_begin, long row_end);
@@ -13,6 +16,15 @@ bool packed_sgemm_available();
 size_t packed_sgemm_workspace_floats(int64_t M, int64_t N, int64_t K);
 void packed_sgemm_pack(float* workspace, const float* x, const float* w,
                        int64_t M, int64_t N, int64_t K, int ith, int nth);
+// ggml custom-op body for dst = W·x with src = {W [K, M], x [K, N...], scratch}: every thread
+// packs its share of x, waits at the barrier, then computes its output tiles. userdata is a
+// SgemmOpSync owned by the graph; it may be reused for any number of evaluations.
+struct SgemmOpSync {
+    std::atomic<int> arrived{0};
+    std::atomic<uint32_t> generation{0};
+};
+void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata);
+
 void packed_sgemm_compute(float* y, const float* workspace, const float* w,
                           int64_t M, int64_t N, int64_t K, int ith, int nth);
 }

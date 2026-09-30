@@ -1,5 +1,8 @@
 #include "kernels.h"
 
+#include "ggml.h"
+#include "ggml-cpu.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -88,7 +91,40 @@ int main() {
     for (int n = 2; n < N; ++n) ok &= std::isinf(got[n*M + 3]) && std::signbit(got[n*M + 3]);
     ok &= std::isfinite(got[2*M]) && std::isfinite(got[3*M]);
 
-    std::printf("packed SGEMM random max |error| %.3e, max relative %.3e; NaN/Inf %s\n",
+    // The op as ggml runs it: one custom node, every pool thread inside the barrier, and the same
+    // node and SgemmOpSync evaluated twice (the barrier must reset itself).
+    for (const auto& [GM, GN, GK] : std::vector<Shape>{{17, 1, 7}, {45, 25, 300}, {767, 13, 769}}) {
+        std::vector<float> gx(static_cast<size_t>(GN) * GK), gw(static_cast<size_t>(GM) * GK);
+        std::generate(gx.begin(), gx.end(), [&] { return dist(rng); });
+        std::generate(gw.begin(), gw.end(), [&] { return dist(rng); });
+        const auto ref = reference(gx, gw, GM, GN, GK);
+        for (int nth : {1, 3, 8}) {
+            ggml_init_params params{size_t(64) << 20, nullptr, false};
+            ggml_context* ctx = ggml_init(params);
+            ggml_tensor* w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, GK, GM);
+            ggml_tensor* x = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, GK, GN);
+            ggml_tensor* scratch = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,
+                static_cast<int64_t>(statim::packed_sgemm_workspace_floats(GM, GN, GK)));
+            std::copy(gw.begin(), gw.end(), static_cast<float*>(w->data));
+            std::copy(gx.begin(), gx.end(), static_cast<float*>(x->data));
+            statim::SgemmOpSync sync;
+            ggml_tensor* args[] = {w, x, scratch};
+            ggml_tensor* y = ggml_custom_4d(ctx, GGML_TYPE_F32, GM, GN, 1, 1, args, 3,
+                                            statim::sgemm_custom_op, GGML_N_TASKS_MAX, &sync);
+            ggml_cgraph* gf = ggml_new_graph(ctx);
+            ggml_build_forward_expand(gf, y);
+            for (int pass = 0; pass < 2; ++pass) {
+                std::fill_n(static_cast<float*>(y->data), GM * GN, -123.0f);
+                ok &= ggml_graph_compute_with_ctx(ctx, gf, nth) == GGML_STATUS_SUCCESS;
+                const float* got = static_cast<const float*>(y->data);
+                for (size_t i = 0; i < ref.size(); ++i)
+                    ok &= std::fabs(got[i] - ref[i]) <= 3e-4 * std::max(1.0, std::fabs(ref[i]));
+            }
+            ggml_free(ctx);
+        }
+    }
+
+    std::printf("packed SGEMM random max |error| %.3e, max relative %.3e; NaN/Inf and ggml graph (x2) %s\n",
                 worst_abs, worst_rel, ok ? "PASS" : "FAIL");
     return ok ? 0 : 1;
 }
