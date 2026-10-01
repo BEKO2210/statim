@@ -70,7 +70,7 @@ for them like a P0.
 |---|---|---|---|
 | 23 | A 24 h soak with an RSS ceiling and a `/ready` poll. **Required for 1.0** | M | running: `bench/soak.py`, 24 h on belkis-home since 2026-10-01 12:28 |
 | 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, overload case |
-| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. Since P0 #7, an ASan error while serving fails the suite; the server's exit status and leaks at shutdown are not checked yet. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
+| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences.. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
 | 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, 5x SIGTERM and SIGINT with requests in flight; `TimeoutStopSec=150` |
 | 27 | A client dropped mid-request, then the same request again, gives an identical 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, dropped-client case |
 | 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
