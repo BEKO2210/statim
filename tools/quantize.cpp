@@ -13,6 +13,7 @@
 #include "ggml-cpu.h"
 #include "ggml.h"
 #include "gguf.h"
+#include "statim/cpu_check.h"
 #include "statim/gguf_preflight.h"
 #include "weight_types.h"
 
@@ -41,6 +42,10 @@ static std::vector<float> to_f32(const ggml_tensor* t) {
 }
 
 int main(int argc, char** argv) {
+    if (const std::string missing = statim::missing_cpu_features(); !missing.empty()) {
+        std::fprintf(stderr, "statim-quantize: %s\n", statim::cpu_requirement_message(missing).c_str());
+        return 1;
+    }
     if (argc < 4) {
         std::fprintf(stderr, "usage: %s in.gguf out.gguf <type> [--embd <type>]\n", argv[0]);
         return 2;

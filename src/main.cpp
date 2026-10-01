@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ggml.h"
+#include "statim/cpu_check.h"
 #include "statim/engine.h"
 #include "statim/server.h"
 
@@ -83,6 +84,10 @@ int main(int argc, char** argv) {
     if (cmd == "version" || cmd == "--version") {
         std::printf("statim %s\n", STATIM_VERSION);
         return 0;
+    }
+    if (const std::string missing = statim::missing_cpu_features(); !missing.empty()) {
+        std::fprintf(stderr, "statim: %s\n", statim::cpu_requirement_message(missing).c_str());
+        return 1;
     }
     try {
         statim::ServerConfig cfg;

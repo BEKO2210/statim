@@ -26,7 +26,7 @@ last column.
 | # | Item | Area | Effort | Status | Proof |
 |---|---|---|---|---|---|
 | 1 | A server bound to a non-loopback address refuses to start without an API key, including the container's default `--host 0.0.0.0`. Only `--allow-unauthenticated` keeps today's warning. | Security | M | open | test in `tests/security/test_http.py` |
-| 2 | On a CPU without the build's instruction set (AVX2, FMA, F16C, BMI2 for the x86-64 release), Statim exits with a message naming the missing features before any inference, instead of `Illegal instruction`. | Reliability, platform | M | open | run on an i5-2520M and an i3-3227U (no AVX2), where 0.9.2 dies with exit 132 |
+| 2 | On a CPU without the build's instruction set (AVX2, FMA, F16C, BMI2 for the x86-64 release), Statim exits with a message naming the missing features before any inference, instead of `Illegal instruction`. | Reliability, platform | M | **closed** | see [Proofs](#proofs); `tests/test_cpu_check.cpp` |
 | 3 | `main` accepts changes only through pull requests with green `build-test` and `fuzz`, and nobody can bypass that. Release tags cannot be deleted or moved. | Supply chain | S | **closed** (2026-09-30) | see [Proofs](#proofs) |
 | 4 | Every GitHub Action is pinned to a full commit SHA. | Supply chain | S | **closed** (#51) | `.github/workflows/*.yml`; Dependabot keeps the pins current |
 | 5 | A root `SECURITY.md` gives the contact, an acknowledgement window and the supported versions; private vulnerability reporting is on. | Security | S | partly: private reporting is on | `SECURITY.md` in the root |
@@ -132,6 +132,20 @@ The repository rulesets:
 - **Break glass.** A tag or `main` can only be changed against these rules by setting the ruleset's
   enforcement to disabled, acting, and setting it back to active. That is recorded in the
   repository's audit log. It was used once, to delete the test tag.
+
+### P0 #2: unsupported CPUs (2026-10-01)
+
+A portable build (`-DSTATIM_NATIVE=OFF`, as released) was run on two CPUs without AVX2:
+
+- **i5-2520M (Sandy Bridge, lenovo).** `statim decide`, `statim serve` and `statim-quantize` exit 1
+  with: "this build of Statim needs an x86-64 CPU with AVX2, FMA, F16C and BMI2 (x86-64-v3 …). This
+  CPU lacks: avx2, fma, f16c, bmi2. Build from source on this machine instead: …".
+- **i3-3227U (Ivy Bridge, homemini2).** The same, naming `avx2, fma, bmi2` (Ivy Bridge has F16C).
+- **0.9.2, for comparison.** It died on the same lenovo with `Illegal instruction (core dumped)`,
+  exit 132.
+
+`statim version` still answers on both. `tests/test_cpu_check.cpp` covers the feature logic and the
+message.
 
 ### P0 #4: pinned actions (#51)
 
