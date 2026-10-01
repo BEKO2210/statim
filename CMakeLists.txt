@@ -14,6 +14,7 @@ option(STATIM_VULKAN "Build the Vulkan GPU backend (--device vulkan)" OFF)
 option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
 option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
 option(STATIM_SANITIZE "Build everything with ASan and UBSan" OFF)
+option(STATIM_HARDEN "Hardening flags for release builds" ON)
 
 if(STATIM_FUZZ OR STATIM_SANITIZE)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -33,6 +34,44 @@ if(STATIM_FUZZ OR STATIM_SANITIZE)
                       -fno-omit-frame-pointer -g)
   add_link_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined)
   set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
+endif()
+
+if(STATIM_HARDEN AND CMAKE_SYSTEM_NAME MATCHES "Linux|Android" AND (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+  include(CheckPIESupported)
+  check_pie_supported(OUTPUT_VARIABLE STATIM_PIE_ERR LANGUAGES C CXX)
+  if(CMAKE_C_LINK_PIE_SUPPORTED AND CMAKE_CXX_LINK_PIE_SUPPORTED)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  else()
+    message(WARNING "PIE is not supported: ${STATIM_PIE_ERR}")
+  endif()
+
+  add_compile_options(-fstack-protector-strong)
+  add_link_options(-Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+
+  if(NOT (STATIM_FUZZ OR STATIM_SANITIZE))
+    include(CheckCSourceCompiles)
+    set(_orig_req_flags "${CMAKE_REQUIRED_FLAGS}")
+    set(CMAKE_REQUIRED_FLAGS "-O2 -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3")
+    check_c_source_compiles("
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char buf[16];
+    memcpy(buf, \"test\", 4);
+    return 0;
+}
+" STATIM_HAS_FORTIFY_3)
+    set(CMAKE_REQUIRED_FLAGS "${_orig_req_flags}")
+
+    if(STATIM_HAS_FORTIFY_3)
+      set(STATIM_FORTIFY_LEVEL 3)
+    else()
+      set(STATIM_FORTIFY_LEVEL 2)
+    endif()
+
+    add_compile_options($<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>
+                        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=${STATIM_FORTIFY_LEVEL}>)
+  endif()
 endif()
 
 # ---- ggml (vendored)
