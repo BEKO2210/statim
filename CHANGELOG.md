@@ -8,6 +8,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Changed
+- The engine parity tests fail above 1.5e-4 instead of 2e-3: one step of the API's 4-decimal
+  rounding, which is what the README's "within 1e-4" claims. Measured worst on x86-64, arm64, Vulkan
+  and CUDA: 1.00e-4.
 - The model and LoRA promotion gates now persist hashed per-item outcomes, verify them against the
   published counts and accuracies, and use paired exact McNemar tests with Holm correction for both
   cell regressions and gains. Family uncertainty and the validation interval are paired too;
