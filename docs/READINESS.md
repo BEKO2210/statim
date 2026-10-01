@@ -73,7 +73,7 @@ for them like a P0.
 | 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
 | 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, 5x SIGTERM and SIGINT with requests in flight; `TimeoutStopSec=150` |
 | 27 | A client dropped mid-request, then the same request again, gives an identical 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, dropped-client case |
-| 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
+| 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | **closed** (#74): static `/health` probe in both images; `deploy/docker-compose.yml` with the unit's limits |
 
 ### Operability
 
