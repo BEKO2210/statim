@@ -1,5 +1,7 @@
 # Security hardening
 
+To report a vulnerability, see the [security policy](../SECURITY.md).
+
 The HTTP API retains successful Jev/Laya response shapes; `/health` is intentionally
 reduced to `status` and `version`. Limits and flags are documented in README → API.
 
@@ -74,7 +76,7 @@ counts). Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Re
   executor recovered after cancellation with identical logits and action probabilities.
 - `git diff --check` and Python syntax compilation passed.
 
-Findings come from an independent review of 0.2.1 (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
+Findings come from a review of 0.2.1 by a separate AI coding agent (Codex), not a third-party audit (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
 
 ## Supply chain
 

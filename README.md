@@ -417,6 +417,7 @@ against a live server:
 python3 tests/security/test_http.py --binary build/statim --model models/laya-multilingual-f32.gguf
 ```
 
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 [docs/SECURITY.md](docs/SECURITY.md) has the findings, fixes, fuzzing campaign and coverage.
 
 ## Status and roadmap
