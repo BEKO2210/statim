@@ -234,7 +234,8 @@ responses, metrics, and tests. Trained adapters and the evidence for each are in
 Set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE`. Authentication covers inference,
 `/metrics`, and `/v1/models`; health, readiness, and the playground remain public. Key sources fail
 closed and comparisons use constant-time code. A non-loopback server without keys emits
-`auth_off_on_network`.
+an error and exits before loading models. Pass `--allow-unauthenticated` to opt in explicitly on a
+trusted network; that mode retains the `auth_off_on_network` warning.
 
 Requests are bounded before inference by body, JSON structure, state, question, option, token,
 attention, response, concurrency, queue, and deadline limits. See [API limits](docs/API.md#limits-and-server-controls),

@@ -25,7 +25,7 @@ last column.
 
 | # | Item | Area | Effort | Status | Proof |
 |---|---|---|---|---|---|
-| 1 | A server bound to a non-loopback address refuses to start without an API key, including the container's default `--host 0.0.0.0`. Only `--allow-unauthenticated` keeps today's warning. | Security | M | open | test in `tests/security/test_http.py` |
+| 1 | A server bound to a non-loopback address refuses to start without an API key, including the container's default `--host 0.0.0.0`. Only `--allow-unauthenticated` keeps today's warning. | Security | M | **closed** | `test_non_loopback_without_key_fails_closed`, `test_non_loopback_allow_unauthenticated`, `test_non_loopback_env_key`, `test_loopback_ipv4_without_key`, `test_loopback_ipv6_without_key` in `tests/security/test_http.py`; loopback predicate cases in `tests/test_security.cpp` |
 | 2 | On a CPU without the build's instruction set (AVX2, FMA, F16C, BMI2 for the x86-64 release), Statim exits with a message naming the missing features before any inference, instead of `Illegal instruction`. | Reliability, platform | M | **closed** | see [Proofs](#proofs); `tests/test_cpu_check.cpp` |
 | 3 | `main` accepts changes only through pull requests with green `build-test` and `fuzz`, and nobody can bypass that. Release tags cannot be deleted or moved. | Supply chain | S | **closed** (2026-09-30) | see [Proofs](#proofs) |
 | 4 | Every GitHub Action is pinned to a full commit SHA. | Supply chain | S | **closed** (#51) | `.github/workflows/*.yml`; Dependabot keeps the pins current |

@@ -423,6 +423,13 @@ int run_server(const ServerConfig& cfg) {
         cfg.ensemble < 1 || cfg.ensemble > 8 || cfg.max_len < 0 || cfg.head_max_len < 0 || cfg.port < 1 || cfg.port > 65535 ||
         cfg.batch_window_ms < 0 || cfg.max_batch < 1 || cfg.max_batch > static_cast<int>(max_batch_states))
         throw std::runtime_error("invalid server worker, concurrency, ensemble, port or token budget configuration");
+    if (cfg.api_keys.empty() && !is_loopback_host(cfg.host) && !cfg.allow_unauthenticated) {
+        const std::string host = ojson(cfg.host).dump();
+        std::fprintf(stderr, "statim serve: error: host %s is not loopback and no API key is configured; "
+                             "set STATIM_API_KEY, pass --api-key-file FILE, or pass --allow-unauthenticated "
+                             "(trusted networks only)\n", host.c_str());
+        return 2;
+    }
     std::vector<LoadedModel> models;
     const int workers = std::max(1, cfg.workers);
     const int threads = cfg.threads > 0 ? cfg.threads : static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
@@ -845,7 +852,7 @@ int run_server(const ServerConfig& cfg) {
     std::signal(SIGTERM, on_signal);
     std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "listening"},
         {"host", cfg.host}, {"port", cfg.port}, {"auth", !api_keys.empty()}, {"auth_status", api_keys.empty() ? "off" : "on"}}.dump().c_str());
-    if (api_keys.empty() && cfg.host != "127.0.0.1" && cfg.host != "::1" && cfg.host != "localhost")
+    if (api_keys.empty() && !is_loopback_host(cfg.host))
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "warn"}, {"event", "auth_off_on_network"},
             {"host", cfg.host}, {"detail", "listening beyond loopback without API keys: every endpoint is open; "
                                            "set STATIM_API_KEY or --api-key-file"}}.dump().c_str());

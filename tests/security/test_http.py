@@ -36,6 +36,21 @@ def main():
         checks += 1
 
     with tempfile.TemporaryDirectory(prefix='statim-security-') as tmp:
+        def test_non_loopback_without_key_fails_closed():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'must-not-be-loaded.gguf')
+            started = time.monotonic()
+            p = subprocess.run([args.binary, 'serve', '-m', missing_model, '--host', '0.0.0.0'],
+                               env=env, capture_output=True, text=True, timeout=5)
+            elapsed = time.monotonic() - started
+            assert p.returncode == 2, (p.returncode, p.stderr)
+            assert 'host "0.0.0.0" is not loopback' in p.stderr, p.stderr
+            assert '--allow-unauthenticated' in p.stderr, p.stderr
+            assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+            assert elapsed < 5, elapsed
+            checks += 1
+
+        test_non_loopback_without_key_fails_closed()
         fail_start(['--api-key-file', str(Path(tmp) / 'missing')])
         for contents in ('', '# comments only\n  # comment\r\n'):
             keyfile = Path(tmp) / 'keys'
@@ -61,6 +76,91 @@ def main():
             print('SKIP: sandbox cannot bind localhost; run tests/security/test_http.py manually. '
                   'C++ security tests exercise socket-free HTTP processing.', flush=True)
             return 77
+
+        def reserve_port(host='127.0.0.1', family=socket.AF_INET):
+            with socket.socket(family) as probe:
+                probe.bind((host, 0))
+                return probe.getsockname()[1]
+
+        def wait_for_health(proc, logfile, connect_host, server_port):
+            for _ in range(300):
+                if proc.poll() is not None:
+                    raise AssertionError(logfile.read_text())
+                try:
+                    conn = http.client.HTTPConnection(connect_host, server_port, timeout=1)
+                    conn.request('GET', '/health')
+                    response = conn.getresponse()
+                    body = response.read()
+                    conn.close()
+                    if response.status == 200:
+                        assert set(json.loads(body)) == {'status', 'version'}
+                        return
+                except (OSError, http.client.HTTPException):
+                    time.sleep(.1)
+            raise AssertionError('server did not become healthy:\n' + logfile.read_text())
+
+        def run_startup_server(name, host, connect_host, keys=None, allow=False, family=socket.AF_INET):
+            nonlocal checks
+            server_port = reserve_port(connect_host, family)
+            logfile = Path(tmp) / (name + '.log')
+            command = base + ['--host', host, '--port', str(server_port)]
+            if allow:
+                command.append('--allow-unauthenticated')
+            server_env = env if keys is None else dict(env, STATIM_API_KEY=keys)
+            with logfile.open('w+') as log:
+                proc = subprocess.Popen(command, env=server_env, stdout=log, stderr=log)
+                try:
+                    wait_for_health(proc, logfile, connect_host, server_port)
+                    conn = http.client.HTTPConnection(connect_host, server_port, timeout=3)
+                    conn.request('GET', '/metrics')
+                    anonymous = conn.getresponse()
+                    anonymous.read()
+                    conn.close()
+                    if keys is None:
+                        assert anonymous.status == 200, anonymous.status
+                    else:
+                        assert anonymous.status == 401, anonymous.status
+                        conn = http.client.HTTPConnection(connect_host, server_port, timeout=3)
+                        conn.request('GET', '/metrics', headers={'Authorization': 'Bearer ' + keys})
+                        authenticated = conn.getresponse()
+                        authenticated.read()
+                        conn.close()
+                        assert authenticated.status == 200, authenticated.status
+                finally:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+            checks += 1
+            return logfile.read_text()
+
+        def test_non_loopback_allow_unauthenticated():
+            log = run_startup_server('non-loopback-allow', '0.0.0.0', '127.0.0.1', allow=True)
+            records = [json.loads(line) for line in log.splitlines() if line.startswith('{')]
+            assert any(record.get('event') == 'auth_off_on_network' for record in records), log
+
+        def test_non_loopback_env_key():
+            run_startup_server('non-loopback-key', '0.0.0.0', '127.0.0.1', keys='secret')
+
+        def test_loopback_ipv4_without_key():
+            run_startup_server('loopback-ipv4', '127.0.0.1', '127.0.0.1')
+
+        def test_loopback_ipv6_without_key():
+            try:
+                reserve_port('::1', socket.AF_INET6)
+            except OSError as exc:
+                print('SKIP: test_loopback_ipv6_without_key: IPv6 loopback unavailable: %s' % exc,
+                      flush=True)
+                return
+            run_startup_server('loopback-ipv6', '::1', '::1', family=socket.AF_INET6)
+
+        test_non_loopback_allow_unauthenticated()
+        test_non_loopback_env_key()
+        test_loopback_ipv4_without_key()
+        test_loopback_ipv6_without_key()
+        port = reserve_port()
 
         def request(path, payload=None, auth=True, rid=None):
             nonlocal checks

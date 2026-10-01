@@ -54,7 +54,23 @@ docker run -d --name statim-cpu --restart unless-stopped \
 ```
 
 `/etc/statim/container.env` must contain a valid `STATIM_API_KEY` and should be readable only by the
-administrator. The image runs as the distroless `nonroot` user.
+administrator. Alternatively, mount a key file and override the image command so the server reads
+it directly:
+
+```sh
+docker run -d --name statim-cpu --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  -v /srv/statim/model.gguf:/models/model.gguf:ro \
+  -v /etc/statim/api-key:/run/secrets/statim-api-key:ro \
+  -p 127.0.0.1:8080:8080 statim:1.0 \
+  serve -m /models/model.gguf --host 0.0.0.0 --port 8080 \
+  --api-key-file /run/secrets/statim-api-key
+```
+
+The CPU and Vulkan images deliberately keep `--host 0.0.0.0`. With neither a valid
+`STATIM_API_KEY` nor a valid mounted `--api-key-file`, their default server command prints a clear
+configuration error and exits with status 2 before loading the model. Both images run as an
+unprivileged user (distroless `nonroot` in the CPU image and UID/GID 65532 in the Vulkan image), so
+the mounted key must be readable by that user.
 
 ## Docker GPU (Vulkan)
 
@@ -81,7 +97,13 @@ and `--group-add` arguments with:
 
 The host driver must provide a Vulkan-capable ICD. The image also includes Mesa Vulkan drivers for
 `/dev/dri` devices. It runs as UID/GID 65532 and defaults to `--device vulkan`; no GPU is required to
-build the image. Budget VRAM for all loaded models (the two f32 checkpoints need about 3.3 GB).
+build the image. The same `STATIM_API_KEY` environment-file or mounted `--api-key-file` patterns
+shown for the CPU image apply. Budget VRAM for all loaded models (the two f32 checkpoints need
+about 3.3 GB).
+
+On a trusted network only, an operator can make the old unauthenticated behavior explicit by
+overriding the image command with `serve ... --host 0.0.0.0 --allow-unauthenticated` (the image
+entrypoint supplies `statim`). Statim then starts and logs `auth_off_on_network`.
 
 ## TLS reverse proxy
 

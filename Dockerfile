@@ -15,6 +15,6 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 COPY --from=build /src/build/statim /src/build/statim-quantize /usr/local/bin/
 EXPOSE 8080
 USER nonroot
-# Mount a converted model at /models/model.gguf; set STATIM_API_KEY to require bearer auth.
+# Mount a converted model; provide STATIM_API_KEY or override CMD with --api-key-file for this listener.
 ENTRYPOINT ["/usr/local/bin/statim"]
 CMD ["serve", "-m", "/models/model.gguf", "--host", "0.0.0.0", "--port", "8080"]

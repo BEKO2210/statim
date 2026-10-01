@@ -113,6 +113,11 @@ int main(int argc, char** argv) try {
     startup_rejects([] { load_key_file("/nonexistent/statim-security-keys"); });
     for (auto text : {"", " , , ", "\t\r\n", "bad key"}) startup_rejects([&] { load_key_env(text); });
     require(load_key_env(" first,second ") == std::vector<std::string>({"first", "second"}), "key whitespace handling");
+    for (auto host : {"127.0.0.1", "127.1.2.3", "127.255.255.255", "::1", "localhost"})
+        require(is_loopback_host(host), "loopback host rejected");
+    for (auto host : {"0.0.0.0", "::", "192.168.1.2", "example.test", "localhost.", "LOCALHOST",
+                      "127.0.0", "127.0.0.1.example", "127.0.0.256"})
+        require(!is_loopback_host(host), "non-loopback host accepted");
     auto path = std::filesystem::temp_directory_path() / ("statim-keys-" + std::to_string(getpid()));
     for (auto text : {"", "# comment\n  # comment\r\n"}) {
         { std::ofstream file(path); file << text; }
