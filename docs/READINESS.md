@@ -33,7 +33,7 @@ last column.
 | 6 | CI fails on a known high or critical CVE in the vendored ggml, cpp-httplib and nlohmann/json. | Security | M | open | a CI job, with a planted advisory in its test |
 | 7 | The security, validation, GGUF-preflight and fuzz-regression tests run under ASan and UBSan in CI, not only the 60-second fuzz job. | Security | M | open | a CI job |
 | 8 | The support matrix in the README equals what CI builds and tests and what the release ships. ARM NEON and CUDA are claimed but not tested today. | Documentation, platform | S | open | README against the CI jobs |
-| 9 | The model promotion gate uses paired statistics (McNemar or a paired bootstrap) on stored per-item outcomes, and a test fails if the unpaired formula returns. The published "0 regressions" is recomputed or withdrawn. | Evaluation | L | open | `tools/finetune/test_gate.py`; recomputed gate reports |
+| 9 | The model promotion gate uses paired statistics (McNemar or a paired bootstrap) on stored per-item outcomes, and a test fails if the unpaired formula returns. The published "0 regressions" is recomputed or withdrawn. | Evaluation | L | **closed** | `tools/finetune/test_gate.py` (guard test `test_no_unpaired_two_proportion_standard_error_outside_allowlist`); [paired recomputation](reproductions/paired-gate-2026-10-01.md): both models and all three adapters keep their decision, 0 regressions |
 
 ## P1 — should be in 1.0
 

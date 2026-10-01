@@ -98,7 +98,8 @@ python3 site/tests/check.py                                                  # a
   torch and the reference `laya` package; [REPRODUCE.md](REPRODUCE.md) creates it as `.venv-train`.
   Measure timings only on an otherwise idle machine, because one GPU is often shared with training.
 - **Audit before training.** Build a mixture, then audit its content (`tools/finetune/mixture_v6/audit.py`).
-- **The gate decides.** A model ships only when `tools/finetune/gate.py` promotes it: Holm-Bonferroni
+- **The gate decides.** A model ships only when `tools/finetune/gate.py` promotes it: paired exact McNemar
+  tests on stored per-item outcomes with Holm-Bonferroni
   over the held-out suites, validation non-inferiority, and at least one family gain. An adapter
   ships only when `tools/finetune/lora_experiment.py` promotes it (`gate.adapter_decision`).
   Published numbers come from these outputs and are never typed from memory.

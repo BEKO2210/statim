@@ -8,6 +8,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Changed
+- The model and LoRA promotion gates now persist hashed per-item outcomes, verify them against the
+  published counts and accuracies, and use paired exact McNemar tests with Holm correction for both
+  cell regressions and gains. Family uncertainty and the validation interval are paired too;
+  family gains are Holm-corrected across both weightings while the conservative 2-SE family harm
+  screen remains uncorrected. Old artifacts fail closed unless explicitly inspected with the
+  non-promoting `--legacy-unpaired` report mode.
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.

@@ -395,8 +395,9 @@ replacing their base. The full method and charts are in [docs/RESULTS.md](docs/R
 | AG News (never trained) | 0.939 | 0.9295 |
 | Emotion (never trained) | 0.588 | 0.504 |
 
-English passed 54 suites with 11 significant gains, 0 regressions, and its zero-shot family within
-noise. Multilingual passed 89 suites with 23 significant gains, 66 within noise, and 0 regressions;
+With paired tests on the same items, English passed 91 suites with 10 significant gains, 0 regressions,
+and its zero-shot family within noise. Multilingual passed 91 suites with 21 significant gains, 70 within
+noise, and 0 regressions;
 its 14-category macro accuracy is 0.748 (0.4.0: 0.559).
 
 Category-adapter results and promotion evidence are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
