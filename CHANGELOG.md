@@ -7,10 +7,6 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
-### Added
-- `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
-  scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
-
 ### Changed
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
@@ -23,6 +19,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
+  scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
 - `bench/perf_gate.py` compares candidate speed, memory, start-up and decisions against a release
   build with interleaved, noise-aware measurements and fails on any regression.
 - [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
