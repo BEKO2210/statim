@@ -47,6 +47,7 @@ Checks that need no build. CI runs the first two on every push, and the others w
 ```sh
 python3 tools/docs/test_check_docs.py && python3 tools/docs/check_docs.py   # documentation agrees with the code
 python3 tools/release/check_versions.py                                      # every copy of the engine version
+python3 tools/security/test_vendored_cves.py && python3 tools/security/vendored_cves.py   # known CVEs in vendored dependencies
 python3 -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py \
     tools/finetune/test_gate.py tools/finetune/test_train_lora.py bench/test_eval_categories.py   # needs pytest, pyarrow
 python3 site/tests/check.py                                                  # after a site change (needs Playwright)
