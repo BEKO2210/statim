@@ -45,7 +45,7 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | **closed** (this PR): [THREAT_MODEL.md](THREAT_MODEL.md), linked from `SECURITY.md` |
+| 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | **closed** (#76): [THREAT_MODEL.md](THREAT_MODEL.md), linked from `SECURITY.md` |
 | 11 | CI fails when `security_http` skips | S | open |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
