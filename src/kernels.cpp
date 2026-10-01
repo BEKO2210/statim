@@ -237,7 +237,21 @@ void packed_sgemm_compute(float* y, const float* workspace, const float* w,
     compute_avx2(y, workspace, w, M, N, K, ith, nth);
 }
 
+// The graph op's two phases, with the cooperative abort (deadline or cancelled client).
+static void op_pack(float* workspace, const float* x, int64_t N, int64_t K, int ith, int nth,
+                    const SgemmAbort* abort) {
+    pack_avx2(workspace, x, N, K, ith, nth, abort);
+}
+static void op_compute(float* y, const float* workspace, const float* w, int64_t M, int64_t N, int64_t K,
+                       int ith, int nth, const SgemmAbort* abort) {
+    compute_avx2(y, workspace, w, M, N, K, ith, nth, abort);
+}
+
 #else
+
+// packed_sgemm_available() is false here, so the op is never put in a graph; these keep it linkable.
+static void op_pack(float*, const float*, int64_t, int64_t, int, int, const SgemmAbort*) {}
+static void op_compute(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int, const SgemmAbort*) {}
 
 bool packed_sgemm_available() { return false; }
 size_t packed_sgemm_workspace_floats(int64_t, int64_t, int64_t) { return 0; }
@@ -253,7 +267,7 @@ void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
     const int64_t M = w->ne[1], N = ggml_nrows(x), K = w->ne[0];
     // Read the generation before arriving, so the last arriver's publish is always seen as a change.
     const uint32_t generation = sync->generation.load(std::memory_order_acquire);
-    pack_avx2(sync->workspace, static_cast<const float*>(x->data), N, K, ith, nth, sync->abort);
+    op_pack(sync->workspace, static_cast<const float*>(x->data), N, K, ith, nth, sync->abort);
     if (sync->arrived.fetch_add(1, std::memory_order_acq_rel) == nth - 1) {
         sync->arrived.store(0, std::memory_order_relaxed);  // ready for the next evaluation
         sync->generation.store(generation + 1, std::memory_order_release);
@@ -262,7 +276,7 @@ void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
         sync->generation.wait(generation, std::memory_order_acquire);
     }
     if (sync->abort && sync->abort->requested()) return;
-    compute_avx2(static_cast<float*>(dst->data), sync->workspace,
+    op_compute(static_cast<float*>(dst->data), sync->workspace,
                  static_cast<const float*>(w->data), M, N, K, ith, nth, sync->abort);
 }
 
