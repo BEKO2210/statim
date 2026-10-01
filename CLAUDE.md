@@ -40,6 +40,7 @@ ctest --test-dir build --output-on-failure
 - Run CTest serially and as a regular user. Several tests use every core, and the security suites
   expect a file with mode 000 to be unreadable, which root can read ([REPRODUCE.md](REPRODUCE.md)).
 - `-DSTATIM_FUZZ=ON` builds the fuzzers with clang. `fuzz/run.sh` runs one harness ([fuzz/README.md](fuzz/README.md)).
+- `-DSTATIM_SANITIZE=ON` builds everything with ASan and UBSan (clang).
 
 Checks that need no build. CI runs the first two on every push, and the others when their files change:
 
