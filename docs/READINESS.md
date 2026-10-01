@@ -91,7 +91,7 @@ for them like a P0.
 |---|---|---|---|
 | 34 | A line-coverage artifact for `src/security.cpp`, `http_security.h` and `src/server.cpp`, with a baseline | M | open |
 | 35 | A performance and memory regression gate against the latest release | M | **closed** (#60): `bench/perf_gate.py`, required for every PR that can affect speed or memory (CLAUDE.md) |
-| 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | open |
+| 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | **closed** (this PR): `engine_parity_*` fail above 1.5e-4 (README: within 1e-4); `tools/ci/parity_summary.py` puts every green run's parity in the job summary and a 90-day artifact |
 | 37 | The Python and TypeScript clients' tests run in CI, both the hermetic cases and live cases against a started server | M | open |
 
 ### Evaluation

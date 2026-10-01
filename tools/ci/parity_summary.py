@@ -2,7 +2,7 @@
 """Archive the measured parity of a green CI run.
 
     ctest --test-dir build --output-junit ctest.xml ...
-    python3 tools/ci/parity_summary.py ctest.xml --json parity.json --markdown "$GITHUB_STEP_SUMMARY"
+    python3 tools/ci/parity_summary.py ctest.xml [more.xml ...] --json parity.json --markdown "$GITHUB_STEP_SUMMARY"
 
 Reads ctest's JUnit file (it keeps the output of passing tests) and extracts, per parity test, the
 worst |Δlogit| (`model_parity_*`, `lora_*`), the worst answer difference (`engine_parity_*`) and the
@@ -51,11 +51,11 @@ def markdown(rows):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("junit")
+    ap.add_argument("junit", nargs="+", help="one or more ctest --output-junit files")
     ap.add_argument("--json")
     ap.add_argument("--markdown", help="file to append the table to (e.g. $GITHUB_STEP_SUMMARY)")
     a = ap.parse_args(argv)
-    rows = summarize(open(a.junit, encoding="utf-8").read())
+    rows = [r for path in a.junit for r in summarize(open(path, encoding="utf-8").read())]
     if a.json:
         json.dump(rows, open(a.json, "w"), indent=1)
     if a.markdown:
