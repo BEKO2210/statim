@@ -30,7 +30,7 @@ void usage() {
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--batch-window-ms 0] [--max-batch 16]\n"
                  "                 [--min-confidence P]\n"
-                 "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
+                 "                 [--api-key-file FILE] [--allow-unauthenticated] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
                  "                 [--max-json-depth 64] [--max-json-nodes 100000] [--max-object-members 1024]\n"
                  "                 [--max-request-work 4096] [--max-request-tokens 1048576]\n"
@@ -167,6 +167,7 @@ int main(int argc, char** argv) {
             else if (a == "--inference-timeout") cfg.inference_timeout = limit();
             else if (a == "--no-access-log") cfg.access_log = false;
             else if (a == "--no-playground") cfg.playground = false;
+            else if (a == "--allow-unauthenticated") cfg.allow_unauthenticated = true;
             else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
             else if (a == "--consensus") cfg.consensus = true;
             else if (a == "--api-key-file") {

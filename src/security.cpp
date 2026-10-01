@@ -263,6 +263,27 @@ std::vector<std::string> load_key_env(const std::string& value) {
     if (keys.empty()) throw std::runtime_error("configured STATIM_API_KEY contains no valid keys");
     return keys;
 }
+bool is_loopback_host(const std::string& host) {
+    if (host == "localhost" || host == "::1") return true;
+    size_t begin = 0;
+    int octets[4]{};
+    for (int i = 0; i < 4; ++i) {
+        const size_t end = host.find('.', begin);
+        if ((i < 3 && end == std::string::npos) || (i == 3 && end != std::string::npos)) return false;
+        const size_t stop = end == std::string::npos ? host.size() : end;
+        if (stop == begin || stop - begin > 3) return false;
+        int value = 0;
+        for (size_t j = begin; j < stop; ++j) {
+            const unsigned char c = static_cast<unsigned char>(host[j]);
+            if (c < '0' || c > '9') return false;
+            value = value * 10 + (c - '0');
+        }
+        if (value > 255) return false;
+        octets[i] = value;
+        begin = stop + 1;
+    }
+    return octets[0] == 127;
+}
 bool valid_request_id(const std::string& v) {
     return !v.empty() && v.size() <= 128 && std::all_of(v.begin(), v.end(), [](unsigned char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';

@@ -23,6 +23,6 @@ COPY --from=build /src/build/statim /src/build/statim-quantize /usr/local/bin/
 ENV XDG_CACHE_HOME=/tmp/statim-cache
 EXPOSE 8080
 USER 65532:65532
-# Mount a converted model at /models/model.gguf and pass the host GPU device at runtime.
+# Mount a model, provide STATIM_API_KEY or --api-key-file, and pass the GPU device at runtime.
 ENTRYPOINT ["/usr/local/bin/statim"]
 CMD ["serve", "--device", "vulkan", "-m", "/models/model.gguf", "--host", "0.0.0.0", "--port", "8080"]

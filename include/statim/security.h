@@ -48,6 +48,7 @@ DecideRequest parse_decide_request(const std::string& raw, bool batch, const Req
                                    const SecurityLimits& limits = {});
 std::vector<std::string> load_key_file(const std::string& path);
 std::vector<std::string> load_key_env(const std::string& value);
+bool is_loopback_host(const std::string& host);
 bool valid_request_id(const std::string& value);
 std::string now_iso8601();
 

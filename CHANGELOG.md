@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
+  on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
+  `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
+
 ### Fixed
 - On a CPU without AVX2, FMA, F16C or BMI2, the release binaries crashed with `Illegal instruction` at the
   first inference. `statim` and `statim-quantize` now check the CPU first, name the missing features
