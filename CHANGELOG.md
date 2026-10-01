@@ -7,6 +7,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- On a CPU without AVX2, FMA, F16C or BMI2, the release binaries crashed with `Illegal instruction` at the
+  first inference. `statim` and `statim-quantize` now check the CPU first, name the missing features
+  and exit with status 1 (`statim version` still works). Verified on an i5-2520M (Sandy Bridge) and an
+  i3-3227U (Ivy Bridge).
+
 ### Added
 - [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
   of 0.9.2. It holds 9 P0 items that block 1.0 and 35 P1 items, each with its status and proof.

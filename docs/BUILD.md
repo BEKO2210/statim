@@ -20,6 +20,13 @@ ctest --test-dir build                        # parity gates against the officia
 Quantized variants: `build/statim-quantize models/laya-multilingual-f32.gguf out.gguf q8_0`. See
 [quantization results](RESULTS.md#consensus-calibration-and-quantization) before choosing 4-bit weights.
 
+### Older x86 CPUs
+
+The release binaries are built for x86-64-v3: AVX2, FMA, F16C and BMI2, which means Intel Haswell,
+AMD Excavator or newer. On an older CPU, `statim` and `statim-quantize` stop before any inference,
+name the missing features and exit with status 1. Build from source on that machine with
+`-DSTATIM_NATIVE=ON` instead.
+
 ### GPU backends
 
 GPU support is optional. Vulkan requires Vulkan headers, `glslc`, SPIR-V headers, and a runtime
