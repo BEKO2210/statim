@@ -304,7 +304,8 @@ Against Laya:
   Peak memory for one shot is 4.6× less in f32 and 11× less in q8_0.
 - **Footprint:** the runtime-footprint row compares PyTorch alone with the Statim binary.
 
-On AVX2 without VNNI, q8_0 halves the file and cuts memory 2.5× but is slower than f32. Its logits
+On AVX2 without VNNI, q8_0 makes the file 2.5× (multilingual) to 3.5× (English) smaller and cuts
+memory 2.5×, but is slower than f32. Its logits
 move by up to ~0.4 and 2 of 240 parity answers change. ARM dotprod/i8mm and AVX-512-VNNI are the
 intended int8 CPU targets. Four-bit weights are not recommended for this model family.
 
