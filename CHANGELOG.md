@@ -57,6 +57,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
 
 ### Security
+- Model, adapter and `statim-quantize` loading open the file once: the GGUF preflight, ggml's
+  parser and the zero-copy tensors read one read-only mapping. Before, each step opened the path
+  again, so a file renamed over it in between could skip the preflight. Directories, FIFOs and
+  empty files are refused up front, without blocking.
 - Hardened CI and release workflows against supply-chain tampering ([docs/SECURITY.md](docs/SECURITY.md#supply-chain)):
   - Every GitHub Actions action across `.github/workflows/` pinned to an immutable full commit SHA with version comments.
   - Least-privilege permissions applied across all workflows: `contents: read` default, with elevated permissions (`contents: write`, `id-token: write`, `attestations: write`) scoped strictly to release asset publishing and provenance attestation.

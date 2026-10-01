@@ -1,5 +1,6 @@
 #include "statim/model.h"
 #include "statim/gguf_preflight.h"
+#include "statim/mapped_file.h"
 #include "statim/security.h"
 
 #include "kernels.h"
@@ -398,6 +399,26 @@ static void validate(const Model::Impl& M) {
         if (id < 0 || id >= V) fail("special token id outside the embedding table");
 }
 
+namespace {
+// Maps a GGUF file once and runs the structural preflight on that mapping. Errors keep the load
+// error's usual form: "cannot read <what> '<path>': GGUF preflight: <reason>".
+std::unique_ptr<MappedFile> map_gguf(const std::string& path, const char* what) {
+    const std::string prefix = std::string("cannot read ") + what + " '" + path + "': ";
+    std::unique_ptr<MappedFile> file;
+    try {
+        file = std::make_unique<MappedFile>(path);
+    } catch (const std::exception& e) {
+        fail(prefix + "GGUF preflight: " + e.what());
+    }
+    try {
+        gguf_preflight(file->data(), file->size());
+    } catch (const std::exception& e) {
+        fail(prefix + e.what());
+    }
+    return file;
+}
+}  // namespace
+
 std::shared_ptr<Model> Model::load(const std::string& path, const std::string& device) {
     std::shared_ptr<Model> m(new Model());
     Impl& M = *m->impl_;
@@ -406,33 +427,23 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     if (!M.on_cpu())
         M.device_desc = std::string(ggml_backend_dev_name(M.dev)) + " (" + ggml_backend_dev_description(M.dev) + ")";
 
-    try {
-        gguf_preflight(path);
-    } catch (const std::exception& e) {  // keep the load error's usual prefix and name the file
-        fail("cannot read GGUF model '" + path + "': " + e.what());
-    }
+    // Open and map the file once, read-only. The preflight, ggml's parser and the tensors all read
+    // this one mapping (no second open by name), and the tensors point straight into the page cache:
+    // a zero-copy load, shared between processes serving the same model.
+    std::unique_ptr<MappedFile> file = map_gguf(path, "GGUF model");
     gguf_init_params gp{/*no_alloc=*/true, &M.ctx_w};
-    M.gguf = gguf_init_from_file(path.c_str(), gp);
+    M.gguf = gguf_init_from_buffer(file->data(), file->size(), gp);
     if (!M.gguf) fail("cannot read GGUF model '" + path + "'");
+    std::tie(M.map, M.map_size) = file->release();
+    // The preflight and ggml read the header and metadata (mostly the tokenizer vocabulary) through
+    // the mapping; ggml has copied what it needs, so hand those pages back instead of keeping them
+    // resident. They are clean, file-backed pages: touching them again would just re-read the file.
+    if (const long page = sysconf(_SC_PAGESIZE); page > 0) {
+        const size_t meta = std::min(gguf_get_data_offset(M.gguf), M.map_size) & ~(static_cast<size_t>(page) - 1);
+        if (meta > 0) madvise(M.map, meta, MADV_DONTNEED);
+    }
     if (get_str(M.gguf, "statim.format") != "statim-decision-v1")
         fail("'" + path + "' is not a Statim decision model (convert it with tools/convert_laya.py)");
-
-    // Map the file read-only; tensors point straight into the page cache (zero-copy load,
-    // shared between processes serving the same model).
-    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd < 0) fail("cannot open '" + path + "'");
-    struct stat st{};
-    if (fstat(fd, &st) != 0) {
-        close(fd);
-        fail("cannot stat '" + path + "'");
-    }
-    M.map_size = static_cast<size_t>(st.st_size);
-    M.map = mmap(nullptr, M.map_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    close(fd);
-    if (M.map == MAP_FAILED) {
-        M.map = nullptr;
-        fail("mmap failed for '" + path + "'");
-    }
     const size_t data_off = gguf_get_data_offset(M.gguf);
     for (int64_t i = 0; i < gguf_get_n_tensors(M.gguf); ++i) {
         ggml_tensor* x = ggml_get_tensor(M.ctx_w, gguf_get_tensor_name(M.gguf, i));
@@ -630,14 +641,12 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     if (n_threads <= 0) n_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
 
     // the adapter file is small: read it fully into memory
-    try {
-        gguf_preflight(path);
-    } catch (const std::exception& e) {
-        fail("cannot read LoRA adapter '" + path + "': " + e.what());
-    }
+    // one open and one mapping for the preflight and ggml (see Model::load); ggml copies the
+    // tensors out, and the mapping goes away at the end of this function
+    std::unique_ptr<MappedFile> file = map_gguf(path, "LoRA adapter");
     ggml_context* ctx_file = nullptr;
     gguf_init_params gp{/*no_alloc=*/false, &ctx_file};
-    gguf_context* g = gguf_init_from_file(path.c_str(), gp);
+    gguf_context* g = gguf_init_from_buffer(file->data(), file->size(), gp);
     if (!g) fail("cannot read LoRA adapter '" + path + "'");
     struct FileGuard {
         gguf_context* g;

@@ -1,10 +1,12 @@
 #include "statim/gguf_preflight.h"
 
+#include "statim/mapped_file.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
+#include <memory>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -26,46 +28,22 @@ constexpr uint64_t kMaxArrayElements = 1024ULL * 1024 * 1024;
 
 class Reader {
 public:
-    explicit Reader(const std::string& path) : in_(path, std::ios::binary) {
-        if (!in_) throw std::runtime_error("GGUF preflight: cannot open '" + path + "'");
-        in_.seekg(0, std::ios::end);
-        const std::streamoff end = in_.tellg();
-        if (end < 0) throw std::runtime_error("GGUF preflight: cannot determine size of '" + path + "'");
-        size_ = static_cast<uint64_t>(end);
-        in_.seekg(0);
-    }
+    // Reads the file's bytes in memory: the caller maps the file once (MappedFile) and hands the same
+    // mapping to ggml afterwards, so what is checked here is exactly what gets parsed.
+    Reader(const void* data, uint64_t size) : data_(static_cast<const char*>(data)), size_(size) {}
 
     uint64_t size() const { return size_; }
     uint64_t pos() const { return pos_; }
     uint64_t remaining() const { return size_ - pos_; }
 
-    // Reads go through one large buffer: a tokenizer holds ~256k short strings, and an ifstream
-    // seek per string would refill its small buffer each time (seconds for a large vocabulary).
     void bytes(void* dst, uint64_t n, const std::string& field) {
         if (n > remaining()) reject(field + " length", std::to_string(n), std::to_string(remaining()) + " remaining bytes");
-        auto* out = static_cast<char*>(dst);
-        while (n > 0) {
-            if (head_ == buf_.size()) refill(field);
-            const size_t take = static_cast<size_t>(std::min<uint64_t>(n, buf_.size() - head_));
-            std::memcpy(out, buf_.data() + head_, take);
-            out += take;
-            head_ += take;
-            n -= take;
-            pos_ += take;
-        }
+        std::memcpy(dst, data_ + pos_, static_cast<size_t>(n));
+        pos_ += n;
     }
 
     void skip(uint64_t n, const std::string& field) {
         if (n > remaining()) reject(field + " length", std::to_string(n), std::to_string(remaining()) + " remaining bytes");
-        if (n <= buf_.size() - head_) {  // within the buffer: no I/O
-            head_ += static_cast<size_t>(n);
-        } else {                          // tensor data and other large skips: one seek
-            in_.clear();
-            in_.seekg(static_cast<std::streamoff>(pos_ + n), std::ios::beg);
-            if (!in_) throw std::runtime_error("GGUF preflight: failed reading " + field);
-            buf_.clear();
-            head_ = 0;
-        }
         pos_ += n;
     }
 
@@ -119,19 +97,8 @@ public:
     }
 
 private:
-    void refill(const std::string& field) {
-        buf_.resize(kBufferBytes);
-        in_.read(buf_.data(), static_cast<std::streamsize>(buf_.size()));
-        buf_.resize(static_cast<size_t>(in_.gcount()));
-        head_ = 0;
-        if (buf_.empty()) throw std::runtime_error("GGUF preflight: failed reading " + field);
-    }
-
-    static constexpr size_t kBufferBytes = size_t(1) << 20;
-    std::vector<char> buf_;
-    size_t head_ = 0;
-    std::ifstream in_;
-    uint64_t size_ = 0;
+    const char* data_;
+    uint64_t size_;
     uint64_t pos_ = 0;
 };
 
@@ -213,7 +180,17 @@ void read_array(Reader& r, uint32_t type, uint64_t count, const std::string& fie
 }  // namespace
 
 void gguf_preflight(const std::string& path) {
-    Reader r(path);
+    std::unique_ptr<MappedFile> file;
+    try {
+        file = std::make_unique<MappedFile>(path);
+    } catch (const std::exception& e) {
+        throw std::runtime_error(std::string("GGUF preflight: ") + e.what());
+    }
+    gguf_preflight(file->data(), file->size());
+}
+
+void gguf_preflight(const void* data, size_t size) {
+    Reader r(data, size);
     std::array<char, 4> magic{};
     r.bytes(magic.data(), magic.size(), "magic");
     if (magic != std::array<char, 4>{'G', 'G', 'U', 'F'})
