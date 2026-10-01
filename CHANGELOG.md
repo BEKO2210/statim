@@ -36,6 +36,7 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- CI `tsan` job and CMake option `STATIM_TSAN`: builds and instruments Statim and its dependencies with ThreadSanitizer (clang). Concurrency stress test `tests/test_server_concurrency.py` (CTest `server_concurrency`) testing 32 concurrent clients across micro-batching, engine pool weight switching with LoRA adapters, custom SGEMM barrier, client mid-request disconnects, calibration cache, and parallel metrics/health polling (READINESS P1 #46).
 - docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
   `statim-decision-v1` and `statim-lora-v1` file formats), the deprecation policy (announce in a minor,
   keep for at least one minor and three months, remove only in a major), and upgrade and rollback steps.

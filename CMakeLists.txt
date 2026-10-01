@@ -14,7 +14,12 @@ option(STATIM_VULKAN "Build the Vulkan GPU backend (--device vulkan)" OFF)
 option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
 option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
 option(STATIM_SANITIZE "Build everything with ASan and UBSan" OFF)
+option(STATIM_TSAN "Build everything with ThreadSanitizer" OFF)
 option(STATIM_HARDEN "Hardening flags for release builds" ON)
+
+if(STATIM_TSAN AND (STATIM_SANITIZE OR STATIM_FUZZ))
+  message(FATAL_ERROR "STATIM_TSAN cannot be combined with STATIM_SANITIZE or STATIM_FUZZ")
+endif()
 
 if(STATIM_FUZZ OR STATIM_SANITIZE)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -36,6 +41,15 @@ if(STATIM_FUZZ OR STATIM_SANITIZE)
   set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
 endif()
 
+if(STATIM_TSAN)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "STATIM_TSAN needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+  endif()
+  add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g -O1)
+  add_link_options(-fsanitize=thread)
+  set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not instrumented
+endif()
+
 if(STATIM_HARDEN AND CMAKE_SYSTEM_NAME MATCHES "Linux|Android" AND (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
   include(CheckPIESupported)
   check_pie_supported(OUTPUT_VARIABLE STATIM_PIE_ERR LANGUAGES C CXX)
@@ -48,7 +62,7 @@ if(STATIM_HARDEN AND CMAKE_SYSTEM_NAME MATCHES "Linux|Android" AND (CMAKE_C_COMP
   add_compile_options(-fstack-protector-strong)
   add_link_options(-Wl,-z,relro,-z,now -Wl,-z,noexecstack)
 
-  if(NOT (STATIM_FUZZ OR STATIM_SANITIZE))
+  if(NOT (STATIM_FUZZ OR STATIM_SANITIZE OR STATIM_TSAN))
     include(CheckCSourceCompiles)
     set(_orig_req_flags "${CMAKE_REQUIRED_FLAGS}")
     set(CMAKE_REQUIRED_FLAGS "-O2 -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3")
@@ -199,6 +213,9 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME server_lora COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lora.py
       --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
     set_tests_properties(server_lora PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
+    add_test(NAME server_concurrency COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_concurrency.py
+      --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
+    set_tests_properties(server_concurrency PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
   endif()
   set(M ${CMAKE_CURRENT_SOURCE_DIR}/models)
   set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)
