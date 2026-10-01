@@ -52,7 +52,7 @@ for them like a P0.
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | open |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
-| 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | in review (#PR) |
+| 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | **closed** (#71): `STATIM_HARDEN`; `tools/release/check_hardening.py` in CI and release |
 | 18 | Secret-scanning push protection, plus a CI scan of the diff | S | partly: push protection is on |
 
 ### Supply chain
