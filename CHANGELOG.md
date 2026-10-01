@@ -16,6 +16,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 
 ### Fixed
+- The build failed for non-x86 targets: `cpu_check.h` called x86-only compiler builtins on every
+  architecture. Found by the first Android arm64 build.
 - The README badges no longer go blank on GitHub. They are served from the repository
   (`assets/badges/`) instead of shields.io, whose responses GitHub's image proxy timed out on
   (HTTP 504). `check_versions.py --set` bumps the release badge with every other version copy.
@@ -25,6 +27,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- Android arm64: a CI job cross-compiles every target with the NDK, and docs/BUILD.md shows the build.
+  On a Galaxy A15 the native test suite and both parity tests pass (240/240 argmax agreement).
 - `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
   scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
 - `bench/perf_gate.py` compares candidate speed, memory, start-up and decisions against a release

@@ -110,7 +110,7 @@ last column.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | partly: Vulkan and CUDA parity pass on an RTX 3070 (2026-10-01, manual); not yet a release step |
-| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | open |
+| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | partly: Galaxy A15 passes the native suite and both parity tests (2026-10-01), CI cross-builds Android arm64; the Tab S9 Ultra (i8mm) is next |
 
 ## Proofs
 
