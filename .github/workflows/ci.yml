@@ -16,7 +16,7 @@ jobs:
         with:
           submodules: recursive
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
-        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/docs/check_docs.py
+        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/docs/check_docs.py
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
       - name: API v1 contract compatibility
@@ -35,9 +35,15 @@ jobs:
       - name: Parity gates vs. the official Laya package
         env:
           STATIM_CONTRACT_REQUIRED: "1"  # the API contract test must run in CI, never skip
-        run: ctest --test-dir build --output-on-failure -E lora
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir build --output-on-failure -E lora | tee ctest-main.log
+          python3 tools/ci/fail_on_skip.py ctest-main.log  # a skipped suite (exit 77) must not pass CI
       - name: LoRA gates (verbose, so the measured differences stay in the log)
-        run: ctest --test-dir build -R lora -V
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir build -R lora -V | tee ctest-lora.log
+          python3 tools/ci/fail_on_skip.py ctest-lora.log
   sanitize:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -69,8 +75,11 @@ jobs:
           ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1"
           UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
         run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
           ctest --test-dir build-sanitize --output-on-failure --timeout 600 \
-            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|server_lifecycle|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$'
+            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|server_lifecycle|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$' \
+            | tee ctest-sanitize.log
+          python3 tools/ci/fail_on_skip.py ctest-sanitize.log
   android-arm64:
     # Cross-compiles every target for Android arm64 (NEON + dotprod) with the runner's NDK, so an
     # x86-only construct cannot break the ARM build again. No device here: the test run on real

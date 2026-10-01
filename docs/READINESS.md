@@ -46,7 +46,7 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | open |
-| 11 | CI fails when `security_http` skips | S | open |
+| 11 | CI fails when `security_http` skips | S | **closed** (this PR): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |

@@ -33,6 +33,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- CI fails when ctest skips a test. ctest counts a skip (exit 77) as a pass, so a server suite that
+  could not bind a socket would have turned CI green unrun; `tools/ci/fail_on_skip.py` checks every
+  ctest log in `build-test` and `sanitize`, and the steps now run with `pipefail`.
 - Server lifecycle test suite `tests/test_server_lifecycle.py` (CTest `server_lifecycle`) covering admission overload (HTTP 503 with `Retry-After: 1`, saturated `/ready` 503, and clean post-drain 200s matching unloaded execution), client connection drops mid-request (both prior to response and during response streaming), graceful drain under `SIGTERM` and `SIGINT` (5 repeated runs asserting complete 200 responses, connection refusal after signal, and logged shutdown within bound), and exit-leak / memory sanitizer assertions (closing READINESS P1 #24, #25, #26, #27).
 - `deploy/statim.service` and `docs/DEPLOY.md`: documented graceful shutdown behavior and configured `TimeoutStopSec=150` with rationale to cover the 120 s inference timeout plus network flush and cleanup headroom.
 - `bench/soak.py`: a soak test that runs one server for hours under mixed load (single and batch
