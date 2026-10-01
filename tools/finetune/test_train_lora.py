@@ -103,10 +103,19 @@ def test_dev_split_is_deterministic_and_disjoint_by_state():
 
 
 def _records(path, accs, pool="p1"):
+    item_path = str(path).replace(".jsonl", "-items.jsonl")
     with open(path, "w", encoding="utf-8") as f:
         for lang, acc in accs.items():
+            actual = round(round(acc * 150) / 150, 4)
             f.write(json.dumps({"family": "categories", "suite": "emotion", "lang": lang, "model": "m",
-                                "n": 150, "accuracy": acc, "pool": pool}) + "\n")
+                                "n": 150, "accuracy": actual, "pool": pool}) + "\n")
+    with open(item_path, "w", encoding="utf-8") as f:
+        for lang, acc in accs.items():
+            right = round(acc * 150)
+            for i in range(150):
+                f.write(json.dumps({"suite": "emotion", "lang": lang, "i": i,
+                                    "item": "%064x" % i, "gold": 0,
+                                    "pred": 0 if i < right else 1}) + "\n")
     return path
 
 
@@ -116,7 +125,7 @@ def test_decision_promotes_a_clear_gain_and_blocks_a_regression(tmp_path):
     better = _records(tmp_path / "better.jsonl", {l: 0.70 for l in langs})
     res = lora_experiment.decide(base, better, log=lambda *a: None)
     assert res["promote"] and len(res["cells"]) == 8 and not res["harms"]
-    assert all(c["verdict"] == "gain (2 SE)" for c in res["cells"])
+    assert all(c["verdict"] == "gain (Holm)" for c in res["cells"])
     mixed = _records(tmp_path / "mixed.jsonl", {**{l: 0.72 for l in langs}, "de": 0.30})
     res = lora_experiment.decide(base, mixed, log=lambda *a: None)
     assert not res["promote"] and [h.rsplit("/", 1)[1] for h in res["harms"]] == ["de"]
@@ -163,6 +172,7 @@ def test_skip_train_recovers_and_verifies_mixture(tmp_path):
     assert "--strict" in plan["eval_base"] and "--strict" in plan["eval_adapter"]
     for command in (plan["eval_base"], plan["eval_adapter"]):
         assert command[command.index("--skip") + 1] == "40"
+        assert "--predictions" in command
     mixture.write_text('{"changed":true}\n', encoding="utf-8")
     with pytest.raises(SystemExit, match="SHA-256 differs"):
         lora_experiment.plan(args, "emotion")

@@ -15,9 +15,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from pathlib import Path
+
+try:
+    from paired_stats import mcnemar_exact
+except ModuleNotFoundError:  # imported as bench.compare_predictions
+    from .paired_stats import mcnemar_exact
 
 
 def load(path: Path) -> dict[tuple[str, str, int], tuple[int, int, str | None]]:
@@ -29,15 +33,6 @@ def load(path: Path) -> dict[tuple[str, str, int], tuple[int, int, str | None]]:
     if not items:
         raise SystemExit(f"{path}: no predictions (did the evaluation fail before its first cell?)")
     return items
-
-
-def mcnemar_exact(b: int, c: int) -> float:
-    """Two-sided exact McNemar p: twice the smaller binomial tail of Bin(b + c, 1/2), capped at 1."""
-    n = b + c
-    if n == 0:
-        return 1.0
-    tail = sum(math.comb(n, k) for k in range(min(b, c) + 1)) / 2 ** n
-    return min(1.0, 2 * tail)
 
 
 def compare(base: dict, other: dict, suites: list[str] | None = None) -> dict:

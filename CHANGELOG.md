@@ -8,6 +8,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Changed
+- The model and LoRA promotion gates now persist hashed per-item outcomes, verify them against the
+  published counts and accuracies, and use paired exact McNemar tests with Holm correction for both
+  cell regressions and gains. Family uncertainty and the validation interval are paired too;
+  family gains are Holm-corrected across both weightings while the conservative 2-SE family harm
+  screen remains uncorrected. Old artifacts fail closed unless explicitly inspected with the
+  non-promoting `--legacy-unpaired` report mode.
 - README: a platform-support table lists only what CI builds and tests or what ran on real
   hardware. ARM NEON is no longer claimed (untested); CUDA is a source build, with its parity tests
   passing on an RTX 3070.
