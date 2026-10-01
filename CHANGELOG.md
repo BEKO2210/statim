@@ -24,6 +24,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ### Fixed
 - Inference now stops cooperatively when its HTTP client disconnects, without cancelling live
   peers in the same micro-batch, and CPU SGEMM observes request deadlines between outer panels.
+- The Hugging Face model cards called q8_0 "recommended for CPU: 4x smaller" and "faster on CPU".
+  It is 2.5x (multilingual) to 3.5x (English) smaller and slower than f32 on AVX2 CPUs; it is faster on
+  ARM CPUs with dot-product instructions and with CUDA. The cards now compute the ratio from the files.
 - The build failed for non-x86 targets: `cpu_check.h` called x86-only compiler builtins on every
   architecture. Found by the first Android arm64 build.
 - The README badges no longer go blank on GitHub. They are served from the repository
@@ -35,6 +38,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
+  `statim-decision-v1` and `statim-lora-v1` file formats), the deprecation policy (announce in a minor,
+  keep for at least one minor and three months, remove only in a major), and upgrade and rollback steps.
+- CI fails when ctest skips a test. ctest counts a skip (exit 77) as a pass, so a server suite that
+  could not bind a socket would have turned CI green unrun; `tools/ci/fail_on_skip.py` checks every
+  ctest log in `build-test` and `sanitize`, and the steps now run with `pipefail`.
+- Container health check and production Docker Compose configuration (`deploy/docker-compose.yml`, `tools/docker/healthcheck.cpp`, `Dockerfile`, `Dockerfile.vulkan`): minimal static C++ socket probe `statim-healthcheck` querying `GET /health` with socket timeouts for container liveness without shell or curl dependencies, tolerant 60 s start period for cold model loading, and Compose deployment mirroring `deploy/statim.service` resource ceilings (8 GB memory limit, 6 GB reservation, 4 CPUs, 256 PIDs, 4096 open files, 150 s stop grace period) and security profile (read-only filesystem, dropped capabilities, no-new-privileges, unprivileged non-root user, secrets-based key management) (READINESS P1 #28).
 - Server lifecycle test suite `tests/test_server_lifecycle.py` (CTest `server_lifecycle`) covering admission overload (HTTP 503 with `Retry-After: 1`, saturated `/ready` 503, and clean post-drain 200s matching unloaded execution), client connection drops mid-request (both prior to response and during response streaming), graceful drain under `SIGTERM` and `SIGINT` (5 repeated runs asserting complete 200 responses, connection refusal after signal, and logged shutdown within bound), and exit-leak / memory sanitizer assertions (closing READINESS P1 #24, #25, #26, #27).
 - `deploy/statim.service` and `docs/DEPLOY.md`: documented graceful shutdown behavior and configured `TimeoutStopSec=150` with rationale to cover the 120 s inference timeout plus network flush and cleanup headroom.
 - `bench/soak.py`: a soak test that runs one server for hours under mixed load (single and batch
@@ -59,6 +69,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
 
 ### Security
+- Release binaries (`statim` and `statim-quantize` on Linux x86-64 and in the Android cross-build)
+  are built with defense-in-depth compile and link hardening enabled by default (`STATIM_HARDEN`):
+  PIE via CMake `check_pie_supported()`, `-fstack-protector-strong`, compile-time and runtime
+  buffer fortification (`_FORTIFY_SOURCE=2` or `=3`, skipped under ASan), full RELRO
+  (`-Wl,-z,relro,-z,now`), and non-executable stack (`-Wl,-z,noexecstack`). CI and release workflows
+  verify these properties before upload with `tools/release/check_hardening.py` (READINESS P1 #17).
 - Model, adapter and `statim-quantize` loading open the file once: the GGUF preflight, ggml's
   parser and the zero-copy tensors read one read-only mapping. Before, each step opened the path
   again, so a file renamed over it in between could skip the preflight. Directories, FIFOs and

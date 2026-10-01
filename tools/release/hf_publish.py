@@ -139,6 +139,9 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     tm = meta.get("training_multitask", {})
     per_suite = "\n".join(f"| `{k}` | {v['acc']:.4f} | {v['n']} |" for k, v in sorted(held.items()))
     files_md = "\n".join(f"| `{f}` | {size / 1e9:.2f} GB | {use} |" for f, size, use in files)
+    sizes = {f.rsplit("-", 1)[-1].removesuffix(".gguf"): size for f, size, _ in files}
+    # the size ratio is measured from the files, never typed: it differs per model (embedding share)
+    q8_ratio = (f"{sizes['f32'] / sizes['q8_0']:.1f}x" if sizes.get("f32") and sizes.get("q8_0") else "about 2.5-3.5x")
     front = {
         "license": "other", "license_name": "statim-weights",
         "license_link": f"https://huggingface.co/{a.upload or 'Beko2210/' + a.name}/blob/main/LICENSE-MODEL.md",
@@ -198,7 +201,10 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     {files_md}
 
     Checksums in `SHA256SUMS`. The f32 file reproduces the reference implementation within 1e-4 on
-    Statim's parity tests; q8_0 is smaller and faster on CPU with slightly different logits.
+    Statim's parity tests. q8_0 is {q8_ratio} smaller with slightly different logits. Whether it
+    is faster depends on the hardware: on x86-64 CPUs with AVX2 but without int8 dot-product
+    instructions it is slower than f32; on ARM CPUs with dot-product instructions and with CUDA it is
+    faster ([measurements]({GITHUB}/blob/main/README.md#performance)).
 
     ## Evaluation
 
@@ -283,7 +289,7 @@ def main():
     py = os.path.join(ROOT, ".venv", "bin", "python")
     files = []
     for qtype, extra, use in (("f32", ["--embd-type", "f16"], "reference precision, exact on GPU"),
-                              ("q8_0", [], "recommended for CPU: 4x smaller")):
+                              ("q8_0", [], "smaller; slower than f32 on AVX2 CPUs, faster on ARM dotprod and CUDA")):
         path = os.path.join(a.out, f"{a.name}-{qtype}.gguf")
         if not os.path.exists(path):
             sh([py, "tools/convert_laya.py", a.model_dir, "-o", path, "--type", qtype, *extra, "--name", a.name])
