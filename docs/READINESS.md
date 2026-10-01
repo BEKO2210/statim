@@ -46,13 +46,13 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | open |
-| 11 | CI fails when `security_http` skips | S | open |
+| 11 | CI fails when `security_http` skips | S | **closed** (#73): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | open |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
-| 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | open |
+| 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | **closed** (#71): `STATIM_HARDEN`; `tools/release/check_hardening.py` in CI and release |
 | 18 | Secret-scanning push protection, plus a CI scan of the diff | S | partly: push protection is on |
 
 ### Supply chain
@@ -73,7 +73,7 @@ for them like a P0.
 | 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
 | 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, 5x SIGTERM and SIGINT with requests in flight; `TimeoutStopSec=150` |
 | 27 | A client dropped mid-request, then the same request again, gives an identical 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, dropped-client case |
-| 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
+| 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | **closed** (#74): static `/health` probe in both images; `deploy/docker-compose.yml` with the unit's limits |
 
 ### Operability
 
@@ -81,7 +81,7 @@ for them like a P0.
 |---|---|---|---|
 | 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
 | 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | open |
-| 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | open |
+| 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | **closed** (#75): [COMPATIBILITY.md](COMPATIBILITY.md#upgrading), with the 1.x promise for `statim-decision-v1` and `statim-lora-v1` |
 | 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | open |
 | 33 | A request counter labelled by adapter | S | open |
 
@@ -106,7 +106,7 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 41 | A deprecation policy: one minor version of warning, removal only in a major | S | open |
+| 41 | A deprecation policy: one minor version of warning, removal only in a major | S | **closed** (#75): [COMPATIBILITY.md](COMPATIBILITY.md#deprecation) |
 | 42 | A commercial term sheet, or no wording that implies the paid terms are in the repository | M | open |
 
 ### Platform coverage
@@ -129,7 +129,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 47 | The inference deadline is checked inside the custom SGEMM op too, so a long batch cannot overrun it by a whole matrix product | Reliability | S | open |
 | 48 | The start-up log names the active matrix-product path (custom SGEMM or ggml) and the CPU features in use | Operability | S | open |
 | 49 | A native C++ ONNX Runtime benchmark next to the Python one, so the binding overhead is excluded by construction | Correctness | M | open |
-| 50 | Claim hygiene: the Hugging Face cards' q8_0 lines ("faster on CPU", "4x smaller") match the measurements (q8_0 is slower than f32 on AVX2, about 2.6x smaller); every speed claim names its hardware and protocol | Documentation | S | open |
+| 50 | Claim hygiene: the Hugging Face cards' q8_0 lines ("faster on CPU", "4x smaller") match the measurements (q8_0 is slower than f32 on AVX2, about 2.6x smaller); every speed claim names its hardware and protocol | Documentation | S | **closed** (#72): the cards compute the q8_0 size ratio from the files and state where q8_0 is slower (AVX2) and faster (ARM dotprod, CUDA); README corrected |
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | open |
 | 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open |
