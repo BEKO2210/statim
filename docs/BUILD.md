@@ -27,6 +27,34 @@ AMD Excavator or newer. On an older CPU, `statim` and `statim-quantize` stop bef
 name the missing features and exit with status 1. Build from source on that machine with
 `-DSTATIM_NATIVE=ON` instead.
 
+### Android arm64
+
+Statim builds for Android with the NDK (r27 or newer). CI cross-compiles every target on each
+push; there is no release binary.
+
+```bash
+cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DSTATIM_NATIVE=OFF \
+  -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DGGML_OPENMP=OFF
+cmake --build build-android
+adb push build-android/statim models/laya-multilingual-f32.gguf /data/local/tmp/   # no root needed
+```
+
+Tested on a Galaxy A15 5G (MediaTek Dimensity 6100+: 2 Cortex-A76 and 6 Cortex-A55, 4 GB, Android
+16) on 2026-10-01:
+
+- **Correctness.** The native test suite passes: security, model validation, GGUF preflight,
+  tokenizer, and multilingual and English parity. Both parity tests agree on all 240 argmaxes, with
+  a max |Δlogit| of 3.2e-4 (multilingual) and 2.0e-4 (English), within the 1e-3 tolerance.
+  `statim-quantize` runs on the phone too.
+- **Speed (indicative only; a phone's clock and scheduler move these by up to 2×).** The
+  multilingual model takes about 1.0–1.2 s per golden item in q8_0 and 2.1–3.9 s in f32. On this
+  CPU, q8_0 is the faster format: the dot-product instructions do the int8 work, and the custom f32
+  kernel is x86-only.
+- **Replays.** The fuzz replay binaries need `STATIM_FUZZ_DATA` set to the copied `fuzz/data`
+  directory, because their build-time path does not exist on the phone.
+
 ### GPU backends
 
 GPU support is optional. Vulkan requires Vulkan headers, `glslc`, SPIR-V headers, and a runtime

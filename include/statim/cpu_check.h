@@ -21,7 +21,9 @@ std::string missing_cpu_features(Has has) {
 }
 
 inline std::string missing_cpu_features() {
-#if defined(STATIM_REQUIRE_X86_V3) && (defined(__GNUC__) || defined(__clang__))
+// Only x86 has these builtins; the feature logic above stays testable on every target.
+#if defined(STATIM_REQUIRE_X86_V3) && (defined(__x86_64__) || defined(__i386__)) && \
+    (defined(__GNUC__) || defined(__clang__))
     __builtin_cpu_init();
     return missing_cpu_features([](const char* f) {
         const std::string name = f;
