@@ -39,6 +39,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- docs/THREAT_MODEL.md: assets, actors, trust boundaries, the control and proving test for each
+  threat, and the residual risks left to the operator. Linked from `SECURITY.md`.
 - docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
   `statim-decision-v1` and `statim-lora-v1` file formats), the deprecation policy (announce in a minor,
   keep for at least one minor and three months, remove only in a major), and upgrade and rollback steps.
