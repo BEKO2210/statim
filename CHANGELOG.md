@@ -13,6 +13,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 
 ### Fixed
+- The README badges no longer go blank on GitHub. They are served from the repository
+  (`assets/badges/`) instead of shields.io, whose responses GitHub's image proxy timed out on
+  (HTTP 504). `check_versions.py --set` bumps the release badge with every other version copy.
 - On a CPU without AVX2, FMA, F16C or BMI2, the release binaries crashed with `Illegal instruction` at the
   first inference. `statim` and `statim-quantize` now check the CPU first, name the missing features
   and exit with status 1 (`statim version` still works). Verified on an i5-2520M (Sandy Bridge) and an
