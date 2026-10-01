@@ -473,7 +473,8 @@ std::vector<Item> Engine::encode(const ojson& state, const ojson& questions, con
 
 std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const ojson& questions, const DecideOptions& opts) {
     if (std::chrono::steady_clock::now() >= opts.deadline) throw HttpError(422, "inference deadline exceeded");
-    impl_->runner->set_deadline(opts.deadline);
+    if (opts.cancelled && opts.cancelled->load(std::memory_order_relaxed)) throw InferenceCancelled();
+    impl_->runner->set_deadline(opts.deadline, opts.cancelled);
     const HParams& h = model_->hparams();
     auto qs = parse_questions(questions);
     std::vector<ojson> results;
@@ -494,6 +495,7 @@ std::vector<ojson> Engine::decide_batch(const std::vector<ojson>& states, const 
     std::vector<size_t> tokens(states.size(), 0);
     for (size_t s = 0; s < states.size(); ++s) {
         if (std::chrono::steady_clock::now() >= opts.deadline) throw HttpError(422, "inference deadline exceeded");
+        if (opts.cancelled && opts.cancelled->load(std::memory_order_relaxed)) throw InferenceCancelled();
         if (states[s].is_null()) throw QuestionError("'state' is required");
         state_ids[s] = model_->tokenizer().encode(replace_all(serialize_state(states[s]), h.mask_token, " "));
         for (size_t qi = 0; qi < qs.size(); ++qi) {

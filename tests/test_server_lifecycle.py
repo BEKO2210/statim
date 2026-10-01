@@ -251,7 +251,7 @@ def test_overload(binary, model, tmp_dir, golden_payload_slow):
 
 
 def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
-    """P1 #27: Client drop mid-request (before response and during read) leaves server healthy."""
+    """P1 #27/#54: client drop cancels compute and leaves the server healthy."""
     print('Testing client drop (P1 #27)...', flush=True)
     log_path = Path(tmp_dir) / 'client_drop.log'
     server = ServerInstance(binary, model, log_path, max_concurrent=4, workers=1, threads=2)
@@ -267,6 +267,20 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         conn.close()
         assert baseline_resp.status == 200
 
+        quick_payload = {
+            'state': 'ok',
+            'questions': {'q': {'type': 'choice', 'instructions': 'choose', 'criteria': ['yes', 'no']}}
+        }
+        quick_bytes = json.dumps(quick_payload).encode()
+        qt0 = time.monotonic()
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', quick_bytes, {'Content-Type': 'application/json'})
+        quick_resp = conn.getresponse()
+        quick_baseline = json.loads(quick_resp.read())
+        conn.close()
+        quick_seconds = time.monotonic() - qt0
+        assert quick_resp.status == 200
+
         req_headers = (
             f'POST /v1/systemone/batch HTTP/1.1\r\n'
             f'Host: 127.0.0.1:{server.port}\r\n'
@@ -279,9 +293,28 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         print('  Case A: Dropping connection before response...', flush=True)
         s1 = socket.create_connection(('127.0.0.1', server.port), timeout=5)
         s1.sendall(req_headers + body_bytes)
-        time.sleep(0.1)  # allow server to read request and begin processing
+        time.sleep(0.5)  # the slow forward pass is running, not merely queued
         s1.close()
-        time.sleep(0.5)
+
+        # With one worker this is blocked for nearly SLOW_SECONDS unless the dead
+        # forward pass cooperatively stops. Scale the bound from both unloaded runs.
+        follow_t0 = time.monotonic()
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', quick_bytes, {'Content-Type': 'application/json'})
+        follow_resp = conn.getresponse()
+        follow_answer = json.loads(follow_resp.read())
+        conn.close()
+        follow_seconds = time.monotonic() - follow_t0
+        cancel_bound = max(1.0, 4 * quick_seconds, 0.6 * SLOW_SECONDS)
+        assert follow_resp.status == 200
+        assert_answers_equal(follow_answer, quick_baseline)
+        assert follow_seconds < cancel_bound, \
+            f'follow-up took {follow_seconds:.2f}s; cancellation bound is {cancel_bound:.2f}s (slow={SLOW_SECONDS:.2f}s)'
+        for _ in range(100):
+            if '"event":"inference_cancelled"' in log_path.read_text():
+                break
+            time.sleep(0.01)
+        assert '"event":"inference_cancelled"' in log_path.read_text(), 'missing inference_cancelled log event'
 
         # Server must still be healthy and answer follow-up request normally
         hconn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=5)
@@ -321,6 +354,70 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         assert r.status == 200
         assert_batch_answers_equal(ans2, baseline_ans)
         print('  Client drop tests passed cleanly.')
+    finally:
+        server.stop()
+
+
+def test_microbatch_client_drop(binary, model, tmp_dir, golden_payload_slow):
+    """One departed item must not cancel a shared forward pass with a live item."""
+    print('Testing client drop from a shared micro-batch...', flush=True)
+    log_path = Path(tmp_dir) / 'microbatch_client_drop.log'
+    server = ServerInstance(binary, model, log_path, max_concurrent=4, workers=1, threads=2,
+                            extra_args=['--batch-window-ms', '250', '--max-batch', '8'])
+    server.start()
+    try:
+        payload = {'state': golden_payload_slow['states'],
+                   'questions': golden_payload_slow['questions']}
+        body = json.dumps(payload).encode()
+
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', body, {'Content-Type': 'application/json'})
+        baseline_resp = conn.getresponse()
+        baseline = json.loads(baseline_resp.read())
+        conn.close()
+        assert baseline_resp.status == 200
+
+        headers = (
+            f'POST /v1/systemone HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n'
+            f'Content-Type: application/json\r\nContent-Length: {len(body)}\r\n'
+            f'X-Request-Id: microbatch-drop\r\nConnection: close\r\n\r\n'
+        ).encode()
+        dropped = socket.create_connection(('127.0.0.1', server.port), timeout=5)
+        dropped.sendall(headers + body)
+
+        def live_request():
+            c = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+            c.request('POST', '/v1/systemone', body,
+                      {'Content-Type': 'application/json', 'X-Request-Id': 'microbatch-live'})
+            r = c.getresponse()
+            answer = json.loads(r.read())
+            c.close()
+            return r.status, answer
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            live = pool.submit(live_request)
+            # Wait until the shared batch owns the only engine, then drop one peer.
+            busy_seen = False
+            for _ in range(200):
+                metrics = http.client.HTTPConnection('127.0.0.1', server.port, timeout=2)
+                metrics.request('GET', '/metrics')
+                metrics_resp = metrics.getresponse()
+                metrics_text = metrics_resp.read().decode()
+                metrics.close()
+                if 'statim_workers_busy{model="multilingual"} 1' in metrics_text:
+                    busy_seen = True
+                    break
+                time.sleep(0.005)
+            assert busy_seen, 'shared micro-batch never started inference'
+            dropped.close()
+            status, answer = live.result()
+        assert status == 200
+        assert_answers_equal(answer, baseline)
+        # Baseline contributed size 1 and the shared forward pass size 2.
+        batch_sum = next(float(line.split()[1]) for line in metrics_text.splitlines()
+                         if line.startswith('statim_batch_size_sum '))
+        assert batch_sum >= 3, f'requests did not share a batch: statim_batch_size_sum={batch_sum}'
+        print('  Live item completed correctly after its batch peer disconnected.')
     finally:
         server.stop()
 
@@ -488,6 +585,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='statim-lifecycle-') as tmp_dir:
         test_overload(args.binary, args.model, tmp_dir, golden_payload_slow)
         test_client_drop(args.binary, args.model, tmp_dir, golden_payload_slow)
+        test_microbatch_client_drop(args.binary, args.model, tmp_dir, golden_payload_slow)
         test_signals(args.binary, args.model, tmp_dir, golden_payload_slow)
 
     print('server_lifecycle: ALL TESTS PASSED')
