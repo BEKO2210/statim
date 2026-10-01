@@ -128,6 +128,10 @@ if(STATIM_BUILD_TESTS)
       --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
       --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)
     set_tests_properties(server_microbatch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+    add_test(NAME server_lifecycle COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lifecycle.py
+      --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
+      --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)
+    set_tests_properties(server_lifecycle PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1500)
     # LoRA adapters: PEFT fixtures (numpy only) -> tools/convert_lora.py -> engine and server gates
     set(LORA ${CMAKE_CURRENT_BINARY_DIR}/lora)
     set(LORA_BASE ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf)

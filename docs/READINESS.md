@@ -69,10 +69,10 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 23 | A 24 h soak with an RSS ceiling and a `/ready` poll. **Required for 1.0** | M | running: `bench/soak.py`, 24 h on belkis-home since 2026-10-01 12:28 |
-| 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200. **Required for 1.0** | M | open |
-| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. Since P0 #7, an ASan error while serving fails the suite; the server's exit status and leaks at shutdown are not checked yet. **Required for 1.0** | M | open |
-| 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | open |
-| 27 | A client dropped mid-request, then the same request again, gives an identical 200. **Required for 1.0** | M | open |
+| 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, overload case |
+| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
+| 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, 5x SIGTERM and SIGINT with requests in flight; `TimeoutStopSec=150` |
+| 27 | A client dropped mid-request, then the same request again, gives an identical 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, dropped-client case |
 | 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
 
 ### Operability
@@ -124,7 +124,7 @@ no aligned vector loads, the scratch buffers are per thread).
 
 | # | Item | Area | Effort | Status |
 |---|---|---|---|---|
-| 45 | GGUF preflight, ggml and the mmap open the model path separately; a file swapped between them skips the preflight. Open once and check the same file (descriptor, or device, inode and size) | Security | M | in review: one `MappedFile` per load; `test_gguf_preflight` covers a rename over the mapped path, directories, FIFOs and empty files |
+| 45 | GGUF preflight, ggml and the mmap open the model path separately; a file swapped between them skips the preflight. Open once and check the same file (descriptor, or device, inode and size) | Security | M | **closed** (#70): one `MappedFile` per load; `test_gguf_preflight` covers a rename over the mapped path, directories, FIFOs and empty files |
 | 46 | ThreadSanitizer on the server with 32 concurrent clients, micro-batching and adapter switches | Reliability | M | open |
 | 47 | The inference deadline is checked inside the custom SGEMM op too, so a long batch cannot overrun it by a whole matrix product | Reliability | S | open |
 | 48 | The start-up log names the active matrix-product path (custom SGEMM or ggml) and the CPU features in use | Operability | S | open |
@@ -133,6 +133,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | open |
 | 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open |
+| 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | open |
 
 ## Proofs
 

@@ -33,6 +33,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- Server lifecycle test suite `tests/test_server_lifecycle.py` (CTest `server_lifecycle`) covering admission overload (HTTP 503 with `Retry-After: 1`, saturated `/ready` 503, and clean post-drain 200s matching unloaded execution), client connection drops mid-request (both prior to response and during response streaming), graceful drain under `SIGTERM` and `SIGINT` (5 repeated runs asserting complete 200 responses, connection refusal after signal, and logged shutdown within bound), and exit-leak / memory sanitizer assertions (closing READINESS P1 #24, #25, #26, #27).
+- `deploy/statim.service` and `docs/DEPLOY.md`: documented graceful shutdown behavior and configured `TimeoutStopSec=150` with rationale to cover the 120 s inference timeout plus network flush and cleanup headroom.
 - `bench/soak.py`: a soak test that runs one server for hours under mixed load (single and batch
   requests, adapter switches, cancelled requests) and checks RSS growth, open files, latency drift,
   `/ready` and a clean SIGTERM exit.

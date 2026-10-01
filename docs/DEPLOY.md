@@ -38,6 +38,13 @@ Place overrides in `/etc/systemd/system/statim.service.d/limits.conf`, then run 
 and restart the service. The request, JSON, state, question, and option limits in the README remain in
 force; do not treat the process memory ceiling as a replacement for them.
 
+On `SIGTERM` or `SIGINT`, Statim immediately stops accepting new connections (subsequent attempts are
+refused) and drains admitted in-flight requests to completion, returning full HTTP 200 responses before
+exiting with status 0 and logging `{"event":"shutdown"}`. In-flight requests are bounded by
+`--inference-timeout` (default 120 s); the systemd unit sets `TimeoutStopSec=150` (the 120 s inference
+deadline plus 30 s headroom for network flush and process exit) so systemd does not prematurely issue a
+`SIGKILL` while in-flight inferences drain.
+
 ## Docker CPU
 
 Build the existing distroless CPU image and run it with a read-only model mount and host ceilings:
