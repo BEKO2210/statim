@@ -33,6 +33,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- `bench/soak.py`: a soak test that runs one server for hours under mixed load (single and batch
+  requests, adapter switches, cancelled requests) and checks RSS growth, open files, latency drift,
+  `/ready` and a clean SIGTERM exit.
+- docs/READINESS.md: all nine P0 items are closed, with their proofs. The server-reliability items
+  P1 #23 to #27 are now release criteria, and nine findings from the external reviews are listed.
 - Android arm64: a CI job cross-compiles every target with the NDK, and docs/BUILD.md shows the build.
   On a Galaxy A15 the native test suite and both parity tests pass (240/240 argmax agreement).
 - `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
