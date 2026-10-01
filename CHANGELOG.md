@@ -27,6 +27,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- Server lifecycle test suite `tests/test_server_lifecycle.py` (CTest `server_lifecycle`) covering admission overload (HTTP 503 with `Retry-After: 1`, saturated `/ready` 503, and clean post-drain 200s matching unloaded execution), client connection drops mid-request (both prior to response and during response streaming), graceful drain under `SIGTERM` and `SIGINT` (5 repeated runs asserting complete 200 responses, connection refusal after signal, and logged shutdown within bound), and exit-leak / memory sanitizer assertions (closing READINESS P1 #24, #25, #26, #27).
+- `deploy/statim.service` and `docs/DEPLOY.md`: documented graceful shutdown behavior and configured `TimeoutStopSec=150` with rationale to cover the 120 s inference timeout plus network flush and cleanup headroom.
 - Android arm64: a CI job cross-compiles every target with the NDK, and docs/BUILD.md shows the build.
   On a Galaxy A15 the native test suite and both parity tests pass (240/240 argmax agreement).
 - `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and

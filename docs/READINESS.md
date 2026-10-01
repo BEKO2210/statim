@@ -65,10 +65,10 @@ last column.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 23 | A 24 h soak with an RSS ceiling and a `/ready` poll | M | open |
-| 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200 | M | open |
-| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. Since P0 #7, an ASan error while serving fails the suite; the server's exit status and leaks at shutdown are not checked yet | M | open |
-| 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal | M | open |
-| 27 | A client dropped mid-request, then the same request again, gives an identical 200 | M | open |
+| 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200 | M | in review (#PR) |
+| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. Since P0 #7, an ASan error while serving fails the suite; the server's exit status and leaks at shutdown are not checked yet | M | in review (#PR) |
+| 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal | M | in review (#PR) |
+| 27 | A client dropped mid-request, then the same request again, gives an identical 200 | M | in review (#PR) |
 | 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |
 
 ### Operability

@@ -70,7 +70,7 @@ jobs:
           UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
         run: |
           ctest --test-dir build-sanitize --output-on-failure --timeout 600 \
-            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$'
+            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|server_lifecycle|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$'
   android-arm64:
     # Cross-compiles every target for Android arm64 (NEON + dotprod) with the runner's NDK, so an
     # x86-only construct cannot break the ARM build again. No device here: the test run on real
