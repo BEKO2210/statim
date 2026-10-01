@@ -14,7 +14,10 @@
 #include "ggml.h"
 #include "gguf.h"
 #include "statim/cpu_check.h"
+#include <memory>
+
 #include "statim/gguf_preflight.h"
+#include "statim/mapped_file.h"
 #include "weight_types.h"
 
 static ggml_type parse_type(const std::string& s) {
@@ -56,14 +59,17 @@ int main(int argc, char** argv) {
         if (!std::strcmp(argv[i], "--embd")) et = parse_type(argv[i + 1]);
 
     ggml_cpu_init();
+    // one open and one mapping for the preflight and ggml, so both check the same bytes
+    std::unique_ptr<statim::MappedFile> file;
     try {
-        statim::gguf_preflight(argv[1]);
+        file = std::make_unique<statim::MappedFile>(argv[1]);
+        statim::gguf_preflight(file->data(), file->size());
     } catch (const std::exception& e) {
         std::fprintf(stderr, "cannot read %s: %s\n", argv[1], e.what());
         return 1;
     }
     ggml_context* ctx = nullptr;
-    gguf_context* in = gguf_init_from_file(argv[1], {/*no_alloc=*/false, &ctx});
+    gguf_context* in = gguf_init_from_buffer(file->data(), file->size(), {/*no_alloc=*/false, &ctx});
     if (!in) {
         std::fprintf(stderr, "cannot read %s\n", argv[1]);
         return 1;
