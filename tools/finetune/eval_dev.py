@@ -19,7 +19,6 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from train_multitask import MASSIVE_URL, SENT_LANGS, SENT_OPTIONS, SENT_URL, load  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "bench"))
 from prediction_items import write_prediction_rows  # noqa: E402
 
@@ -28,6 +27,8 @@ EVAL_LANGS = ["de", "en", "fr", "es", "it", "tr", "pl", "ru", "ja", "zh-CN", "ar
 
 
 def suites(per_lang, n):
+    # imported here, not at module level: argument checks must work without numpy and the training stack
+    from train_multitask import MASSIVE_URL, SENT_LANGS, SENT_OPTIONS, SENT_URL, load  # noqa: PLC0415
     from datasets import load_dataset
     out = {}
     bank = list(load_dataset("mteb/banking77", split="train"))
