@@ -151,6 +151,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_accuracy import metrics, run_statim  # noqa: E402
+from prediction_items import write_prediction_rows  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MANIFESTS = [
@@ -652,6 +653,8 @@ def main():
     ap.add_argument("--n", type=int, default=150, help="stratified sample size per suite and language")
     ap.add_argument("--seed", type=int, default=20260927)
     ap.add_argument("--out", default=None, help="JSONL path, one record per suite/language plus a macro line")
+    ap.add_argument("--predictions", default=None, metavar="PATH",
+                    help="JSONL, one per-item gold/prediction record for paired comparisons")
     a = ap.parse_args()
     if a.langs:
         unknown = [t for t in a.langs if t.strip().lower() not in LANG_GROUPS]
@@ -695,6 +698,10 @@ def main():
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
         out = open(a.out, "w", encoding="utf-8")
+    predictions = None
+    if a.predictions:
+        os.makedirs(os.path.dirname(os.path.abspath(a.predictions)) or ".", exist_ok=True)
+        predictions = open(a.predictions, "w", encoding="utf-8")
     records = []
     try:
         by_suite = {}
@@ -705,11 +712,17 @@ def main():
                     print("run %s %s n=%d options=%d classes=%d split=%s" % (
                         suite, lang, len(gold), len(keys), len(set(gold)), split), flush=True)
                     probs, secs = _run_fixed(a.url, a.model, states, questions, qid, keys, head)
+                    prediction_states, prediction_questions = states, questions
                 else:
                     lang, triples, qid, keys, gold, head, split = task
                     print("run %s %s n=%d options=%d classes=%d split=%s (one request per item)" % (
                         suite, lang, len(gold), len(keys), len(set(gold)), split), flush=True)
                     probs, secs = _run_varied(a.url, a.model, triples, qid, keys, head)
+                    prediction_states = [state for state, _questions in triples]
+                    prediction_questions = [questions for _state, questions in triples]
+                if predictions:
+                    write_prediction_rows(predictions, suite, lang, prediction_states,
+                                          prediction_questions, gold, probs)
                 row = {"suite": suite, "lang": lang, "model": a.model, "n": len(gold),
                        "n_options": len(keys), "n_gold_labels": len(set(gold)),
                        "seed": a.seed, "split": split, "head_max_len": head}
@@ -737,6 +750,8 @@ def main():
     finally:
         if out:
             out.close()
+        if predictions:
+            predictions.close()
 
 
 if __name__ == "__main__":

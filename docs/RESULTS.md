@@ -8,8 +8,10 @@ This page contains the method, charts, and experiments behind the summary in the
 A new model replaces the one it was trained from only through the promotion gate
 (`tools/finetune/gate.py`). The validation mean may fall by at most one point. No held-out suite may
 drop significantly after Holm-Bonferroni correction for the number of suites (family-wise error
-5 %). No suite family may decline significantly when pooled (more than two standard errors), and at
-least one family must improve significantly.
+5 %). Both models answer the same items, so every test is paired: an exact McNemar test per suite on
+the items one model gets right and the other wrong, and gains are Holm-corrected too. No suite
+family may decline significantly when pooled (more than two paired standard errors), and at
+least one family must improve significantly after Holm correction.
 
 The first four suites use 2,000 deterministic test rows; MASSIVE and HWU64 cells use 150 seeded
 stratified rows. See [REPRODUCE.md](../REPRODUCE.md#3-a-published-models-evaluation).

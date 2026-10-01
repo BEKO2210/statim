@@ -39,8 +39,9 @@ base was trained on another mixture, pass one file that holds both (eval_categor
 or "none" to exclude nothing. With --skip-train, the default is recovered from each adapter's
 train_lora.json and its recorded SHA-256 is verified before evaluation.
 
-The decision per category: PROMOTE when the pooled category gain exceeds 2 standard errors and no
-language cell regresses after Holm-Bonferroni (family-wise 5 %); see gate.adapter_decision. Adapter
+The decision per category: PROMOTE when the paired pooled category gain survives Holm correction
+over all available family weighting tests and no language cell regresses after exact McNemar tests
+with Holm-Bonferroni (family-wise 5 %); per-cell gains use Holm too. See gate.adapter_decision. Adapter
 answers use the base model's temperatures (an adapter GGUF carries none), so NLL and ECE of the
 adapter run are uncalibrated; accuracy, which the decision uses, is not affected.
 """
@@ -110,6 +111,8 @@ def plan(a, category):
         "category": category, "adapter_dir": adapter_dir, "gguf": gguf,
         "base_jsonl": os.path.join(work, category + ".base.jsonl"),
         "adapter_jsonl": os.path.join(work, category + ".adapter.jsonl"),
+        "base_items": os.path.join(work, category + ".base-items.jsonl"),
+        "adapter_items": os.path.join(work, category + ".adapter-items.jsonl"),
         "train_log": os.path.join(work, category + ".train.log"),
         "server_log": os.path.join(work, category + ".server.log"),
         "exclude_mixture": exclude,
@@ -122,8 +125,9 @@ def plan(a, category):
                   "%s:%s=%s" % (MODEL, category, gguf), "--device", a.server_device, "--threads", str(a.threads),
                   "--port", str(a.port), "--no-access-log", "--inference-timeout", str(a.inference_timeout)],
     }
-    p["eval_base"] = evaluate + ["--out", p["base_jsonl"]]
-    p["eval_adapter"] = evaluate + ["--adapter", category, "--out", p["adapter_jsonl"]]
+    p["eval_base"] = evaluate + ["--out", p["base_jsonl"], "--predictions", p["base_items"]]
+    p["eval_adapter"] = evaluate + ["--adapter", category, "--out", p["adapter_jsonl"],
+                                    "--predictions", p["adapter_items"]]
     return p
 
 
@@ -132,7 +136,14 @@ def records(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
-def decide(base_jsonl, adapter_jsonl, z=2.0, log=print):
+def _category_items(path):
+    grouped = {}
+    for row in records(path):
+        grouped.setdefault("categories:%s/%s" % (row["suite"], row["lang"]), []).append(row)
+    return grouped
+
+
+def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0, log=print):
     """gate.adapter_decision on two eval_categories.py outputs; a JSON-ready result with one row per
     compared cell (language)."""
     base_records, adapter_records = records(base_jsonl), records(adapter_jsonl)
@@ -144,21 +155,27 @@ def decide(base_jsonl, adapter_jsonl, z=2.0, log=print):
         raise ValueError("base and adapter evaluations used different realized pool items")
     base, base_reported = gate.heldout_cells(base_records)
     adapter, adapter_reported = gate.heldout_cells(adapter_records)
-    res = gate.adapter_decision(base, adapter, z=z, log=log)
-    regress = {t[0] for t in res["harms"]}
+    base_items = base_items or str(base_jsonl).replace(".jsonl", "-items.jsonl")
+    adapter_items = adapter_items or str(adapter_jsonl).replace(".jsonl", "-items.jsonl")
+    res = gate.adapter_decision(base, adapter, _category_items(base_items), _category_items(adapter_items),
+                                z=z, log=log)
+    regress = {t["name"] for t in res["harms"]}
     cells = []
-    for k, x, y, d, se in res["tests"]:
-        verdict = "regression (Holm)" if k in regress else ("gain (2 SE)" if d > z * se else "within noise")
+    for t in res["tests"]:
+        k, x, y, d, se = t["name"], t["a"], t["b"], t["d"], t["se"]
+        verdict = "regression (Holm)" if k in regress else (
+            "gain (Holm)" if k in {g["name"] for g in res["gains"]} else "within noise")
         cells.append({"cell": k, "lang": k.rsplit("/", 1)[1], "n_base": base[k]["n"], "n_adapter": adapter[k]["n"],
                       "base_acc": x, "adapter_acc": y, "delta": round(d, 4), "se": round(se, 4),
-                      "z": round(d / se, 2) if se > 0 else None, "p_drop": gate.p_drop(d, se),
-                      "p_drop_holm": res["p_holm"][k], "verdict": verdict})
+                      "z": round(d / se, 2) if se > 0 else None, "p_drop": t["p_drop"],
+                      "p_drop_holm": res["p_holm"][k], "p_gain_holm": res["p_gain_holm"][k],
+                      "verdict": verdict})
     fam = res["families"].get("categories", {})
     skipped = [r for r in base_records if r.get("skipped")]
     return {"promote": res["promote"], "reason": res["reason"] or "", "cells": cells,
             "family": {w: {"delta": round(v["d"], 4), "se": round(v["se"], 4), "groups": v["groups"], "flag": v["flag"]}
                        for w, v in fam.items()},
-            "not_compared": res["not_compared"], "harms": [t[0] for t in res["harms"]],
+            "not_compared": res["not_compared"], "harms": [t["name"] for t in res["harms"]],
             "reported": {"base": base_reported, "adapter": adapter_reported},
             "skipped": [{"lang": r["lang"], "why": r["skipped"]} for r in skipped],
             "pool": sorted({v.get("pool") for v in base.values()} | {v.get("pool") for v in adapter.values()} - {None})}
@@ -257,7 +274,7 @@ def run_category(a, p):
         out.update(stage="serve", error=str(exc))
         return out
     print("--- decision for %s" % cat, flush=True)
-    out.update(decide(p["base_jsonl"], p["adapter_jsonl"], a.z))
+    out.update(decide(p["base_jsonl"], p["adapter_jsonl"], p["base_items"], p["adapter_items"], a.z))
     if ((out.get("train") or {}).get("best") or {}).get("saved_initial"):
         out.update(promote=False, reason="(saved adapter is the initial zero-delta adapter: no gain)")
     out.update(status="ok", stage="done")
@@ -274,9 +291,10 @@ def summary_md(summary):
     lines = ["# LoRA specialists: base vs adapter", "",
              "- base checkpoint: `%s`" % s["base_checkpoint"], "- base GGUF: `%s`" % s["base_gguf"],
              "- training mixture: `%s`" % s["mixture"], "- excluded from the suites: `%s`" % s["exclude_mixture"],
-             "- sample: n=%d draw per language cell, skip %d, seed %d; decision: gate.adapter_decision (pooled "
-             "category gain > %g SE, no Holm-significant cell regression, family-wise %g)" % (
-                 s["n"], s.get("eval_skip", 0), s["seed"], s["z"], s["alpha"]),
+             "- sample: n=%d draw per language cell, skip %d, seed %d; decision: gate.adapter_decision (paired "
+             "pooled category gain with Holm correction, no paired exact Holm-significant cell regression, "
+             "family-wise %g)" % (
+                 s["n"], s.get("eval_skip", 0), s["seed"], s["alpha"]),
              "- created %s" % s["created"], ""]
     lines += ["| category | promote | cells | pooled delta (pts) | 2 SE (pts) | reason |", "|---|---|---|---|---|---|"]
     for cat, r in s["categories"].items():
@@ -303,12 +321,12 @@ def summary_md(summary):
                 if best.get("saved_initial"):
                     lines += ["The saved adapter is the initial zero-delta adapter; this category has no gain.", ""]
             lines += ["Converted: %s" % r.get("convert"), "",
-                      "| lang | n | base acc | adapter acc | delta (pts) | 2 SE (pts) | p (drop) | Holm p (drop) | verdict |",
-                      "|---|---|---|---|---|---|---|---|---|"]
+                      "| lang | n | base acc | adapter acc | delta (pts) | 2 SE (pts) | p (drop) | Holm p (drop) | Holm p (gain) | verdict |",
+                      "|---|---|---|---|---|---|---|---|---|---|"]
             for c in r["cells"]:
-                lines.append("| %s | %d | %.4f | %.4f | %+.1f | %.1f | %.3g | %.3g | %s |" % (
+                lines.append("| %s | %d | %.4f | %.4f | %+.1f | %.1f | %.3g | %.3g | %.3g | %s |" % (
                     c["lang"], c["n_base"], c["base_acc"], c["adapter_acc"], 100 * c["delta"], 200 * c["se"],
-                    c["p_drop"], c["p_drop_holm"], c["verdict"]))
+                    c["p_drop"], c["p_drop_holm"], c["p_gain_holm"], c["verdict"]))
             for w, f in r["family"].items():
                 lines.append("")
                 lines.append("Family (%s, %d groups): %+.2f pts, 2 SE %.2f pts -> %s." % (

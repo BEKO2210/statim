@@ -12,7 +12,6 @@ The card states the protocol of every number (split, rows, sampling) next to it.
 import argparse
 import hashlib
 import json
-import math
 import os
 import re
 import shutil
@@ -86,22 +85,16 @@ def suite_score(heldout, key):
     return (sum(rows) / len(rows), len(rows)) if rows else (None, 0)
 
 
-def gate_counts(base, model):
-    """(gains, within noise, regressions, nominal drops) with the gate's own rule: a gain is more than two
-    combined standard errors, a regression must stay significant after Holm-Bonferroni over all suites."""
+def gate_summary(base_dir, model_dir):
     sys.path.insert(0, os.path.join(ROOT, "tools", "finetune"))
-    from gate import holm_regressions  # noqa: PLC0415 (stdlib-only module)
-    tests = []
-    for k in sorted(set(base) & set(model)):
-        x, y = base[k], model[k]
-        if k.startswith("categories:") and x.get("pool") != y.get("pool"):
-            continue  # cells from different suite pools are not comparable
-        se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
-        tests.append((k, x["acc"], y["acc"], y["acc"] - x["acc"], se))
-    gain = sum(t[3] > 2 * t[4] for t in tests)
-    loss = len(holm_regressions(tests))
-    nominal = sum(t[3] < -2 * t[4] for t in tests) - loss
-    return gain, len(tests) - gain - loss - nominal, loss, nominal
+    from gate import summary  # noqa: PLC0415 (stdlib-only module)
+    return summary(base_dir, model_dir)
+
+
+def gate_counts(base_dir, model_dir):
+    """Return (paired Holm gains, noise, paired Holm regressions)."""
+    counts = gate_summary(base_dir, model_dir)["counts"]
+    return counts["gain"], counts["noise"], counts["loss"]
 
 
 def category_rows(held, bheld):
@@ -120,7 +113,7 @@ def category_rows(held, bheld):
     return rows
 
 
-def card(a, meta, ev, base_ev, files):
+def card(a, meta, ev, base_ev, files, comparison=None):
     held, bheld = ev["heldout"], (base_ev or {}).get("heldout", {})
     rows, index = [], []
     for key, spec in SUITES.items():
@@ -142,7 +135,7 @@ def card(a, meta, ev, base_ev, files):
         index.append({"task": {"type": "text-classification"},
                       "dataset": {"name": f"{name} ({proto})", "type": dtype},
                       "metrics": [{"type": "accuracy", "value": round(s, 4)}]})
-    g = gate_counts(bheld, held) if bheld else None
+    g = comparison["counts"] if comparison else None
     tm = meta.get("training_multitask", {})
     per_suite = "\n".join(f"| `{k}` | {v['acc']:.4f} | {v['n']} |" for k, v in sorted(held.items()))
     files_md = "\n".join(f"| `{f}` | {size / 1e9:.2f} GB | {use} |" for f, size, use in files)
@@ -156,11 +149,10 @@ def card(a, meta, ev, base_ev, files):
     }
     import yaml  # noqa: PLC0415 (only needed here)
     head = "---\n" + yaml.safe_dump(front, sort_keys=False, allow_unicode=True) + "---\n"
-    gate_line = (f"Against the checkpoint it was trained from, on {sum(g)} held-out suites: **{g[0]} significant "
-                 f"gains, {g[1]} within noise, {g[2]} regressions** (gains: more than two combined binomial "
-                 f"standard errors; regressions: significant after Holm-Bonferroni over all suites"
-                 + (f"; {g[3]} nominal drop{'s' if g[3] != 1 else ''} beyond two standard errors did not stay significant"
-                    if g[3] else "") + ").") if g else ""
+    gate_line = (f"Against the checkpoint it was trained from, on {sum(g.values())} held-out suites: "
+                 f"**{g['gain']} significant gains, {g['noise']} within noise, {g['loss']} regressions** "
+                 "(paired exact McNemar tests; gains and regressions are separately significant after "
+                 "Holm-Bonferroni over all suites).") if g else ""
     crows = category_rows(held, bheld)
     cat_md = ("### Decision categories\n\n"
               "One held-out suite per decision category, built from splits of the training sources that the "
@@ -278,8 +270,14 @@ def main():
     ap.add_argument("--upload", help="Hugging Face repo id; without it nothing is uploaded")
     a = ap.parse_args()
     a.info = MODELS[a.name]
-    ev = json.load(open(os.path.join(a.model_dir, "eval.json")))
-    base_ev = json.load(open(os.path.join(a.base, "eval.json"))) if a.base else None
+    sys.path.insert(0, os.path.join(ROOT, "tools", "finetune"))
+    from gate import load_evaluation  # noqa: PLC0415
+    if a.base:
+        comparison = gate_summary(a.base, a.model_dir)
+        base_ev, ev = comparison["champion"], comparison["challenger"]
+    else:
+        ev, _ = load_evaluation(a.model_dir)
+        base_ev, comparison = None, None
     meta = json.load(open(os.path.join(a.model_dir, "rl_agent_config.json")))
     os.makedirs(a.out, exist_ok=True)
     py = os.path.join(ROOT, ".venv", "bin", "python")
@@ -300,9 +298,11 @@ def main():
                   "Laya-format checkpoint for fine-tuning and the Python reference"))
     os.makedirs(os.path.join(a.out, "evaluation"), exist_ok=True)
     shutil.copy2(os.path.join(a.model_dir, "eval.json"), os.path.join(a.out, "evaluation", "eval.json"))
+    # the per-item outcomes make the published evaluation usable as a paired gate reference
+    shutil.copy2(os.path.join(a.model_dir, "eval-items.jsonl.gz"), os.path.join(a.out, "evaluation", "eval-items.jsonl.gz"))
     for f in ("LICENSE-MODEL.md", "DATA_LICENSES.md", "NOTICE"):
         shutil.copy2(os.path.join(ROOT, f), os.path.join(a.out, f))
-    open(os.path.join(a.out, "README.md"), "w").write(card(a, meta, ev, base_ev, files))
+    open(os.path.join(a.out, "README.md"), "w").write(card(a, meta, ev, base_ev, files, comparison))
     sums = []
     for d, _, fs in os.walk(a.out):
         for f in sorted(fs):
