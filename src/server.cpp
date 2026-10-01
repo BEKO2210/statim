@@ -102,6 +102,42 @@ struct Summary {
     }
 };
 
+// Socket liveness is deliberately sampled outside the inference hot path. The
+// compute threads only read the resulting atomic flag.
+class ConnectionWatcher {
+public:
+    ConnectionWatcher(const std::function<bool()>& disconnected,
+                      std::shared_ptr<std::atomic<bool>> cancelled)
+        : disconnected_(disconnected), cancelled_(std::move(cancelled)), thread_([this] { watch(); }) {}
+    ~ConnectionWatcher() {
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            stopping_ = true;
+        }
+        cv_.notify_one();
+        thread_.join();
+    }
+private:
+    void watch() {
+        std::unique_lock<std::mutex> lk(mu_);
+        while (!stopping_) {
+            lk.unlock();
+            if (disconnected_()) {
+                cancelled_->store(true, std::memory_order_relaxed);
+                return;
+            }
+            lk.lock();
+            cv_.wait_for(lk, std::chrono::milliseconds(5), [this] { return stopping_; });
+        }
+    }
+    std::function<bool()> disconnected_;
+    std::shared_ptr<std::atomic<bool>> cancelled_;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    bool stopping_ = false;
+    std::thread thread_;
+};
+
 // A fixed number of compute slots per base model (each engine owns its compute buffers; weights
 // are shared). The base model and its adapter views share the slots, so adapters never add
 // compute threads, and they share the engines too: the pool never holds more engines than slots.
@@ -233,6 +269,11 @@ public:
     using Clock = std::chrono::steady_clock;
     using Run = std::function<std::vector<ojson>(const std::vector<ojson>&, const ojson&, DecideOptions)>;
 
+    struct BatchAbort {
+        std::atomic<size_t> remaining{0};
+        std::shared_ptr<std::atomic<bool>> flag = std::make_shared<std::atomic<bool>>(false);
+    };
+
     struct Item {
         ojson state;
         ojson questions;
@@ -242,6 +283,7 @@ public:
         std::mutex mu;
         std::condition_variable cv;
         bool cancelled = false;
+        std::shared_ptr<BatchAbort> batch_abort;
         bool done = false;
         ojson result;
         std::exception_ptr error;
@@ -285,8 +327,10 @@ public:
             const auto poll = std::min(deadline, Clock::now() + std::chrono::milliseconds(10));
             item->cv.wait_until(lk, poll);
             if (!item->done && (Clock::now() >= deadline || disconnected())) {
-                item->cancelled = true;
-                throw HttpError(422, Clock::now() >= deadline ? "inference deadline exceeded" : "inference cancelled");
+                const bool expired = Clock::now() >= deadline;
+                cancel_locked(*item);
+                if (expired) throw HttpError(422, "inference deadline exceeded");
+                throw InferenceCancelled();
             }
         }
         if (Clock::now() >= deadline) throw HttpError(422, "inference deadline exceeded");
@@ -295,6 +339,13 @@ public:
     }
 
 private:
+    static void cancel_locked(Item& item) {
+        if (item.cancelled) return;
+        item.cancelled = true;
+        if (item.batch_abort && item.batch_abort->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1)
+            item.batch_abort->flag->store(true, std::memory_order_relaxed);
+    }
+
     struct Group {
         Clock::time_point first;
         std::deque<std::shared_ptr<Item>> items;
@@ -360,6 +411,22 @@ private:
                 if (!item->cancelled && started < item->deadline) active.push_back(item);
             }
             if (active.empty()) continue;
+            auto batch_abort = std::make_shared<BatchAbort>();
+            batch_abort->remaining.store(active.size(), std::memory_order_relaxed);
+            std::vector<std::shared_ptr<Item>> still_active;
+            still_active.reserve(active.size());
+            for (auto& item : active) {
+                std::lock_guard<std::mutex> lk(item->mu);
+                item->batch_abort = batch_abort;
+                if (item->cancelled) {
+                    if (batch_abort->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                        batch_abort->flag->store(true, std::memory_order_relaxed);
+                } else {
+                    still_active.push_back(item);
+                }
+            }
+            active = std::move(still_active);
+            if (active.empty()) continue;
             sizes_.observe(static_cast<double>(active.size()));
 
             std::vector<ojson> states;
@@ -371,6 +438,7 @@ private:
             }
             DecideOptions opts = active.front()->opts;
             opts.deadline = deadline;
+            opts.cancelled = batch_abort->flag;
             std::vector<ojson> results;
             std::exception_ptr error;
             const auto ti = Clock::now();
@@ -704,6 +772,8 @@ int run_server(const ServerConfig& cfg) {
                 if (want_consensus) reason = "consensus";
             } else {
                 const auto ti = std::chrono::steady_clock::now();
+                opts.cancelled = std::make_shared<std::atomic<bool>>(false);
+                ConnectionWatcher watcher(req.is_connection_closed, opts.cancelled);
                 results = want_consensus ? run_consensus(states, questions, opts)
                                          : run_one_model(lm, weights, states, questions, opts);
                 infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
@@ -731,6 +801,12 @@ int run_server(const ServerConfig& cfg) {
             if (response.size() > cfg.limits.max_response_bytes) throw HttpError(413, "response exceeds byte budget");
             res.status = 200;
             res.set_content(response, "application/json");
+        } catch (const InferenceCancelled&) {
+            status = 422;
+            std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"},
+                {"event", "inference_cancelled"}, {"reason", "client_disconnected"},
+                {"request_id", rid}}.dump().c_str());
+            send_json(res, status, {{"detail", "inference cancelled"}});
         } catch (const HttpError& e) {
             status = e.status;
             res.set_header("Connection", "close");

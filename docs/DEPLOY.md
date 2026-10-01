@@ -45,6 +45,12 @@ exiting with status 0 and logging `{"event":"shutdown"}`. In-flight requests are
 deadline plus 30 s headroom for network flush and process exit) so systemd does not prematurely issue a
 `SIGKILL` while in-flight inferences drain.
 
+When a client disconnects before its answer, Statim stops that request's inference within a few
+milliseconds and frees the worker; the access log shows status 422 and an `inference_cancelled` event.
+A request that shares a micro-batch with others is only dropped from the batch; the others continue.
+A client that half-closes its connection (shuts down its write side) while waiting counts as
+disconnected; HTTP clients and nginx do not do that.
+
 ## Docker CPU
 
 Build the existing distroless CPU image and run it with a read-only model mount and host ceilings:

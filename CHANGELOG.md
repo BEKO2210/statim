@@ -22,6 +22,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 
 ### Fixed
+- Inference now stops cooperatively when its HTTP client disconnects, without cancelling live
+  peers in the same micro-batch, and CPU SGEMM observes request deadlines between outer panels.
 - The build failed for non-x86 targets: `cpu_check.h` called x86-only compiler builtins on every
   architecture. Found by the first Android arm64 build.
 - The README badges no longer go blank on GitHub. They are served from the repository

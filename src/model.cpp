@@ -957,11 +957,22 @@ ggml_tensor* attention(ggml_context* c, ggml_tensor* q, ggml_tensor* k, ggml_ten
 
 struct Runner::Impl {
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
+    std::shared_ptr<std::atomic<bool>> cancelled;
+    SgemmAbort abort;
     RunOptions opts;
     ggml_backend_t backend = nullptr;
     ggml_gallocr_t galloc = nullptr;
     std::vector<uint8_t> meta_buf;
     std::vector<float> sgemm_workspace;  // shared by this runner's packed projections
+
+    bool cancellation_requested() const {
+        return cancelled && cancelled->load(std::memory_order_relaxed);
+    }
+    void throw_if_aborted() const {
+        if (std::chrono::steady_clock::now() >= deadline)
+            throw HttpError(422, "inference deadline exceeded");
+        if (cancellation_requested()) throw InferenceCancelled();
+    }
 
     ~Impl() {
         if (galloc) ggml_gallocr_free(galloc);
@@ -984,10 +995,14 @@ Runner::Runner(std::shared_ptr<Model> model, RunOptions opts) : model_(std::move
 
 Runner::~Runner() = default;
 
-void Runner::set_deadline(std::chrono::steady_clock::time_point deadline) {
+void Runner::set_deadline(std::chrono::steady_clock::time_point deadline,
+                          std::shared_ptr<std::atomic<bool>> cancelled) {
     impl_->deadline = deadline;
+    impl_->cancelled = std::move(cancelled);
+    impl_->abort.deadline = deadline;
+    impl_->abort.cancelled = impl_->cancelled.get();
     if (model_->impl()->on_cpu()) ggml_backend_cpu_set_abort_callback(impl_->backend, [](void* p) {
-        return std::chrono::steady_clock::now() >= static_cast<Impl*>(p)->deadline;
+        return static_cast<Impl*>(p)->abort.requested();
     }, impl_.get());
 }
 
@@ -1016,7 +1031,7 @@ static void build_masks(const std::vector<const std::vector<int32_t>*>& seqs, in
 std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     const char* profile_path = std::getenv("STATIM_PROFILE");
     const auto total_t0 = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+    impl_->throw_if_aborted();
     if (items.empty()) return {};
     const Model::Impl& M = *model_->impl();
     const HParams& h = M.hp;
@@ -1181,7 +1196,10 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     size_t sgemm_floats = 0;
     for (const auto& sync : sgemm_syncs) sgemm_floats = std::max(sgemm_floats, sync->workspace_floats);
     if (impl_->sgemm_workspace.size() < sgemm_floats) impl_->sgemm_workspace.resize(sgemm_floats);
-    for (const auto& sync : sgemm_syncs) sync->workspace = impl_->sgemm_workspace.data();
+    for (const auto& sync : sgemm_syncs) {
+        sync->workspace = impl_->sgemm_workspace.data();
+        sync->abort = &impl_->abort;
+    }
 
     // Explicit semantic names above cover compute-heavy nodes. Name any remaining view/copy
     // plumbing deterministically so a profile never contains an unattributed node.
@@ -1243,9 +1261,9 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_backend_tensor_set(io.pool_rows, pool.data(), 0, ggml_nbytes(io.pool_rows));
     const auto upload_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
-    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+    if (impl_->abort.requested()) {
         ggml_free(c);
-        throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
     }
     std::unique_ptr<std::ostringstream> profile_nodes;
     if (profile_path) {
@@ -1258,7 +1276,7 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
             auto t0 = std::chrono::steady_clock::now();
             if (ggml_backend_graph_compute(impl_->backend, &gv) != GGML_STATUS_SUCCESS) {
                 ggml_free(c);
-                if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+                impl_->throw_if_aborted();
                 fail("graph compute failed");
             }
             ggml_backend_synchronize(impl_->backend);
@@ -1286,19 +1304,21 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         }
     } else if (ggml_backend_graph_compute(impl_->backend, gf) != GGML_STATUS_SUCCESS) {
         ggml_free(c);
-        if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
         fail("graph compute failed");
     }
     const auto compute_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
-    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+    if (impl_->abort.requested()) {
         ggml_free(c);
-        throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
     }
     std::vector<float> logits(n_markers), pooled(static_cast<size_t>(d) * B);
     if (n_markers) ggml_backend_tensor_get(io.logits, logits.data(), 0, ggml_nbytes(io.logits));
     ggml_backend_tensor_get(io.pooled, pooled.data(), 0, ggml_nbytes(io.pooled));
+    const bool aborted_after_read = impl_->abort.requested();
     ggml_free(c);
+    if (aborted_after_read) impl_->throw_if_aborted();
 
     // ---- per-item outputs + act head on the host
     std::vector<ItemResult> out(B);
