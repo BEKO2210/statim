@@ -36,6 +36,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
+  `statim-decision-v1` and `statim-lora-v1` file formats), the deprecation policy (announce in a minor,
+  keep for at least one minor and three months, remove only in a major), and upgrade and rollback steps.
 - CI fails when ctest skips a test. ctest counts a skip (exit 77) as a pass, so a server suite that
   could not bind a socket would have turned CI green unrun; `tools/ci/fail_on_skip.py` checks every
   ctest log in `build-test` and `sanitize`, and the steps now run with `pipefail`.

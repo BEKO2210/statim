@@ -451,6 +451,8 @@ category adapters are published: PII, emotion and safety ([docs/ADAPTERS.md](doc
 Next, sentiment and fact-check need more data or larger held-out samples.
 
 Since 0.9.0, API v1 accepts only additive changes; breaking changes require a new major version.
+[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) states what each version promises, the deprecation policy,
+and how to upgrade and roll back.
 See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
 
 ## Licence
