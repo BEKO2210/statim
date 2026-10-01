@@ -25,6 +25,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 
 ### Fixed
+- Inference now stops cooperatively when its HTTP client disconnects, without cancelling live
+  peers in the same micro-batch, and CPU SGEMM observes request deadlines between outer panels.
 - The Hugging Face model cards called q8_0 "recommended for CPU: 4x smaller" and "faster on CPU".
   It is 2.5x (multilingual) to 3.5x (English) smaller and slower than f32 on AVX2 CPUs; it is faster on
   ARM CPUs with dot-product instructions and with CUDA. The cards now compute the ratio from the files.
