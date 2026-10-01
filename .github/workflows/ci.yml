@@ -36,6 +36,39 @@ jobs:
         run: ctest --test-dir build --output-on-failure -E lora
       - name: LoRA gates (verbose, so the measured differences stay in the log)
         run: ctest --test-dir build -R lora -V
+  sanitize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (ASan + UBSan)
+        run: |
+          cmake -S . -B build-sanitize -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_SANITIZE=ON \
+            -DPython3_EXECUTABLE="$(command -v python3)"
+          cmake --build build-sanitize
+      - name: Memory safety and deterministic security suites (ASan + UBSan)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          STATIM_CONTRACT_REQUIRED: "1"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+        run: |
+          ctest --test-dir build-sanitize --output-on-failure --timeout 600 \
+            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$'
   fuzz:
     # 60 s per libFuzzer harness under ASan + UBSan, from the committed seeds and regressions plus the
     # corpus grown in earlier runs (actions/cache; fuzz/README.md).

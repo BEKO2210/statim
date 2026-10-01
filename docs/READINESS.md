@@ -31,7 +31,7 @@ last column.
 | 4 | Every GitHub Action is pinned to a full commit SHA. | Supply chain | S | **closed** (#51) | `.github/workflows/*.yml`; Dependabot keeps the pins current |
 | 5 | A root `SECURITY.md` gives the contact, an acknowledgement window and the supported versions; private vulnerability reporting is on. | Security | S | **closed** | `SECURITY.md` in the root; `gh api repos/BEKO2210/statim/private-vulnerability-reporting` returns `{"enabled":true}` |
 | 6 | CI fails on a known high or critical CVE in the vendored ggml, cpp-httplib and nlohmann/json. | Security | M | open | a CI job, with a planted advisory in its test |
-| 7 | The security, validation, GGUF-preflight and fuzz-regression tests run under ASan and UBSan in CI, not only the 60-second fuzz job. | Security | M | open | a CI job |
+| 7 | The security, validation, GGUF-preflight and fuzz-regression tests run under ASan and UBSan in CI, not only the 60-second fuzz job. | Security | M | **closed** (#62) | the `sanitize` job in `.github/workflows/ci.yml` |
 | 8 | The support matrix in the README equals what CI builds and tests and what the release ships. ARM NEON and CUDA are claimed but not tested today. | Documentation, platform | S | open | README against the CI jobs |
 | 9 | The model promotion gate uses paired statistics (McNemar or a paired bootstrap) on stored per-item outcomes, and a test fails if the unpaired formula returns. The published "0 regressions" is recomputed or withdrawn. | Evaluation | L | open | `tools/finetune/test_gate.py`; recomputed gate reports |
 
@@ -66,7 +66,7 @@ last column.
 |---|---|---|---|
 | 23 | A 24 h soak with an RSS ceiling and a `/ready` poll | M | open |
 | 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200 | M | open |
-| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences | M | open |
+| 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. Since P0 #7, an ASan error while serving fails the suite; the server's exit status and leaks at shutdown are not checked yet | M | open |
 | 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal | M | open |
 | 27 | A client dropped mid-request, then the same request again, gives an identical 200 | M | open |
 | 28 | A Docker `HEALTHCHECK` on `/health`, and a compose file with the systemd unit's limits | S | open |

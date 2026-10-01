@@ -13,10 +13,15 @@ option(STATIM_BUILD_TESTS "Build tests" ON)
 option(STATIM_VULKAN "Build the Vulkan GPU backend (--device vulkan)" OFF)
 option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
 option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
+option(STATIM_SANITIZE "Build everything with ASan and UBSan" OFF)
 
-if(STATIM_FUZZ)
+if(STATIM_FUZZ OR STATIM_SANITIZE)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    if(STATIM_FUZZ)
+      message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    else()
+      message(FATAL_ERROR "STATIM_SANITIZE needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    endif()
   endif()
   # ASan + UBSan for every object, ggml included, so memory errors our inputs cause inside ggml are
   # reported; coverage feedback only for Statim's parsers/runtime (below), which keeps
@@ -26,7 +31,7 @@ if(STATIM_FUZZ)
   # before it reaches ggml.
   add_compile_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined
                       -fno-omit-frame-pointer -g)
-  add_link_options(-fsanitize=address,undefined -fno-sanitize=function)
+  add_link_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined)
   set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
 endif()
 
