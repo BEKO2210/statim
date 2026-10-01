@@ -7,7 +7,7 @@
 The version lives in `project(statim VERSION x.y.z)`. The places below repeat it: the server's
 compiled-in string, the client SDKs, the demo Space's Dockerfile, the site's footers and JSON-LD,
 the release downloads in the README, REPRODUCE.md and the ticket-triage example, the client
-READMEs, and the examples in the API reference and the OpenAPI spec. Model versions
+READMEs, the README release badge, and the examples in the API reference and the OpenAPI spec. Model versions
 (statim-decide-* 0.5.0, 0.7.0) are a different number and are never touched: every pattern below
 is anchored on text that only surrounds the engine version. Standard library only, so CI runs it
 before anything is built.
@@ -53,6 +53,7 @@ SITES = [
     ("docs/openapi.yaml", r'weights="[a-z0-9_]+",version="%s"' % V, 1),
     ("clients/python/README.md", r"\(server %s\)" % V, 1),
     ("clients/js/README.md", r"the same API as server %s" % V, 1),
+    ("assets/badges/release.svg", r"v%s" % V, 5),  # the README badge, served from the repository
 ]
 
 
