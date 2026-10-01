@@ -9,12 +9,15 @@ RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF 
       -DCMAKE_CXX_FLAGS="-march=x86-64-v3" -DCMAKE_C_FLAGS="-march=x86-64-v3" \
       -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
     && cmake --build build --target statim statim-quantize \
+    && g++ -O2 -s -static tools/docker/healthcheck.cpp -o build/statim-healthcheck \
     && strip build/statim build/statim-quantize
 
 FROM gcr.io/distroless/cc-debian12:nonroot
-COPY --from=build /src/build/statim /src/build/statim-quantize /usr/local/bin/
+COPY --from=build /src/build/statim /src/build/statim-quantize /src/build/statim-healthcheck /usr/local/bin/
 EXPOSE 8080
 USER nonroot
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["/usr/local/bin/statim-healthcheck"]
 # Mount a converted model; provide STATIM_API_KEY or override CMD with --api-key-file for this listener.
 ENTRYPOINT ["/usr/local/bin/statim"]
 CMD ["serve", "-m", "/models/model.gguf", "--host", "0.0.0.0", "--port", "8080"]
