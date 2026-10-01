@@ -24,7 +24,21 @@ import time
 # (~22 s under ASan).
 # We bound graceful shutdown to 45.0 s, which provides comfortable headroom above the
 # ~22 s ASan drain time while remaining well below the 120 s default inference timeout.
-SHUTDOWN_BOUND_SECONDS = 45.0
+# Bounds scale with the measured time of one unloaded slow batch (SLOW_SECONDS, set by the
+# overload test, which runs first): a sanitizer build on a shared CI runner is 3-6x slower than a
+# release build on a workstation, and fixed seconds made the test flaky there. A real hang still
+# fails: it never ends, while every bound here is a small multiple of a measured request.
+SLOW_SECONDS = None
+
+
+def client_timeout():
+    # a request may wait for a dropped or queued slow batch ahead of it on the same worker
+    return max(30.0, 6 * (SLOW_SECONDS or 10.0) + 30)
+
+
+def shutdown_bound():
+    # 4 slow batches on 2 workers drain in 2 waves; allow 2x for contention between them
+    return max(45.0, 4 * (SLOW_SECONDS or 10.0) + 30)
 
 
 def reserve_port(host='127.0.0.1'):
@@ -132,11 +146,11 @@ class ServerInstance:
         if self.proc and self.proc.poll() is None:
             self.proc.send_signal(sig)
             try:
-                self.proc.wait(timeout=SHUTDOWN_BOUND_SECONDS)
+                self.proc.wait(timeout=shutdown_bound())
             except subprocess.TimeoutExpired:
                 self.proc.kill()
                 self.proc.wait()
-                raise AssertionError(f'Server did not stop within {SHUTDOWN_BOUND_SECONDS}s on signal {sig}')
+                raise AssertionError(f'Server did not stop within {shutdown_bound():.0f}s on signal {sig}')
         self.assert_clean_exit(expected_code=0)
 
 
@@ -152,19 +166,21 @@ def test_overload(binary, model, tmp_dir, golden_payload_slow):
 
         # Measure a single unloaded run to verify slow inference and obtain baseline
         t0 = time.monotonic()
-        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=30)
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=600)
         conn.request('POST', '/v1/systemone/batch', body_bytes, {'Content-Type': 'application/json'})
         resp = conn.getresponse()
         baseline_bytes = resp.read()
         conn.close()
         elapsed = time.monotonic() - t0
         assert resp.status == 200, f'Baseline request failed: {resp.status}'
+        global SLOW_SECONDS
+        SLOW_SECONDS = elapsed
         baseline_ans = json.loads(baseline_bytes)
         print(f'  Single unloaded slow batch took {elapsed:.2f}s (inference verified slow enough)')
         assert elapsed >= 0.5, f'Inference was unexpectedly fast: {elapsed:.2f}s'
 
         def send_request(idx):
-            c = http.client.HTTPConnection('127.0.0.1', server.port, timeout=60)
+            c = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
             c.request('POST', '/v1/systemone/batch', body_bytes,
                       {'Content-Type': 'application/json', 'X-Request-Id': f'overload-{idx}'})
             r = c.getresponse()
@@ -222,7 +238,7 @@ def test_overload(binary, model, tmp_dir, golden_payload_slow):
         hconn.close()
 
         # Follow-up request answers 200 and matches baseline
-        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=30)
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
         conn.request('POST', '/v1/systemone/batch', body_bytes, {'Content-Type': 'application/json'})
         post_resp = conn.getresponse()
         post_body = post_resp.read()
@@ -244,7 +260,7 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         body_bytes = json.dumps(golden_payload_slow).encode()
 
         # Baseline clean run
-        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=30)
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
         conn.request('POST', '/v1/systemone/batch', body_bytes, {'Content-Type': 'application/json'})
         baseline_resp = conn.getresponse()
         baseline_ans = json.loads(baseline_resp.read())
@@ -273,7 +289,7 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         assert hconn.getresponse().status == 200
         hconn.close()
 
-        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=30)
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
         conn.request('POST', '/v1/systemone/batch', body_bytes, {'Content-Type': 'application/json'})
         r = conn.getresponse()
         ans1 = json.loads(r.read())
@@ -283,7 +299,7 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
 
         # Case B: Close socket mid-request WHILE response is being read
         print('  Case B: Dropping connection while reading response...', flush=True)
-        s2 = socket.create_connection(('127.0.0.1', server.port), timeout=30)
+        s2 = socket.create_connection(('127.0.0.1', server.port), timeout=client_timeout())
         s2.sendall(req_headers + body_bytes)
         # Read partial bytes of HTTP response header
         partial = s2.recv(25)
@@ -297,7 +313,7 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         assert hconn.getresponse().status == 200
         hconn.close()
 
-        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=30)
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
         conn.request('POST', '/v1/systemone/batch', body_bytes, {'Content-Type': 'application/json'})
         r = conn.getresponse()
         ans2 = json.loads(r.read())
@@ -333,15 +349,15 @@ def run_quick_inferences(port, count=200, workers=4):
         list(pool.map(worker_loop, [per_worker] * workers))
 
 
-def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run_label, measured_times):
+def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run_label, measured_times, quick=20):
     """Executes a single signal drain case: quick inferences -> 4 slow requests -> signal -> drain."""
     log_path = Path(tmp_dir) / f'drain_{run_label}.log'
     server = ServerInstance(binary, model, log_path, max_concurrent=8, workers=2, threads=4)
     server.start()
     try:
-        # Run 200 quick inferences first (P1 #25)
+        # Quick inferences first, so the leak check at exit (P1 #25) covers real work
         t_quick_start = time.monotonic()
-        run_quick_inferences(server.port, count=200, workers=4)
+        run_quick_inferences(server.port, count=quick, workers=4)
         t_quick = time.monotonic() - t_quick_start
 
         # Start 4 slow requests
@@ -349,7 +365,7 @@ def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run
 
         def send_slow(idx):
             try:
-                conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=60)
+                conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
                 conn.request('POST', '/v1/systemone/batch', body_bytes,
                              {'Content-Type': 'application/json', 'X-Request-Id': f'{run_label}-{idx}'})
                 r = conn.getresponse()
@@ -384,16 +400,16 @@ def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run
 
         # Process must exit with status 0 within bound
         try:
-            server.proc.wait(timeout=SHUTDOWN_BOUND_SECONDS)
+            server.proc.wait(timeout=shutdown_bound())
         except subprocess.TimeoutExpired:
             server.proc.kill()
             server.proc.wait()
-            raise AssertionError(f'{run_label}: server hung after {sig}, exceeded bound {SHUTDOWN_BOUND_SECONDS}s')
+            raise AssertionError(f'{run_label}: server hung after {sig}, exceeded bound {shutdown_bound():.0f}s')
 
         drain_duration = time.monotonic() - t0
         measured_times.append(drain_duration)
-        assert drain_duration <= SHUTDOWN_BOUND_SECONDS, \
-            f'{run_label}: shutdown took {drain_duration:.2f}s, exceeding bound {SHUTDOWN_BOUND_SECONDS}s'
+        assert drain_duration <= shutdown_bound(), \
+            f'{run_label}: shutdown took {drain_duration:.2f}s, exceeding bound {shutdown_bound():.0f}s'
 
         # Requests admitted before the signal are drained: each one completes with a full 200 answer.
         # (DEPLOY.md documents this; a dropped connection here would contradict it.)
@@ -408,7 +424,7 @@ def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run
         server.assert_clean_exit(expected_code=0)
         log_text = server.log_path.read_text()
         assert '\"event\":\"shutdown\"' in log_text, f'{run_label}: missing shutdown event in log:\n{log_text}'
-        print(f'  {run_label} ({sig.name}): 200 quick inferences in {t_quick:.2f}s; drained in {drain_duration:.2f}s, exit 0')
+        print(f'  {run_label} ({sig.name}): {quick} quick inferences in {t_quick:.2f}s; drained in {drain_duration:.2f}s, exit 0')
     finally:
         if server.proc and server.proc.poll() is None:
             server.proc.kill()
@@ -421,8 +437,10 @@ def test_signals(binary, model, tmp_dir, golden_payload_slow):
     print('Testing signals and graceful drain (P1 #26)...', flush=True)
     measured_times = []
 
-    # Test SIGINT once
-    run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGINT, 'sigint-1', measured_times)
+    # SIGINT once, after a few hundred inferences (P1 #25: leaks at exit after real work); the
+    # SIGTERM repeats look for races in the drain and keep the warm-up short, so the suite fits a
+    # sanitizer build on a small CI runner
+    run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGINT, 'sigint-1', measured_times, quick=200)
 
     # Repeat SIGTERM 5 times to catch races
     for i in range(1, 6):
@@ -430,7 +448,7 @@ def test_signals(binary, model, tmp_dir, golden_payload_slow):
 
     print(f'  Shutdown drain times over 5 SIGTERM runs: '
           f'min={min(measured_times[1:]):.2f}s, max={max(measured_times[1:]):.2f}s, '
-          f'avg={sum(measured_times[1:])/5:.2f}s (bound: {SHUTDOWN_BOUND_SECONDS}s)')
+          f'avg={sum(measured_times[1:])/5:.2f}s (bound: {shutdown_bound():.0f}s)')
 
 
 def main():

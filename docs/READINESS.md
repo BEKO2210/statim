@@ -133,6 +133,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | open |
 | 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open |
+| 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | open |
 
 ## Proofs
 
