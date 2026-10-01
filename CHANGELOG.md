@@ -7,6 +7,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
+  scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
+
 ### Changed
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
