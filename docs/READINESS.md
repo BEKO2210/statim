@@ -32,7 +32,7 @@ last column.
 | 5 | A root `SECURITY.md` gives the contact, an acknowledgement window and the supported versions; private vulnerability reporting is on. | Security | S | **closed** | `SECURITY.md` in the root; `gh api repos/BEKO2210/statim/private-vulnerability-reporting` returns `{"enabled":true}` |
 | 6 | CI fails on a known high or critical CVE in the vendored ggml, cpp-httplib and nlohmann/json. | Security | M | open | a CI job, with a planted advisory in its test |
 | 7 | The security, validation, GGUF-preflight and fuzz-regression tests run under ASan and UBSan in CI, not only the 60-second fuzz job. | Security | M | **closed** (#62) | the `sanitize` job in `.github/workflows/ci.yml` |
-| 8 | The support matrix in the README equals what CI builds and tests and what the release ships. ARM NEON and CUDA are claimed but not tested today. | Documentation, platform | S | open | README against the CI jobs |
+| 8 | The support matrix in the README equals what CI builds and tests and what the release ships. ARM NEON and CUDA are claimed but not tested today. | Documentation, platform | S | **closed** | README [Platform support](../README.md#platform-support): ARM NEON is no longer claimed; Vulkan and CUDA list the parity tests run on an RTX 3070 on 2026-10-01 |
 | 9 | The model promotion gate uses paired statistics (McNemar or a paired bootstrap) on stored per-item outcomes, and a test fails if the unpaired formula returns. The published "0 regressions" is recomputed or withdrawn. | Evaluation | L | open | `tools/finetune/test_gate.py`; recomputed gate reports |
 
 ## P1 — should be in 1.0
@@ -109,7 +109,7 @@ last column.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | open |
+| 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | partly: Vulkan and CUDA parity pass on an RTX 3070 (2026-10-01, manual); not yet a release step |
 | 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | open |
 
 ## Proofs

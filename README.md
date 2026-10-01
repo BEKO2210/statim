@@ -420,10 +420,23 @@ python3 tests/security/test_http.py --binary build/statim --model models/laya-mu
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 [docs/SECURITY.md](docs/SECURITY.md) has the findings, fixes, fuzzing campaign and coverage.
 
+## Platform support
+
+Only what CI builds and tests, or what was run on real hardware, is listed as supported. Everything
+else may build through ggml but is untested.
+
+| Platform | Release binary | CI | Tested on hardware |
+|---|---|---|---|
+| Linux x86-64, CPU (AVX2, FMA, F16C, BMI2) | yes | build, full `ctest`, ASan + UBSan, fuzzing | Ryzen 7 5800X; Xeon E3-1505M v5 |
+| Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
+| Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
+| x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
+| ARM64 (NEON), macOS, Windows | no | no | not tested; an ARM run is planned |
+
 ## Status and roadmap
 
-The current release is v0.9.2: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.9.2 brings a packed f32 GEMM that makes Statim level with or faster than ONNX Runtime on short
+The current release is v0.9.2: Linux x86-64 binaries for CPU and Vulkan, CUDA from source (see
+[platform support](#platform-support)), two published models, client SDKs, and a public demo. 0.9.2 brings a packed f32 GEMM that makes Statim level with or faster than ONNX Runtime on short
 inputs; 0.9.1 adds the [comparison with ONNX Runtime](docs/ORT.md) and a structural GGUF check before
 ggml parses a model file; 0.9.0 freezes HTTP API v1, with contract
 tests against the real server; 0.8.7 makes the README readable on phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against

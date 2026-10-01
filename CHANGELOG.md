@@ -8,6 +8,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Changed
+- README: a platform-support table lists only what CI builds and tests or what ran on real
+  hardware. ARM NEON is no longer claimed (untested); CUDA is a source build, with its parity tests
+  passing on an RTX 3070.
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
