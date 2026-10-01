@@ -14,20 +14,40 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   family gains are Holm-corrected across both weightings while the conservative 2-SE family harm
   screen remains uncorrected. Old artifacts fail closed unless explicitly inspected with the
   non-promoting `--legacy-unpaired` report mode.
+- README: a platform-support table lists only what CI builds and tests or what ran on real
+  hardware. ARM NEON is no longer claimed (untested); CUDA is a source build, with its parity tests
+  passing on an RTX 3070.
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 
 ### Fixed
+- The build failed for non-x86 targets: `cpu_check.h` called x86-only compiler builtins on every
+  architecture. Found by the first Android arm64 build.
+- The README badges no longer go blank on GitHub. They are served from the repository
+  (`assets/badges/`) instead of shields.io, whose responses GitHub's image proxy timed out on
+  (HTTP 504). `check_versions.py --set` bumps the release badge with every other version copy.
 - On a CPU without AVX2, FMA, F16C or BMI2, the release binaries crashed with `Illegal instruction` at the
   first inference. `statim` and `statim-quantize` now check the CPU first, name the missing features
   and exit with status 1 (`statim version` still works). Verified on an i5-2520M (Sandy Bridge) and an
   i3-3227U (Ivy Bridge).
 
 ### Added
+- Android arm64: a CI job cross-compiles every target with the NDK, and docs/BUILD.md shows the build.
+  On a Galaxy A15 the native test suite and both parity tests pass (240/240 argmax agreement).
+- `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
+  scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
+- `bench/perf_gate.py` compares candidate speed, memory, start-up and decisions against a release
+  build with interleaved, noise-aware measurements and fails on any regression.
 - [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
   of 0.9.2. It holds 9 P0 items that block 1.0 and 35 P1 items, each with its status and proof.
   Branch and tag protection are closed with a recorded test; pinned actions are closed by #51.
+- CI `sanitize` job and CMake option `STATIM_SANITIZE`: runs deterministic memory-safety suites
+  (`security`, `security_model`, `model_validation`, `gguf_preflight`, `tokenizer`, `cpu_check`),
+  Python-driven server tests (`security_http`, `api_contract`, `server_microbatch`), fuzz crash
+  regressions, and multilingual model and engine parity under AddressSanitizer and
+  UndefinedBehaviorSanitizer on every pull request (READINESS P0 #7).
+- CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
 
 ### Security
 - Hardened CI and release workflows against supply-chain tampering ([docs/SECURITY.md](docs/SECURITY.md#supply-chain)):

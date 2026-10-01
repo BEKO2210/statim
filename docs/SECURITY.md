@@ -1,5 +1,7 @@
 # Security hardening
 
+To report a vulnerability, see the [security policy](../SECURITY.md).
+
 The HTTP API retains successful Jev/Laya response shapes; `/health` is intentionally
 reduced to `status` and `version`. Limits and flags are documented in README → API.
 
@@ -74,7 +76,7 @@ counts). Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Re
   executor recovered after cancellation with identical logits and action probabilities.
 - `git diff --check` and Python syntax compilation passed.
 
-Findings come from an independent review of 0.2.1 (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
+Findings come from a review of 0.2.1 by a separate AI coding agent (Codex), not a third-party audit (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
 
 ## Supply chain
 
@@ -92,3 +94,4 @@ Statim hardens its continuous integration and release pipeline against supply-ch
   ```bash
   sha256sum --check --ignore-missing SHA256SUMS
   ```
+- **Vendored CVE scanning and triage.** CI runs `tools/security/vendored_cves.py` daily and on every change to detect known high or critical vulnerabilities across vendored dependencies (`cpp-httplib`, `nlohmann/json`, and `ggml`) using OSV.dev and GitHub Security Advisories. For upstream advisories that cannot be matched automatically to a pinned commit (such as ggml and GGUF advisories filed against `ggml-org/llama.cpp`), each advisory concerning ggml or GGUF must have an explicit entry in `tools/security/cve-triage.json` recording a decision (`fixed-in-pinned`, `not-affected`, or `accepted-risk`), commit and file/line evidence, and a `review_by` expiry date. To triage a new advisory, locate the upstream fixing commit or PR, inspect whether that change is present in `third_party/ggml` or whether the affected subsystem (such as RPC or llama-server) is unbuilt, add the entry to `tools/security/cve-triage.json` with the evidence, and set a future `review_by` date.

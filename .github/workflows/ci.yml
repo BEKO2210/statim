@@ -2,6 +2,8 @@ name: ci
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 6 * * *'
 
 permissions:
   contents: read
@@ -36,6 +38,62 @@ jobs:
         run: ctest --test-dir build --output-on-failure -E lora
       - name: LoRA gates (verbose, so the measured differences stay in the log)
         run: ctest --test-dir build -R lora -V
+  sanitize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (ASan + UBSan)
+        run: |
+          cmake -S . -B build-sanitize -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_SANITIZE=ON \
+            -DPython3_EXECUTABLE="$(command -v python3)"
+          cmake --build build-sanitize
+      - name: Memory safety and deterministic security suites (ASan + UBSan)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          STATIM_CONTRACT_REQUIRED: "1"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+        run: |
+          ctest --test-dir build-sanitize --output-on-failure --timeout 600 \
+            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$'
+  android-arm64:
+    # Cross-compiles every target for Android arm64 (NEON + dotprod) with the runner's NDK, so an
+    # x86-only construct cannot break the ARM build again. No device here: the test run on real
+    # hardware is recorded in the README's platform-support table.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build (Android arm64, NDK from the runner image)
+        run: |
+          echo "NDK: $ANDROID_NDK_LATEST_HOME"
+          cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DSTATIM_NATIVE=OFF \
+            -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DGGML_OPENMP=OFF
+          cmake --build build-android
+          file build-android/statim | grep -q 'ARM aarch64'
   fuzz:
     # 60 s per libFuzzer harness under ASan + UBSan, from the committed seeds and regressions plus the
     # corpus grown in earlier runs (actions/cache; fuzz/README.md).
@@ -87,3 +145,20 @@ jobs:
           name: fuzz-artifacts
           path: build-fuzz/artifacts/
           if-no-files-found: ignore
+  vendored-cves:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Self-test vendored CVE tooling
+        run: python3 tools/security/test_vendored_cves.py
+      - name: Live control step (OSV database coverage check)
+        run: python3 tools/security/vendored_cves.py --control
+      - name: Check vendored CVEs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/security/vendored_cves.py

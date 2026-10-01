@@ -40,12 +40,14 @@ ctest --test-dir build --output-on-failure
 - Run CTest serially and as a regular user. Several tests use every core, and the security suites
   expect a file with mode 000 to be unreadable, which root can read ([REPRODUCE.md](REPRODUCE.md)).
 - `-DSTATIM_FUZZ=ON` builds the fuzzers with clang. `fuzz/run.sh` runs one harness ([fuzz/README.md](fuzz/README.md)).
+- `-DSTATIM_SANITIZE=ON` builds everything with ASan and UBSan (clang).
 
 Checks that need no build. CI runs the first two on every push, and the others when their files change:
 
 ```sh
 python3 tools/docs/test_check_docs.py && python3 tools/docs/check_docs.py   # documentation agrees with the code
 python3 tools/release/check_versions.py                                      # every copy of the engine version
+python3 tools/security/test_vendored_cves.py && python3 tools/security/vendored_cves.py   # known CVEs in vendored dependencies
 python3 -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py \
     tools/finetune/test_gate.py tools/finetune/test_train_lora.py bench/test_eval_categories.py   # needs pytest, pyarrow
 python3 site/tests/check.py                                                  # after a site change (needs Playwright)
@@ -106,6 +108,7 @@ python3 site/tests/check.py                                                  # a
 
 ## Changes and releases
 
+- Every PR that can affect speed or memory attaches the `bench/perf_gate.py` summary against the latest release.
 - One branch and one PR per change, green CI, squash merge. Never push to main directly. The PR
   description lists the commands that verified the change and their results.
 - A release: `python3 tools/release/check_versions.py --set X.Y.Z` bumps every copy of the engine
