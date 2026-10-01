@@ -105,6 +105,7 @@ python3 site/tests/check.py                                                  # a
 
 ## Changes and releases
 
+- Every PR that can affect speed or memory attaches the `bench/perf_gate.py` summary against the latest release.
 - One branch and one PR per change, green CI, squash merge. Never push to main directly. The PR
   description lists the commands that verified the change and their results.
 - A release: `python3 tools/release/check_versions.py --set X.Y.Z` bumps every copy of the engine

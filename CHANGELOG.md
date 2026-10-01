@@ -19,6 +19,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- `bench/perf_gate.py` compares candidate speed, memory, start-up and decisions against a release
+  build with interleaved, noise-aware measurements and fails on any regression.
 - [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
   of 0.9.2. It holds 9 P0 items that block 1.0 and 35 P1 items, each with its status and proof.
   Branch and tag protection are closed with a recorded test; pinned actions are closed by #51.
