@@ -1,5 +1,7 @@
 # Production deployment
 
+For incidents (start-up failures, 503s, OOM, key rotation), see the [runbook](RUNBOOK.md).
+
 Statim should listen on a private interface, require bearer authentication, and sit behind a
 TLS-terminating reverse proxy. Model weights are separate artifacts: obtain or convert them as
 described in the README, verify their provenance, and mount them read-only. Release archives and
