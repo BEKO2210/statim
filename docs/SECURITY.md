@@ -85,10 +85,10 @@ Statim hardens its continuous integration and release pipeline against supply-ch
 - **Pinned actions.** Every workflow action (`uses:`) across `.github/workflows/` is pinned to an immutable full commit SHA, resolved directly from the action's official repository, with the semantic release tag recorded in a trailing comment. Action pins are monitored and kept current weekly via Dependabot (`.github/dependabot.yml`).
 - **Least privilege.** Workflows declare `contents: read` by default. Elevated permissions are scoped strictly to the specific jobs that require them: `contents: write` for uploading release assets, and `id-token: write` / `attestations: write` for generating artifact attestations.
 - **Pinned CI dependencies.** Python tooling dependencies in CI are pinned to exact versions with SHA-256 integrity hashes (`requirements-ci.txt`) and installed with `--require-hashes`.
-- **Software Bill of Materials (SBOM).** Each release archive has a companion SPDX 2.3 JSON SBOM generated at build time with Syft (`anchore/sbom-action/download-syft`) and published alongside the release assets (for example, `statim-0.9.2-linux-x86_64-cpu.spdx.json`).
+- **Software Bill of Materials (SBOM).** Each release archive has a companion SPDX 2.3 JSON SBOM generated at build time with Syft (`anchore/sbom-action/download-syft`) and published alongside the release assets (for example, `statim-0.9.3-linux-x86_64-cpu.spdx.json`).
 - **Build provenance.** Release archives are signed with build provenance attestations via `actions/attest-build-provenance`. Provenance can be verified using the GitHub CLI:
   ```bash
-  gh attestation verify statim-0.9.2-linux-x86_64-cpu.tar.gz --owner BEKO2210
+  gh attestation verify statim-0.9.3-linux-x86_64-cpu.tar.gz --owner BEKO2210
   ```
 - **Secret scanning.** GitHub push protection rejects pushes that contain known credential formats. CI job `secrets` also runs gitleaks 8.30.1 (pinned, SHA-256-checked) over the commits each push or pull request adds, and over the whole history daily. `.gitleaks.toml` adds only a narrow allowlist: test keys of the form `<name>-test-key-<hex>` and the description hashes in `docs/api-v1.contract.json`.
 - **Checksums.** Each release attaches `SHA256SUMS` covering all released archives:
