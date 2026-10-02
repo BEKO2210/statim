@@ -52,10 +52,20 @@ jobs:
       - name: Check hardening of archived binaries
         run: python3 tools/release/check_hardening.py dist/*.tar.gz
 
+      - name: Generate SBOM for release archive
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          for archive in dist/*.tar.gz; do
+            python3 tools/release/sbom.py --archive "$archive" --source . \
+              --out "${archive%.tar.gz}.spdx.json"
+          done
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: statim-${{ matrix.flavor }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.spdx.json
           if-no-files-found: error
 
   publish:
@@ -75,16 +85,6 @@ jobs:
       - name: Create checksums
         working-directory: dist
         run: sha256sum -- *.tar.gz > SHA256SUMS
-
-      - name: Download Syft
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
-
-      - name: Generate SBOM for each release archive
-        working-directory: dist
-        run: |
-          for archive in *.tar.gz; do
-            syft scan "$archive" -o spdx-json="${archive%.tar.gz}.spdx.json"
-          done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
