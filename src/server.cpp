@@ -19,6 +19,7 @@
 #include <thread>
 
 #include "statim/http_security.h"
+#include "kernels.h"
 #include "playground.inc"
 #include "statim/engine.h"
 
@@ -100,6 +101,42 @@ struct Summary {
         count++;
         sum_milli += static_cast<uint64_t>(std::max(0.0, value) * 1000.0);
     }
+};
+
+// Socket liveness is deliberately sampled outside the inference hot path. The
+// compute threads only read the resulting atomic flag.
+class ConnectionWatcher {
+public:
+    ConnectionWatcher(const std::function<bool()>& disconnected,
+                      std::shared_ptr<std::atomic<bool>> cancelled)
+        : disconnected_(disconnected), cancelled_(std::move(cancelled)), thread_([this] { watch(); }) {}
+    ~ConnectionWatcher() {
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            stopping_ = true;
+        }
+        cv_.notify_one();
+        thread_.join();
+    }
+private:
+    void watch() {
+        std::unique_lock<std::mutex> lk(mu_);
+        while (!stopping_) {
+            lk.unlock();
+            if (disconnected_()) {
+                cancelled_->store(true, std::memory_order_relaxed);
+                return;
+            }
+            lk.lock();
+            cv_.wait_for(lk, std::chrono::milliseconds(5), [this] { return stopping_; });
+        }
+    }
+    std::function<bool()> disconnected_;
+    std::shared_ptr<std::atomic<bool>> cancelled_;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    bool stopping_ = false;
+    std::thread thread_;
 };
 
 // A fixed number of compute slots per base model (each engine owns its compute buffers; weights
@@ -233,6 +270,11 @@ public:
     using Clock = std::chrono::steady_clock;
     using Run = std::function<std::vector<ojson>(const std::vector<ojson>&, const ojson&, DecideOptions)>;
 
+    struct BatchAbort {
+        std::atomic<size_t> remaining{0};
+        std::shared_ptr<std::atomic<bool>> flag = std::make_shared<std::atomic<bool>>(false);
+    };
+
     struct Item {
         ojson state;
         ojson questions;
@@ -242,6 +284,7 @@ public:
         std::mutex mu;
         std::condition_variable cv;
         bool cancelled = false;
+        std::shared_ptr<BatchAbort> batch_abort;
         bool done = false;
         ojson result;
         std::exception_ptr error;
@@ -285,8 +328,10 @@ public:
             const auto poll = std::min(deadline, Clock::now() + std::chrono::milliseconds(10));
             item->cv.wait_until(lk, poll);
             if (!item->done && (Clock::now() >= deadline || disconnected())) {
-                item->cancelled = true;
-                throw HttpError(422, Clock::now() >= deadline ? "inference deadline exceeded" : "inference cancelled");
+                const bool expired = Clock::now() >= deadline;
+                cancel_locked(*item);
+                if (expired) throw HttpError(422, "inference deadline exceeded");
+                throw InferenceCancelled();
             }
         }
         if (Clock::now() >= deadline) throw HttpError(422, "inference deadline exceeded");
@@ -295,6 +340,13 @@ public:
     }
 
 private:
+    static void cancel_locked(Item& item) {
+        if (item.cancelled) return;
+        item.cancelled = true;
+        if (item.batch_abort && item.batch_abort->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1)
+            item.batch_abort->flag->store(true, std::memory_order_relaxed);
+    }
+
     struct Group {
         Clock::time_point first;
         std::deque<std::shared_ptr<Item>> items;
@@ -360,6 +412,22 @@ private:
                 if (!item->cancelled && started < item->deadline) active.push_back(item);
             }
             if (active.empty()) continue;
+            auto batch_abort = std::make_shared<BatchAbort>();
+            batch_abort->remaining.store(active.size(), std::memory_order_relaxed);
+            std::vector<std::shared_ptr<Item>> still_active;
+            still_active.reserve(active.size());
+            for (auto& item : active) {
+                std::lock_guard<std::mutex> lk(item->mu);
+                item->batch_abort = batch_abort;
+                if (item->cancelled) {
+                    if (batch_abort->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                        batch_abort->flag->store(true, std::memory_order_relaxed);
+                } else {
+                    still_active.push_back(item);
+                }
+            }
+            active = std::move(still_active);
+            if (active.empty()) continue;
             sizes_.observe(static_cast<double>(active.size()));
 
             std::vector<ojson> states;
@@ -371,6 +439,7 @@ private:
             }
             DecideOptions opts = active.front()->opts;
             opts.deadline = deadline;
+            opts.cancelled = batch_abort->flag;
             std::vector<ojson> results;
             std::exception_ptr error;
             const auto ti = Clock::now();
@@ -423,6 +492,13 @@ int run_server(const ServerConfig& cfg) {
         cfg.ensemble < 1 || cfg.ensemble > 8 || cfg.max_len < 0 || cfg.head_max_len < 0 || cfg.port < 1 || cfg.port > 65535 ||
         cfg.batch_window_ms < 0 || cfg.max_batch < 1 || cfg.max_batch > static_cast<int>(max_batch_states))
         throw std::runtime_error("invalid server worker, concurrency, ensemble, port or token budget configuration");
+    if (cfg.api_keys.empty() && !is_loopback_host(cfg.host) && !cfg.allow_unauthenticated) {
+        const std::string host = ojson(cfg.host).dump();
+        std::fprintf(stderr, "statim serve: error: host %s is not loopback and no API key is configured; "
+                             "set STATIM_API_KEY, pass --api-key-file FILE, or pass --allow-unauthenticated "
+                             "(trusted networks only)\n", host.c_str());
+        return 2;
+    }
     std::vector<LoadedModel> models;
     const int workers = std::max(1, cfg.workers);
     const int threads = cfg.threads > 0 ? cfg.threads : static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
@@ -439,6 +515,7 @@ int run_server(const ServerConfig& cfg) {
         lm.pool = std::make_unique<EnginePool>(lm.model, workers, per_worker);
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "model_loaded"},
             {"model", name}, {"path", path}, {"weights", lm.model->hparams().weight_type}, {"device", lm.model->device()},
+            {"gemm", lm.model->gemm_path()}, {"cpu_features", matrix_cpu_features()},
             {"bytes", lm.model->weight_bytes()}, {"workers", workers}, {"threads_per_worker", per_worker},
             {"ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
         models.push_back(std::move(lm));
@@ -697,6 +774,8 @@ int run_server(const ServerConfig& cfg) {
                 if (want_consensus) reason = "consensus";
             } else {
                 const auto ti = std::chrono::steady_clock::now();
+                opts.cancelled = std::make_shared<std::atomic<bool>>(false);
+                ConnectionWatcher watcher(req.is_connection_closed, opts.cancelled);
                 results = want_consensus ? run_consensus(states, questions, opts)
                                          : run_one_model(lm, weights, states, questions, opts);
                 infer_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ti).count();
@@ -724,6 +803,12 @@ int run_server(const ServerConfig& cfg) {
             if (response.size() > cfg.limits.max_response_bytes) throw HttpError(413, "response exceeds byte budget");
             res.status = 200;
             res.set_content(response, "application/json");
+        } catch (const InferenceCancelled&) {
+            status = 422;
+            std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"},
+                {"event", "inference_cancelled"}, {"reason", "client_disconnected"},
+                {"request_id", rid}}.dump().c_str());
+            send_json(res, status, {{"detail", "inference cancelled"}});
         } catch (const HttpError& e) {
             status = e.status;
             res.set_header("Connection", "close");
@@ -756,9 +841,15 @@ int run_server(const ServerConfig& cfg) {
     srv.Post("/v1/systemone", [&](const httplib::Request& q, httplib::Response& r, const httplib::ContentReader& reader) { handle(q, r, false, reader); });
     srv.Post("/v1/systemone/batch", [&](const httplib::Request& q, httplib::Response& r, const httplib::ContentReader& reader) { handle(q, r, true, reader); });
 
+    static const std::string playground_policy = playground_csp(kPlaygroundHtml);
     srv.Get("/", [&](const httplib::Request&, httplib::Response& res) {
-        if (cfg.playground) res.set_content(kPlaygroundHtml, "text/html; charset=utf-8");
-        else send_json(res, 404, {{"detail", "not found"}});
+        if (cfg.playground) {
+            res.set_header("Content-Security-Policy", playground_policy);
+            res.set_header("X-Frame-Options", "DENY");  // for browsers without frame-ancestors
+            res.set_content(kPlaygroundHtml, "text/html; charset=utf-8");
+        } else {
+            send_json(res, 404, {{"detail", "not found"}});
+        }
     });
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         send_json(res, 200, {{"status", "ok"}, {"version", STATIM_VERSION}});
@@ -845,7 +936,7 @@ int run_server(const ServerConfig& cfg) {
     std::signal(SIGTERM, on_signal);
     std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "listening"},
         {"host", cfg.host}, {"port", cfg.port}, {"auth", !api_keys.empty()}, {"auth_status", api_keys.empty() ? "off" : "on"}}.dump().c_str());
-    if (api_keys.empty() && cfg.host != "127.0.0.1" && cfg.host != "::1" && cfg.host != "localhost")
+    if (api_keys.empty() && !is_loopback_host(cfg.host))
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "warn"}, {"event", "auth_off_on_network"},
             {"host", cfg.host}, {"detail", "listening beyond loopback without API keys: every endpoint is open; "
                                            "set STATIM_API_KEY or --api-key-file"}}.dump().c_str());

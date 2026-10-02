@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Render the release results chart (light + dark SVG) from two gate evaluations.
 
-    python3 tools/diagrams/gate_chart.py models/laya-multilingual/eval.json models/laya-multilingual-clean/eval.json \\
+    python3 tools/diagrams/gate_chart.py models/laya-multilingual models/laya-multilingual-clean \\
         --out assets/diagrams/results-0.3.0 --version 0.3.0
 
-Numbers come straight from tools/finetune/gate.py output; a group averages its languages, and a
-difference is marked significant when it exceeds two standard errors of that average.
+Numbers come from verified gate evaluations; a group averages its languages, and a green mark means
+at least one displayed cell has a paired Holm-significant gain and none has a significant loss.
 """
 import argparse
-import json
-import math
+import os
+import sys
 from collections import OrderedDict
 
 FONT = "Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif"
@@ -70,8 +70,19 @@ def group(ev, key):
     rows = [v for k, v in ev["heldout"].items() if k == key or k.split("/")[0] == key]
     k = len(rows)
     mean = sum(r["acc"] for r in rows) / k
-    var = sum(r["acc"] * (1 - r["acc"]) / r["n"] for r in rows) / (k * k)
-    return mean, var
+    return mean
+
+
+def gate_summary(base, candidate):
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "finetune"))
+    from gate import summary  # noqa: PLC0415
+    return summary(base, candidate)
+
+
+def group_verdict(cells, key):
+    verdicts = [cell["verdict"] for name, cell in cells.items()
+                if name == key or name.split("/")[0] == key]
+    return "loss" if "loss" in verdicts else "gain" if "gain" in verdicts else "noise"
 
 
 def text(x, y, s, size, fill, weight=None, anchor=None, family=FONT):
@@ -81,7 +92,7 @@ def text(x, y, s, size, fill, weight=None, anchor=None, family=FONT):
     return f'<text x="{x}" y="{y}" font-family="{family}" font-size="{size}"{w}{a} fill="{fill}">{s}</text>'
 
 
-def render(base, cand, theme, version, name):
+def render(base, cand, cells, theme, version, name):
     c = THEMES[theme]
     W, X0, X1 = 960, 300, 820  # bar area
     y, out = 176, []
@@ -89,8 +100,8 @@ def render(base, cand, theme, version, name):
         out.append(text(40, y, title, 13, c["muted"], weight=600))
         y += 14
         for key, label, note in rows:
-            (b, vb), (n, vn) = group(base, key), group(cand, key)
-            d, se = n - b, math.sqrt(vb + vn)
+            b, n = group(base, key), group(cand, key)
+            d = n - b
             out.append(text(40, y + 17, label, 14.5, c["ink"], weight=600))
             out.append(text(40, y + 35, note, 12.5, c["text2"]))
             for i, (v, fill) in enumerate(((b, c["base"]), (n, c["signal"]))):
@@ -98,7 +109,7 @@ def render(base, cand, theme, version, name):
                 out.append(f'<rect x="{X0}" y="{by}" width="{max(2, (X1 - X0) * v):.1f}" height="12" rx="3" fill="{fill}"/>')
                 out.append(text(X0 + (X1 - X0) * v + 8, by + 10.5, f"{v:.3f}", 12.5,
                                 c["ink"] if i else c["text2"], weight=600 if i else None, family=MONO))
-            sig = abs(d) > 2 * se
+            sig = group_verdict(cells, key) == "gain"
             label_d = f"{d * 100:+.1f} pts"
             if sig and d > 0:
                 out.append(f'<rect x="{W - 104}" y="{y + 10}" width="64" height="22" rx="11" fill="{c["soft"]}"/>')
@@ -117,13 +128,13 @@ def render(base, cand, theme, version, name):
               + text(X0 + 18, y + 8.5, f"base checkpoint ({BASE_NAME})", 12.5, c["text2"])
               + f'<rect x="{X0 + 250}" y="{y - 2}" width="12" height="12" rx="3" fill="{c["signal"]}"/>'
               + text(X0 + 268, y + 8.5, f"Statim {version}, licence-clean training data", 12.5, c["text2"]))
-    note = text(40, y + 36, "Accuracy. A green chip marks a difference larger than two standard errors; "
-                "grey differences are within sampling noise.", 12.5, c["muted"])
+    note = text(40, y + 36, "Accuracy. A green chip marks a paired Holm-significant gain; "
+                "grey differences are not significant gains.", 12.5, c["muted"])
     head = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{h}" viewBox="0 0 {W} {h}" role="img" '
             f'aria-labelledby="{name}-title {name}-desc">'
             f'<title id="{name}-title">Statim {version}: licence-clean model vs. base checkpoint</title>'
             f'<desc id="{name}-desc">Accuracy of the base checkpoint and the Statim {version} model on '
-            + "; ".join(f"{lab}: {group(base, k)[0]:.3f} to {group(cand, k)[0]:.3f}" for _, rs in SECTIONS for k, lab, _ in rs)
+            + "; ".join(f"{lab}: {group(base, k):.3f} to {group(cand, k):.3f}" for _, rs in SECTIONS for k, lab, _ in rs)
             + ".</desc>"
             f'<rect x="0" y="0" width="{W}" height="{h}" rx="16" fill="{c["panel"]}"/>'
             f'<g aria-hidden="true"><path d="M41 44H50.5" stroke="{c["ink"]}" stroke-width="2.5" stroke-linecap="round"/>'
@@ -148,10 +159,12 @@ def main():
     if a.english:
         global SECTIONS, BASE_NAME
         SECTIONS, BASE_NAME = SECTIONS_EN, "laya, English"
-    base, cand = json.load(open(a.base)), json.load(open(a.candidate))
+    summary = gate_summary(a.base, a.candidate)
+    base, cand = summary["champion"], summary["challenger"]
     for theme in THEMES:
         name = a.out.split("/")[-1] + "-" + theme
-        open(f"{a.out}-{theme}.svg", "w").write(render(base, cand, theme, a.version, name))
+        open(f"{a.out}-{theme}.svg", "w").write(
+            render(base, cand, summary["cells"], theme, a.version, name))
 
 
 if __name__ == "__main__":

@@ -55,9 +55,10 @@ console.log(decision.request_id, decision.inference_time_ms);
 
 Options match the Python client: `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`,
 `calibrate`, `return_logits`, `min_confidence`, `max_len`, `head_max_len`, `request_id`. `null`
-and `undefined` omit a field; request base weights explicitly with
-`{ adapter: "none" }`. Question type `noul` is returned as `YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's
-`noul` value and `probabilities.no` is `1 - noul`.
+and `undefined` omit a field; request base weights explicitly with `{ adapter: "none" }`. Request
+type `yes_no` is accepted as an alias and sent unchanged. Question type `noul` is returned as
+`YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's `noul` value and
+`probabilities.no` is `1 - noul`.
 Every answer type has optional `escalate`, present only when a positive
 confidence threshold applied to the response.
 
@@ -107,6 +108,6 @@ node --test test/client.test.js
 ```
 
 `STATIM_URL` and `STATIM_AUTH_URL` override the base URLs. `STATIM_API_KEY_TEST`
-overrides the key for port 8191 (default `sdk-test-key`).
+overrides the key for port 8191 (default `sdk-test-key-0123456789abcdef0123`).
 
 Source is Apache-2.0, the same licence as the engine.

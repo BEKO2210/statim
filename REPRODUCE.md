@@ -67,8 +67,9 @@ root. In a root-only container you can run the suite as `nobody` after
 
 ## 3. A published model's evaluation
 
-The no-harm gate evaluates a checkpoint on validation data and 54 held-out suites and writes
-`eval.json`. The published `evaluation/eval.json` next to each model is the reference to compare with.
+The no-harm gate evaluates a checkpoint on validation data and 91 held-out suites and writes
+`eval.json` and the per-item outcomes `eval-items.jsonl.gz`, which the paired comparison needs. The
+published `evaluation/` folder next to each model holds both and is the reference to compare with.
 
 ```sh
 python3 -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 datasets huggingface_hub
@@ -76,11 +77,15 @@ python3 -m venv .venv-train && .venv-train/bin/pip install torch laya==0.3.20 da
 .venv-train/bin/hf download Beko2210/statim-decide-en-large --local-dir dist/statim-decide-en-large
 ln -s ../dist/statim-decide-en-large/checkpoint models/statim-decide-en-large
 ln -s ../dist/statim-decide-en-large/statim-decide-en-large-f32.gguf models/statim-decide-en-large-f32.gguf
-mkdir -p models/statim-decide-en-large-published && cp dist/statim-decide-en-large/evaluation/eval.json models/statim-decide-en-large-published/
+mkdir -p models/statim-decide-en-large-published && cp dist/statim-decide-en-large/evaluation/eval.json dist/statim-decide-en-large/evaluation/eval-items.jsonl.gz models/statim-decide-en-large-published/
 # evaluate (about an hour on an RTX 3070; several hours on a CPU)
-STATIM_BIN=build/statim STATIM_GATE_DEVICE=cpu .venv-train/bin/python tools/finetune/gate.py eval models/statim-decide-en-large
+STATIM_BIN=build/statim STATIM_GATE_DEVICE=cpu .venv-train/bin/python tools/finetune/gate.py eval models/statim-decide-en-large --mixture data/mixture-v5.jsonl.gz
 .venv-train/bin/python tools/finetune/gate.py compare models/statim-decide-en-large-published models/statim-decide-en-large
 ```
+
+`--mixture` removes the training texts from the decision-category suites. Build
+`data/mixture-v5.jsonl.gz` with the commands in [RESULTS.md](docs/RESULTS.md#published-model-gates). Without it, the category cells
+come from a different pool and `compare` skips them; the other suites are still compared item by item.
 
 Expected for `statim-decide-en-large` 0.5.0 (`models/statim-decide-en-large/eval.json`):
 
@@ -132,13 +137,14 @@ typed-decisions 0.7585, Banking77 0.9035, AG News 0.9310, Emotion 0.5285.
 ```sh
 tools/fetch_models.sh english                                    # convaiinnovations/laya -> models/laya, models/laya-english-f32.gguf
 ln -sfn laya-english-f32.gguf models/laya-f32.gguf
-STATIM_BIN=build/statim STATIM_GATE_DEVICE=cpu .venv-train/bin/python tools/finetune/gate.py eval models/laya
+STATIM_BIN=build/statim STATIM_GATE_DEVICE=cpu .venv-train/bin/python tools/finetune/gate.py eval models/laya --mixture data/mixture-v5.jsonl.gz
 .venv-train/bin/python tools/finetune/gate.py compare models/laya models/statim-decide-en-large
 ```
 
-Expected: `VERDICT: PROMOTE`, 11 significant gains, 0 significant regressions, the trained family
+Expected: `VERDICT: PROMOTE`, 10 significant gains, 0 significant regressions, the trained family
 +18.6 points (rows) and the zero-shot family within noise. For the multilingual model against
-`convaiinnovations/laya-multilingual`: 18 gains, 36 within noise, 0 regressions.
+`convaiinnovations/laya-multilingual` (0.7.0, both evaluated with `--mixture data/mixture-v8.jsonl.gz`):
+37 gains, 54 within noise, 0 regressions on 91 suites.
 
 ## 5. Speed
 

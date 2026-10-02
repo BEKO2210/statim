@@ -1,0 +1,74 @@
+# Production Docker Compose file for Statim.
+# Mirrors the hardening and resource ceilings from deploy/statim.service.
+#
+# Usage:
+#   1. Set STATIM_MODEL to your model path (defaults to ./models/model.gguf).
+#   2. Set STATIM_API_KEY_FILE to your key secret file (defaults to ./statim_api_key.txt).
+#      Alternatively, supply STATIM_API_KEY via an env file (see comment below).
+#   3. Start the service: docker compose -f deploy/docker-compose.yml up -d
+#
+# Exposure:
+#   By default, port 8080 binds exclusively to host loopback (127.0.0.1:8080:8080).
+#   To serve behind a reverse proxy (e.g. NGINX, Envoy, Traefik, or Caddy):
+#     - Attach statim to a private container network shared with the proxy, or
+#     - Change host_ip to the private LAN/VPC interface (e.g., "10.0.0.1:8080:8080").
+#   Never expose port 8080 unauthenticated or directly to public interfaces.
+
+services:
+  statim:
+    image: statim:latest
+    restart: unless-stopped
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    stop_grace_period: 150s
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          # MemoryMax=8G. systemd's MemoryHigh=6G (reclaim pressure before the hard limit) has no
+          # Compose equivalent: a reservation would be a guarantee, not a throttle, so it is left out.
+          memory: 8G
+          pids: 256
+    ports:
+      # Binds to 127.0.0.1 by default; see header comment for reverse proxy setup.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - type: bind
+        source: ${STATIM_MODEL:-./models/model.gguf}
+        target: /models/model.gguf
+        read_only: true
+    secrets:
+      - statim_api_key
+    # The API key comes from a Docker secret (mounted at /run/secrets/statim_api_key)
+    # or an environment file (never inline).
+    # To use an env file instead of Docker secrets:
+    #   1. Comment out 'secrets:' above and '--api-key-file' in command below.
+    #   2. Uncomment 'env_file:' with a file containing STATIM_API_KEY=<key>.
+    # env_file:
+    #   - ./statim.env
+    command:
+      - serve
+      - -m
+      - /models/model.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --workers
+      - "2"
+      - --api-key-file
+      - /run/secrets/statim_api_key
+
+secrets:
+  statim_api_key:
+    file: ${STATIM_API_KEY_FILE:-./statim_api_key.txt}

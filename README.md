@@ -7,9 +7,9 @@
 
 <p align="center">
   <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BEKO2210/statim?color=0F9F6E"></a>
-  <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-161B22"></a>
-  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, PolyForm Small Business, PolyForm Free Trial, or commercial" src="https://img.shields.io/badge/weights-PolyForm%20or%20commercial-161B22"></a>
+  <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="assets/badges/release.svg"></a>
+  <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="assets/badges/code-licence.svg"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, PolyForm Small Business, PolyForm Free Trial, or commercial" src="assets/badges/weights-licence.svg"></a>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 </p>
 
 Statim answers typed questions about text or JSON: pick one of several labels (`choice`), rate on a
-scale (`score`), or give a yes/no probability (`noul`). It is a native C++20 engine for System-1
+scale (`score`), or give a yes/no probability (`noul`, alias `yes_no`). It is a native C++20 engine for System-1
 decision models and computes all answers in one encoder forward pass, served from one static binary.
 It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by changing the base URL.
@@ -66,6 +66,27 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 These rows use different workloads. They are separate evidence for accuracy, throughput, latency,
 and parity, not one combined benchmark.
+
+### Against ONNX Runtime on CPU
+
+The comparison uses the same model and the same token ids on a Ryzen 7 5800X: Statim 0.9.2 against
+onnxruntime 1.30 (CPU execution provider). Both engines reproduce the PyTorch reference on 240/240
+items before any timing. ORT is called from Python, which adds at most 0.02 % to a run.
+
+| Measure | **Statim** | **ORT** |
+|---|---:|---:|
+| Short inputs, f32, 8 threads, ms per state | **257** | 266 |
+| 1,024 tokens, f32, 8 threads, ms | **4,399** | 11,421 |
+| Short inputs, f32, 16 threads (SMT), ms per state | 457 | **366** |
+| First answer after process start, f32 | **0.45 s** | 2.06 s |
+| Resident memory at start-up, 8-bit | **276 MiB** | 579–581 MiB |
+| Install | **5.2 MiB executable** | 186 MiB of Python packages |
+
+ORT's dynamic int8 is the fastest variant on short inputs, at 168 ms per state on 8 threads, but it
+changes 443 of 2,850 held-out decisions and costs 1.7 accuracy points. Statim's q8_0 changes 30
+decisions, with no measurable accuracy change.
+
+The comparison does not cover TensorRT or a GPU run. [Full protocol and every row](docs/ORT.md)
 
 ## Quick start
 
@@ -135,7 +156,9 @@ the tokenizer in GGUF, making each model a self-describing artifact.
 
 - Runtime: Laya needs Python 3.10+, PyTorch, and transformers. Statim uses one 5.5 MB binary and one
   `.gguf` file.
-- Answers: the comparison covers 240/240 token sequences; answers are within 1e-4 of the reference.
+- Answers: the comparison covers 240/240 token sequences; answers are within 1e-4 of the reference,
+  which is one step of the 4-decimal rounding both use. CI fails at two steps (`engine_parity_*`, on
+  CPU, Vulkan and CUDA).
 - Tokenizer: Laya uses HF `tokenizers` (Rust). Statim's native C++ tokenizer is identical on 3,906
   cases plus 140k fuzz strings and about 10× faster.
 - Memory and throughput: Statim's mmap'd weights are shared between processes. Its 1.07 req/s uses
@@ -233,8 +256,10 @@ responses, metrics, and tests. Trained adapters and the evidence for each are in
 
 Set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE`. Authentication covers inference,
 `/metrics`, and `/v1/models`; health, readiness, and the playground remain public. Key sources fail
-closed and comparisons use constant-time code. A non-loopback server without keys emits
-`auth_off_on_network`.
+closed and comparisons use constant-time code. Every key must be 32–4096 printable ASCII characters
+without whitespace; generate one with `openssl rand -hex 32`. A non-loopback server without keys emits
+an error and exits before loading models. Pass `--allow-unauthenticated` to opt in explicitly on a
+trusted network; that mode retains the `auth_off_on_network` warning.
 
 Requests are bounded before inference by body, JSON structure, state, question, option, token,
 attention, response, concurrency, queue, and deadline limits. See [API limits](docs/API.md#limits-and-server-controls),
@@ -303,7 +328,8 @@ Against Laya:
   Peak memory for one shot is 4.6× less in f32 and 11× less in q8_0.
 - **Footprint:** the runtime-footprint row compares PyTorch alone with the Statim binary.
 
-On AVX2 without VNNI, q8_0 halves the file and cuts memory 2.5× but is slower than f32. Its logits
+On AVX2 without VNNI, q8_0 makes the file 2.5× (multilingual) to 3.5× (English) smaller and cuts
+memory 2.5×, but is slower than f32. Its logits
 move by up to ~0.4 and 2 of 240 parity answers change. ARM dotprod/i8mm and AVX-512-VNNI are the
 intended int8 CPU targets. Four-bit weights are not recommended for this model family.
 
@@ -323,10 +349,12 @@ using the 30 × 8 golden workload:
 | Multilingual p50<br>1 client | 353 ms | **45 ms** | — |
 | English rate<br>1 client | 0.91 req/s | **8.1 req/s** | 8.9× |
 | English p50<br>1 client | 1,039 ms | **119 ms** | — |
-| Multilingual max \|Δlogit\| | 5.0e-4 | **8.8e-5** | 240/240 argmax |
-| English max \|Δlogit\| | 2.0e-4 | **1.6e-4** | 240/240 argmax |
+| Multilingual max \|Δlogit\| | 5.9e-4 | **8.8e-5** | 240/240 argmax |
+| English max \|Δlogit\| | 4.7e-4 | **1.6e-4** | 240/240 argmax |
 
-The state rows are in-process measurements per state.
+The state rows are in-process measurements per state. The \|Δlogit\| rows are against the PyTorch
+reference, measured on 2026-10-01 (CPU since 0.9.2's packed GEMM); CI fails above 1e-3 and archives
+the values of every green run.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/gpu-dark.svg">
@@ -394,8 +422,9 @@ replacing their base. The full method and charts are in [docs/RESULTS.md](docs/R
 | AG News (never trained) | 0.939 | 0.9295 |
 | Emotion (never trained) | 0.588 | 0.504 |
 
-English passed 54 suites with 11 significant gains, 0 regressions, and its zero-shot family within
-noise. Multilingual passed 89 suites with 23 significant gains, 66 within noise, and 0 regressions;
+With paired tests on the same items, English passed 91 suites with 10 significant gains, 0 regressions,
+and its zero-shot family within noise. Multilingual passed 91 suites with 21 significant gains, 70 within
+noise, and 0 regressions;
 its 14-category macro accuracy is 0.748 (0.4.0: 0.559).
 
 Category-adapter results and promotion evidence are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
@@ -416,12 +445,27 @@ against a live server:
 python3 tests/security/test_http.py --binary build/statim --model models/laya-multilingual-f32.gguf
 ```
 
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 [docs/SECURITY.md](docs/SECURITY.md) has the findings, fixes, fuzzing campaign and coverage.
+
+## Platform support
+
+Only what CI builds and tests, or what was run on real hardware, is listed as supported. Everything
+else may build through ggml but is untested.
+
+| Platform | Release binary | CI | Tested on hardware |
+|---|---|---|---|
+| Linux x86-64, CPU (AVX2, FMA, F16C, BMI2) | yes | build, full `ctest`, ASan + UBSan, fuzzing | Ryzen 7 5800X; Xeon E3-1505M v5 |
+| Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
+| Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
+| x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
+| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+) and Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2, i8mm): the native test suite passes, multilingual and English parity 240/240 (2026-10-01/02) |
+| Linux arm64, macOS, Windows | no | no | not tested |
 
 ## Status and roadmap
 
-The current release is v0.9.2: x86-64 AVX2 and ARM NEON CPU support through ggml, optional Vulkan
-and CUDA, two published models, client SDKs, and a public demo. 0.9.2 brings a packed f32 GEMM that makes Statim level with or faster than ONNX Runtime on short
+The current release is v0.9.2: Linux x86-64 binaries for CPU and Vulkan, CUDA from source (see
+[platform support](#platform-support)), two published models, client SDKs, and a public demo. 0.9.2 brings a packed f32 GEMM that makes Statim level with or faster than ONNX Runtime on short
 inputs; 0.9.1 adds the [comparison with ONNX Runtime](docs/ORT.md) and a structural GGUF check before
 ggml parses a model file; 0.9.0 freezes HTTP API v1, with contract
 tests against the real server; 0.8.7 makes the README readable on phones; 0.8.6 gives it a three-step quick start; 0.8.5 publishes the safety adapter after a pre-registered replication; 0.8.4 publishes the PII and emotion adapters; 0.8.3 brings LoRA adapters to both client SDKs; 0.8.2 checks every document against
@@ -433,6 +477,8 @@ category adapters are published: PII, emotion and safety ([docs/ADAPTERS.md](doc
 Next, sentiment and fact-check need more data or larger held-out samples.
 
 Since 0.9.0, API v1 accepts only additive changes; breaking changes require a new major version.
+[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) states what each version promises, the deprecation policy,
+and how to upgrade and roll back.
 See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
 
 ## Licence

@@ -7,7 +7,109 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- The engine parity tests fail above 1.5e-4 instead of 2e-3: one step of the API's 4-decimal
+  rounding, which is what the README's "within 1e-4" claims. Measured worst on x86-64, arm64, Vulkan
+  and CUDA: 1.00e-4.
+- The model and LoRA promotion gates now persist hashed per-item outcomes, verify them against the
+  published counts and accuracies, and use paired exact McNemar tests with Holm correction for both
+  cell regressions and gains. Family uncertainty and the validation interval are paired too;
+  family gains are Holm-corrected across both weightings while the conservative 2-SE family harm
+  screen remains uncorrected. Old artifacts fail closed unless explicitly inspected with the
+  non-promoting `--legacy-unpaired` report mode.
+- README: a platform-support table lists only what CI builds and tests or what ran on real
+  hardware. ARM NEON is no longer claimed (untested); CUDA is a source build, with its parity tests
+  passing on an RTX 3070.
+- **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
+  on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
+  `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
+
+### Fixed
+- Inference now stops cooperatively when its HTTP client disconnects, without cancelling live
+  peers in the same micro-batch, and CPU SGEMM observes request deadlines between outer panels.
+- The Hugging Face model cards called q8_0 "recommended for CPU: 4x smaller" and "faster on CPU".
+  It is 2.5x (multilingual) to 3.5x (English) smaller and slower than f32 on AVX2 CPUs; it is faster on
+  ARM CPUs with dot-product instructions and with CUDA. The cards now compute the ratio from the files.
+- The build failed for non-x86 targets: `cpu_check.h` called x86-only compiler builtins on every
+  architecture. Found by the first Android arm64 build.
+- The README badges no longer go blank on GitHub. They are served from the repository
+  (`assets/badges/`) instead of shields.io, whose responses GitHub's image proxy timed out on
+  (HTTP 504). `check_versions.py --set` bumps the release badge with every other version copy.
+- On a CPU without AVX2, FMA, F16C or BMI2, the release binaries crashed with `Illegal instruction` at the
+  first inference. `statim` and `statim-quantize` now check the CPU first, name the missing features
+  and exit with status 1 (`statim version` still works). Verified on an i5-2520M (Sandy Bridge) and an
+  i3-3227U (Ivy Bridge).
+
+### Added
+- `deploy/nginx/`: NGINX reverse proxy (TLS 1.2 and 1.3, HSTS, nosniff, referrer policy, `X-Frame-Options`, 2 MiB body limit, the existing rate and connection zones, `/metrics` denied except from 127.0.0.1, access log without `Authorization`). `deploy/nginx/test_nginx.sh` runs `nginx -t` and a live server through the proxy. CI job `nginx` (READINESS P1 #15).
+- The playground (also the Hugging Face Space) has a **Simple** mode for first-time and non-technical
+  users: examples presented as use cases, a question builder in plain words (kinds of answer as tiles,
+  answers as chips, no question names or JSON), and a plain-language summary of what Statim decided,
+  with how sure it is. **Expert** mode keeps the full editor and the developer view. Motion follows the
+  brand's pulse line: a title sequence, a scan over the text and a live signal trace while the model
+  reads, then every answer resolves in the same frame (springs, decoding text, counting numbers).
+  All motion is off under `prefers-reduced-motion`; the page stays inside the hash-pinned CSP.
+- Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2) results in docs/BUILD.md: the native suite and both parity
+  tests pass; an `i8mm` build runs the multilingual model in q8_0 at about 0.28 s per item on 5 cores,
+  about 2.4x faster than without `i8mm` (indicative).
+- CI `tsan` job and CMake option `STATIM_TSAN`: builds and instruments Statim and its dependencies with ThreadSanitizer (clang). Concurrency stress test `tests/test_server_concurrency.py` (CTest `server_concurrency`) testing 32 concurrent clients across micro-batching, engine pool weight switching with LoRA adapters, custom SGEMM barrier, client mid-request disconnects, calibration cache, and parallel metrics/health polling (READINESS P1 #46).
+- docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
+  401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
+  server's real log events, messages and metrics.
+- docs/THREAT_MODEL.md: assets, actors, trust boundaries, the control and proving test for each
+  threat, and the residual risks left to the operator. Linked from `SECURITY.md`.
+- docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
+  `statim-decision-v1` and `statim-lora-v1` file formats), the deprecation policy (announce in a minor,
+  keep for at least one minor and three months, remove only in a major), and upgrade and rollback steps.
+- CI fails when ctest skips a test. ctest counts a skip (exit 77) as a pass, so a server suite that
+  could not bind a socket would have turned CI green unrun; `tools/ci/fail_on_skip.py` checks every
+  ctest log in `build-test` and `sanitize`, and the steps now run with `pipefail`.
+- Container health check and production Docker Compose configuration (`deploy/docker-compose.yml`, `tools/docker/healthcheck.cpp`, `Dockerfile`, `Dockerfile.vulkan`): minimal static C++ socket probe `statim-healthcheck` querying `GET /health` with socket timeouts for container liveness without shell or curl dependencies, tolerant 60 s start period for cold model loading, and Compose deployment mirroring `deploy/statim.service` resource ceilings (8 GB memory limit, 6 GB reservation, 4 CPUs, 256 PIDs, 4096 open files, 150 s stop grace period) and security profile (read-only filesystem, dropped capabilities, no-new-privileges, unprivileged non-root user, secrets-based key management) (READINESS P1 #28).
+- Server lifecycle test suite `tests/test_server_lifecycle.py` (CTest `server_lifecycle`) covering admission overload (HTTP 503 with `Retry-After: 1`, saturated `/ready` 503, and clean post-drain 200s matching unloaded execution), client connection drops mid-request (both prior to response and during response streaming), graceful drain under `SIGTERM` and `SIGINT` (5 repeated runs asserting complete 200 responses, connection refusal after signal, and logged shutdown within bound), and exit-leak / memory sanitizer assertions (closing READINESS P1 #24, #25, #26, #27).
+- `deploy/statim.service` and `docs/DEPLOY.md`: documented graceful shutdown behavior and configured `TimeoutStopSec=150` with rationale to cover the 120 s inference timeout plus network flush and cleanup headroom.
+- `bench/soak.py`: a soak test that runs one server for hours under mixed load (single and batch
+  requests, adapter switches, cancelled requests) and checks RSS growth, open files, latency drift,
+  `/ready` and a clean SIGTERM exit.
+- docs/READINESS.md: all nine P0 items are closed, with their proofs. The server-reliability items
+  P1 #23 to #27 are now release criteria, and nine findings from the external reviews are listed.
+- Android arm64: a CI job cross-compiles every target with the NDK, and docs/BUILD.md shows the build.
+  On a Galaxy A15 the native test suite and both parity tests pass (240/240 argmax agreement).
+- `SECURITY.md`: how to report a vulnerability privately, response targets, supported versions and
+  scope. `docs/SECURITY.md` no longer calls the 0.2.1 review independent: an AI coding agent did it.
+- `bench/perf_gate.py` compares candidate speed, memory, start-up and decisions against a release
+  build with interleaved, noise-aware measurements and fails on any regression.
+- [docs/READINESS.md](docs/READINESS.md): the criteria 1.0 has to meet, from an enterprise-readiness audit
+  of 0.9.2. It holds 9 P0 items that block 1.0 and 35 P1 items, each with its status and proof.
+  Branch and tag protection are closed with a recorded test; pinned actions are closed by #51.
+- CI `sanitize` job and CMake option `STATIM_SANITIZE`: runs deterministic memory-safety suites
+  (`security`, `security_model`, `model_validation`, `gguf_preflight`, `tokenizer`, `cpu_check`),
+  Python-driven server tests (`security_http`, `api_contract`, `server_microbatch`), fuzz crash
+  regressions, and multilingual model and engine parity under AddressSanitizer and
+  UndefinedBehaviorSanitizer on every pull request (READINESS P0 #7).
+- CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
+- CI `gpu` workflow: the CUDA and Vulkan parity gates on a self-hosted RTX 3070 runner, for pushes to
+  `main`, release tags and manual runs only, never for pull requests (READINESS P1 #52).
+- HTTP requests accept `yes_no` as a readable alias of the Jev/Laya `noul` question type; answers
+  remain wire-compatible and always use `noul`.
+
 ### Security
+- **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter
+  than 32 characters, exiting with status 2 before model loading. Migration: replace each shorter key
+  with one generated by `openssl rand -hex 32`.
+- The playground no longer keeps the API key in `localStorage` (shared by every tab, kept forever): it
+  lives only in the tab's `sessionStorage`, and a key stored by older versions is removed. `GET /` sends a
+  Content-Security-Policy that pins the page's inline script and style by SHA-256 and forbids framing;
+  every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
+- Release binaries (`statim` and `statim-quantize` on Linux x86-64 and in the Android cross-build)
+  are built with defense-in-depth compile and link hardening enabled by default (`STATIM_HARDEN`):
+  PIE via CMake `check_pie_supported()`, `-fstack-protector-strong`, compile-time and runtime
+  buffer fortification (`_FORTIFY_SOURCE=2` or `=3`, skipped under ASan), full RELRO
+  (`-Wl,-z,relro,-z,now`), and non-executable stack (`-Wl,-z,noexecstack`). CI and release workflows
+  verify these properties before upload with `tools/release/check_hardening.py` (READINESS P1 #17).
+- Model, adapter and `statim-quantize` loading open the file once: the GGUF preflight, ggml's
+  parser and the zero-copy tensors read one read-only mapping. Before, each step opened the path
+  again, so a file renamed over it in between could skip the preflight. Directories, FIFOs and
+  empty files are refused up front, without blocking.
 - Hardened CI and release workflows against supply-chain tampering ([docs/SECURITY.md](docs/SECURITY.md#supply-chain)):
   - Every GitHub Actions action across `.github/workflows/` pinned to an immutable full commit SHA with version comments.
   - Least-privilege permissions applied across all workflows: `contents: read` default, with elevated permissions (`contents: write`, `id-token: write`, `attestations: write`) scoped strictly to release asset publishing and provenance attestation.
@@ -15,6 +117,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   - Build provenance attestations generated for all release archives using `actions/attest-build-provenance` and verifiable with `gh attestation verify`.
   - Added weekly Dependabot updates (`.github/dependabot.yml`) for GitHub Actions.
   - CI Python dependencies pinned to exact versions with SHA-256 integrity hashes in `requirements-ci.txt` and verified via `--require-hashes`.
+- README: a short comparison with ONNX Runtime on CPU under "At a glance", from the measurements in
+  docs/ORT.md, including where ORT is faster. TensorRT and GPU are stated as not measured.
 
 ## [0.9.2] - 2026-09-30
 

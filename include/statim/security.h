@@ -10,6 +10,9 @@ struct HttpError : std::runtime_error {
     int status;
     HttpError(int status, const std::string& detail) : std::runtime_error(detail), status(status) {}
 };
+struct ApiKeyConfigError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 struct SecurityLimits {
     size_t max_json_depth = 64;
     size_t max_json_nodes = 100000;
@@ -48,8 +51,14 @@ DecideRequest parse_decide_request(const std::string& raw, bool batch, const Req
                                    const SecurityLimits& limits = {});
 std::vector<std::string> load_key_file(const std::string& path);
 std::vector<std::string> load_key_env(const std::string& value);
+void validate_api_key(const std::string& key, const std::string& source);
+bool is_loopback_host(const std::string& host);
 bool valid_request_id(const std::string& value);
 std::string now_iso8601();
+// Content-Security-Policy for the built-in playground page: its one inline <script> and one inline
+// <style> block are allowed by SHA-256 hash, everything else stays closed (no 'unsafe-inline' for
+// scripts, no frames, no foreign origins). Throws if the page has not exactly one of each.
+std::string playground_csp(const std::string& html);
 
 // Exact semantic keys avoid hash-collision changes to inference. Both retained key
 // bytes and values are charged; an entry ceiling also bounds allocator overhead.
