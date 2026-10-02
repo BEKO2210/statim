@@ -50,7 +50,7 @@ for them like a P0.
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | **closed** (#81): key in `sessionStorage` only; hash-pinned CSP, `frame-ancestors 'none'`, `nosniff` and `Referrer-Policy` on every response; checked in `security_http`, `test_security` and a headless-browser run |
-| 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | **closed** (this PR): `deploy/nginx/`; `test_nginx.sh` runs `nginx -t` and 12 live checks in the `nginx` CI job |
+| 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | **closed** (#83): `deploy/nginx/`; `test_nginx.sh` runs `nginx -t` and 12 live checks in the `nginx` CI job |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
 | 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | **closed** (#71): `STATIM_HARDEN`; `tools/release/check_hardening.py` in CI and release |
 | 18 | Secret-scanning push protection, plus a CI scan of the diff | S | partly: push protection is on |
