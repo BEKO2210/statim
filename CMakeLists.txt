@@ -15,10 +15,19 @@ option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
 option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
 option(STATIM_SANITIZE "Build everything with ASan and UBSan" OFF)
 option(STATIM_TSAN "Build everything with ThreadSanitizer" OFF)
+option(STATIM_COVERAGE "Clang source-based coverage (-fprofile-instr-generate -fcoverage-mapping)" OFF)
 option(STATIM_HARDEN "Hardening flags for release builds" ON)
+
+if(STATIM_COVERAGE AND (STATIM_FUZZ OR STATIM_SANITIZE OR STATIM_TSAN))
+  message(FATAL_ERROR "STATIM_COVERAGE cannot be combined with STATIM_FUZZ, STATIM_SANITIZE or STATIM_TSAN")
+endif()
 
 if(STATIM_TSAN AND (STATIM_SANITIZE OR STATIM_FUZZ))
   message(FATAL_ERROR "STATIM_TSAN cannot be combined with STATIM_SANITIZE or STATIM_FUZZ")
+endif()
+
+if(STATIM_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR "STATIM_COVERAGE needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
 endif()
 
 if(STATIM_FUZZ OR STATIM_SANITIZE)
@@ -104,21 +113,36 @@ set(GGML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/ggml EXCLUDE_FROM_ALL)
 
+if(STATIM_COVERAGE)
+  # Keep coverage about Statim: ggml was added above without instrumentation.  Every executable
+  # that consumes an instrumented static library still needs Clang's profile runtime at link time.
+  add_link_options(-fprofile-instr-generate)
+endif()
+
+function(statim_enable_coverage target)
+  if(STATIM_COVERAGE)
+    target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  endif()
+endfunction()
+
 add_library(statim_gguf_preflight STATIC src/gguf_preflight.cpp)
 target_include_directories(statim_gguf_preflight PUBLIC include)
 target_link_libraries(statim_gguf_preflight PUBLIC ggml)
+statim_enable_coverage(statim_gguf_preflight)
 
 # ---- tokenizer
 # Unicode data lives in src/unicode_tables.inc (generated from HF behavior by
 # tools/gen_unicode_tables.py); no external Unicode library needed.
 add_library(statim_tokenizer STATIC src/tokenizer.cpp)
 target_include_directories(statim_tokenizer PUBLIC include PRIVATE third_party src)
+statim_enable_coverage(statim_tokenizer)
 
 # ---- core runtime
 add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp src/sha256.cpp)
 set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml statim_gguf_preflight)
+statim_enable_coverage(statim_core)
 find_package(Threads REQUIRED)
 if(STATIM_FUZZ)
   target_compile_options(statim_tokenizer PRIVATE -fsanitize=fuzzer-no-link)
@@ -274,6 +298,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/playground.inc
           -P ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.playground.cmake
   DEPENDS src/playground.html CMakeLists.playground.cmake)
 add_executable(statim src/main.cpp src/server.cpp ${CMAKE_CURRENT_BINARY_DIR}/playground.inc)
+statim_enable_coverage(statim)
 target_include_directories(statim PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(statim PRIVATE STATIM_VERSION="${PROJECT_VERSION}")
 if(NOT STATIM_NATIVE AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")

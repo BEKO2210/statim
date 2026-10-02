@@ -1,0 +1,100 @@
+name: fuzz-weekly
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to run each harness
+        required: false
+        default: '2400'
+
+permissions:
+  contents: read
+
+concurrency: fuzz-weekly
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [request, tokenizer, gguf]
+    env:
+      FUZZ_SECONDS: ${{ inputs.seconds || '2400' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev llvm-18
+      - name: Cache Laya tokenizers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            models/laya/tokenizer
+            models/laya-multilingual/tokenizer
+          key: laya-tokenizers-v1
+      - name: Fetch Laya tokenizers (fuzz_tokenizer also runs on the real vocabularies)
+        run: |
+          for m in laya:laya laya-multilingual:laya-multilingual; do
+            repo=${m%%:*}; dir=models/${m##*:}/tokenizer; mkdir -p "$dir"
+            [ -s "$dir/tokenizer.json" ] || curl -fL --retry 3 -o "$dir/tokenizer.json" \
+              "https://huggingface.co/convaiinnovations/$repo/resolve/main/tokenizer/tokenizer.json"
+          done
+      - name: Restore the grown fuzz corpus
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # the same path as the per-push job's cache, so its corpus can seed this run
+          path: build-fuzz/corpus-*
+          key: fuzz-weekly-${{ matrix.name }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-weekly-${{ matrix.name }}-
+            fuzz-corpus-
+      - name: Build fuzzer
+        run: |
+          cmake -S . -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_FUZZ=ON
+          cmake --build build-fuzz --target fuzz_${{ matrix.name }}
+      - name: Run fuzz_${{ matrix.name }}
+        run: |
+          case "$FUZZ_SECONDS" in (''|*[!0-9]*) echo "seconds must be a whole number" >&2; exit 2;; esac
+          fuzz/run.sh ${{ matrix.name }} "$FUZZ_SECONDS" build-fuzz
+      - name: Upload crash inputs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-artifacts-${{ matrix.name }}
+          path: build-fuzz/artifacts/
+          if-no-files-found: ignore
+      - name: Check for a corpus
+        id: corpus
+        if: always()
+        run: |
+          if [ -d "build-fuzz/corpus-${{ matrix.name }}" ]; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build coverage and write note
+        if: always() && steps.corpus.outputs.exists == 'true'
+        env:
+          LLVM_PROFDATA: llvm-profdata-18
+          LLVM_COV: llvm-cov-18
+        run: |
+          cmake -S . -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_COVERAGE=ON
+          cmake --build build-cov --target fuzz_replay_${{ matrix.name }}
+          fuzz/coverage.sh ${{ matrix.name }} build-cov cov "build-fuzz/corpus-${{ matrix.name }}"
+          cat "cov/coverage-${{ matrix.name }}.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage
+        if: always() && steps.corpus.outputs.exists == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-coverage-${{ matrix.name }}
+          path: cov/
+          retention-days: 90
+          if-no-files-found: ignore
