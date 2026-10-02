@@ -67,6 +67,27 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 These rows use different workloads. They are separate evidence for accuracy, throughput, latency,
 and parity, not one combined benchmark.
 
+### Against ONNX Runtime on CPU
+
+The comparison uses the same model and the same token ids on a Ryzen 7 5800X: Statim 0.9.2 against
+onnxruntime 1.30 (CPU execution provider). Both engines reproduce the PyTorch reference on 240/240
+items before any timing. ORT is called from Python, which adds at most 0.02 % to a run.
+
+| Measure | **Statim** | **ORT** |
+|---|---:|---:|
+| Short inputs, f32, 8 threads, ms per state | **257** | 266 |
+| 1,024 tokens, f32, 8 threads, ms | **4,399** | 11,421 |
+| Short inputs, f32, 16 threads (SMT), ms per state | 457 | **366** |
+| First answer after process start, f32 | **0.45 s** | 2.06 s |
+| Resident memory at start-up, 8-bit | **276 MiB** | 579–581 MiB |
+| Install | **5.2 MiB executable** | 186 MiB of Python packages |
+
+ORT's dynamic int8 is the fastest variant on short inputs, at 168 ms per state on 8 threads, but it
+changes 443 of 2,850 held-out decisions and costs 1.7 accuracy points. Statim's q8_0 changes 30
+decisions, with no measurable accuracy change.
+
+The comparison does not cover TensorRT or a GPU run. [Full protocol and every row](docs/ORT.md)
+
 ## Quick start
 
 Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, ask.
