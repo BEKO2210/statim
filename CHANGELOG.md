@@ -42,6 +42,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ### Added
 - `deploy/nginx/`: NGINX reverse proxy (TLS 1.2 and 1.3, HSTS, nosniff, referrer policy, `X-Frame-Options`, 2 MiB body limit, the existing rate and connection zones, `/metrics` denied except from 127.0.0.1, access log without `Authorization`). `deploy/nginx/test_nginx.sh` runs `nginx -t` and a live server through the proxy. CI job `nginx` (READINESS P1 #15).
+- docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
+  401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
+  server's real log events, messages and metrics.
 - docs/THREAT_MODEL.md: assets, actors, trust boundaries, the control and proving test for each
   threat, and the residual risks left to the operator. Linked from `SECURITY.md`.
 - docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
@@ -75,6 +78,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
 
 ### Security
+- The playground no longer keeps the API key in `localStorage` (shared by every tab, kept forever): it
+  lives only in the tab's `sessionStorage`, and a key stored by older versions is removed. `GET /` sends a
+  Content-Security-Policy that pins the page's inline script and style by SHA-256 and forbids framing;
+  every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 - Release binaries (`statim` and `statim-quantize` on Linux x86-64 and in the Android cross-build)
   are built with defense-in-depth compile and link hardening enabled by default (`STATIM_HARDEN`):
   PIE via CMake `check_pie_supported()`, `-fstack-protector-strong`, compile-time and runtime
