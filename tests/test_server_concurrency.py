@@ -360,6 +360,10 @@ def main():
         "--port",
         str(port),
         "--no-access-log",
+        # This test looks for races and wrong answers, not for the deadline: under ThreadSanitizer
+        # a CI runner serves about 1 request/s, and one queued request outlived the 120 s default.
+        "--inference-timeout",
+        "900",
     ]
 
     env = dict(os.environ, STATIM_DEVICE="cpu", CUDA_VISIBLE_DEVICES="")

@@ -48,6 +48,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   brand's pulse line: a title sequence, a scan over the text and a live signal trace while the model
   reads, then every answer resolves in the same frame (springs, decoding text, counting numbers).
   All motion is off under `prefers-reduced-motion`; the page stays inside the hash-pinned CSP.
+- Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2) results in docs/BUILD.md: the native suite and both parity
+  tests pass; an `i8mm` build runs the multilingual model in q8_0 at about 0.28 s per item on 5 cores,
+  about 2.4x faster than without `i8mm` (indicative).
 - CI `tsan` job and CMake option `STATIM_TSAN`: builds and instruments Statim and its dependencies with ThreadSanitizer (clang). Concurrency stress test `tests/test_server_concurrency.py` (CTest `server_concurrency`) testing 32 concurrent clients across micro-batching, engine pool weight switching with LoRA adapters, custom SGEMM barrier, client mid-request disconnects, calibration cache, and parallel metrics/health polling (READINESS P1 #46).
 - docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
   401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
