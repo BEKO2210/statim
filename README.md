@@ -235,7 +235,8 @@ responses, metrics, and tests. Trained adapters and the evidence for each are in
 
 Set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE`. Authentication covers inference,
 `/metrics`, and `/v1/models`; health, readiness, and the playground remain public. Key sources fail
-closed and comparisons use constant-time code. A non-loopback server without keys emits
+closed and comparisons use constant-time code. Every key must be 32–4096 printable ASCII characters
+without whitespace; generate one with `openssl rand -hex 32`. A non-loopback server without keys emits
 an error and exits before loading models. Pass `--allow-unauthenticated` to opt in explicitly on a
 trusted network; that mode retains the `auth_off_on_network` warning.
 
