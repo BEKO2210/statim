@@ -79,7 +79,7 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
+| 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S |**closed** (#95): `deploy/prometheus/statim-alerts.yml` (down, not ready, busy 503s, 5xx, p95 latency, workers saturated) with `promtool test rules` cases that fire and that stay silent; CI job `alerts`; new gauges `statim_max_concurrent` and `statim_workers` |
 | 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | **closed** (#80): [RUNBOOK.md](RUNBOOK.md), with the server's real event names, messages and metrics |
 | 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | **closed** (#75): [COMPATIBILITY.md](COMPATIBILITY.md#upgrading), with the 1.x promise for `statim-decision-v1` and `statim-lora-v1` |
 | 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | **closed** (#93): `fingerprint` and `checkpoint_sha256` (null for old files) on `/v1/models` and as `statim_model_info` labels; `security_http` checks both agree |

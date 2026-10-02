@@ -3252,9 +3252,17 @@ paths:
 
                 statim_in_flight 0
 
+                # TYPE statim_max_concurrent gauge
+
+                statim_max_concurrent 16
+
                 # TYPE statim_uptime_seconds gauge
 
                 statim_uptime_seconds 0
+
+                # TYPE statim_workers gauge
+
+                statim_workers{model="english"} 1
 
                 # TYPE statim_workers_busy gauge
 

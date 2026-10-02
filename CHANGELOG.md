@@ -99,6 +99,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - `/v1/models` and `statim_model_info` expose each checkpoint's fingerprint and optional full
   checkpoint SHA-256; `statim_adapter_requests_total` counts successful adapter-backed requests by
   explicit or automatic routing (READINESS P1 #32 and #33).
+- Prometheus alert rules and promtool unit tests cover availability, readiness, busy rejection
+  share, server errors, p95 latency and worker saturation. `/metrics` now exports the configured
+  concurrency and per-checkpoint worker limits used by those rules (READINESS P1 #29).
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter

@@ -915,9 +915,12 @@ int run_server(const ServerConfig& cfg) {
              "# TYPE statim_batch_wait_ms summary\nstatim_batch_wait_ms_sum " << batch_wait_ms.sum_milli / 1000.0
           << "\nstatim_batch_wait_ms_count " << batch_wait_ms.count << "\n";
         o << "# TYPE statim_in_flight gauge\nstatim_in_flight " << in_flight << "\n";
+        o << "# TYPE statim_max_concurrent gauge\nstatim_max_concurrent " << cfg.max_concurrent << "\n";
         o << "# TYPE statim_uptime_seconds gauge\nstatim_uptime_seconds "
           << std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count() << "\n";
         // one block per metric family, as text parsers that close a family on a name change expect
+        o << "# TYPE statim_workers gauge\n";
+        for (auto& m : models) o << "statim_workers{model=\"" << prom_label(m.name) << "\"} " << m.pool->size() << "\n";
         o << "# TYPE statim_workers_busy gauge\n";
         for (auto& m : models) o << "statim_workers_busy{model=\"" << prom_label(m.name) << "\"} " << m.pool->busy() << "\n";
         o << "# TYPE statim_model_info gauge\n";

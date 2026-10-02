@@ -1,0 +1,161 @@
+rule_files:
+  - statim-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: target down and healthy
+    interval: 1m
+    input_series:
+      - series: 'up{job="statim",instance="down:8080"}'
+        values: '0+0x5'
+      - series: 'up{job="statim",instance="healthy:8080"}'
+        values: '1+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: StatimDown
+        exp_alerts:
+          - exp_labels:
+              instance: down:8080
+              job: statim
+              severity: page
+            exp_annotations:
+              summary: Statim is down
+              description: Prometheus has been unable to scrape a Statim target for at least two minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimdown
+
+  - name: readiness saturated and below limit
+    interval: 1m
+    input_series:
+      - series: 'statim_in_flight{job="statim",instance="full:8080"}'
+        values: '16+0x8'
+      - series: 'statim_max_concurrent{job="statim",instance="full:8080"}'
+        values: '16+0x8'
+      - series: 'statim_in_flight{job="statim",instance="room:8080"}'
+        values: '15+0x8'
+      - series: 'statim_max_concurrent{job="statim",instance="room:8080"}'
+        values: '16+0x8'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: StatimNotReady
+        exp_alerts:
+          - exp_labels:
+              instance: full:8080
+              job: statim
+              severity: page
+            exp_annotations:
+              summary: Statim has no admission capacity
+              description: Statim has remained at its configured concurrent-request limit for at least five minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimnotready
+
+  - name: busy rejection share above and below threshold
+    interval: 1m
+    input_series:
+      - series: 'statim_rejected_busy_total{job="statim",instance="six-percent:8080"}'
+        values: '0+6x12'
+      - series: 'statim_request_duration_ms_count{job="statim",instance="six-percent:8080"}'
+        values: '0+100x12'
+      - series: 'statim_rejected_busy_total{job="statim",instance="four-percent:8080"}'
+        values: '0+4x12'
+      - series: 'statim_request_duration_ms_count{job="statim",instance="four-percent:8080"}'
+        values: '0+100x12'
+      - series: 'statim_rejected_busy_total{job="statim",instance="idle:8080"}'
+        values: '0+0x12'
+      - series: 'statim_request_duration_ms_count{job="statim",instance="idle:8080"}'
+        values: '0+0x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: StatimRejectingBusy
+        exp_alerts:
+          - exp_labels:
+              instance: six-percent:8080
+              job: statim
+              severity: ticket
+            exp_annotations:
+              summary: Statim is rejecting more than 5% of decisions as busy
+              description: Busy admission rejections exceeded 5% of decision-handler responses over ten minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimrejectingbusy
+
+  - name: server errors increasing and unchanged
+    interval: 1m
+    input_series:
+      - series: 'statim_requests_total{job="statim",instance="failing:8080",code="500"}'
+        values: '0+1x12'
+      - series: 'statim_requests_total{job="statim",instance="stable:8080",code="502"}'
+        values: '3+0x12'
+      - series: 'statim_requests_total{job="statim",instance="busy-only:8080",code="503"}'
+        values: '0+5x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: StatimServerErrors
+        exp_alerts:
+          - exp_labels:
+              code: "500"
+              instance: failing:8080
+              job: statim
+              severity: page
+            exp_annotations:
+              summary: Statim returned a server error
+              description: At least one non-503 decision-handler server error occurred in the last ten minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimservererrors
+
+  - name: high latency p95 fires
+    interval: 1m
+    input_series:
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="slow:8080",le="1000"}'
+        values: '0+0x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="slow:8080",le="5000"}'
+        values: '0+0x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="slow:8080",le="10000"}'
+        values: '0+10x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="slow:8080",le="+Inf"}'
+        values: '0+10x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: StatimHighLatencyP95
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: Statim p95 decision latency is above five seconds
+              description: Aggregate p95 decision-handler latency has exceeded 5000 ms for at least fifteen minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimhighlatencyp95
+
+  - name: low latency p95 does not fire
+    interval: 1m
+    input_series:
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="fast:8080",le="1000"}'
+        values: '0+10x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="fast:8080",le="5000"}'
+        values: '0+10x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="fast:8080",le="10000"}'
+        values: '0+10x25'
+      - series: 'statim_request_duration_ms_bucket{job="statim",instance="fast:8080",le="+Inf"}'
+        values: '0+10x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: StatimHighLatencyP95
+        exp_alerts: []
+
+  - name: workers at and below configured capacity
+    interval: 1m
+    input_series:
+      - series: 'statim_workers_busy{job="statim",instance="a:8080",model="english"}'
+        values: '2+0x20'
+      - series: 'statim_workers{job="statim",instance="a:8080",model="english"}'
+        values: '2+0x20'
+      - series: 'statim_workers_busy{job="statim",instance="a:8080",model="multilingual"}'
+        values: '1+0x20'
+      - series: 'statim_workers{job="statim",instance="a:8080",model="multilingual"}'
+        values: '2+0x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: StatimWorkersSaturated
+        exp_alerts:
+          - exp_labels:
+              model: english
+              severity: ticket
+            exp_annotations:
+              summary: All Statim workers are busy
+              description: A checkpoint has used all of its configured workers continuously for at least fifteen minutes.
+              runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimworkerssaturated

@@ -211,7 +211,7 @@ def main():
 
         logfile = Path(tmp) / 'server.log'
         with logfile.open('w+') as log:
-            proc = subprocess.Popen(base + ['--port', str(port), '--max-concurrent', '2', '--http-queue', '4',
+            proc = subprocess.Popen(base + ['--port', str(port), '--workers', '2', '--max-concurrent', '2', '--http-queue', '4',
                                            '--request-timeout', '2'],
                                     env=dict(env, STATIM_API_KEY=KEY), stdout=log, stderr=log)
             try:
@@ -249,7 +249,10 @@ def main():
                 assert re.fullmatch(r'[0-9a-f]{64}', fingerprint), fingerprint
                 assert checkpoint_sha256 is None or re.fullmatch(r'[0-9a-f]{64}', checkpoint_sha256), checkpoint_sha256
                 _, metrics_body, _ = request('/metrics')
-                model_info = next(line for line in metrics_body.decode().splitlines()
+                metrics_lines = metrics_body.decode().splitlines()
+                assert 'statim_max_concurrent 2' in metrics_lines, metrics_body
+                assert 'statim_workers{model="multilingual"} 2' in metrics_lines, metrics_body
+                model_info = next(line for line in metrics_lines
                                   if line.startswith('statim_model_info{model="multilingual",'))
                 assert 'fingerprint="%s"' % fingerprint in model_info, model_info
                 q = {'x': {'type': 'choice', 'instructions': 'Choose', 'criteria': ['yes', 'no']}}

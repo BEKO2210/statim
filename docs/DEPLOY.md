@@ -230,3 +230,11 @@ scrape_configs:
 Protect the token file with restrictive permissions and do not expose `/metrics` through the public
 proxy. Alert on readiness failures, HTTP 503s, latency, in-flight requests, and busy workers. See
 `docs/SECURITY.md` for the threat boundaries and regression coverage behind these recommendations.
+
+### Alerts
+
+The ready-to-load rules are in `deploy/prometheus/statim-alerts.yml` and expect the scrape job name
+`statim` shown above. Change every `job="statim"` matcher if the deployment uses another job name.
+Load the file through Prometheus `rule_files` (or the equivalent field in a Prometheus operator),
+then reload Prometheus. Run `PROMTOOL=.tools/promtool deploy/prometheus/test_alerts.sh` before
+deploying local changes; alert response steps are in [RUNBOOK.md](RUNBOOK.md#prometheus-alerts).
