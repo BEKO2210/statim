@@ -22,6 +22,10 @@ template<class F> void startup_rejects(F fn) {
     try { fn(); } catch (const std::runtime_error&) { ++checks; return; }
     throw std::runtime_error("expected startup failure");
 }
+template<class F> std::string startup_error(F fn) {
+    try { fn(); } catch (const std::runtime_error& e) { ++checks; return e.what(); }
+    throw std::runtime_error("expected startup failure");
+}
 // Real cpp-httplib request processing without a listening socket. Separate input
 // and output ensures an attempted body drain cannot accidentally read its reply.
 class MemoryStream : public httplib::Stream {
@@ -51,6 +55,7 @@ public:
     }
 };
 int main(int argc, char** argv) try {
+    const std::string test_key = "statim-test-key-0123456789abcdef";
     SecurityLimits limits;
     auto question = ojson{{"type", "choice"}, {"instructions", "Choose"}, {"criteria", {"yes", "no"}}};
     ojson qs = {{"decision", question}};
@@ -138,7 +143,17 @@ int main(int argc, char** argv) try {
 
     startup_rejects([] { load_key_file("/nonexistent/statim-security-keys"); });
     for (auto text : {"", " , , ", "\t\r\n", "bad key"}) startup_rejects([&] { load_key_env(text); });
-    require(load_key_env(" first,second ") == std::vector<std::string>({"first", "second"}), "key whitespace handling");
+    const std::string key31(31, 'a'), key32(32, 'b');
+    const std::string short_error = startup_error([&] { validate_api_key(key31, "STATIM_API_KEY"); });
+    require(short_error.find("STATIM_API_KEY") != std::string::npos &&
+            short_error.find("length 31") != std::string::npos &&
+            short_error.find("minimum is 32") != std::string::npos &&
+            short_error.find("openssl rand -hex 32") != std::string::npos,
+            "short-key error lacks remediation details");
+    require(short_error.find(key31) == std::string::npos, "short-key error exposes key bytes");
+    validate_api_key(key32, "STATIM_API_KEY"); ++checks;
+    require(load_key_env(" " + test_key + "," + key32 + " ") == std::vector<std::string>({test_key, key32}),
+            "key whitespace handling");
     for (auto host : {"127.0.0.1", "127.1.2.3", "127.255.255.255", "::1", "localhost"})
         require(is_loopback_host(host), "loopback host rejected");
     for (auto host : {"0.0.0.0", "::", "192.168.1.2", "example.test", "localhost.", "LOCALHOST",
@@ -149,8 +164,13 @@ int main(int argc, char** argv) try {
         { std::ofstream file(path); file << text; }
         startup_rejects([&] { load_key_file(path); });
     }
-    { std::ofstream file(path); file << "# comment\n secret\r\n"; }
-    require(load_key_file(path) == std::vector<std::string>{"secret"}, "valid key file rejected");
+    { std::ofstream file(path); file << "# comment\n" << test_key << "\n\n  " << key32 << "\r\n"; }
+    require(load_key_file(path) == std::vector<std::string>({test_key, key32}), "several valid file keys rejected");
+    { std::ofstream file(path); file << "# comment\n" << key31 << "\n"; }
+    const std::string file_error = startup_error([&] { load_key_file(path); });
+    require(file_error.find(path.string() + ":2") != std::string::npos, "short file-key error lacks file and line");
+    require(file_error.find(key31) == std::string::npos, "short file-key error exposes key bytes");
+    { std::ofstream file(path); file << test_key << "\n"; }
     std::filesystem::permissions(path, std::filesystem::perms::none);
     if (geteuid() != 0) startup_rejects([&] { load_key_file(path); });
     else std::cerr << "note: running as root, which can read a mode-000 file; unreadable key file check skipped\n";
@@ -173,12 +193,12 @@ int main(int argc, char** argv) try {
         // fixed-length comparison: a maximal key still matches, prefixes/extensions and oversized headers do not
         const std::string big(4096, 'k');
         auto with = [](const std::string& v) { httplib::Request r; r.headers.emplace("Authorization", v); return r; };
-        require(bearer_authorized(with("Bearer " + big), {"short", big}), "4096-byte key rejected");
+        require(bearer_authorized(with("Bearer " + big), {test_key, big}), "4096-byte key rejected");
         require(!bearer_authorized(with("Bearer " + big + "k"), {big}), "longer header accepted");
         require(!bearer_authorized(with("Bearer " + big.substr(1)), {big}), "key prefix accepted");
-        require(!bearer_authorized(with("Bearer shor"), {"short"}), "short key prefix accepted");
+        require(!bearer_authorized(with("Bearer " + test_key.substr(0, 31)), {test_key}), "key prefix accepted");
         require(!bearer_authorized(with("Bearer " + std::string(100000, 'k')), {big}), "oversized header accepted");
-        require(bearer_authorized(with("Bearer short"), {big, "short"}), "second key rejected");
+        require(bearer_authorized(with("Bearer " + test_key), {big, test_key}), "second key rejected");
     }
     CalibrationCache cache(1024, 2);
     std::vector<double> found;
@@ -193,7 +213,7 @@ int main(int argc, char** argv) try {
     require(cache.get("4999", found) && found[0] == 4999, "cache final result changed");
 
     TestServer server;
-    configure_http_security(server, {"secret"});
+    configure_http_security(server, {test_key});
     bool reached = false;
     server.Post("/v1/systemone", [&](const httplib::Request&, httplib::Response& r) { reached = true; r.set_content("{}", "application/json"); });
     for (auto endpoint : {"/metrics", "/v1/models", "/health", "/ready"})
@@ -207,22 +227,23 @@ int main(int argc, char** argv) try {
     };
     auto no_auth = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n", 401);
     require(no_auth.empty_reads == 0 && !reached, "unauthorized body read/drained");
-    auto large = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\nContent-Length: 999999999\r\n\r\n", 413);
+    const std::string auth = "Authorization: Bearer " + test_key + "\r\n";
+    auto large = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n" + auth + "Content-Length: 999999999\r\n\r\n", 413);
     require(large.empty_reads == 0 && !reached, "oversized body read/drained");
     for (auto framing : {"Content-Length: 100\r\nTransfer-Encoding: chunked", "Content-Length: 0\r\nTransfer-Encoding: chunked",
                          "Content-Length: 2\r\nContent-Length: 2", "Content-Length: 2\r\nContent-Length: 3", "Content-Length: 2, 2", "Content-Length: -1"}) {
-        auto stream = replay(std::string("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\n") + framing + "\r\n\r\n", 400);
+        auto stream = replay(std::string("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n") + auth + framing + "\r\n\r\n", 400);
         require(!reached && stream.empty_reads == 0, "conflicting framing consumed body");
     }
-    auto chunked = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\n"
+    auto chunked = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n" + auth +
                           "Transfer-Encoding: chunked\r\n\r\n300000\r\n" + std::string(3 * 1024 * 1024, 'x') + "\r\n0\r\n\r\n", 413);
     require(!reached && chunked.offset < chunked.input.size(), "oversized chunked body drained or dispatched");
     for (auto endpoint : {"/metrics", "/v1/models"}) {
         replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n\r\n", 401);
-        replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\n\r\n", 200);
+        replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n" + auth + "\r\n", 200);
     }
     for (auto endpoint : {"/health", "/ready"}) replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n\r\n", 200);
-    auto failure = replay("GET /throw HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\n\r\n", 500);
+    auto failure = replay("GET /throw HTTP/1.1\r\nHost: localhost\r\n" + auth + "\r\n", 500);
     require(failure.output.find("private-file-secret") == std::string::npos && failure.output.find("EXCEPTION_WHAT") == std::string::npos,
             "exception disclosed to client");
     require(failure.output.find("{\"detail\":\"internal server error\"}") != std::string::npos, "exception shape changed");

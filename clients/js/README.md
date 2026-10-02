@@ -108,6 +108,6 @@ node --test test/client.test.js
 ```
 
 `STATIM_URL` and `STATIM_AUTH_URL` override the base URLs. `STATIM_API_KEY_TEST`
-overrides the key for port 8191 (default `sdk-test-key`).
+overrides the key for port 8191 (default `sdk-test-key-0123456789abcdef0123`).
 
 Source is Apache-2.0, the same licence as the engine.

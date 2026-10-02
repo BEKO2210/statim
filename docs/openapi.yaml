@@ -17,7 +17,7 @@ x-server-configuration:
     env: STATIM_API_KEY=key1,key2
     flag: --api-key-file FILE (repeatable; one key per line)
     behavior: Each explicitly configured source must independently yield a valid key or startup aborts.
-      Keys are trimmed 1-4096 byte printable ASCII strings without whitespace. With no source configured,
+      Keys are trimmed 32-4096 byte printable ASCII strings without whitespace. With no source configured,
       only loopback listeners start unless --allow-unauthenticated is passed; that explicit opt-in logs
       auth_off_on_network and records auth=false and auth_status=off.
   environment:

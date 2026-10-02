@@ -277,6 +277,9 @@ int main(int argc, char** argv) {
         }
         usage();
         return 2;
+    } catch (const statim::ApiKeyConfigError& e) {
+        std::fprintf(stderr, "error: %s\n", e.what());
+        return 2;
     } catch (const statim::QuestionError& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
         return 3;

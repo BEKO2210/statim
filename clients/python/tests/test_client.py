@@ -2,7 +2,7 @@
 
 Integration calls use the unauthenticated server at STATIM_URL (default
 http://127.0.0.1:8190, multilingual CPU model) and a keyed server at
-STATIM_AUTH_URL (default http://127.0.0.1:8191, key sdk-test-key).
+STATIM_AUTH_URL (default http://127.0.0.1:8191, key sdk-test-key-0123456789abcdef0123).
 
 Retry sequencing uses a local HTTP server so admission control does not have
 to be saturated.
@@ -16,7 +16,6 @@ import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -38,7 +37,7 @@ from statim import (
 
 BASE_URL = os.environ.get("STATIM_URL", "http://127.0.0.1:8190")
 AUTH_URL = os.environ.get("STATIM_AUTH_URL", "http://127.0.0.1:8191")
-AUTH_KEY = os.environ.get("STATIM_API_KEY_TEST", "sdk-test-key")
+AUTH_KEY = os.environ.get("STATIM_API_KEY_TEST", "sdk-test-key-0123456789abcdef0123")
 ADAPTER_URL = os.environ.get("STATIM_ADAPTER_URL")
 ADAPTER_NAME = os.environ.get("STATIM_ADAPTER_NAME")
 AUTO_FAMILIES = {
@@ -187,30 +186,32 @@ def test_constructor_rejects_bad_arguments() -> None:
     assert client.api_key is None
 
 
-def test_yes_no_probabilities_and_options_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_yes_no_probabilities_and_options_round_trip() -> None:
     seen: dict[str, Any] = {}
 
-    def request(self: Client, method: str, path: str, body: dict[str, Any], **options: Any) -> Any:
-        seen["method"] = method
-        seen["path"] = path
-        seen["body"] = body
-        seen["request_id"] = options["request_id"]
-        return SimpleNamespace(
-            status=200,
-            headers={"X-Request-Id": "opt-1", "X-Inference-Time-Ms": "1.50"},
-            payload=NOUL_BODY,
-        )
+    def script(hit: int, handler: BaseHTTPRequestHandler):
+        server = handler.server
+        assert isinstance(server, _ScriptServer)
+        seen["body"] = json.loads(server.last_body)
+        seen["headers"] = server.last_headers
+        assert hit == 1
+        return 200, {"X-Request-Id": "opt-1", "X-Inference-Time-Ms": "1.50"}, json.dumps(NOUL_BODY)
 
-    monkeypatch.setattr(Client, "_request", request)
-    client = Client("http://127.0.0.1:1", api_key="secret", timeout=5, max_retries=0)
-    decision = client.decide(
-        "hello",
-        {"refund": {"type": "yes_no", "instructions": "Refund?"}},
-        model=None,
-        calibrate=False,
-        ensemble=1,
-        request_id="opt-1",
-    )
+    server, url, thread = _mock(script)
+    try:
+        client = Client(url, api_key="sdk-unit-key-0123456789abcdef0123", timeout=5, max_retries=0)
+        decision = client.decide(
+            "hello",
+            {"refund": {"type": "yes_no", "instructions": "Refund?"}},
+            model=None,
+            calibrate=False,
+            ensemble=1,
+            request_id="opt-1",
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
     assert seen["body"] == {
         "state": "hello",
@@ -218,8 +219,8 @@ def test_yes_no_probabilities_and_options_round_trip(monkeypatch: pytest.MonkeyP
         "calibrate": False,
         "ensemble": 1,
     }
-    assert seen["method"] == "POST" and seen["path"] == "/v1/systemone"
-    assert seen["request_id"] == "opt-1"
+    assert seen["headers"]["x-request-id"] == "opt-1"
+    assert seen["headers"]["authorization"] == "Bearer sdk-unit-key-0123456789abcdef0123"
     assert "request_id" not in seen["body"]
     answer = decision.answers["refund"]
     assert isinstance(answer, YesNoAnswer)
@@ -659,7 +660,7 @@ def test_handler_errors_on_the_real_server(base_url: str) -> None:
 
     with pytest.raises(UnprocessableEntityError) as unknown:
         client.decide("x", {"q": {"type": "maybe", "instructions": "?"}})
-    assert unknown.value.detail == "unknown question type; use choice, score, noul or yes_no"
+    assert unknown.value.detail == "unknown question type; use choice, score or noul"
 
     too_many = {f"q{i}": {"type": "noul", "instructions": "?"} for i in range(65)}
     with pytest.raises(PayloadTooLargeError) as large:
@@ -764,7 +765,7 @@ def test_authentication_on_the_keyed_server(auth: tuple[str, str]) -> None:
     assert str(no_key.value) == "invalid or missing bearer token"
     assert no_key.value.request_id is None
 
-    wrong = Client(url, api_key="not-the-key", timeout=30)
+    wrong = Client(url, api_key="wrong-sdk-key-0123456789abcdef01", timeout=30)
     with pytest.raises(AuthenticationError) as denied:
         wrong.decide(
             "hello",
