@@ -104,6 +104,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   concurrency and per-checkpoint worker limits used by those rules (READINESS P1 #29).
 - Weekly 40-minute fuzz campaigns for all three harnesses, with cached corpora and per-harness
   Clang source-coverage notes and artifacts (READINESS P1 #16).
+- CI `secrets` job: gitleaks over the commits each push or pull request adds, and daily over all
+  history, with a narrow allowlist in `.gitleaks.toml` (READINESS P1 #18).
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter
