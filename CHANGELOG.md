@@ -41,6 +41,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- The playground (also the Hugging Face Space) has a **Simple** mode for first-time and non-technical
+  users: examples presented as use cases, a question builder in plain words (kinds of answer as tiles,
+  answers as chips, no question names or JSON), and a plain-language summary of what Statim decided,
+  with how sure it is. **Expert** mode keeps the full editor and the developer view. Motion follows the
+  brand's pulse line: a title sequence, a scan over the text and a live signal trace while the model
+  reads, then every answer resolves in the same frame (springs, decoding text, counting numbers).
+  All motion is off under `prefers-reduced-motion`; the page stays inside the hash-pinned CSP.
 - Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2) results in docs/BUILD.md: the native suite and both parity
   tests pass; an `i8mm` build runs the multilingual model in q8_0 at about 0.28 s per item on 5 cores,
   about 2.4x faster than without `i8mm` (indicative).
