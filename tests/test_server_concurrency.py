@@ -34,6 +34,12 @@ STATE_2 = "Worst experience ever. The support agent hung up on me twice and I am
 STATE_3 = "Il pagamento non va a buon fine, errore 402."
 STATE_4 = "Can you send me a quote for 50 seats of the enterprise plan?"
 
+# This test looks for races and wrong answers, not for the deadline: under ThreadSanitizer a CI
+# runner serves about 1 request/s, and one queued request outlived the 120 s default. The clients
+# wait as long as the server may take, so a slow runner cannot fail the test with a client timeout.
+INFERENCE_TIMEOUT_S = 900
+CLIENT_TIMEOUT_S = INFERENCE_TIMEOUT_S + 60
+
 Q_SENTIMENT = {
     "sentiment": {
         "type": "choice",
@@ -224,7 +230,7 @@ def make_templates():
     ]
 
 
-def run_single_request(port, payload, timeout=120):
+def run_single_request(port, payload, timeout=CLIENT_TIMEOUT_S):
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
     try:
         body = json.dumps(payload)
@@ -236,7 +242,7 @@ def run_single_request(port, payload, timeout=120):
         conn.close()
 
 
-def run_batch_request(port, payload, timeout=120):
+def run_batch_request(port, payload, timeout=CLIENT_TIMEOUT_S):
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
     try:
         body = json.dumps(payload)
@@ -360,10 +366,8 @@ def main():
         "--port",
         str(port),
         "--no-access-log",
-        # This test looks for races and wrong answers, not for the deadline: under ThreadSanitizer
-        # a CI runner serves about 1 request/s, and one queued request outlived the 120 s default.
         "--inference-timeout",
-        "900",
+        str(INFERENCE_TIMEOUT_S),
     ]
 
     env = dict(os.environ, STATIM_DEVICE="cpu", CUDA_VISIBLE_DEVICES="")
@@ -427,7 +431,7 @@ def main():
 
                 try:
                     if ttype == "single":
-                        status, body_text = run_single_request(port, tpl["payload"], timeout=120)
+                        status, body_text = run_single_request(port, tpl["payload"])
                         if status == 200:
                             data = json.loads(body_text)
                             assert_answers_equal(data, references[tpl_idx])
@@ -441,7 +445,7 @@ def main():
                             client_errors.append(f"Client {client_id} step {step} ({tpl['desc']}) unexpected status {status}: {body_text}")
 
                     elif ttype == "batch":
-                        status, body_text = run_batch_request(port, tpl["payload"], timeout=120)
+                        status, body_text = run_batch_request(port, tpl["payload"])
                         if status == 200:
                             data = json.loads(body_text)
                             assert_batch_answers_equal(data, references[tpl_idx])
