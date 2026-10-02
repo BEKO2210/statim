@@ -41,7 +41,7 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 ## At a glance
 
-| Measure | **Statim** | **Qwen3-8B** |
+| Measure | **Statim Decide Multilingual 0.7.0**, trained | **Qwen3-8B**, zero-shot |
 |---|---:|---:|
 | 14-category macro accuracy | **0.748** | 0.706 |
 | Banking77 | **0.913** | 0.650 |

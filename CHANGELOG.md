@@ -23,6 +23,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - **Breaking:** `statim serve` now exits with status 2 before loading models when it is configured
   on a non-loopback host without an API key. Existing unauthenticated network deployments can pass
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
+- README "At a glance": the columns name the model and the protocol, "Statim Decide Multilingual
+  0.7.0, trained" against "Qwen3-8B, zero-shot" (READINESS P1 #40).
 
 ### Fixed
 - Inference now stops cooperatively when its HTTP client disconnects, without cancelling live

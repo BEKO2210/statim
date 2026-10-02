@@ -100,7 +100,7 @@ for them like a P0.
 |---|---|---|---|
 | 38 | A contamination report for the 1.0 weights: exact matches and near-duplicates against every evaluation split, as a release gate | M | open |
 | 39 | A specialist baseline on the same items, or no "same protocol" wording for external supervised numbers | L | open |
-| 40 | The glance table names model 0.7.0 and trained against zero-shot | S | open |
+| 40 | The glance table names model 0.7.0 and trained against zero-shot | S | **closed** (#94): the column heads read "Statim Decide Multilingual 0.7.0, trained" and "Qwen3-8B, zero-shot" |
 
 ### Documentation
 
