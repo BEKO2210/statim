@@ -306,3 +306,39 @@ jobs:
           tar xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" --strip-components=1 "prometheus-$PROMETHEUS_VERSION.linux-amd64/promtool"
       - name: Alert rules and their unit tests
         run: PROMTOOL="$RUNNER_TEMP/promtool" deploy/prometheus/test_alerts.sh
+  secrets:
+    # gitleaks over the commits a push or pull request adds; the daily run scans all history
+    # (READINESS P1 #18). Push protection on GitHub is the first line; this catches what it misses.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from the release's checksums.txt
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks (pinned, hash-checked)
+        run: |
+          f=gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$f" "https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS_VERSION/$f"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$f" | sha256sum -c
+          tar xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan the new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then range="$PR_BASE..HEAD"
+          elif [ "$EVENT" = push ] && [ -n "$PUSH_BEFORE" ] && [ "${PUSH_BEFORE#0000000}" = "$PUSH_BEFORE" ] \
+               && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then range="$PUSH_BEFORE..HEAD"
+          elif [ "$EVENT" = push ] && [ "$GITHUB_REF" != refs/heads/main ]; then range="origin/main..HEAD"
+          else range="HEAD"  # schedule, or a push without a usable base: all history
+          fi
+          echo "scanning $range"
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --config .gitleaks.toml --log-opts="$range" .

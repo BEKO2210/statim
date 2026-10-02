@@ -1,0 +1,16 @@
+# gitleaks configuration for the CI secret scan (READINESS P1 #18): the default rules, plus an
+# allowlist for values that are public on purpose. Keep it narrow: a new entry needs a reason.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public test fixtures and hashes"
+regexes = [
+  # API keys that exist only in tests and examples: "<name>-test-key-" + hex digits
+  '''\b[a-z]+-test-key-[0-9a-f]{16,}\b''',
+  '''\bsdk-unit-key-[0-9a-f]+\b''',
+]
+paths = [
+  # API v1 contract: SHA-256 hashes of OpenAPI descriptions, not credentials
+  '''^docs/api-v1\.contract\.json$''',
+]
