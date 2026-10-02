@@ -55,9 +55,10 @@ console.log(decision.request_id, decision.inference_time_ms);
 
 Options match the Python client: `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`,
 `calibrate`, `return_logits`, `min_confidence`, `max_len`, `head_max_len`, `request_id`. `null`
-and `undefined` omit a field; request base weights explicitly with
-`{ adapter: "none" }`. Question type `noul` is returned as `YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's
-`noul` value and `probabilities.no` is `1 - noul`.
+and `undefined` omit a field; request base weights explicitly with `{ adapter: "none" }`. Request
+type `yes_no` is accepted as an alias and sent unchanged. Question type `noul` is returned as
+`YesNoAnswer` (`type` stays `"noul"`). `probabilities.yes` is the server's `noul` value and
+`probabilities.no` is `1 - noul`.
 Every answer type has optional `escalate`, present only when a positive
 confidence threshold applied to the response.
 

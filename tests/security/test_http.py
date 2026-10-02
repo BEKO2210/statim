@@ -245,6 +245,16 @@ def main():
                 q = {'x': {'type': 'choice', 'instructions': 'Choose', 'criteria': ['yes', 'no']}}
                 req = {'state': 'hello', 'questions': q}
                 assert request('/v1/systemone', req, auth=False)[0] == 401
+                yes_no_q = {'answer': {'type': 'yes_no', 'instructions': 'Is this a greeting?',
+                                       'labels': {'false': 'no', 'true': 'yes'}}}
+                noul_q = {'answer': dict(yes_no_q['answer'], type='noul')}
+                yes_no_status, yes_no_body, _ = request('/v1/systemone', {'state': 'hello', 'questions': yes_no_q})
+                noul_status, noul_body, _ = request('/v1/systemone', {'state': 'hello', 'questions': noul_q})
+                yes_no_answer = json.loads(yes_no_body)['answers']['answer']
+                noul_answer = json.loads(noul_body)['answers']['answer']
+                assert yes_no_status == noul_status == 200
+                assert yes_no_answer['type'] == 'noul'
+                assert yes_no_answer['noul'] == noul_answer['noul']
                 status, body, _ = request('/v1/systemone/batch', {'states': ['one', 'two'], 'questions': {}})
                 batch = json.loads(body)
                 assert status == 200 and set(batch) == {'results'} and len(batch['results']) == 2

@@ -139,8 +139,8 @@ void validate_request_fields(const ojson& body) {
         const auto& q = it.value();
         fields(q, {"type", "instructions", "criteria", "labels"});
         if (!q.contains("type") || !q["type"].is_string() ||
-            (q["type"] != "choice" && q["type"] != "score" && q["type"] != "noul"))
-            throw HttpError(422, "unknown question type; use choice, score or noul");
+            (q["type"] != "choice" && q["type"] != "score" && q["type"] != "noul" && q["type"] != "yes_no"))
+            throw HttpError(422, "unknown question type; use choice, score, noul or yes_no");
         if (!q.contains("instructions")) throw HttpError(422, "question requires instructions");
         if (q.contains("instructions") && rendered_size(q["instructions"]) > 16384)
             throw HttpError(413, "instructions exceed 16384 bytes");
@@ -158,8 +158,10 @@ DecideRequest parse_decide_request(const std::string& raw, bool batch, const Req
                                    const SecurityLimits& limits) {
     DecideRequest r;
     r.body = parse_request(raw, limits);
+    validate_request_fields(r.body);
+    for (auto& q : r.body["questions"])
+        if (q["type"] == "yes_no") q["type"] = "noul";
     const ojson& body = r.body;
-    validate_request_fields(body);
     if (!body.is_object() || !body.contains("questions"))
         throw HttpError{400, "request body must be an object with a 'questions' field"};
     const ojson& questions = body["questions"];

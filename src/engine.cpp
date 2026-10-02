@@ -18,6 +18,7 @@ constexpr const char* kQTypes[] = {"choice", "score", "noul"};
 constexpr float kTempMin = 0.5f, kTempMax = 5.0f;
 
 int qtype_of(const std::string& t) {
+    if (t == "yes_no") return 2;
     for (int i = 0; i < 3; ++i)
         if (t == kQTypes[i]) return i;
     return -1;
@@ -185,7 +186,7 @@ void check_question(const std::string& qid, const ojson& q) {
     auto err = [&](const std::string& m) { throw QuestionError("question '" + qid + "': " + m); };
     if (!q.is_object()) err("definition must be an object");
     if (!q.contains("type") || !q["type"].is_string() || qtype_of(q["type"].get<std::string>()) < 0)
-        err("unknown type; use one of ['choice', 'noul', 'score']");
+        err("unknown type; use one of ['choice', 'noul', 'score', 'yes_no']");
     const std::string t = q["type"].get<std::string>();
     if (!q.contains("instructions")) err("no 'instructions'; add the text the model should answer");
     const ojson crit = q.contains("criteria") ? q["criteria"] : ojson();
@@ -211,7 +212,7 @@ void check_question(const std::string& qid, const ojson& q) {
         }
     }
     if (q.contains("labels")) {
-        if (t != "noul") err("'labels' is only supported for noul questions");
+        if (t != "noul" && t != "yes_no") err("'labels' is only supported for noul questions");
     }
 }
 

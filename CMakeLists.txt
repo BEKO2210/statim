@@ -218,7 +218,9 @@ file(WRITE ${CMAKE_BINARY_DIR}/CTestCustom.cmake "set(CTEST_CUSTOM_MAXIMUM_PASSE
     set_tests_properties(server_lora PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
     add_test(NAME server_concurrency COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_concurrency.py
       --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
-    set_tests_properties(server_concurrency PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
+    # 1500 s like the tsan job's --timeout: the per-test property wins over ctest --timeout, and its
+    # clients may wait up to the server's 900 s deadline under ThreadSanitizer
+    set_tests_properties(server_concurrency PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 1500)
   endif()
   set(M ${CMAKE_CURRENT_SOURCE_DIR}/models)
   set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)

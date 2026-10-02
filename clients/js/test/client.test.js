@@ -129,7 +129,7 @@ test("yes/no probabilities and option encoding", async () => {
     assert.equal(req.headers.authorization, "Bearer sdk-unit-key-0123456789abcdef0123");
     assert.deepEqual(JSON.parse(body), {
       state: "hello",
-      questions: { refund: { type: "noul", instructions: "Refund?" } },
+      questions: { refund: { type: "yes_no", instructions: "Refund?" } },
       calibrate: false,
       ensemble: 1,
     });
@@ -142,7 +142,7 @@ test("yes/no probabilities and option encoding", async () => {
   try {
     const decision = await new Client(server.url, "sdk-unit-key-0123456789abcdef0123", 5, { max_retries: 0 }).decide(
       "hello",
-      { refund: { type: "noul", instructions: "Refund?" } },
+      { refund: { type: "yes_no", instructions: "Refund?" } },
       { calibrate: false, ensemble: 1, request_id: "opt-1" },
     );
     const answer = decision.answers.refund;

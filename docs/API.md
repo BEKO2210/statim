@@ -1,6 +1,6 @@
 # Statim HTTP API
 
-Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and zero or more questions. Each question has type `choice`, `score`, or `noul`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object.
+Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and zero or more questions. Each question has type `choice`, `score`, `noul`, or `yes_no`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object. `yes_no` is an alias of `noul` in requests; answers always use the wire name `noul`.
 
 The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 `{"detail":"HTTP request failed"}`. When authentication is configured, a nonpublic unknown path is rejected with 401 before route lookup unless it has a valid bearer key.
 
@@ -267,10 +267,10 @@ Each question is an object:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `type` | yes | `choice`, `score`, or `noul`. |
+| `type` | yes | `choice`, `score`, `noul`, or `yes_no`; `yes_no` is a request alias of `noul`. |
 | `instructions` | yes | The text to answer. A non-string is serialized as JSON and used as text. |
 | `criteria` | depends on type | Options. See the next section. |
-| `labels` | no | Only valid on `noul`. Maps `false` and `true` to two different non-empty strings. |
+| `labels` | no | Only valid on `noul` and its `yes_no` request alias. Maps `false` and `true` to two different non-empty strings. |
 
 Unknown fields in a question definition are also ignored. They do not affect inference or calibration-cache keys.
 
@@ -1081,7 +1081,7 @@ Question validation messages:
 | `detail` | Trigger |
 |---|---|
 | `expected JSON object` (HTTP 400) | the question value is not an object |
-| `unknown question type; use choice, score or noul` | `type` is missing, not a string, or not one of those three |
+| `unknown question type; use choice, score, noul or yes_no` | `type` is missing, not a string, or not one of those four |
 | `question requires instructions` | `instructions` is missing |
 | `question '<id>': a choice question takes 'criteria' as a dict of label -> description, or a list of labels` | choice `criteria` is missing or not an object or list |
 | `question '<id>': a choice question needs at least one criterion` | the object or list is empty |
@@ -1251,7 +1251,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"unknown question type; use choice, score or noul"}
+{"detail":"unknown question type; use choice, score, noul or yes_no"}
 422
 ```
 

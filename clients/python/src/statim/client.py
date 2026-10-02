@@ -221,8 +221,8 @@ class Client:
         """Score one state.
 
         ``questions`` maps a question id to an object with ``type``
-        (``choice``, ``score``, or ``noul``) and ``instructions``. Choice and
-        score questions also need ``criteria``. Optional keyword arguments are
+        (``choice``, ``score``, ``noul``, or its request alias ``yes_no``) and
+        ``instructions``. Choice and score questions also need ``criteria``. Optional keyword arguments are
         ``model``, ``adapter``, ``lang``, ``ensemble``, ``ensemble_margin``, ``calibrate``,
         ``return_logits``, ``min_confidence``, ``max_len``, ``head_max_len``,
         and ``request_id``.

@@ -61,6 +61,21 @@ int main(int argc, char** argv) try {
     ojson qs = {{"decision", question}};
     ojson request = {{"state", "hello"}, {"questions", qs}};
     require(parse_request(request.dump()) == request, "valid request changed");
+    auto yes_no = request;
+    yes_no["questions"]["decision"] = {{"type", "yes_no"}, {"instructions", "Is it so?"},
+                                           {"labels", {{"false", "no"}, {"true", "yes"}}}};
+    auto normalized = parse_decide_request(yes_no.dump(), false);
+    require(normalized.body["questions"]["decision"]["type"] == "noul",
+            "yes_no was not normalized to noul");
+    auto unknown = request;
+    unknown["questions"]["decision"]["type"] = "maybe";
+    try {
+        (void)parse_decide_request(unknown.dump(), false);
+        throw std::runtime_error("unknown question type accepted");
+    } catch (const HttpError& e) {
+        require(e.status == 422 && std::string(e.what()) == "unknown question type; use choice, score, noul or yes_no",
+                "unknown question type error did not list yes_no");
+    }
     {  // playground CSP: inline blocks pinned by SHA-256 (values from `printf a | openssl dgst -sha256 -binary | base64`)
         const std::string csp = playground_csp("<style>a</style><p>x</p><script>b</script>");
         require(csp.find("style-src 'sha256-ypeBEsobvcr6wjGzmiPcTaeG7/gUfE5yuYB3ha/uSLs='") != std::string::npos, "playground CSP: style hash");
@@ -251,6 +266,13 @@ int main(int argc, char** argv) try {
         Engine engine(model, ro);
         DecideOptions normal; normal.return_logits = true;
         auto baseline = engine.decide("A simple decision.", qs, normal);
+        ojson noul_qs = {{"answer", {{"type", "noul"}, {"instructions", "Is this simple?"},
+                                      {"labels", {{"false", "no"}, {"true", "yes"}}}}}};
+        auto yes_no_qs = noul_qs;
+        yes_no_qs["answer"]["type"] = "yes_no";
+        require(engine.decide("A simple decision.", yes_no_qs, normal) ==
+                    engine.decide("A simple decision.", noul_qs, normal),
+                "yes_no does not behave identically to noul");
         auto timed = normal; timed.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         require(engine.decide("A simple decision.", qs, timed) == baseline, "deadline changes inference bits");
         timed.deadline = std::chrono::steady_clock::now();
