@@ -437,7 +437,7 @@ else may build through ggml but is untested.
 | Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
 | Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
 | x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
-| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+): the native test suite passes, multilingual and English parity 240/240 (2026-10-01) |
+| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+) and Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2, i8mm): the native test suite passes, multilingual and English parity 240/240 (2026-10-01/02) |
 | Linux arm64, macOS, Windows | no | no | not tested |
 
 ## Status and roadmap
