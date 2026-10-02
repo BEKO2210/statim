@@ -60,8 +60,8 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 19 | A release archive built twice has an identical SHA-256; the compiler package is pinned | M | open |
-| 20 | An SPDX SBOM next to `SHA256SUMS` | S | done in #51; proven by the next release |
-| 21 | Build-provenance attestations on the release archives, with the verify command documented | M | done in #51; proven by the next release |
+| 20 | An SPDX SBOM next to `SHA256SUMS` | S | **closed** (#99): Syft's SBOM for 0.9.3 listed only the archive file; `tools/release/sbom.py` lists every shipped file, the compiled-in components with versions and licences, and the system libraries; the 0.9.3 SBOMs were replaced and pass `pyspdxtools` validation |
+| 21 | Build-provenance attestations on the release archives, with the verify command documented | M | **closed** (#99): `gh attestation verify` (gh 2.102) passes for both 0.9.3 archives: signed by `release.yml` at `refs/tags/v0.9.3` |
 | 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | partly: the Python CI tools are hash-locked (#51) |
 
 ### Reliability
@@ -134,6 +134,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | partly (#89): `gpu` workflow on the self-hosted RTX 3070 runner, CUDA and Vulkan parity gates on `main`, tags and manual runs; fork pull-request workflows need approval. Open: iGPU Vulkan, GPU perf-gate cells, ORT CUDA and TensorRT |
 | 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open: run 2 of [soak-2026-10-01.md](reproductions/soak-2026-10-01.md) covers it |
 | 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | **closed** (#77): a 5 ms connection watcher cancels the request's inference; a shared micro-batch continues for its live items; `server_lifecycle` measures both |
+| 55 | Release binaries run on the glibc of current enterprise distributions (RHEL 9: 2.34, Debian 12: 2.36, Ubuntu 22.04: 2.35); 0.9.3 needs 2.38 (`__isoc23_strtol` from the Ubuntu 24.04 build). Build on an older base and check the highest required `GLIBC_` version in CI | Platform | M | open |
 
 ## Proofs
 

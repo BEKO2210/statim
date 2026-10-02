@@ -7,6 +7,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- The release SBOMs (Syft) listed only the archive file. `tools/release/sbom.py` now lists every
+  shipped file, the compiled-in components with their versions and licences, and the system
+  libraries the binaries load; it validates as SPDX 2.3. The 0.9.3 release assets were replaced
+  with SBOMs generated this way from the same archives (READINESS P1 #20).
+
 ## [0.9.3] - 2026-10-02
 
 **Upgrade first.** Two security changes stop a misconfigured server from starting (exit status 2,
