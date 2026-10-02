@@ -660,7 +660,7 @@ def test_handler_errors_on_the_real_server(base_url: str) -> None:
 
     with pytest.raises(UnprocessableEntityError) as unknown:
         client.decide("x", {"q": {"type": "maybe", "instructions": "?"}})
-    assert unknown.value.detail == "unknown question type; use choice, score or noul"
+    assert unknown.value.detail == "unknown question type; use choice, score, noul or yes_no"
 
     too_many = {f"q{i}": {"type": "noul", "instructions": "?"} for i in range(65)}
     with pytest.raises(PayloadTooLargeError) as large:

@@ -91,6 +91,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `main`, release tags and manual runs only, never for pull requests (READINESS P1 #52).
 - HTTP requests accept `yes_no` as a readable alias of the Jev/Laya `noul` question type; answers
   remain wire-compatible and always use `noul`.
+- CI `sdk` job and `clients/run_live_tests.sh`: both SDK suites, hermetic and live, against three
+  started servers (no key, bearer key, test LoRA adapter); a skipped live case fails the job
+  (READINESS P1 #37). pytest is hash-pinned in `clients/python/requirements-test.txt`.
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter
