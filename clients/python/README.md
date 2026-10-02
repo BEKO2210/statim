@@ -53,9 +53,10 @@ print(decision.request_id, decision.inference_time_ms)
 
 Options are `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`, `calibrate`,
 `return_logits`, `min_confidence`, `max_len`, `head_max_len`, and `request_id`. Pass `None` to
-omit a field; request base weights explicitly with `adapter="none"`. Question
-type `noul` is the yes/no question; the parsed object is `YesNoAnswer`. Its `noul` field is the server probability that the
-statement holds, and `probabilities` is `{"yes": noul, "no": 1 - noul}`.
+omit a field; request base weights explicitly with `adapter="none"`. Request type `yes_no` is
+accepted as an alias of `noul` and is sent unchanged. Responses always use type `noul`; the parsed
+object is `YesNoAnswer`. Its `noul` field is the server probability that the statement holds, and
+`probabilities` is `{"yes": noul, "no": 1 - noul}`.
 Every answer has optional `escalate`, which is `None` unless a positive
 confidence threshold applied to the response.
 
@@ -108,11 +109,11 @@ except ServiceUnavailableError as exc:
 
 Start the server, then run pytest from this directory. The suite expects an
 unauthenticated server on port 8190 and a second server on port 8191 whose
-only key is `sdk-test-key`.
+only key is `sdk-test-key-0123456789abcdef0123`.
 
 From the repository root, start the unauthenticated server. Start a second
 process the same way on port 8191 with `--api-key-file` containing
-`sdk-test-key`.
+`sdk-test-key-0123456789abcdef0123`.
 
 ```sh
 env -u STATIM_API_KEY ./build/statim serve \
@@ -125,7 +126,7 @@ python3 -m pytest
 ```
 
 `STATIM_URL` and `STATIM_AUTH_URL` override the two base URLs. `STATIM_API_KEY_TEST`
-overrides the key for port 8191 (default `sdk-test-key`).
+overrides the key for port 8191 (default `sdk-test-key-0123456789abcdef0123`).
 
 The client source is Apache-2.0, the same as the engine. Model weights are
 covered by `LICENSE-MODEL.md`, not by this package.

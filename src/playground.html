@@ -163,12 +163,15 @@ textarea.text.bad { border-color: var(--bad); }
 .split .no { flex: 1; justify-content: flex-end; color: var(--fg2); }
 .conf { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--fg3); }
 .conf b { font: 400 12.5px var(--mono); color: var(--fg2); }
-@media (prefers-reduced-motion: no-preference) {
-  .resolved .fill, .resolved .split .yes { animation: resolve .8s var(--ease) both; }
-  .resolved .mk { animation: slide .8s var(--ease) both; }
-}
-@keyframes resolve { from { transform: scaleX(0); } }
-@keyframes slide { from { left: 0; } }
+.text-card { position: relative; overflow: hidden; }
+.text-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--signal) 16%, transparent) 50%, transparent 65%); }
+@media (prefers-reduced-motion: no-preference) { .text-card.scanning::after { opacity: 1; animation: scan 1.15s var(--ease) infinite; } }
+@keyframes scan { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.trace { display: block; width: 100%; height: 44px; }
+.pulse { display: block; width: min(100%, 22rem); height: 22px; margin-top: 2px; overflow: visible; }
+.pulse path { fill: none; stroke: var(--line2); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.pulse circle { fill: var(--signal); }
 
 /* developer panel */
 .dev { grid-column: 1 / -1; overflow: hidden; }
@@ -206,6 +209,91 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
 .btn.pri { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); font-weight: 600; }
 .toast { position: fixed; left: 50%; bottom: 22px; z-index: 30; transform: translate(-50%, 16px); opacity: 0; padding: 9px 14px; border-radius: 10px; background: var(--fg); color: var(--bg); font-size: 13px; transition: opacity .2s, transform .2s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* mode switch and intro (simple mode) */
+.mode { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--inset); border: 1px solid var(--line); }
+.mode button { height: 30px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; color: var(--fg3); }
+.mode button[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 0 0 1px var(--line2); }
+.intro { grid-column: 1 / -1; display: grid; gap: 10px; padding: 6px 0 2px; max-width: 46rem; }
+.intro h1 { margin: 0; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.15; font-weight: 600; letter-spacing: -.03em; }
+.intro p { margin: 0; color: var(--fg2); font-size: 15.5px; max-width: 40rem; }
+body:not([data-mode="simple"]) .intro, body:not([data-mode="simple"]) .step { display: none; }
+body[data-mode="simple"] #devBtn, body[data-mode="simple"] .dev { display: none; }
+.step { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: var(--signal-soft);
+  color: var(--signal-text); font: 600 12px/1 var(--sans); vertical-align: 1px; }
+.col-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+
+/* example gallery: each example is a use case */
+body[data-mode="simple"] .scenarios { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr)); gap: 10px; }
+body[data-mode="simple"] .scenarios button { height: auto; width: 100%; display: grid; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 12px;
+  background: var(--panel); border-color: var(--line); }
+body[data-mode="simple"] .scenarios button[aria-pressed="true"] { background: var(--signal-soft); border-color: var(--signal); }
+.scenarios .use { display: none; }
+body[data-mode="simple"] .scenarios .use { display: block; font-size: 12.5px; line-height: 1.45; color: var(--fg3); }
+body[data-mode="simple"] .scenarios b { font-weight: 600; color: var(--fg); font-size: 14px; }
+.scenarios b { font-weight: inherit; }
+
+/* simple-mode question builder */
+.qtext { width: 100%; min-height: 46px; resize: none; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--field); padding: 11px 12px;
+  font: 500 15.5px/1.45 var(--sans); }
+.qtext:focus { outline: none; border-color: var(--signal); }
+.qtitle { font-size: 13px; color: var(--fg3); }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 4px; border-radius: 12px; background: var(--inset); border: 1px solid var(--line); }
+.tile { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 10px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--fg2); }
+.tile b { font-weight: 500; font-size: 13.5px; white-space: nowrap; }
+.tile span { display: none; }
+.tile svg { width: 18px; height: 18px; color: var(--fg3); flex: none; }
+.kindnote { margin: -4px 0 0; font-size: 12.5px; color: var(--fg3); }
+.tile:hover { border-color: var(--fg3); }
+.tile[aria-pressed="true"] { border-color: var(--signal); background: var(--panel); color: var(--fg); }
+.tile[aria-pressed="true"] svg { color: var(--signal-text); }
+@media (max-width: 420px) { .tile svg { display: none; } }
+.go .step { background: rgba(0, 0, 0, .14); color: var(--signal-ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 2px; height: 34px; padding: 0 4px 0 12px; border-radius: 999px; background: var(--inset);
+  border: 1px solid var(--line2); font-size: 14px; }
+.chip .n { font: 400 11.5px var(--mono); color: var(--fg3); margin-right: 6px; }
+.chip button { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--fg3); display: grid; place-items: center; }
+.chip button:hover { color: var(--bad); background: var(--bad-soft); }
+.chip button svg { width: 13px; height: 13px; }
+.chip-in { height: 34px; min-width: 12rem; flex: 1; border: 1px dashed var(--line2); border-radius: 999px; background: transparent; padding: 0 14px; font-size: 14px; }
+.chip-in:focus { outline: none; border-style: solid; border-color: var(--signal); }
+.hints { font-size: 13px; color: var(--fg3); }
+.hints summary { cursor: pointer; width: fit-content; }
+.hints summary:hover { color: var(--fg); }
+.hints[open] summary { margin-bottom: 8px; }
+
+/* plain-language result summary */
+.summary { padding: 16px 18px; display: grid; gap: 12px; }
+.summary[hidden] { display: none; }
+.summary h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.sumlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.sumlist li { display: grid; gap: 3px; }
+.sumlist .sq { font-size: 12.5px; color: var(--fg3); }
+.sumlist .sa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.sumlist .sa strong { font-size: 17px; font-weight: 600; letter-spacing: -.01em; color: var(--signal-text); }
+.sumlist .sa .how { font-size: 12.5px; color: var(--fg2); }
+.sumlist .sa .how.check { color: var(--warn); }
+
+/* one read, many answers: the pulse travels the questions while the model reads, then every
+   answer resolves at the same instant */
+.qwrap { position: relative; display: grid; gap: 16px; }
+.spine { display: none; }
+@media (min-width: 1024px) {
+  .spine { display: block; position: absolute; left: -15px; top: 18px; bottom: 18px; width: 2px; border-radius: 1px; background: var(--line); }
+  .spine::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 0; border-radius: inherit; background: var(--signal); }
+  .spine::after { content: ""; position: absolute; left: -4px; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--signal);
+    box-shadow: 0 0 0 4px var(--signal-soft); opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .thinking .spine::after { opacity: 1; animation: travel 1.1s var(--ease) infinite; }
+  .resolved .spine::before { animation: fillspine .45s var(--ease) both; }
+  .resolved .spine::before { height: 100%; }
+  .summary.show .sumlist li { animation: appear .45s var(--ease) both; }
+}
+@keyframes travel { from { top: 0; } to { top: calc(100% - 10px); } }
+@keyframes fillspine { from { height: 0; } to { height: 100%; } }
+@keyframes appear { from { opacity: 0; transform: translateY(4px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -217,6 +305,10 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
   </a>
   <span class="status" title="Server status"><span class="dot" id="dot"></span><span id="stxt">connecting</span></span>
   <span class="grow"></span>
+  <div class="mode" role="group" aria-label="Mode">
+    <button type="button" data-mode="simple" aria-pressed="true" title="Plain-language question builder">Simple</button>
+    <button type="button" data-mode="expert" aria-pressed="false" title="Question names, option descriptions, request and code">Expert</button>
+  </div>
   <div class="tools">
     <label class="sr" for="model">Model</label>
     <select class="ctl" id="model"><option value="">Model: automatic</option></select>
@@ -232,26 +324,34 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
 </header>
 
 <main class="wrap">
+  <div class="intro">
+    <h1 id="hero">Ask a text anything. Get every answer from one read.</h1>
+    <svg class="pulse" id="pulse" viewBox="0 0 352 22" aria-hidden="true"><path d="M2 11H150l9-8 12 16 9-8h170"/><circle cx="341" cy="11" r="5"/></svg>
+    <p>Pick an example or paste your own text, ask questions in plain words, and Statim answers all of them in a single pass over the text, with a probability for each answer. No prompt, no chatbot.</p>
+  </div>
   <section class="input-col" aria-label="Input">
     <ul class="scenarios" id="scenarios" aria-label="Examples"></ul>
     <div class="card text-card">
-      <div class="label-row"><label for="text">Text to decide on</label><span class="meta" id="textMeta"></span></div>
+      <div class="label-row"><label for="text"><span class="step">1</span>Text to decide on</label><span class="meta" id="textMeta"></span></div>
       <textarea class="text" id="text" spellcheck="false"></textarea>
       <p class="help">Plain text, or JSON such as <code>{"subject": …, "body": …}</code>. Any language.</p>
     </div>
     <div class="decide">
-      <button class="go" id="go" type="button"><span class="spin"></span><span>Decide</span><kbd>Ctrl ↵</kbd></button>
+      <button class="go" id="go" type="button"><span class="spin"></span><span><span class="step">3</span>Decide</span><kbd>Ctrl ↵</kbd></button>
+      <canvas class="trace" id="trace" height="44" aria-hidden="true"></canvas>
       <ul class="runmeta" id="runmeta" aria-live="polite"></ul>
       <div id="err" role="alert"></div>
+      <section class="card summary" id="summary" hidden aria-live="polite"><h2>What Statim decided</h2><ul class="sumlist" id="sumlist"></ul></section>
     </div>
   </section>
 
   <section class="q-col" aria-label="Questions and answers">
-    <div id="qlist" class="q-col"></div>
+    <h2 class="col-title step-title"><span class="step">2</span>Questions about the text</h2>
+    <div class="qwrap" id="qwrap"><span class="spine" aria-hidden="true"></span><div id="qlist" class="q-col"></div></div>
     <div class="addq"><span>Add a question</span>
-      <button type="button" data-add="choice">Choice</button>
-      <button type="button" data-add="score">Score</button>
-      <button type="button" data-add="noul">Yes / No</button>
+      <button type="button" data-add="choice" data-simple="Pick one">Choice</button>
+      <button type="button" data-add="score" data-simple="Rate">Score</button>
+      <button type="button" data-add="noul" data-simple="Yes or no">Yes / No</button>
     </div>
   </section>
 
@@ -284,7 +384,7 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
 
 <dialog id="keyDlg"><form method="dialog">
   <h2>API key</h2>
-  <p>Sent as <code>Authorization: Bearer …</code> and stored only in this browser. Needed when the server runs with <code>--api-key-file</code>.</p>
+  <p>Sent as <code>Authorization: Bearer …</code> and kept only in this browser tab until it closes. Needed when the server runs with <code>--api-key-file</code>.</p>
   <input class="field" id="keyIn" type="password" placeholder="Key" autocomplete="off" aria-label="API key">
   <div class="acts"><button class="btn" value="clear">Remove</button><button class="btn" value="cancel">Cancel</button><button class="btn pri" value="save">Save</button></div>
 </form></dialog>
@@ -298,20 +398,57 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 };
+/* The API key lives only in this tab's sessionStorage: it is gone when the tab closes and never
+   shared with other tabs. Older versions kept it in localStorage; that copy is removed. */
+const keyStore = {
+  get() { try { return sessionStorage.getItem("statim_key"); } catch { return null; } },
+  set(v) { try { v == null ? sessionStorage.removeItem("statim_key") : sessionStorage.setItem("statim_key", v); } catch {} }
+};
+store.set("statim_key", null);
 const pct = v => (v * 100).toFixed(1) + "%";
 const p3 = v => v < 0.001 ? "<0.001" : v.toFixed(3);
 
+/* ---------- motion (curves from BEKO2210/motion-studio, style "tech") ---------- */
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+const E = {
+  outExpo: p => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p)),
+  spring: p => (p >= 1 ? 1 : 1 - Math.exp(-7 * p) * Math.cos(9 * p))
+};
+// a CSS linear() easing sampled from a curve, so the compositor runs the spring
+const curve = (f, n = 40) => "linear(" + Array.from({length: n + 1}, (_, i) => f(i / n).toFixed(4)).join(", ") + ")";
+const SPRING = curve(E.spring), EXPO = curve(E.outExpo);
+function tween(ms, step, ease = E.outExpo) {
+  if (still.matches) { step(1); return Promise.resolve(); }
+  return new Promise(done => {
+    const t0 = performance.now();
+    const frame = now => { const p = Math.min(1, (now - t0) / ms); step(ease(p)); p < 1 ? requestAnimationFrame(frame) : done(); };
+    requestAnimationFrame(frame);
+  });
+}
+// letters decode into the answer, left to right
+const GLYPHS = "abcdefghijklmnopqrstuvwxyz0123456789";
+function scramble(el, final, ms = 520) {
+  return tween(ms, p => {
+    const lock = Math.floor(final.length * p);
+    // digits decode through digits, words through letters; spaces and punctuation stay put
+    el.textContent = final.slice(0, lock) + [...final.slice(lock)].map(c => /\d/.test(c) ? String((Math.random() * 10) | 0) : /\p{L}/u.test(c) ? GLYPHS[(Math.random() * 26) | 0] : c).join("");
+  }, x => x);
+}
+function countUp(el, to, fmt, ms = 700) { return tween(ms, p => { el.textContent = fmt(to * p); }); }
+
 /* ---------- examples, written as form data ---------- */
 const SCENARIOS = {
-  "Support ticket": {
+  "Route a support ticket": {
+    use: "Pick the team, rate the urgency and spot a refund request in one go.",
     text: {subject: "Duplicate charge on invoice #4411", body: "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."},
     qs: [
       {id: "department", type: "choice", q: "Which department should handle this request?", opts: [["billing", "invoices, payments, refunds"], ["technical", "bugs, outages, system errors"], ["sales", "pricing, new contracts"], ["other", "everything else"]]},
       {id: "urgency", type: "score", q: "How urgent is this request?", levels: ["not urgent", "soon", "critical deadline or blocking issue"]},
-      {id: "refund", type: "noul", q: "Does the user explicitly request a refund?"}
+      {id: "refund", type: "noul", q: "Does the customer explicitly ask for a refund?"}
     ]
   },
-  "Ticket auf Deutsch": {
+  "Triage a German bug report": {
+    use: "Questions and text in German: the multilingual model reads both.",
     text: "Seit dem Update gestern stürzt die App beim Start ab und wir können nicht verkaufen. Bitte dringend melden!",
     qs: [
       {id: "department", type: "choice", q: "Welche Abteilung ist zuständig?", opts: [["billing", "Rechnungen, Zahlungen"], ["technical", "Fehler, Abstürze, Ausfälle"], ["sales", "Preise, Verträge"], ["other", "Sonstiges"]]},
@@ -319,15 +456,17 @@ const SCENARIOS = {
       {id: "revenue_impact", type: "noul", q: "Verhindert das Problem Verkäufe oder kostet es Umsatz?"}
     ]
   },
-  "Product review": {
+  "Read a product review": {
+    use: "Sentiment, a star rating and a support complaint from one review.",
     text: "The battery life is fantastic, but the screen scratches way too easily and support never answered my emails.",
     qs: [
-      {id: "sentiment", type: "choice", q: "Overall sentiment of the review?", opts: [["positive", "mostly praise"], ["mixed", "both praise and complaints"], ["negative", "mostly complaints"]]},
+      {id: "sentiment", type: "choice", q: "What is the overall tone of the review?", opts: [["positive", "mostly praise"], ["mixed", "both praise and complaints"], ["negative", "mostly complaints"]]},
       {id: "rating", type: "score", q: "Which star rating fits this review?", levels: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]},
       {id: "support_issue", type: "noul", q: "Does the reviewer complain about customer support?"}
     ]
   },
-  "Moderation": {
+  "Moderate a chat message": {
+    use: "Classify a message and decide whether it should come down.",
     text: {author: "guest_2291", message: "Click here to claim your free iPhone!!! Limited offer: bit.ly/xyz"},
     qs: [
       {id: "category", type: "choice", q: "What kind of message is this?", opts: [["spam", "ads, scams, unsolicited links"], ["abuse", "insults, harassment"], ["normal", "regular conversation"]]},
@@ -336,9 +475,9 @@ const SCENARIOS = {
   }
 };
 const TEMPLATE = {
-  choice: () => ({type: "choice", q: "Which option fits best?", opts: [["option_a", ""], ["option_b", ""]]}),
-  score: () => ({type: "score", q: "How strongly does this apply?", levels: ["low", "medium", "high"]}),
-  noul: () => ({type: "noul", q: "Is this true?"})
+  choice: () => ({type: "choice", q: "", opts: [], auto: true}),
+  score: () => ({type: "score", q: "", levels: ["low", "medium", "high"], auto: true}),
+  noul: () => ({type: "noul", q: "", auto: true})
 };
 
 /* ---------- state ---------- */
@@ -352,6 +491,16 @@ function load(name) {
   renderScenarios(); renderQs(); checkText(); clearAnswers(); save();
 }
 
+/* ---------- mode: simple (plain-language builder) or expert ---------- */
+let mode = store.get("statim_mode") === "expert" ? "expert" : "simple";
+function applyMode(m) {
+  mode = m; document.body.dataset.mode = m; store.set("statim_mode", m === "expert" ? "expert" : null);
+  document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  document.querySelectorAll("[data-add]").forEach(b => { b.dataset.expert = b.dataset.expert || b.textContent; b.textContent = m === "simple" ? b.dataset.simple : b.dataset.expert; });
+}
+document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { if (mode !== b.dataset.mode) { applyMode(b.dataset.mode); renderQs(); clearAnswers(); } });
+applyMode(mode);
+
 /* ---------- theme ---------- */
 const root = document.documentElement;
 function applyTheme(t) { if (t === "light") root.dataset.theme = "light"; else delete root.dataset.theme; }
@@ -362,16 +511,16 @@ let toastT;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1700); }
 
 /* ---------- API key ---------- */
-function keyUi() { const on = !!store.get("statim_key"); $("keyBtn").classList.toggle("on", on); $("keyLbl").textContent = on ? "Key set" : "API key"; }
+function keyUi() { const on = !!keyStore.get(); $("keyBtn").classList.toggle("on", on); $("keyLbl").textContent = on ? "Key set" : "API key"; }
 keyUi();
-$("keyBtn").onclick = () => { $("keyIn").value = store.get("statim_key") || ""; $("keyDlg").showModal(); };
+$("keyBtn").onclick = () => { $("keyIn").value = keyStore.get() || ""; $("keyDlg").showModal(); };
 $("keyDlg").addEventListener("close", () => {
   const v = $("keyDlg").returnValue;
-  if (v === "save") store.set("statim_key", $("keyIn").value.trim() || null);
-  if (v === "clear") store.set("statim_key", null);
+  if (v === "save") keyStore.set($("keyIn").value.trim() || null);
+  if (v === "clear") keyStore.set(null);
   keyUi(); loadModels();
 });
-const authHeaders = () => { const k = store.get("statim_key"); return k ? {Authorization: "Bearer " + k} : {}; };
+const authHeaders = () => { const k = keyStore.get(); return k ? {Authorization: "Bearer " + k} : {}; };
 
 /* ---------- settings ---------- */
 $("setBtn").onclick = () => $("setDlg").showModal();
@@ -417,9 +566,9 @@ $("model").onchange = () => store.set("statim_model", $("model").value || null);
 
 /* ---------- scenarios and text ---------- */
 function renderScenarios() {
-  $("scenarios").innerHTML = Object.keys(SCENARIOS).map(n => `<li><button type="button" aria-pressed="${n === scenario}">${esc(n)}</button></li>`).join("");
+  $("scenarios").innerHTML = Object.entries(SCENARIOS).map(([n, s]) => `<li><button type="button" data-name="${esc(n)}" aria-pressed="${n === scenario}"><b>${esc(n)}</b><span class="use">${esc(s.use)}</span></button></li>`).join("");
 }
-$("scenarios").onclick = e => { const b = e.target.closest("button"); if (b) load(b.textContent); };
+$("scenarios").onclick = e => { const b = e.target.closest("button"); if (b) load(b.dataset.name); };
 function parseText() { const t = $("text").value.trim(); return /^[\[{]/.test(t) ? JSON.parse(t) : t; }
 function checkText() {
   const ta = $("text"), meta = $("textMeta"), t = ta.value.trim(), json = /^[\[{]/.test(t);
@@ -432,6 +581,13 @@ $("text").addEventListener("input", () => { scenario = ""; renderScenarios(); ch
 /* ---------- question cards ---------- */
 const TYPES = [["choice", "Choice"], ["score", "Score"], ["noul", "Yes / No"]];
 const X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+// a question's name, derived from its words in simple mode: "Is the customer angry?" -> is_the_customer_angry
+function slugFor(text, qi) {
+  const base = text.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "").slice(0, 40).replace(/_+$/, "") || "question";
+  let id = base, i = 2; const taken = new Set(qs.filter((_, j) => j !== qi).map(q => q.id));
+  while (taken.has(id)) id = base + "_" + i++;
+  return id;
+}
 function uniqueId(base) { let id = base, i = 2; const taken = new Set(qs.map(q => q.id)); while (taken.has(id)) id = base + "_" + i++; return id; }
 function optsHtml(q, qi) {
   if (q.type === "choice") return `<ul class="opts">${q.opts.map(([k, d], oi) => `<li class="opt">
@@ -445,7 +601,42 @@ function optsHtml(q, qi) {
       <p class="note">Levels from lowest to highest.</p><button class="add" type="button" data-add-opt="${qi}">Add level</button>`;
   return `<p class="note">Answered with the probability of yes.</p>`;
 }
+const ICONS = {
+  choice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="7" r="1.6"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="17" r="1.6"/><path d="M10 7h10M10 12h10M10 17h10"/></svg>',
+  score: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 16h18"/><path d="M5 16v-2M9 16v-4M13 16v-6M17 16v-8"/><circle cx="13" cy="7" r="1.6" fill="currentColor"/></svg>',
+  noul: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l4 4 8-9"/><path d="M15 15l5 5M20 15l-5 5"/></svg>'
+};
+const KINDS = [["choice", "Pick one", "The text fits one of several answers"], ["score", "Rate", "Place the text on a scale"], ["noul", "Yes or no", "How likely a statement is true"]];
+const openHints = new Set();
+function builderOpts(q, qi) {
+  if (q.type === "choice") return `<ul class="chips">${q.opts.map(([k], oi) => `<li class="chip">${esc(k)}<button type="button" data-del-opt="${qi}:${oi}" aria-label="Remove ${esc(k)}">${X}</button></li>`).join("")}
+      <li style="display:contents"><input class="chip-in" data-chip="${qi}" placeholder="${q.opts.length ? "Add another answer" : "Type a possible answer, press Enter"}" aria-label="Add an answer"></li></ul>
+      ${q.opts.length ? `<details class="hints" data-hints="${qi}"${openHints.has(qi) ? " open" : ""}><summary>Describe the answers (optional, helps accuracy)</summary>
+        <ul class="opts">${q.opts.map(([k, d], oi) => `<li class="opt"><input class="key" value="${esc(k)}" readonly tabindex="-1" aria-label="Answer ${oi + 1}">
+        <input value="${esc(d)}" data-q="${qi}" data-o="${oi}" data-f="d" aria-label="Description of ${esc(k)}" placeholder="what this answer means"><span></span></li>`).join("")}</ul></details>` : ""}`;
+  if (q.type === "score") return `<ul class="chips">${q.levels.map((l, li) => `<li class="chip"><span class="n">${li}</span>${esc(l)}<button type="button" data-del-opt="${qi}:${li}" aria-label="Remove ${esc(l)}">${X}</button></li>`).join("")}
+      <li style="display:contents"><input class="chip-in" data-chip="${qi}" placeholder="Add the next level" aria-label="Add a level"></li></ul>
+      <p class="note">From the lowest level to the highest.</p>`;
+  return "";
+}
+// question fields grow with their text, so a long question is never cut off
+function fit(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + 2 + "px"; }
+function builderCard(q, qi) {
+  return `<article class="card qcard" data-card="${qi}">
+    <div class="qhead"><span class="qtitle">Question ${qi + 1}</span><button class="icon" type="button" data-del-q="${qi}" aria-label="Remove question ${qi + 1}">${X}</button></div>
+    <textarea class="qtext" rows="1" data-q="${qi}" data-f="q" aria-label="Question ${qi + 1}" placeholder="Ask in plain words, e.g. Is the customer angry?">${esc(q.q)}</textarea>
+    <div class="tiles" role="group" aria-label="Kind of answer">${KINDS.map(([t, l, h]) => `<button type="button" class="tile" data-type="${qi}:${t}" aria-pressed="${q.type === t}" title="${h}">${ICONS[t]}<b>${l}</b></button>`).join("")}</div>
+    <p class="kindnote">${KINDS.find(k => k[0] === q.type)[2]}.</p>
+    ${builderOpts(q, qi)}
+    <div class="ans" id="ans-${qi}" hidden aria-live="polite"></div>
+  </article>`;
+}
 function renderQs() {
+  if (mode === "simple") {
+    $("qlist").innerHTML = qs.map(builderCard).join("") || `<div class="card qcard"><p class="note">No questions yet. Add one below: pick one of several answers, rate on a scale, or ask yes or no.</p></div>`;
+    document.querySelectorAll(".qtext").forEach(fit);
+    return;
+  }
   $("qlist").innerHTML = qs.map((q, qi) => `<article class="card qcard" data-card="${qi}">
     <div class="qhead">
       <input class="qname" value="${esc(q.id)}" data-q="${qi}" data-f="id" aria-label="Question name" spellcheck="false">
@@ -460,9 +651,10 @@ function renderQs() {
 $("qlist").addEventListener("input", e => {
   const el = e.target, qi = +el.dataset.q, f = el.dataset.f;
   if (Number.isNaN(qi) || !f) return;
+  if (el.classList.contains("qtext")) fit(el);
   const q = qs[qi];
-  if (f === "id") q.id = el.value.trim();
-  else if (f === "q") q.q = el.value;
+  if (f === "id") { q.id = el.value.trim(); q.auto = false; }
+  else if (f === "q") { q.q = el.value; if (q.auto || !q.id) q.id = slugFor(q.q, qi); }
   else if (f === "k") q.opts[+el.dataset.o][0] = el.value;
   else if (f === "d") q.opts[+el.dataset.o][1] = el.value;
   else if (f === "l") q.levels[+el.dataset.o] = el.value;
@@ -473,7 +665,7 @@ $("qlist").addEventListener("click", e => {
   if (b.dataset.type) {
     const [qi, t] = b.dataset.type.split(":"); const q = qs[+qi];
     if (q.type === t) return;
-    const keep = {id: q.id, q: q.q}; Object.assign(q, TEMPLATE[t](), keep);
+    const keep = {id: q.id, q: q.q, auto: q.auto}; Object.assign(q, TEMPLATE[t](), keep);
     if (t === "choice" && !q.opts) q.opts = [["option_a", ""], ["option_b", ""]];
   } else if (b.dataset.delQ !== undefined) qs.splice(+b.dataset.delQ, 1);
   else if (b.dataset.addOpt !== undefined) { const q = qs[+b.dataset.addOpt]; q.type === "choice" ? q.opts.push(["", ""]) : q.levels.push(""); }
@@ -481,30 +673,45 @@ $("qlist").addEventListener("click", e => {
   else return;
   scenario = ""; renderScenarios(); renderQs(); clearAnswers(); save();
 });
+$("qlist").addEventListener("keydown", e => {
+  const el = e.target;
+  if (el.dataset.chip !== undefined && (e.key === "Enter" || e.key === ",")) {
+    e.preventDefault();
+    const v = el.value.trim(), qi = +el.dataset.chip, q = qs[qi];
+    if (!v) return;
+    if (q.type === "choice") { if (!q.opts.some(([k]) => k === v)) q.opts.push([v, ""]); } else q.levels.push(v);
+    scenario = ""; renderScenarios(); renderQs(); clearAnswers(); save();
+    const again = document.querySelector(`[data-chip="${qi}"]`); if (again) again.focus();
+  } else if (el.dataset.chip !== undefined && e.key === "Backspace" && !el.value) {
+    const q = qs[+el.dataset.chip], list = q.type === "choice" ? q.opts : q.levels;
+    if (list.length) { list.pop(); renderQs(); save(); const again = document.querySelector(`[data-chip="${el.dataset.chip}"]`); if (again) again.focus(); }
+  }
+});
+$("qlist").addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.hints !== undefined) d.open ? openHints.add(+d.dataset.hints) : openHints.delete(+d.dataset.hints); }, true);
 document.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
   const t = b.dataset.add; qs.push({id: uniqueId(t === "noul" ? "yes_no" : t), ...TEMPLATE[t]()});
   renderQs(); save();
   const cards = document.querySelectorAll("[data-card]"); const last = cards[cards.length - 1];
-  if (last) { last.scrollIntoView({block: "nearest"}); last.querySelector('[data-f="q"]').select(); }
+  if (last) { last.scrollIntoView({block: "nearest", behavior: still.matches ? "auto" : "smooth"}); last.querySelector('[data-f="q"]').focus(); }
 });
 
 /* ---------- request ---------- */
 function buildQuestions() {
   const out = {}, seen = new Set();
-  for (const q of qs) {
-    const id = q.id.trim();
+  for (const [i, q] of qs.entries()) {
+    const id = q.id.trim(), name = mode === "simple" ? `Question ${i + 1}` : `Question “${id}”`;
+    if (!q.q.trim()) throw new Error(`${name} has no text. Ask it in plain words.`);
     if (!id) throw new Error("Every question needs a name.");
     if (seen.has(id)) throw new Error(`Two questions are named “${id}”.`);
     seen.add(id);
-    if (!q.q.trim()) throw new Error(`Question “${id}” has no text.`);
     const d = {type: q.type, instructions: q.q.trim()};
     if (q.type === "choice") {
       const opts = q.opts.filter(([k]) => k.trim());
-      if (opts.length < 2) throw new Error(`Question “${id}” needs at least two options.`);
+      if (opts.length < 2) throw new Error(`${name} needs at least two possible answers.`);
       d.criteria = Object.fromEntries(opts.map(([k, v]) => [k.trim(), v.trim()]));
     } else if (q.type === "score") {
       const lv = q.levels.map(l => l.trim()).filter(Boolean);
-      if (lv.length < 2) throw new Error(`Question “${id}” needs at least two levels.`);
+      if (lv.length < 2) throw new Error(`${name} needs at least two levels.`);
       d.criteria = lv;
     }
     out[id] = d;
@@ -524,13 +731,13 @@ function buildBody() {
 const origin = () => location.origin;
 function curlFor(b) {
   const payload = JSON.stringify(b, null, 2).replace(/'/g, "'\\''");
-  return `curl -s ${origin()}/v1/systemone \\\n  -H 'Content-Type: application/json' \\\n${store.get("statim_key") ? "  -H \"Authorization: Bearer $STATIM_KEY\" \\\n" : ""}  -d '${payload}'`;
+  return `curl -s ${origin()}/v1/systemone \\\n  -H 'Content-Type: application/json' \\\n${keyStore.get() ? "  -H \"Authorization: Bearer $STATIM_KEY\" \\\n" : ""}  -d '${payload}'`;
 }
 function pyFor(b) {
   const opts = ["model", "lang", "ensemble", "calibrate", "min_confidence"].filter(k => b[k] !== undefined)
     .map(k => `    ${k}=${JSON.stringify(b[k]).replace(/^true$/, "True")},`).join("\n");
   const py = v => JSON.stringify(v, null, 4).replace(/\n/g, "\n    ");
-  return `# pip install ./clients/python   (github.com/BEKO2210/statim)\nfrom statim import Client\n\nclient = Client("${origin()}"${store.get("statim_key") ? ", api_key=os.environ[\"STATIM_KEY\"]" : ""})\ndecision = client.decide(\n    ${py(b.state)},\n    ${py(b.questions)},\n${opts ? opts + "\n" : ""})\nfor name, answer in decision.answers.items():\n    print(name, answer)`;
+  return `# pip install ./clients/python   (github.com/BEKO2210/statim)\nfrom statim import Client\n\nclient = Client("${origin()}"${keyStore.get() ? ", api_key=os.environ[\"STATIM_KEY\"]" : ""})\ndecision = client.decide(\n    ${py(b.state)},\n    ${py(b.questions)},\n${opts ? opts + "\n" : ""})\nfor name, answer in decision.answers.items():\n    print(name, answer)`;
 }
 function highlight(json) {
   return esc(json).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (m, s, colon, kw) => {
@@ -581,7 +788,7 @@ $("hist").onclick = e => {
 };
 
 /* ---------- answers ---------- */
-function clearAnswers() { document.querySelectorAll(".ans").forEach(a => { a.hidden = true; a.innerHTML = ""; }); $("runmeta").innerHTML = ""; }
+function clearAnswers() { document.querySelectorAll(".ans").forEach(a => { a.hidden = true; a.innerHTML = ""; }); $("runmeta").innerHTML = ""; $("summary").hidden = true; if (typeof trace !== "undefined") trace.reset(); }
 function badge(a, minc) {
   const review = a.escalate === true || (a.escalate === undefined && minc > 0 && a.answer_confidence < minc);
   if (review) return '<span class="badge review">Needs review</span>';
@@ -613,8 +820,48 @@ function showAnswers(res, body) {
     if (!a) { box.hidden = true; return; }
     box.innerHTML = answerHtml(a, minc); box.hidden = false;
   });
-  // one forward pass: every bar resolves at the same instant
-  const list = $("qlist"); list.classList.remove("resolved"); void list.offsetWidth; list.classList.add("resolved");
+  renderSummary(res, body);
+  resolveAll();
+}
+// one forward pass, so every answer resolves in the same frame: bars spring in, the answer word
+// decodes, numbers count up
+function resolveAll() {
+  const wrap = $("qwrap"); wrap.classList.remove("resolved"); void wrap.offsetWidth; wrap.classList.add("resolved");
+  if (still.matches) return;
+  const spring = {duration: 950, easing: SPRING, fill: "backwards"};
+  document.querySelectorAll(".ans:not([hidden]) .fill, .ans:not([hidden]) .split .yes, #sumlist .meter i")
+    .forEach(el => el.animate([{transform: "scaleX(0)"}, {transform: "scaleX(1)"}], spring));
+  document.querySelectorAll(".ans:not([hidden]) .mk").forEach(el => el.animate([{left: "0%"}, {left: getComputedStyle(el).left}], spring));
+  document.querySelectorAll(".ans:not([hidden]) .verdict strong, #sumlist strong").forEach(el => scramble(el, el.textContent));
+  document.querySelectorAll(".ans:not([hidden]) .bar .v").forEach(el => {
+    const v = parseFloat(el.textContent); if (Number.isFinite(v) && !el.textContent.startsWith("<")) countUp(el, v, x => x.toFixed(3));
+  });
+}
+
+/* ---------- plain-language summary ---------- */
+function sureness(a, minc) {
+  const review = a.escalate === true || (a.escalate === undefined && minc > 0 && a.answer_confidence < minc);
+  if (review) return ["check this one", true];
+  const c = a.answer_confidence;
+  return [c >= .9 ? "very sure" : c >= .7 ? "fairly sure" : "unsure", c < .7];
+}
+function renderSummary(res, body) {
+  const minc = body.min_confidence || 0, items = [];
+  for (const q of qs) {
+    const a = res.answers[q.id.trim()]; if (!a) continue;
+    let ans, extra = "";
+    if (a.type === "choice") ans = a.choice;
+    else if (a.type === "score") {
+      const top = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1])[0][0], max = Math.max(Object.keys(a.probabilities).length - 1, 1);
+      ans = a.legend[top]; extra = `, score ${a.score.toFixed(1)} of ${max}`;
+    } else ans = a.noul >= .5 ? "yes" : "no";
+    const [how, check] = sureness(a, minc);
+    items.push(`<li><span class="sq">${esc(q.q)}</span><span class="sa"><strong>${esc(ans)}</strong><span class="how${check ? " check" : ""}">${how} (${pct(a.answer_confidence)})${extra}</span></span></li>`);
+  }
+  $("sumlist").innerHTML = items.join("");
+  const box = $("summary"); box.hidden = !items.length;
+  box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+  [...box.querySelectorAll("li")].forEach((li, i) => li.style.animationDelay = (i * 70) + "ms");
 }
 
 /* ---------- run ---------- */
@@ -624,6 +871,8 @@ async function run() {
   let body;
   try { body = buildBody(); } catch (e) { return fail("Check the questions", e.message); }
   const go = $("go"); go.disabled = true;
+  $("qwrap").classList.add("thinking"); document.querySelector(".text-card").classList.add("scanning"); trace.read();
+  $("runmeta").innerHTML = `<li>Reading the text once for ${Object.keys(body.questions).length} question${Object.keys(body.questions).length === 1 ? "" : "s"}…</li>`;
   const when = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
   lastReq = body;
   try {
@@ -634,12 +883,14 @@ async function run() {
     lastRes = j;
     if (!r.ok) {
       const hint = r.status === 401 ? "This server needs an API key." : r.status === 503 ? "The server is busy. Try again in a moment." : r.status === 422 ? "The server rejected the request." : "";
+      $("runmeta").innerHTML = "";
       fail(`${hint || "Request failed"} (HTTP ${r.status})`, typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j));
       if (r.status === 401) $("keyBtn").click();
       runs.unshift({ok: false, summary: `HTTP ${r.status}`, ms: "", when, body});
       return;
     }
     lastMs = r.headers.get("X-Inference-Time-Ms");
+    trace.done();
     showAnswers(j, body);
     const n = Object.keys(j.answers).length;
     $("runmeta").innerHTML = `<li><b>${n}</b> answer${n === 1 ? "" : "s"} in one forward pass</li>` +
@@ -653,6 +904,8 @@ async function run() {
   } finally {
     if (runs.length > 25) runs.length = 25;
     go.disabled = false;
+    $("qwrap").classList.remove("thinking"); document.querySelector(".text-card").classList.remove("scanning");
+    if (!lastRes || !lastRes.answers) trace.reset();
     if (!$("dev").hidden) renderDev();
   }
 }
@@ -660,13 +913,65 @@ function fail(title, detail) { $("err").innerHTML = `<div class="err"><b>${esc(t
 $("go").onclick = run;
 document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (!$("go").disabled) run(); } });
 
+/* ---------- signal trace: idles flat, oscillates while the model reads, settles into the brand pulse ---------- */
+const trace = (() => {
+  const cv = $("trace"), ctx = cv.getContext("2d");
+  let amp = 0, target = 0, settle = 0, phase = 0, raf = 0, last = 0;
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function size() { const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; cv.width = Math.max(1, r.width * d); cv.height = 44 * d; ctx.setTransform(d, 0, 0, d, 0, 0); }
+  // the notch of the logo's pulse line, centred at x = 0.42 of the width
+  const notch = x => { const u = (x - .42) / .06; return u < -1 || u > 1.5 ? 0 : u < 0 ? -9 * (1 + u) : u < .75 ? -9 + 22 * (u / .75) : 13 * (1 - (u - .75) / .75); };
+  function draw(now) {
+    const w = cv.width / (devicePixelRatio || 1), mid = 22, dt = Math.min(50, now - (last || now)); last = now;
+    amp += (target - amp) * Math.min(1, dt / 160); phase += dt * .012;
+    ctx.clearRect(0, 0, w, 44);
+    ctx.lineWidth = 2; ctx.lineCap = ctx.lineJoin = "round";
+    ctx.strokeStyle = settle > 0 ? css("--signal") : css("--line2");
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 2) {
+      const f = x / w, env = Math.sin(Math.PI * f);
+      const wave = amp * env * (Math.sin(f * 38 + phase) * .55 + Math.sin(f * 91 - phase * 1.7) * .3 + Math.sin(f * 7 + phase * .5) * .15);
+      const y = mid + wave * 15 + notch(f) * E.spring(Math.min(1, settle));
+      x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+    const dot = settle > 0 ? Math.min(1, E.outExpo(settle)) : 0;
+    ctx.fillStyle = css("--signal"); ctx.beginPath(); ctx.arc(6 + (w - 12) * dot, mid, 4.5, 0, Math.PI * 2); ctx.fill();
+    if (settle > 0 && settle < 1.4) settle += dt / 700;
+    if (Math.abs(target - amp) > .002 || target > 0 || (settle > 0 && settle < 1.4)) raf = requestAnimationFrame(draw); else raf = 0;
+  }
+  const kick = () => { if (!raf) { last = 0; raf = requestAnimationFrame(draw); } };
+  addEventListener("resize", () => { size(); kick(); });
+  size(); requestAnimationFrame(draw);
+  return {
+    read() { if (still.matches) return; settle = 0; target = 1; kick(); },
+    done() { target = 0; settle = still.matches ? 1.4 : .001; still.matches ? requestAnimationFrame(draw) : kick(); },
+    reset() { target = 0; settle = 0; amp = 0; kick(); }
+  };
+})();
+
+/* ---------- title sequence: kinetic type, then the pulse line draws and the dot lands ---------- */
+function titleSequence() {
+  const h = $("hero"), svg = $("pulse");
+  if (!h || still.matches || mode !== "simple") return;
+  const words = h.textContent.split(" ");
+  h.innerHTML = words.map(w => `<span style="display:inline-block;white-space:pre">${esc(w)} </span>`).join("");
+  [...h.children].forEach((el, i) => el.animate(
+    [{opacity: 0, transform: "translateY(.45em)", filter: "blur(10px)"}, {opacity: 1, transform: "none", filter: "blur(0)"}],
+    {duration: 720, delay: 90 + i * 55, easing: EXPO, fill: "backwards"}));
+  const path = svg.querySelector("path"), dot = svg.querySelector("circle"), len = path.getTotalLength(), start = 90 + words.length * 55;
+  path.animate([{strokeDasharray: len, strokeDashoffset: len}, {strokeDasharray: len, strokeDashoffset: 0}], {duration: 900, delay: start, easing: EXPO, fill: "backwards"});
+  dot.animate([{transform: "scale(0)", transformOrigin: "341px 11px"}, {transform: "scale(1)", transformOrigin: "341px 11px"}], {duration: 700, delay: start + 650, easing: SPRING, fill: "backwards"});
+}
+
 /* ---------- start ---------- */
 renderScenarios();
 try {
   const saved = JSON.parse(store.get("statim_pg") || "null");
   if (saved && Array.isArray(saved.qs)) { $("text").value = saved.text; qs = saved.qs; scenario = saved.scenario || ""; renderScenarios(); renderQs(); checkText(); }
-  else load("Support ticket");
-} catch { load("Support ticket"); }
+  else load(Object.keys(SCENARIOS)[0]);
+} catch { load(Object.keys(SCENARIOS)[0]); }
+titleSequence();
 </script>
 </body>
 </html>

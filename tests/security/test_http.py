@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 import time
 
+KEY = 'statim-test-key-0123456789abcdef'
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -36,12 +38,45 @@ def main():
         checks += 1
 
     with tempfile.TemporaryDirectory(prefix='statim-security-') as tmp:
+        def test_non_loopback_without_key_fails_closed():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'must-not-be-loaded.gguf')
+            started = time.monotonic()
+            p = subprocess.run([args.binary, 'serve', '-m', missing_model, '--host', '0.0.0.0'],
+                               env=env, capture_output=True, text=True, timeout=5)
+            elapsed = time.monotonic() - started
+            assert p.returncode == 2, (p.returncode, p.stderr)
+            assert 'host "0.0.0.0" is not loopback' in p.stderr, p.stderr
+            assert '--allow-unauthenticated' in p.stderr, p.stderr
+            assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+            assert elapsed < 5, elapsed
+            checks += 1
+
+        test_non_loopback_without_key_fails_closed()
+        def test_short_keys_fail_before_model_load():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'short-key-must-not-load.gguf')
+            keyfile = Path(tmp) / 'short-keys'
+            keyfile.write_text('# first line\n' + 'f' * 31 + '\n', encoding='ascii')
+            cases = [([args.binary, 'serve', '-m', missing_model], dict(env, STATIM_API_KEY='e' * 31),
+                      'STATIM_API_KEY'),
+                     ([args.binary, 'serve', '-m', missing_model, '--api-key-file', str(keyfile)], env,
+                      str(keyfile) + ':2')]
+            for command, case_env, source in cases:
+                p = subprocess.run(command, env=case_env, capture_output=True, text=True, timeout=5)
+                assert p.returncode == 2, (p.returncode, p.stderr)
+                assert source in p.stderr and 'length 31' in p.stderr and 'minimum is 32' in p.stderr, p.stderr
+                assert 'openssl rand -hex 32' in p.stderr, p.stderr
+                assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+                checks += 1
+
+        test_short_keys_fail_before_model_load()
         fail_start(['--api-key-file', str(Path(tmp) / 'missing')])
         for contents in ('', '# comments only\n  # comment\r\n'):
             keyfile = Path(tmp) / 'keys'
             keyfile.write_text(contents)
             fail_start(['--api-key-file', str(keyfile)])
-            fail_start(['--api-key-file', str(keyfile)], keys='otherwise-valid')
+            fail_start(['--api-key-file', str(keyfile)], keys=KEY)
         for value in ('', ' , , ', 'invalid key'):
             fail_start(keys=value)
         for flag in ('--max-len', '--head-max-len', '--ensemble'):
@@ -62,12 +97,97 @@ def main():
                   'C++ security tests exercise socket-free HTTP processing.', flush=True)
             return 77
 
+        def reserve_port(host='127.0.0.1', family=socket.AF_INET):
+            with socket.socket(family) as probe:
+                probe.bind((host, 0))
+                return probe.getsockname()[1]
+
+        def wait_for_health(proc, logfile, connect_host, server_port):
+            for _ in range(300):
+                if proc.poll() is not None:
+                    raise AssertionError(logfile.read_text())
+                try:
+                    conn = http.client.HTTPConnection(connect_host, server_port, timeout=1)
+                    conn.request('GET', '/health')
+                    response = conn.getresponse()
+                    body = response.read()
+                    conn.close()
+                    if response.status == 200:
+                        assert set(json.loads(body)) == {'status', 'version'}
+                        return
+                except (OSError, http.client.HTTPException):
+                    time.sleep(.1)
+            raise AssertionError('server did not become healthy:\n' + logfile.read_text())
+
+        def run_startup_server(name, host, connect_host, keys=None, allow=False, family=socket.AF_INET):
+            nonlocal checks
+            server_port = reserve_port(connect_host, family)
+            logfile = Path(tmp) / (name + '.log')
+            command = base + ['--host', host, '--port', str(server_port)]
+            if allow:
+                command.append('--allow-unauthenticated')
+            server_env = env if keys is None else dict(env, STATIM_API_KEY=keys)
+            with logfile.open('w+') as log:
+                proc = subprocess.Popen(command, env=server_env, stdout=log, stderr=log)
+                try:
+                    wait_for_health(proc, logfile, connect_host, server_port)
+                    conn = http.client.HTTPConnection(connect_host, server_port, timeout=3)
+                    conn.request('GET', '/metrics')
+                    anonymous = conn.getresponse()
+                    anonymous.read()
+                    conn.close()
+                    if keys is None:
+                        assert anonymous.status == 200, anonymous.status
+                    else:
+                        assert anonymous.status == 401, anonymous.status
+                        conn = http.client.HTTPConnection(connect_host, server_port, timeout=3)
+                        conn.request('GET', '/metrics', headers={'Authorization': 'Bearer ' + keys})
+                        authenticated = conn.getresponse()
+                        authenticated.read()
+                        conn.close()
+                        assert authenticated.status == 200, authenticated.status
+                finally:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+            checks += 1
+            return logfile.read_text()
+
+        def test_non_loopback_allow_unauthenticated():
+            log = run_startup_server('non-loopback-allow', '0.0.0.0', '127.0.0.1', allow=True)
+            records = [json.loads(line) for line in log.splitlines() if line.startswith('{')]
+            assert any(record.get('event') == 'auth_off_on_network' for record in records), log
+
+        def test_non_loopback_env_key():
+            run_startup_server('non-loopback-key', '0.0.0.0', '127.0.0.1', keys=KEY)
+
+        def test_loopback_ipv4_without_key():
+            run_startup_server('loopback-ipv4', '127.0.0.1', '127.0.0.1')
+
+        def test_loopback_ipv6_without_key():
+            try:
+                reserve_port('::1', socket.AF_INET6)
+            except OSError as exc:
+                print('SKIP: test_loopback_ipv6_without_key: IPv6 loopback unavailable: %s' % exc,
+                      flush=True)
+                return
+            run_startup_server('loopback-ipv6', '::1', '::1', family=socket.AF_INET6)
+
+        test_non_loopback_allow_unauthenticated()
+        test_non_loopback_env_key()
+        test_loopback_ipv4_without_key()
+        test_loopback_ipv6_without_key()
+        port = reserve_port()
+
         def request(path, payload=None, auth=True, rid=None):
             nonlocal checks
             conn = http.client.HTTPConnection('127.0.0.1', port, timeout=30)
             headers = {'Content-Type': 'application/json'}
             if auth:
-                headers['Authorization'] = 'Bearer secret'
+                headers['Authorization'] = 'Bearer ' + KEY
             if rid:
                 headers['X-Request-Id'] = rid
             if isinstance(payload, dict):
@@ -93,7 +213,7 @@ def main():
         with logfile.open('w+') as log:
             proc = subprocess.Popen(base + ['--port', str(port), '--max-concurrent', '2', '--http-queue', '4',
                                            '--request-timeout', '2'],
-                                    env=dict(env, STATIM_API_KEY='secret'), stdout=log, stderr=log)
+                                    env=dict(env, STATIM_API_KEY=KEY), stdout=log, stderr=log)
             try:
                 for _ in range(300):
                     if proc.poll() is not None:
@@ -105,8 +225,19 @@ def main():
                         time.sleep(.1)
                 else:
                     raise AssertionError('server did not become healthy')
-                status, body, _ = request('/health', auth=False)
+                status, body, hdr = request('/health', auth=False)
                 assert status == 200 and set(json.loads(body)) == {'status', 'version'}
+                # security headers on every response, also on errors (READINESS P1 #14)
+                assert hdr.get('X-Content-Type-Options') == 'nosniff' and hdr.get('Referrer-Policy') == 'no-referrer', hdr
+                _, _, hdr = request('/metrics', auth=False)
+                assert hdr.get('X-Content-Type-Options') == 'nosniff', hdr
+                status, page, hdr = request('/', auth=False)
+                csp = hdr.get('Content-Security-Policy', '')
+                assert status == 200 and hdr.get('X-Frame-Options') == 'DENY', hdr
+                script_src = csp.split('script-src', 1)[1].split(';', 1)[0]
+                assert "'sha256-" in script_src and 'unsafe-inline' not in script_src, csp
+                assert "frame-ancestors 'none'" in csp and "default-src 'none'" in csp, csp
+                assert b'localStorage.getItem("statim_key")' not in page and b'sessionStorage' in page
                 assert request('/ready', auth=False)[0] == 200
                 for path in ('/metrics', '/v1/models'):
                     assert request(path, auth=False)[0] == 401
@@ -114,6 +245,16 @@ def main():
                 q = {'x': {'type': 'choice', 'instructions': 'Choose', 'criteria': ['yes', 'no']}}
                 req = {'state': 'hello', 'questions': q}
                 assert request('/v1/systemone', req, auth=False)[0] == 401
+                yes_no_q = {'answer': {'type': 'yes_no', 'instructions': 'Is this a greeting?',
+                                       'labels': {'false': 'no', 'true': 'yes'}}}
+                noul_q = {'answer': dict(yes_no_q['answer'], type='noul')}
+                yes_no_status, yes_no_body, _ = request('/v1/systemone', {'state': 'hello', 'questions': yes_no_q})
+                noul_status, noul_body, _ = request('/v1/systemone', {'state': 'hello', 'questions': noul_q})
+                yes_no_answer = json.loads(yes_no_body)['answers']['answer']
+                noul_answer = json.loads(noul_body)['answers']['answer']
+                assert yes_no_status == noul_status == 200
+                assert yes_no_answer['type'] == 'noul'
+                assert yes_no_answer['noul'] == noul_answer['noul']
                 status, body, _ = request('/v1/systemone/batch', {'states': ['one', 'two'], 'questions': {}})
                 batch = json.loads(body)
                 assert status == 200 and set(batch) == {'results'} and len(batch['results']) == 2
@@ -156,21 +297,22 @@ def main():
                     status, _, headers = request('/v1/systemone', {'state': 'ok', 'questions': {}}, rid=rid)
                     assert status == 200 and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', headers['X-Request-Id'])
                 raw('Content-Length: 100', 401)  # no body sent: reject immediately
-                raw('Authorization: Bearer secret\r\nContent-Length: 999999999', 413)
+                raw('Authorization: Bearer ' + KEY + '\r\nContent-Length: 999999999', 413)
                 for framing in ('Content-Length: 100\r\nTransfer-Encoding: chunked',
                                 'Content-Length: 0\r\nTransfer-Encoding: chunked',
                                 'Content-Length: 2\r\nContent-Length: 2',
                                 'Content-Length: 2\r\nContent-Length: 3', 'Content-Length: 2, 2', 'Content-Length: -1'):
-                    raw('Authorization: Bearer secret\r\n' + framing, 400)
+                    raw('Authorization: Bearer ' + KEY + '\r\n' + framing, 400)
                 # A partial authenticated upload consumes one admission slot.
                 slow = []
                 try:
                     for _ in range(2):
                         conn = socket.create_connection(('127.0.0.1', port), timeout=3)
-                        conn.sendall(b'POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\nContent-Length: 100\r\n\r\n{')
+                        conn.sendall(('POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ' + KEY +
+                                      '\r\nContent-Length: 100\r\n\r\n{').encode())
                         slow.append(conn)
                     time.sleep(.1)
-                    raw('Authorization: Bearer secret\r\nContent-Length: 100', 503)
+                    raw('Authorization: Bearer ' + KEY + '\r\nContent-Length: 100', 503)
                     assert request('/health', auth=False)[0] == 200
                     # Drip bytes faster than the idle timeout; absolute timeout must still expire.
                     start = time.monotonic()
@@ -272,6 +414,9 @@ def main():
         text = badlog.read_bytes().decode('utf-8')
         loaded = [json.loads(line) for line in text.splitlines() if line.startswith('{') and '"model_loaded"' in line]
         assert loaded and loaded[0]['event'] == 'model_loaded' and '\ufffd' in loaded[0]['path'], text
+        assert loaded[0]['gemm'] in ('packed_sgemm', 'ggml'), loaded[0]
+        assert isinstance(loaded[0]['cpu_features'], list), loaded[0]
+        assert set(loaded[0]['cpu_features']) <= {'avx2', 'fma', 'f16c', 'avx512f'}, loaded[0]
         print('invalid-utf8 model path: health 200', flush=True)
         print(f'security HTTP: {checks} checks passed')
     return 0

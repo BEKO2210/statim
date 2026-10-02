@@ -4,6 +4,8 @@
 #include "ggml-cpu.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -123,6 +125,63 @@ int main() {
             }
             ggml_free(ctx);
         }
+    }
+
+    // An already-expired large op must take only the packing barrier, not the matrix product.
+    {
+        constexpr int CM = 2048, CN = 256, CK = 2048, CTHREADS = 8;
+        ggml_init_params params{size_t(96) << 20, nullptr, false};
+        ggml_context* ctx = ggml_init(params);
+        ggml_tensor* w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, CK, CM);
+        ggml_tensor* x = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, CK, CN);
+        std::vector<float> workspace(statim::packed_sgemm_workspace_floats(CM, CN, CK));
+        statim::SgemmAbort abort{std::chrono::steady_clock::now() - std::chrono::seconds(1), nullptr};
+        statim::SgemmOpSync sync;
+        sync.workspace = workspace.data();
+        sync.abort = &abort;
+        ggml_tensor* args[] = {w, x};
+        ggml_tensor* y = ggml_custom_4d(ctx, GGML_TYPE_F32, CM, CN, 1, 1, args, 2,
+                                        statim::sgemm_custom_op, GGML_N_TASKS_MAX, &sync);
+        const auto start = std::chrono::steady_clock::now();
+        std::vector<std::thread> threads;
+        for (int ith = 0; ith < CTHREADS; ++ith)
+            threads.emplace_back([&, ith] { statim::sgemm_custom_op(y, ith, CTHREADS, &sync); });
+        for (auto& thread : threads) thread.join();
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        ok &= elapsed < std::chrono::seconds(1);
+        ok &= sync.generation.load() == 1;
+        ggml_free(ctx);
+    }
+
+    // Hold one participant back so the others are known to be at the generation barrier,
+    // cancel, then let the final participant release them. No thread may remain waiting.
+    {
+        constexpr int CM = 128, CN = 32, CK = 256, CTHREADS = 8;
+        ggml_init_params params{size_t(8) << 20, nullptr, false};
+        ggml_context* ctx = ggml_init(params);
+        ggml_tensor* w = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, CK, CM);
+        ggml_tensor* x = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, CK, CN);
+        std::vector<float> workspace(statim::packed_sgemm_workspace_floats(CM, CN, CK));
+        std::atomic<bool> cancelled{false};
+        statim::SgemmAbort abort{std::chrono::steady_clock::time_point::max(), &cancelled};
+        statim::SgemmOpSync sync;
+        sync.workspace = workspace.data();
+        sync.abort = &abort;
+        ggml_tensor* args[] = {w, x};
+        ggml_tensor* y = ggml_custom_4d(ctx, GGML_TYPE_F32, CM, CN, 1, 1, args, 2,
+                                        statim::sgemm_custom_op, GGML_N_TASKS_MAX, &sync);
+        std::vector<std::thread> threads;
+        for (int ith = 0; ith < CTHREADS - 1; ++ith)
+            threads.emplace_back([&, ith] { statim::sgemm_custom_op(y, ith, CTHREADS, &sync); });
+        const auto wait_until = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (sync.arrived.load(std::memory_order_acquire) != CTHREADS - 1 &&
+               std::chrono::steady_clock::now() < wait_until) std::this_thread::yield();
+        ok &= sync.arrived.load(std::memory_order_acquire) == CTHREADS - 1;
+        cancelled.store(true, std::memory_order_relaxed);
+        threads.emplace_back([&] { statim::sgemm_custom_op(y, CTHREADS - 1, CTHREADS, &sync); });
+        for (auto& thread : threads) thread.join();
+        ok &= sync.generation.load() == 1;
+        ggml_free(ctx);
     }
 
     std::printf("packed SGEMM random max |error| %.3e, max relative %.3e; NaN/Inf and ggml graph (x2) %s\n",

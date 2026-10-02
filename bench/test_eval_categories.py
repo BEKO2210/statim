@@ -4,7 +4,9 @@
 """
 import collections
 import copy
+import gzip
 import inspect
+import io
 import json
 import os
 import sys
@@ -13,6 +15,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import eval_categories as ec  # noqa: E402
+from prediction_items import item_sha256, write_prediction_rows  # noqa: E402
 
 from tools.finetune import gate  # noqa: E402
 from tools.finetune.mixture_v6 import eval_texts, loaders, registry  # noqa: E402
@@ -372,15 +375,31 @@ def test_gate_prefixes_category_suites():
 
 
 def test_gate_compare_reports_the_categories_family(tmp_path, capsys):
-    import json
-    champ, chall = tmp_path / "champ", tmp_path / "chall"
-    for d, acc in ((champ, 0.80), (chall, 0.74)):
-        d.mkdir()
-        heldout = {"categories:%s/en" % s: {"acc": acc, "n": 150} for s in ("sentiment", "nli", "emotion", "intent")}
-        json.dump({"validation": {"v": 0.5 if d == champ else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
-    assert gate.compare(str(champ), str(chall)) is False
-    out = capsys.readouterr().out
-    assert "family categories" in out and "REGRESSION" in out
+    base, other, bi, oi = {}, {}, {}, {}
+    for suite in ("sentiment", "nli", "emotion", "intent"):
+        key = "categories:%s/en" % suite
+        base[key], other[key] = {"acc": .8, "n": 150}, {"acc": .74, "n": 150}
+        common = [{"suite": key, "lang": "en", "i": i, "item": "%064x" % i, "gold": 0}
+                  for i in range(150)]
+        bi[key] = [dict(r, pred=0 if r["i"] < 120 else 1) for r in common]
+        oi[key] = [dict(r, pred=0 if r["i"] < 111 else 1) for r in common]
+    res = gate.heldout_decision(base, other, bi, oi)
+    assert res["harms"]
+    assert "family categories" in capsys.readouterr().out
+
+
+def test_prediction_writer_from_fake_http_answers_is_canonical():
+    state = {"text": "same input"}
+    questions = {"q": {"type": "choice", "instructions": "Pick", "criteria": {"a": None, "b": None}}}
+    fake_http = {"results": [{"answers": {"q": {"probabilities": {"a": .1, "b": .9}}}}]}
+    probs = [[fake_http["results"][0]["answers"]["q"]["probabilities"][k] for k in ("a", "b")]]
+    out = io.StringIO()
+    rows = write_prediction_rows(out, "suite", "en", [state], questions, [1], probs)
+    assert json.loads(out.getvalue()) == rows[0]
+    assert len(rows[0]["item"]) == 64 and rows[0]["pred"] == rows[0]["gold"] == 1
+    changed = {"q": dict(questions["q"], criteria={"a": None, "b": None, "c": None})}
+    assert rows[0]["item"] == item_sha256(state, questions)
+    assert rows[0]["item"] != item_sha256(state, changed)
 
 
 def test_template_fields_stay_in_state_but_not_in_banned_texts():
@@ -510,7 +529,19 @@ def _gate_pair(tmp_path, pools):
         heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool},
                    # a trained suite that clearly improves: the gate also asks for one significant family gain
                    "test/banking77": {"acc": 0.80 if name == "champ" else 0.90, "n": 2000}}
-        json.dump({"validation": {"v": 0.5 if name == "champ" else 0.6}, "heldout": heldout}, open(d / "eval.json", "w"))
+        items = []
+        for suite, n, right in (("categories:nli/en", 150, round(acc * 150)),
+                                ("test/banking77", 2000, 1600 if name == "champ" else 1800),
+                                ("validation:v", 100, 50 if name == "champ" else 60)):
+            items += [{"suite": suite, "lang": "en", "i": i, "item": "%064x" % i, "gold": 0,
+                       "pred": 0 if i < right else 1} for i in range(n)]
+        item_path = d / gate.ITEMS_NAME
+        with gzip.open(item_path, "wt", encoding="utf-8") as f:
+            for row in items:
+                f.write(json.dumps(row) + "\n")
+        json.dump({"validation": {"v": {"acc": 0.5 if name == "champ" else 0.6, "n": 100}},
+                   "heldout": heldout,
+                   "eval_items_sha256": gate.sha256_file(item_path)}, open(d / "eval.json", "w"))
         dirs.append(str(d))
     return dirs
 

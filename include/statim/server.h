@@ -43,6 +43,7 @@ struct ServerConfig {
     int inference_timeout = 120; // includes engine queue wait; cooperative compute deadline
     bool access_log = true;
     bool playground = true;   // serve the web playground at "/"
+    bool allow_unauthenticated = false;  // explicit opt-in for unauthenticated non-loopback listeners
 };
 
 int run_server(const ServerConfig& cfg);

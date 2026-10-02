@@ -14,7 +14,7 @@ import {
 
 const BASE_URL = process.env.STATIM_URL ?? "http://127.0.0.1:8190";
 const AUTH_URL = process.env.STATIM_AUTH_URL ?? "http://127.0.0.1:8191";
-const AUTH_KEY = process.env.STATIM_API_KEY_TEST ?? "sdk-test-key";
+const AUTH_KEY = process.env.STATIM_API_KEY_TEST ?? "sdk-test-key-0123456789abcdef0123";
 const ADAPTER_URL = process.env.STATIM_ADAPTER_URL;
 const ADAPTER_NAME = process.env.STATIM_ADAPTER_NAME;
 const AUTO_FAMILIES = new Set([
@@ -126,10 +126,10 @@ test("yes/no probabilities and option encoding", async () => {
   const server = await mock((hit, req, body) => {
     assert.equal(hit, 1);
     assert.equal(req.headers["x-request-id"], "opt-1");
-    assert.equal(req.headers.authorization, "Bearer secret");
+    assert.equal(req.headers.authorization, "Bearer sdk-unit-key-0123456789abcdef0123");
     assert.deepEqual(JSON.parse(body), {
       state: "hello",
-      questions: { refund: { type: "noul", instructions: "Refund?" } },
+      questions: { refund: { type: "yes_no", instructions: "Refund?" } },
       calibrate: false,
       ensemble: 1,
     });
@@ -140,9 +140,9 @@ test("yes/no probabilities and option encoding", async () => {
     };
   });
   try {
-    const decision = await new Client(server.url, "secret", 5, { max_retries: 0 }).decide(
+    const decision = await new Client(server.url, "sdk-unit-key-0123456789abcdef0123", 5, { max_retries: 0 }).decide(
       "hello",
-      { refund: { type: "noul", instructions: "Refund?" } },
+      { refund: { type: "yes_no", instructions: "Refund?" } },
       { calibrate: false, ensemble: 1, request_id: "opt-1" },
     );
     const answer = decision.answers.refund;
@@ -546,7 +546,7 @@ test("handler errors on the real server", async () => {
     () => client.decide("x", { q: { type: "maybe", instructions: "?" } }),
     (err) => {
       assert.ok(err instanceof UnprocessableEntityError);
-      assert.equal(err.detail, "unknown question type; use choice, score or noul");
+      assert.equal(err.detail, "unknown question type; use choice, score, noul or yes_no");
       return true;
     },
   );
@@ -647,7 +647,7 @@ test("authentication on the keyed server", async () => {
       return true;
     },
   );
-  const wrong = new Client(AUTH_URL, "not-the-key", 30);
+  const wrong = new Client(AUTH_URL, "wrong-sdk-key-0123456789abcdef01", 30);
   await assert.rejects(
     () =>
       wrong.decide(

@@ -49,6 +49,9 @@ jobs:
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           tools/package_release.sh "build-${{ matrix.flavor }}" "${{ matrix.flavor }}" "${GITHUB_REF_NAME}" dist
 
+      - name: Check hardening of archived binaries
+        run: python3 tools/release/check_hardening.py dist/*.tar.gz
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: statim-${{ matrix.flavor }}

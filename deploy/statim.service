@@ -1,7 +1,7 @@
 # systemd unit for the Statim decision server.
 #   install -Dm755 build/statim /usr/local/bin/statim
 #   install -Dm644 model.gguf /var/lib/statim/multilingual.gguf
-#   echo 'STATIM_API_KEY=change-me' > /etc/statim/env && chmod 600 /etc/statim/env
+#   printf 'STATIM_API_KEY=%s\n' "$(openssl rand -hex 32)" > /etc/statim/env && chmod 600 /etc/statim/env
 #   systemctl enable --now statim
 [Unit]
 Description=Statim System-1 decision server
@@ -14,6 +14,9 @@ Type=simple
 Environment=STATIM_API_KEY=
 EnvironmentFile=/etc/statim/env
 ExecStart=/usr/local/bin/statim serve -m multilingual=/var/lib/statim/multilingual.gguf --host 127.0.0.1 --port 8080 --workers 2
+# Allow in-flight requests to complete on SIGTERM up to the 120 s inference timeout,
+# plus 30 s headroom for network flush and clean exit, before systemd issues SIGKILL.
+TimeoutStopSec=150
 Restart=on-failure
 RestartSec=2
 DynamicUser=yes
