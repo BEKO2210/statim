@@ -1,0 +1,78 @@
+# Statim must be scraped with job="statim". If your scrape job has another name,
+# replace that matcher consistently in this file before loading the rules.
+groups:
+  - name: statim
+    rules:
+      # DOWN_FOR = 2m.
+      - alert: StatimDown
+        expr: up{job="statim"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: Statim is down
+          description: Prometheus has been unable to scrape a Statim target for at least two minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimdown
+
+      # NOT_READY_FOR = 5m. This is exactly the condition that makes /ready return 503.
+      - alert: StatimNotReady
+        expr: statim_in_flight{job="statim"} >= statim_max_concurrent{job="statim"}
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Statim has no admission capacity
+          description: Statim has remained at its configured concurrent-request limit for at least five minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimnotready
+
+      # BUSY_REJECTION_RATIO = 0.05 and BUSY_WINDOW = 10m.
+      # rejected_busy_total is a subset of the decision-handler latency count, unlike a generic 503 series.
+      - alert: StatimRejectingBusy
+        expr: |
+          (
+            rate(statim_rejected_busy_total{job="statim"}[10m])
+              / rate(statim_request_duration_ms_count{job="statim"}[10m]) > 0.05
+          )
+          and rate(statim_request_duration_ms_count{job="statim"}[10m]) > 0
+        labels:
+          severity: ticket
+        annotations:
+          summary: Statim is rejecting more than 5% of decisions as busy
+          description: Busy admission rejections exceeded 5% of decision-handler responses over ten minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimrejectingbusy
+
+      # SERVER_ERROR_WINDOW = 10m; any non-admission 5xx response is actionable.
+      - alert: StatimServerErrors
+        expr: increase(statim_requests_total{job="statim",code=~"5..",code!="503"}[10m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: Statim returned a server error
+          description: At least one non-503 decision-handler server error occurred in the last ten minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimservererrors
+
+      # LATENCY_P95_MS = 5000, LATENCY_WINDOW = 10m and LATENCY_FOR = 15m.
+      # Tune the latency threshold for the deployed model, device and hardware.
+      - alert: StatimHighLatencyP95
+        expr: histogram_quantile(0.95, sum by (le) (rate(statim_request_duration_ms_bucket{job="statim"}[10m]))) > 5000
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: Statim p95 decision latency is above five seconds
+          description: Aggregate p95 decision-handler latency has exceeded 5000 ms for at least fifteen minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimhighlatencyp95
+
+      # WORKER_SATURATION_FOR = 15m.
+      - alert: StatimWorkersSaturated
+        expr: sum by (model) (statim_workers_busy{job="statim"}) >= sum by (model) (statim_workers{job="statim"})
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: All Statim workers are busy
+          description: A checkpoint has used all of its configured workers continuously for at least fifteen minutes.
+          runbook_url: https://github.com/BEKO2210/statim/blob/main/docs/RUNBOOK.md#statimworkerssaturated
+
+      # StatimRestarted is intentionally omitted: uptime < 300 fires during every normal rollout,
+      # so without deployment-state suppression it creates a non-actionable ticket on each deploy.

@@ -14,9 +14,47 @@ are one JSON object per line on stderr; with systemd, `journalctl -u statim -o c
 ```sh
 curl -fsS http://127.0.0.1:8080/health          # {"status":"ok","version":"..."}: the process is up
 curl -fsS http://127.0.0.1:8080/ready           # 200 {"ready":true}: it accepts work; 503 while saturated
-curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/metrics | grep -E 'statim_(in_flight|workers_busy|rejected_busy_total|model_info|adapter_requests_total)'
+curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/metrics | grep -E 'statim_(in_flight|max_concurrent|workers|workers_busy|rejected_busy_total|model_info|adapter_requests_total)'
 journalctl -u statim -o cat --since -10min | jq -c 'select(.level != "info")'
 ```
+
+## Prometheus alerts
+
+The rule names below come from `deploy/prometheus/statim-alerts.yml`. Its thresholds are conservative
+defaults; tune latency for the deployed model and hardware after measuring normal traffic.
+
+### StatimDown
+
+Confirm that the process is running and that Prometheus can reach and authenticate to `/metrics`.
+Inspect the service or container logs; if the process exited, follow [the start-up
+checks](#the-process-does-not-start), and if it is running, fix the scrape network or bearer key.
+
+### StatimNotReady
+
+Compare `statim_in_flight` with `statim_max_concurrent`. Sustained equality means admission capacity
+is exhausted; follow the busy-response capacity steps below rather than restarting a healthy server.
+
+### StatimRejectingBusy
+
+Check client volume and `statim_workers_busy` against `statim_workers`. Ask clients to honour
+`Retry-After`; add compute capacity or replicas if all workers stay busy. Raising only
+`--max-concurrent` increases queueing and does not add compute.
+
+### StatimServerErrors
+
+Find `inference_failed` events and correlate their request ids with the request log. Preserve the
+internal error and a safe reproducer, then follow the 500-response reporting steps below.
+
+### StatimHighLatencyP95
+
+Compare current request sizes and worker saturation with the deployment baseline. Reduce batch or
+input sizes, add compute capacity, or tune the alert threshold if the deployed model and hardware
+have a measured healthy p95 above the conservative five-second default.
+
+### StatimWorkersSaturated
+
+Compare `statim_workers_busy{model}` with `statim_workers{model}` to identify the checkpoint. Add
+workers only when memory and compute allow it; otherwise add a replica or reduce load.
 
 ## The process does not start
 
@@ -64,7 +102,7 @@ Statim checks its configuration before it loads a model. The message names the p
   `--max-concurrent` (default 16). This is not a failure of Statim.
 - **Fix.**
   - Clients should honour `Retry-After`; the official SDKs retry.
-  - If it persists, check `statim_workers_busy` against `--workers`. If every worker is always
+  - If it persists, check `statim_workers_busy` against `statim_workers`. If every worker is always
     busy, the host lacks compute: add workers (each needs its own compute buffers, see the
     `model_loaded` event's `threads_per_worker`) or another instance behind the proxy.
   - Raising `--max-concurrent` alone only makes requests wait longer.

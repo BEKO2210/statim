@@ -1630,7 +1630,9 @@ playground-ok
 | `statim_batch_size_sum`, `statim_batch_size_count` | Summary of states in server-created micro-batch jobs. |
 | `statim_batch_wait_ms_sum`, `statim_batch_wait_ms_count` | Summary of admitted-request time waiting for compatible peers. |
 | `statim_in_flight` | Requests currently in the handler. |
+| `statim_max_concurrent` | Configured `--max-concurrent` admission limit. `/ready` returns 503 while `statim_in_flight >= statim_max_concurrent`. |
 | `statim_uptime_seconds` | Seconds since the process started listening. |
+| `statim_workers{model="<id>"}` | Configured worker count for that checkpoint, one line per checkpoint under one `# TYPE statim_workers gauge`. |
 | `statim_workers_busy{model="<id>"}` | Workers currently running inference for that checkpoint, one line per checkpoint under one `# TYPE statim_workers_busy gauge`. |
 | `statim_model_info{model="...",weights="...",version="...",fingerprint="...",checkpoint_sha256="..."} 1` | One line per checkpoint under one `# TYPE statim_model_info gauge`. `version` is the build version; `checkpoint_sha256` is empty for an old GGUF without that metadata. |
 | `statim_adapter_requests_total{model="...",adapter="...",routing="requested|auto"}` | With adapters loaded, successful decision requests answered through each adapter, split by explicit or automatic selection. Every loaded pair starts at zero; a batch counts once. |
@@ -1658,8 +1660,12 @@ statim_batch_wait_ms_sum N
 statim_batch_wait_ms_count N
 # TYPE statim_in_flight gauge
 statim_in_flight N
+# TYPE statim_max_concurrent gauge
+statim_max_concurrent N
 # TYPE statim_uptime_seconds gauge
 statim_uptime_seconds N
+# TYPE statim_workers gauge
+statim_workers{model="english"} N
 # TYPE statim_workers_busy gauge
 statim_workers_busy{model="english"} N
 # TYPE statim_model_info gauge
@@ -1708,8 +1714,13 @@ required = [
     "statim_batch_wait_ms_count ",
     "# TYPE statim_in_flight gauge",
     "statim_in_flight ",
+    "# TYPE statim_max_concurrent gauge",
+    "statim_max_concurrent ",
     "# TYPE statim_uptime_seconds gauge",
     "statim_uptime_seconds ",
+    "# TYPE statim_workers gauge",
+    'statim_workers{model="english"}',
+    'statim_workers{model="multilingual"}',
     "# TYPE statim_workers_busy gauge",
     'statim_workers_busy{model="english"}',
     'statim_workers_busy{model="multilingual"}',
