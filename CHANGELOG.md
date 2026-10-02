@@ -99,6 +99,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   - Build provenance attestations generated for all release archives using `actions/attest-build-provenance` and verifiable with `gh attestation verify`.
   - Added weekly Dependabot updates (`.github/dependabot.yml`) for GitHub Actions.
   - CI Python dependencies pinned to exact versions with SHA-256 integrity hashes in `requirements-ci.txt` and verified via `--require-hashes`.
+- README: a short comparison with ONNX Runtime on CPU under "At a glance", from the measurements in
+  docs/ORT.md, including where ORT is faster. TensorRT and GPU are stated as not measured.
 
 ## [0.9.2] - 2026-09-30
 
