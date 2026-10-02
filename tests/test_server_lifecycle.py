@@ -548,12 +548,16 @@ def test_signals(binary, model, tmp_dir, golden_payload_slow):
     run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGINT, 'sigint-1', measured_times, quick=200)
 
     # Repeat SIGTERM 5 times to catch races
-    for i in range(1, 6):
+    # Five SIGTERM repeats look for shutdown races. The ThreadSanitizer job sets
+    # STATIM_LIFECYCLE_SIGTERM_RUNS=1: TSan finds races without repeats, and five runs at its ~12x
+    # slowdown exceed the test's time limit on a CI runner.
+    runs = int(os.environ.get('STATIM_LIFECYCLE_SIGTERM_RUNS', '5'))
+    for i in range(1, runs + 1):
         run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGTERM, f'sigterm-{i}', measured_times)
 
-    print(f'  Shutdown drain times over 5 SIGTERM runs: '
+    print(f'  Shutdown drain times over {runs} SIGTERM runs: '
           f'min={min(measured_times[1:]):.2f}s, max={max(measured_times[1:]):.2f}s, '
-          f'avg={sum(measured_times[1:])/5:.2f}s (bound: {shutdown_bound():.0f}s)')
+          f'avg={sum(measured_times[1:])/runs:.2f}s (bound: {shutdown_bound():.0f}s)')
 
 
 def main():

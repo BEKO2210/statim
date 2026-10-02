@@ -117,6 +117,7 @@ jobs:
       - name: Concurrency stress and thread safety suites (TSan)
         env:
           CUDA_VISIBLE_DEVICES: ""
+          STATIM_LIFECYCLE_SIGTERM_RUNS: "1"  # five runs at TSan speed exceed the test's limit; ASan and release run five
           TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1"
         run: |
           set -o pipefail
