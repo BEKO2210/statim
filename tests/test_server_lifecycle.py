@@ -41,6 +41,13 @@ def shutdown_bound():
     return max(45.0, 4 * (SLOW_SECONDS or 10.0) + 30)
 
 
+def drain_inference_timeout():
+    # The drain cases test shutdown, not the deadline: give admitted requests room to finish, so a
+    # slow sanitizer build (ThreadSanitizer is ~12x slower) does not turn a drained request into a
+    # 422 "inference deadline exceeded". Never below the server default of 120 s.
+    return int(max(120, 8 * (SLOW_SECONDS or 10.0) + 60))
+
+
 def reserve_port(host='127.0.0.1'):
     probe = socket.socket()
     try:
@@ -449,7 +456,8 @@ def run_quick_inferences(port, count=200, workers=4):
 def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run_label, measured_times, quick=20):
     """Executes a single signal drain case: quick inferences -> 4 slow requests -> signal -> drain."""
     log_path = Path(tmp_dir) / f'drain_{run_label}.log'
-    server = ServerInstance(binary, model, log_path, max_concurrent=8, workers=2, threads=4)
+    server = ServerInstance(binary, model, log_path, max_concurrent=8, workers=2, threads=4,
+                            extra_args=['--inference-timeout', str(drain_inference_timeout())])
     server.start()
     try:
         # Quick inferences first, so the leak check at exit (P1 #25) covers real work
@@ -540,12 +548,16 @@ def test_signals(binary, model, tmp_dir, golden_payload_slow):
     run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGINT, 'sigint-1', measured_times, quick=200)
 
     # Repeat SIGTERM 5 times to catch races
-    for i in range(1, 6):
+    # Five SIGTERM repeats look for shutdown races. The ThreadSanitizer job sets
+    # STATIM_LIFECYCLE_SIGTERM_RUNS=1: TSan finds races without repeats, and five runs at its ~12x
+    # slowdown exceed the test's time limit on a CI runner.
+    runs = int(os.environ.get('STATIM_LIFECYCLE_SIGTERM_RUNS', '5'))
+    for i in range(1, runs + 1):
         run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGTERM, f'sigterm-{i}', measured_times)
 
-    print(f'  Shutdown drain times over 5 SIGTERM runs: '
+    print(f'  Shutdown drain times over {runs} SIGTERM runs: '
           f'min={min(measured_times[1:]):.2f}s, max={max(measured_times[1:]):.2f}s, '
-          f'avg={sum(measured_times[1:])/5:.2f}s (bound: {shutdown_bound():.0f}s)')
+          f'avg={sum(measured_times[1:])/runs:.2f}s (bound: {shutdown_bound():.0f}s)')
 
 
 def main():

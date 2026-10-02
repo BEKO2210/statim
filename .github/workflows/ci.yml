@@ -90,6 +90,41 @@ jobs:
             -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|server_lifecycle|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$' \
             | tee ctest-sanitize.log
           python3 tools/ci/fail_on_skip.py ctest-sanitize.log
+  tsan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60  # server_lifecycle alone takes ~12 min under TSan locally; CI runners are slower
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (ThreadSanitizer)
+        run: |
+          cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_TSAN=ON \
+            -DPython3_EXECUTABLE="$(command -v python3)"
+          cmake --build build-tsan
+      - name: Concurrency stress and thread safety suites (TSan)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          STATIM_LIFECYCLE_SIGTERM_RUNS: "1"  # five runs at TSan speed exceed the test's limit; ASan and release run five
+          TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1"
+        run: |
+          set -o pipefail
+          ctest --test-dir build-tsan --output-on-failure --timeout 1500 \
+            -R '^(server_concurrency|sgemm|server_microbatch|server_lifecycle)$' \
+            | tee ctest-tsan.log
+          python3 tools/ci/fail_on_skip.py ctest-tsan.log
   android-arm64:
     # Cross-compiles every target for Android arm64 (NEON + dotprod) with the runner's NDK, so an
     # x86-only construct cannot break the ARM build again. No device here: the test run on real
