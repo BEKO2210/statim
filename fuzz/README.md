@@ -32,6 +32,38 @@ to `build-fuzz/corpus-<name>/`; crash inputs to `build-fuzz/artifacts/`. CI runs
 Reproduce a crash with `build-fuzz/fuzz_<name> <file>`, or without sanitizers through the replay
 driver of an ordinary build: `build/fuzz_replay_<name> <file-or-dir>...`.
 
+## Weekly campaign and coverage
+
+The `fuzz-weekly` workflow runs all three harnesses every Sunday at 02:00 UTC for 2,400 seconds
+each by default. It restores and grows the cached corpus, then replays that corpus through a
+source-coverage build. Each matrix job puts its short per-harness coverage note in the workflow
+summary and uploads the full report as a `fuzz-coverage-<name>` artifact for 90 days. A manual run
+can override the duration with the `seconds` input.
+
+Produce the same note locally with Clang and LLVM 18 (replace `request` with `tokenizer` or `gguf`):
+
+```bash
+cmake -S . -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+      -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_COVERAGE=ON
+cmake --build build-cov --target fuzz_replay_request
+LLVM_PROFDATA=llvm-profdata-18 LLVM_COV=llvm-cov-18 \
+  fuzz/coverage.sh request build-cov cov build-fuzz/corpus-request
+cat cov/coverage-request.md
+```
+
+First notes (2026-10-02, pop-os, 120 s per harness on top of the committed seeds; line coverage
+of the files each harness targets):
+
+| Harness | Inputs replayed | Targeted files |
+|---|---:|---|
+| `request` | 1,635 | `security.cpp` 60 %, `engine.cpp` 81 %, `tokenizer.cpp` 77 % |
+| `tokenizer` | 1,086 | `tokenizer.cpp` 91 % |
+| `gguf` | 518 | `gguf_preflight.cpp` 94 %, `model.cpp` 62 %, `mapped_file.h` 71 % |
+
+Known gap: no harness links `include/statim/http_security.h` (header and host checks in the HTTP
+server), so the request note lists it at 0 %. Those checks are covered by `tests/test_security.cpp`
+and `tests/security/test_http.py`, not by fuzzing.
+
 ## Layout
 
 | Path | Contents |

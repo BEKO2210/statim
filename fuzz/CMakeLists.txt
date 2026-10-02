@@ -13,6 +13,7 @@ foreach(name request tokenizer gguf)
     set(seed_dir ${STATIM_FUZZ_DIR}/seeds/${name})
   endif()
   add_executable(fuzz_replay_${name} ${STATIM_FUZZ_DIR}/fuzz_${name}.cpp ${STATIM_FUZZ_DIR}/replay_main.cpp)
+  statim_enable_coverage(fuzz_replay_${name})
   target_compile_definitions(fuzz_replay_${name} PRIVATE STATIM_FUZZ_DATA="${STATIM_FUZZ_DIR}/data"
                              STATIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(fuzz_replay_${name} PRIVATE statim_core)
