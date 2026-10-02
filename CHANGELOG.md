@@ -41,6 +41,7 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- CI `tsan` job and CMake option `STATIM_TSAN`: builds and instruments Statim and its dependencies with ThreadSanitizer (clang). Concurrency stress test `tests/test_server_concurrency.py` (CTest `server_concurrency`) testing 32 concurrent clients across micro-batching, engine pool weight switching with LoRA adapters, custom SGEMM barrier, client mid-request disconnects, calibration cache, and parallel metrics/health polling (READINESS P1 #46).
 - docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
   401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
   server's real log events, messages and metrics.
