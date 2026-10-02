@@ -1,0 +1,78 @@
+name: gpu
+# Parity gates on a real GPU: the maintainer's RTX 3070 as a self-hosted runner (READINESS P1 #52).
+# Only pushes to main, release tags and manual runs reach it. Pull requests never do: a fork's code
+# must not run on that machine, and fork workflows additionally need approval in the repository
+# settings ("all external contributors").
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-runner
+  cancel-in-progress: false
+
+jobs:
+  gpu-parity:
+    if: github.repository == 'BEKO2210/statim'
+    runs-on: [self-hosted, linux, gpu]
+    timeout-minutes: 90
+    env:
+      # Persistent between runs (outside the checkout, which is cleaned every run): the converter's
+      # venv, the converted models and the build trees, so a run rebuilds only what changed.
+      CACHE: /opt/gh-runner/cache
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: GPU and driver
+        run: |
+          nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv
+          vulkaninfo --summary 2>/dev/null | grep -E 'deviceName|driverVersion|apiVersion' || true
+      - name: Converter environment (pinned, hash-checked)
+        run: |
+          [ -x "$CACHE/venv/bin/python" ] || python3 -m venv "$CACHE/venv"
+          "$CACHE/venv/bin/pip" install -q --require-hashes -r requirements-ci.txt
+      - name: Fetch + convert Laya checkpoints (cached)
+        run: |
+          mkdir -p "$CACHE/models"
+          rm -rf models && ln -s "$CACHE/models" models
+          PYTHON="$CACHE/venv/bin/python" tools/fetch_models.sh multilingual english
+      - name: Build (CUDA)
+        run: |
+          cmake -S . -B "$CACHE/build-cuda" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF \
+            -DSTATIM_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12/bin/nvcc -DCMAKE_CUDA_ARCHITECTURES=86 \
+            -DPython3_EXECUTABLE="$CACHE/venv/bin/python"
+          cmake --build "$CACHE/build-cuda" --target test_model_parity test_engine_parity statim
+      - name: Build (Vulkan)
+        run: |
+          cmake -S . -B "$CACHE/build-vulkan" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF \
+            -DSTATIM_VULKAN=ON -DPython3_EXECUTABLE="$CACHE/venv/bin/python"
+          cmake --build "$CACHE/build-vulkan" --target test_model_parity test_engine_parity statim
+      - name: Parity gates on CUDA
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir "$CACHE/build-cuda" --output-on-failure -R '_cuda$' --no-tests=error \
+            --output-junit "$PWD/ctest-cuda.xml" | tee ctest-cuda.log
+          python3 tools/ci/fail_on_skip.py ctest-cuda.log
+      - name: Parity gates on Vulkan
+        run: |
+          set -o pipefail
+          ctest --test-dir "$CACHE/build-vulkan" --output-on-failure -R '_vulkan$' --no-tests=error \
+            --output-junit "$PWD/ctest-vulkan.xml" | tee ctest-vulkan.log
+          python3 tools/ci/fail_on_skip.py ctest-vulkan.log
+      - name: Record the measured parity of this run
+        if: always()
+        run: python3 tools/ci/parity_summary.py ctest-cuda.xml ctest-vulkan.xml --json parity-gpu.json --markdown "$GITHUB_STEP_SUMMARY"
+      - name: Archive the parity record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: parity-gpu-${{ github.sha }}-${{ github.event_name }}
+          path: parity-gpu.json
+          retention-days: 90

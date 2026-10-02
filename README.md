@@ -24,7 +24,7 @@
 </p>
 
 Statim answers typed questions about text or JSON: pick one of several labels (`choice`), rate on a
-scale (`score`), or give a yes/no probability (`noul`). It is a native C++20 engine for System-1
+scale (`score`), or give a yes/no probability (`noul`, alias `yes_no`). It is a native C++20 engine for System-1
 decision models and computes all answers in one encoder forward pass, served from one static binary.
 It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by changing the base URL.
@@ -256,7 +256,8 @@ responses, metrics, and tests. Trained adapters and the evidence for each are in
 
 Set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE`. Authentication covers inference,
 `/metrics`, and `/v1/models`; health, readiness, and the playground remain public. Key sources fail
-closed and comparisons use constant-time code. A non-loopback server without keys emits
+closed and comparisons use constant-time code. Every key must be 32–4096 printable ASCII characters
+without whitespace; generate one with `openssl rand -hex 32`. A non-loopback server without keys emits
 an error and exits before loading models. Pass `--allow-unauthenticated` to opt in explicitly on a
 trusted network; that mode retains the `auth_off_on_network` warning.
 
@@ -458,7 +459,7 @@ else may build through ggml but is untested.
 | Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
 | Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
 | x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
-| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+): the native test suite passes, multilingual and English parity 240/240 (2026-10-01) |
+| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+) and Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2, i8mm): the native test suite passes, multilingual and English parity 240/240 (2026-10-01/02) |
 | Linux arm64, macOS, Windows | no | no | not tested |
 
 ## Status and roadmap

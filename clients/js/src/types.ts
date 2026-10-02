@@ -92,7 +92,7 @@ export interface Decision {
 }
 
 export interface Question {
-  type: "choice" | "score" | "noul";
+  type: "choice" | "score" | "noul" | "yes_no";
   instructions: unknown;
   criteria?: unknown;
   labels?: { true?: string; false?: string };

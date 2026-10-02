@@ -1,7 +1,7 @@
 # systemd unit for the Statim decision server.
 #   install -Dm755 build/statim /usr/local/bin/statim
 #   install -Dm644 model.gguf /var/lib/statim/multilingual.gguf
-#   echo 'STATIM_API_KEY=change-me' > /etc/statim/env && chmod 600 /etc/statim/env
+#   printf 'STATIM_API_KEY=%s\n' "$(openssl rand -hex 32)" > /etc/statim/env && chmod 600 /etc/statim/env
 #   systemctl enable --now statim
 [Unit]
 Description=Statim System-1 decision server
