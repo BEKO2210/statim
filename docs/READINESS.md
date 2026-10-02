@@ -45,11 +45,11 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | open |
+| 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | **closed** (#76): [THREAT_MODEL.md](THREAT_MODEL.md), linked from `SECURITY.md` |
 | 11 | CI fails when `security_http` skips | S | **closed** (#73): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | **closed** (#87): a shorter key from `--api-key`, `STATIM_API_KEY` or `--api-keys-file` exits with status 2 before the model loads, naming the source and length; `test_short_keys_fail_before_model_load` in `tests/security/test_http.py`, key cases in `tests/test_security.cpp` |
-| 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
+| 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | **closed** (#81): key in `sessionStorage` only; hash-pinned CSP, `frame-ancestors 'none'`, `nosniff` and `Referrer-Policy` on every response; checked in `security_http`, `test_security` and a headless-browser run |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | open |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
 | 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | **closed** (#71): `STATIM_HARDEN`; `tools/release/check_hardening.py` in CI and release |
@@ -80,7 +80,7 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
-| 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | open |
+| 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | **closed** (#80): [RUNBOOK.md](RUNBOOK.md), with the server's real event names, messages and metrics |
 | 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | **closed** (#75): [COMPATIBILITY.md](COMPATIBILITY.md#upgrading), with the 1.x promise for `statim-decision-v1` and `statim-lora-v1` |
 | 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | open |
 | 33 | A request counter labelled by adapter | S | open |
@@ -91,7 +91,7 @@ for them like a P0.
 |---|---|---|---|
 | 34 | A line-coverage artifact for `src/security.cpp`, `http_security.h` and `src/server.cpp`, with a baseline | M | open |
 | 35 | A performance and memory regression gate against the latest release | M | **closed** (#60): `bench/perf_gate.py`, required for every PR that can affect speed or memory (CLAUDE.md) |
-| 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | open |
+| 36 | The README's parity tolerance equals the CI tolerance; green runs archive the worst \|Δlogit\| | S | **closed** (#78): `engine_parity_*` fail above 1.5e-4 (README: within 1e-4); `tools/ci/parity_summary.py` puts every green run's parity in the job summary and a 90-day artifact |
 | 37 | The Python and TypeScript clients' tests run in CI, both the hermetic cases and live cases against a started server | M | open |
 
 ### Evaluation
@@ -114,7 +114,7 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | partly: Vulkan and CUDA parity pass on an RTX 3070 (2026-10-01, manual); not yet a release step |
-| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | partly: Galaxy A15 passes the native suite and both parity tests (2026-10-01), CI cross-builds Android arm64; the Tab S9 Ultra (i8mm) is next |
+| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | **closed** (#84): Galaxy A15 and Galaxy Tab S9 Ultra pass the native suite and both parity tests; CI cross-builds Android arm64; [BUILD.md](BUILD.md#android-arm64) |
 
 ### From the external reviews (2026-10-01)
 
@@ -125,15 +125,15 @@ no aligned vector loads, the scratch buffers are per thread).
 | # | Item | Area | Effort | Status |
 |---|---|---|---|---|
 | 45 | GGUF preflight, ggml and the mmap open the model path separately; a file swapped between them skips the preflight. Open once and check the same file (descriptor, or device, inode and size) | Security | M | **closed** (#70): one `MappedFile` per load; `test_gguf_preflight` covers a rename over the mapped path, directories, FIFOs and empty files |
-| 46 | ThreadSanitizer on the server with 32 concurrent clients, micro-batching and adapter switches | Reliability | M | open |
-| 47 | The inference deadline is checked inside the custom SGEMM op too, so a long batch cannot overrun it by a whole matrix product | Reliability | S | open |
+| 46 | ThreadSanitizer on the server with 32 concurrent clients, micro-batching and adapter switches | Reliability | M | **closed** (#79): `tsan` job; `server_concurrency` with 32 clients, 0 warnings |
+| 47 | The inference deadline is checked inside the custom SGEMM op too, so a long batch cannot overrun it by a whole matrix product | Reliability | S | **closed** (#77): the SGEMM op polls the deadline and the cancel flag between panels; `test_sgemm` covers an expired deadline and a cancel at the barrier |
 | 48 | The start-up log names the active matrix-product path (custom SGEMM or ggml) and the CPU features in use | Operability | S | **closed** (#87): `model_loaded` logs `gemm` (`packed_sgemm` or `ggml`) and `cpu_features` |
 | 49 | A native C++ ONNX Runtime benchmark next to the Python one, so the binding overhead is excluded by construction | Correctness | M | open |
 | 50 | Claim hygiene: the Hugging Face cards' q8_0 lines ("faster on CPU", "4x smaller") match the measurements (q8_0 is slower than f32 on AVX2, about 2.6x smaller); every speed claim names its hardware and protocol | Documentation | S | **closed** (#72): the cards compute the q8_0 size ratio from the files and state where q8_0 is slower (AVX2) and faster (ARM dotprod, CUDA); README corrected |
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | open |
 | 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open |
-| 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | open |
+| 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | **closed** (#77): a 5 ms connection watcher cancels the request's inference; a shared micro-batch continues for its live items; `server_lifecycle` measures both |
 
 ## Proofs
 

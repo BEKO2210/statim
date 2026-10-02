@@ -2,15 +2,22 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "statim/tokenizer.h"
 
 namespace statim {
+
+// Cooperative stop used when an inference caller no longer needs the result.
+struct InferenceCancelled : std::runtime_error {
+    InferenceCancelled() : std::runtime_error("inference cancelled") {}
+};
 
 struct HParams {
     // encoder
@@ -129,7 +136,8 @@ public:
     // Items in one call are padded to the longest and evaluated in one graph.
     std::vector<ItemResult> run(const std::vector<Item>& items);
 
-    void set_deadline(std::chrono::steady_clock::time_point deadline);
+    void set_deadline(std::chrono::steady_clock::time_point deadline,
+                      std::shared_ptr<std::atomic<bool>> cancelled = {});
     const Model& model() const { return *model_; }
 
 private:

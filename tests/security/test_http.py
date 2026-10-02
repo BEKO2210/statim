@@ -225,8 +225,19 @@ def main():
                         time.sleep(.1)
                 else:
                     raise AssertionError('server did not become healthy')
-                status, body, _ = request('/health', auth=False)
+                status, body, hdr = request('/health', auth=False)
                 assert status == 200 and set(json.loads(body)) == {'status', 'version'}
+                # security headers on every response, also on errors (READINESS P1 #14)
+                assert hdr.get('X-Content-Type-Options') == 'nosniff' and hdr.get('Referrer-Policy') == 'no-referrer', hdr
+                _, _, hdr = request('/metrics', auth=False)
+                assert hdr.get('X-Content-Type-Options') == 'nosniff', hdr
+                status, page, hdr = request('/', auth=False)
+                csp = hdr.get('Content-Security-Policy', '')
+                assert status == 200 and hdr.get('X-Frame-Options') == 'DENY', hdr
+                script_src = csp.split('script-src', 1)[1].split(';', 1)[0]
+                assert "'sha256-" in script_src and 'unsafe-inline' not in script_src, csp
+                assert "frame-ancestors 'none'" in csp and "default-src 'none'" in csp, csp
+                assert b'localStorage.getItem("statim_key")' not in page and b'sessionStorage' in page
                 assert request('/ready', auth=False)[0] == 200
                 for path in ('/metrics', '/v1/models'):
                     assert request(path, auth=False)[0] == 401

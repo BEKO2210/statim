@@ -192,6 +192,12 @@ The response headers on that call are:
 | `Server-Timing` | Same responses. The value is `inference;dur=` followed by the same number. |
 | `Retry-After` | `503` from the decision handler only. The value is `1`. |
 
+Every response, from every route and including errors, also carries `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: no-referrer`. `GET /` (the playground) adds a `Content-Security-Policy` that allows only its own
+inline script and style block by SHA-256, connections to the same origin, and no framing
+(`frame-ancestors 'none'`, plus `X-Frame-Options: DENY`). The playground keeps an API key only in the
+tab's `sessionStorage`, so it is gone when the tab closes.
+
 HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
 
 ## Endpoints

@@ -135,7 +135,9 @@ the tokenizer in GGUF, making each model a self-describing artifact.
 
 - Runtime: Laya needs Python 3.10+, PyTorch, and transformers. Statim uses one 5.5 MB binary and one
   `.gguf` file.
-- Answers: the comparison covers 240/240 token sequences; answers are within 1e-4 of the reference.
+- Answers: the comparison covers 240/240 token sequences; answers are within 1e-4 of the reference,
+  which is one step of the 4-decimal rounding both use. CI fails at two steps (`engine_parity_*`, on
+  CPU, Vulkan and CUDA).
 - Tokenizer: Laya uses HF `tokenizers` (Rust). Statim's native C++ tokenizer is identical on 3,906
   cases plus 140k fuzz strings and about 10× faster.
 - Memory and throughput: Statim's mmap'd weights are shared between processes. Its 1.07 req/s uses
@@ -326,10 +328,12 @@ using the 30 × 8 golden workload:
 | Multilingual p50<br>1 client | 353 ms | **45 ms** | — |
 | English rate<br>1 client | 0.91 req/s | **8.1 req/s** | 8.9× |
 | English p50<br>1 client | 1,039 ms | **119 ms** | — |
-| Multilingual max \|Δlogit\| | 5.0e-4 | **8.8e-5** | 240/240 argmax |
-| English max \|Δlogit\| | 2.0e-4 | **1.6e-4** | 240/240 argmax |
+| Multilingual max \|Δlogit\| | 5.9e-4 | **8.8e-5** | 240/240 argmax |
+| English max \|Δlogit\| | 4.7e-4 | **1.6e-4** | 240/240 argmax |
 
-The state rows are in-process measurements per state.
+The state rows are in-process measurements per state. The \|Δlogit\| rows are against the PyTorch
+reference, measured on 2026-10-01 (CPU since 0.9.2's packed GEMM); CI fails above 1e-3 and archives
+the values of every green run.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/gpu-dark.svg">
@@ -434,7 +438,7 @@ else may build through ggml but is untested.
 | Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
 | Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
 | x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
-| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+): the native test suite passes, multilingual and English parity 240/240 (2026-10-01) |
+| Android arm64 (NEON, dotprod) | no; build from source with the NDK ([BUILD.md](docs/BUILD.md#android-arm64)) | cross-build | Galaxy A15 (Dimensity 6100+) and Galaxy Tab S9 Ultra (Snapdragon 8 Gen 2, i8mm): the native test suite passes, multilingual and English parity 240/240 (2026-10-01/02) |
 | Linux arm64, macOS, Windows | no | no | not tested |
 
 ## Status and roadmap

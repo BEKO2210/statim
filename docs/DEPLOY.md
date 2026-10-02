@@ -1,5 +1,7 @@
 # Production deployment
 
+For incidents (start-up failures, 503s, OOM, key rotation), see the [runbook](RUNBOOK.md).
+
 Statim should listen on a private interface, require bearer authentication, and sit behind a
 TLS-terminating reverse proxy. Model weights are separate artifacts: obtain or convert them as
 described in the README, verify their provenance, and mount them read-only. Release archives and
@@ -45,6 +47,12 @@ exiting with status 0 and logging `{"event":"shutdown"}`. In-flight requests are
 `--inference-timeout` (default 120 s); the systemd unit sets `TimeoutStopSec=150` (the 120 s inference
 deadline plus 30 s headroom for network flush and process exit) so systemd does not prematurely issue a
 `SIGKILL` while in-flight inferences drain.
+
+When a client disconnects before its answer, Statim stops that request's inference within a few
+milliseconds and frees the worker; the access log shows status 422 and an `inference_cancelled` event.
+A request that shares a micro-batch with others is only dropped from the batch; the others continue.
+A client that half-closes its connection (shuts down its write side) while waiting counts as
+disconnected; HTTP clients and nginx do not do that.
 
 ## Docker CPU
 

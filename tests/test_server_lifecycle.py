@@ -41,6 +41,13 @@ def shutdown_bound():
     return max(45.0, 4 * (SLOW_SECONDS or 10.0) + 30)
 
 
+def drain_inference_timeout():
+    # The drain cases test shutdown, not the deadline: give admitted requests room to finish, so a
+    # slow sanitizer build (ThreadSanitizer is ~12x slower) does not turn a drained request into a
+    # 422 "inference deadline exceeded". Never below the server default of 120 s.
+    return int(max(120, 8 * (SLOW_SECONDS or 10.0) + 60))
+
+
 def reserve_port(host='127.0.0.1'):
     probe = socket.socket()
     try:
@@ -251,7 +258,7 @@ def test_overload(binary, model, tmp_dir, golden_payload_slow):
 
 
 def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
-    """P1 #27: Client drop mid-request (before response and during read) leaves server healthy."""
+    """P1 #27/#54: client drop cancels compute and leaves the server healthy."""
     print('Testing client drop (P1 #27)...', flush=True)
     log_path = Path(tmp_dir) / 'client_drop.log'
     server = ServerInstance(binary, model, log_path, max_concurrent=4, workers=1, threads=2)
@@ -267,6 +274,20 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         conn.close()
         assert baseline_resp.status == 200
 
+        quick_payload = {
+            'state': 'ok',
+            'questions': {'q': {'type': 'choice', 'instructions': 'choose', 'criteria': ['yes', 'no']}}
+        }
+        quick_bytes = json.dumps(quick_payload).encode()
+        qt0 = time.monotonic()
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', quick_bytes, {'Content-Type': 'application/json'})
+        quick_resp = conn.getresponse()
+        quick_baseline = json.loads(quick_resp.read())
+        conn.close()
+        quick_seconds = time.monotonic() - qt0
+        assert quick_resp.status == 200
+
         req_headers = (
             f'POST /v1/systemone/batch HTTP/1.1\r\n'
             f'Host: 127.0.0.1:{server.port}\r\n'
@@ -279,9 +300,28 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         print('  Case A: Dropping connection before response...', flush=True)
         s1 = socket.create_connection(('127.0.0.1', server.port), timeout=5)
         s1.sendall(req_headers + body_bytes)
-        time.sleep(0.1)  # allow server to read request and begin processing
+        time.sleep(0.5)  # the slow forward pass is running, not merely queued
         s1.close()
-        time.sleep(0.5)
+
+        # With one worker this is blocked for nearly SLOW_SECONDS unless the dead
+        # forward pass cooperatively stops. Scale the bound from both unloaded runs.
+        follow_t0 = time.monotonic()
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', quick_bytes, {'Content-Type': 'application/json'})
+        follow_resp = conn.getresponse()
+        follow_answer = json.loads(follow_resp.read())
+        conn.close()
+        follow_seconds = time.monotonic() - follow_t0
+        cancel_bound = max(1.0, 4 * quick_seconds, 0.6 * SLOW_SECONDS)
+        assert follow_resp.status == 200
+        assert_answers_equal(follow_answer, quick_baseline)
+        assert follow_seconds < cancel_bound, \
+            f'follow-up took {follow_seconds:.2f}s; cancellation bound is {cancel_bound:.2f}s (slow={SLOW_SECONDS:.2f}s)'
+        for _ in range(100):
+            if '"event":"inference_cancelled"' in log_path.read_text():
+                break
+            time.sleep(0.01)
+        assert '"event":"inference_cancelled"' in log_path.read_text(), 'missing inference_cancelled log event'
 
         # Server must still be healthy and answer follow-up request normally
         hconn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=5)
@@ -325,6 +365,70 @@ def test_client_drop(binary, model, tmp_dir, golden_payload_slow):
         server.stop()
 
 
+def test_microbatch_client_drop(binary, model, tmp_dir, golden_payload_slow):
+    """One departed item must not cancel a shared forward pass with a live item."""
+    print('Testing client drop from a shared micro-batch...', flush=True)
+    log_path = Path(tmp_dir) / 'microbatch_client_drop.log'
+    server = ServerInstance(binary, model, log_path, max_concurrent=4, workers=1, threads=2,
+                            extra_args=['--batch-window-ms', '250', '--max-batch', '8'])
+    server.start()
+    try:
+        payload = {'state': golden_payload_slow['states'],
+                   'questions': golden_payload_slow['questions']}
+        body = json.dumps(payload).encode()
+
+        conn = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+        conn.request('POST', '/v1/systemone', body, {'Content-Type': 'application/json'})
+        baseline_resp = conn.getresponse()
+        baseline = json.loads(baseline_resp.read())
+        conn.close()
+        assert baseline_resp.status == 200
+
+        headers = (
+            f'POST /v1/systemone HTTP/1.1\r\nHost: 127.0.0.1:{server.port}\r\n'
+            f'Content-Type: application/json\r\nContent-Length: {len(body)}\r\n'
+            f'X-Request-Id: microbatch-drop\r\nConnection: close\r\n\r\n'
+        ).encode()
+        dropped = socket.create_connection(('127.0.0.1', server.port), timeout=5)
+        dropped.sendall(headers + body)
+
+        def live_request():
+            c = http.client.HTTPConnection('127.0.0.1', server.port, timeout=client_timeout())
+            c.request('POST', '/v1/systemone', body,
+                      {'Content-Type': 'application/json', 'X-Request-Id': 'microbatch-live'})
+            r = c.getresponse()
+            answer = json.loads(r.read())
+            c.close()
+            return r.status, answer
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            live = pool.submit(live_request)
+            # Wait until the shared batch owns the only engine, then drop one peer.
+            busy_seen = False
+            for _ in range(200):
+                metrics = http.client.HTTPConnection('127.0.0.1', server.port, timeout=2)
+                metrics.request('GET', '/metrics')
+                metrics_resp = metrics.getresponse()
+                metrics_text = metrics_resp.read().decode()
+                metrics.close()
+                if 'statim_workers_busy{model="multilingual"} 1' in metrics_text:
+                    busy_seen = True
+                    break
+                time.sleep(0.005)
+            assert busy_seen, 'shared micro-batch never started inference'
+            dropped.close()
+            status, answer = live.result()
+        assert status == 200
+        assert_answers_equal(answer, baseline)
+        # Baseline contributed size 1 and the shared forward pass size 2.
+        batch_sum = next(float(line.split()[1]) for line in metrics_text.splitlines()
+                         if line.startswith('statim_batch_size_sum '))
+        assert batch_sum >= 3, f'requests did not share a batch: statim_batch_size_sum={batch_sum}'
+        print('  Live item completed correctly after its batch peer disconnected.')
+    finally:
+        server.stop()
+
+
 def run_quick_inferences(port, count=200, workers=4):
     """Executes quick inferences to populate engine compute and check for leaks."""
     quick_payload = {
@@ -352,7 +456,8 @@ def run_quick_inferences(port, count=200, workers=4):
 def run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, sig, run_label, measured_times, quick=20):
     """Executes a single signal drain case: quick inferences -> 4 slow requests -> signal -> drain."""
     log_path = Path(tmp_dir) / f'drain_{run_label}.log'
-    server = ServerInstance(binary, model, log_path, max_concurrent=8, workers=2, threads=4)
+    server = ServerInstance(binary, model, log_path, max_concurrent=8, workers=2, threads=4,
+                            extra_args=['--inference-timeout', str(drain_inference_timeout())])
     server.start()
     try:
         # Quick inferences first, so the leak check at exit (P1 #25) covers real work
@@ -443,12 +548,16 @@ def test_signals(binary, model, tmp_dir, golden_payload_slow):
     run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGINT, 'sigint-1', measured_times, quick=200)
 
     # Repeat SIGTERM 5 times to catch races
-    for i in range(1, 6):
+    # Five SIGTERM repeats look for shutdown races. The ThreadSanitizer job sets
+    # STATIM_LIFECYCLE_SIGTERM_RUNS=1: TSan finds races without repeats, and five runs at its ~12x
+    # slowdown exceed the test's time limit on a CI runner.
+    runs = int(os.environ.get('STATIM_LIFECYCLE_SIGTERM_RUNS', '5'))
+    for i in range(1, runs + 1):
         run_sigterm_drain_case(binary, model, tmp_dir, golden_payload_slow, signal.SIGTERM, f'sigterm-{i}', measured_times)
 
-    print(f'  Shutdown drain times over 5 SIGTERM runs: '
+    print(f'  Shutdown drain times over {runs} SIGTERM runs: '
           f'min={min(measured_times[1:]):.2f}s, max={max(measured_times[1:]):.2f}s, '
-          f'avg={sum(measured_times[1:])/5:.2f}s (bound: {shutdown_bound():.0f}s)')
+          f'avg={sum(measured_times[1:])/runs:.2f}s (bound: {shutdown_bound():.0f}s)')
 
 
 def main():
@@ -488,6 +597,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='statim-lifecycle-') as tmp_dir:
         test_overload(args.binary, args.model, tmp_dir, golden_payload_slow)
         test_client_drop(args.binary, args.model, tmp_dir, golden_payload_slow)
+        test_microbatch_client_drop(args.binary, args.model, tmp_dir, golden_payload_slow)
         test_signals(args.binary, args.model, tmp_dir, golden_payload_slow)
 
     print('server_lifecycle: ALL TESTS PASSED')

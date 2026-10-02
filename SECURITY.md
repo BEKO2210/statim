@@ -68,6 +68,11 @@ From 1.0 on, the latest minor version of the current major version is supported.
 - **Third-party vulnerabilities.** Issues in vendored ggml, cpp-httplib or nlohmann/json that do
   not affect Statim. Report those upstream. If one does affect Statim, it is in scope here too.
 
+## Threat model
+
+[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) lists the assets, actors, trust boundaries, the control
+and test for each threat, and the residual risks that remain the operator's.
+
 ## Hardening record
 
 [docs/SECURITY.md](docs/SECURITY.md) records the security findings and their fixes, the fuzzing

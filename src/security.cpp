@@ -1,4 +1,5 @@
 #include "statim/security.h"
+#include "sha256.h"
 #include <algorithm>
 #include <ctime>
 #include <fstream>
@@ -339,4 +340,42 @@ void CalibrationCache::put(std::string key, const std::vector<double>& value) {
     catch (...) { entries_.pop_front(); throw; }
     bytes_ += cost;
 }
+
+namespace {
+std::string base64(const uint8_t* p, size_t n) {
+    static const char* t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    for (size_t i = 0; i < n; i += 3) {
+        const uint32_t v = (uint32_t(p[i]) << 16) | (i + 1 < n ? uint32_t(p[i + 1]) << 8 : 0) | (i + 2 < n ? p[i + 2] : 0);
+        out += t[(v >> 18) & 63];
+        out += t[(v >> 12) & 63];
+        out += i + 1 < n ? t[(v >> 6) & 63] : '=';
+        out += i + 2 < n ? t[v & 63] : '=';
+    }
+    return out;
+}
+
+// 'sha256-...' of the text between the only <tag> and its </tag>, as CSP hashes it (exact bytes).
+std::string inline_hash(const std::string& html, const std::string& tag) {
+    const std::string open = "<" + tag + ">", close = "</" + tag + ">";
+    const size_t a = html.find(open);
+    if (a == std::string::npos || html.find(open, a + 1) != std::string::npos)
+        throw std::runtime_error("playground: expected exactly one inline <" + tag + ">");
+    const size_t b = html.find(close, a);
+    if (b == std::string::npos) throw std::runtime_error("playground: unterminated <" + tag + ">");
+    Sha256 h;
+    h.update(html.data() + a + open.size(), b - a - open.size());
+    const auto d = h.digest();
+    return "'sha256-" + base64(d.data(), d.size()) + "'";
+}
+}  // namespace
+
+std::string playground_csp(const std::string& html) {
+    // style-src-attr allows the inline style="--v:..." attributes the page renders for the
+    // probability bars; attributes cannot run code, while scripts and style blocks stay hash-pinned.
+    return "default-src 'none'; script-src " + inline_hash(html, "script") + "; style-src " + inline_hash(html, "style") +
+           "; style-src-attr 'unsafe-inline'; font-src data:; img-src data:; connect-src 'self'; base-uri 'none'; "
+           "form-action 'none'; frame-ancestors 'none'";
+}
+
 } // namespace statim
