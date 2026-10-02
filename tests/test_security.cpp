@@ -56,6 +56,17 @@ int main(int argc, char** argv) try {
     ojson qs = {{"decision", question}};
     ojson request = {{"state", "hello"}, {"questions", qs}};
     require(parse_request(request.dump()) == request, "valid request changed");
+    {  // playground CSP: inline blocks pinned by SHA-256 (values from `printf a | openssl dgst -sha256 -binary | base64`)
+        const std::string csp = playground_csp("<style>a</style><p>x</p><script>b</script>");
+        require(csp.find("style-src 'sha256-ypeBEsobvcr6wjGzmiPcTaeG7/gUfE5yuYB3ha/uSLs='") != std::string::npos, "playground CSP: style hash");
+        require(csp.find("script-src 'sha256-PiPoFgA5WUoziU9lZOGxNIu9egCI1CxKy3PurtWcAJ0='") != std::string::npos, "playground CSP: script hash");
+        require(csp.find("frame-ancestors 'none'") != std::string::npos && csp.find("default-src 'none'") != std::string::npos,
+                "playground CSP: closed defaults");
+        require(csp.find("script-src 'unsafe-inline'") == std::string::npos, "playground CSP: no inline scripts");
+        bool threw = false;
+        try { (void)playground_csp("<style>a</style><script>b</script><script>c</script>"); } catch (const std::exception&) { threw = true; }
+        require(threw, "playground CSP: a second inline script is refused, not silently left unhashed");
+    }
     rejects(413, [&] { parse_request("{\"state\":" + std::string(30000, '[') + "0" + std::string(30000, ']') + ",\"questions\":{}}"); });
     require(parse_request(std::string(64, '[') + "0" + std::string(64, ']')).is_array(), "depth boundary rejected");
     rejects(413, [&] { parse_request(std::string(65, '[') + "0" + std::string(65, ']')); });

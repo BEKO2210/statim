@@ -49,7 +49,7 @@ for them like a P0.
 | 11 | CI fails when `security_http` skips | S | **closed** (#73): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
 | 13 | API keys shorter than 32 characters are rejected | S | open |
-| 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | open |
+| 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | **closed** (#81): key in `sessionStorage` only; hash-pinned CSP, `frame-ancestors 'none'`, `nosniff` and `Referrer-Policy` on every response; checked in `security_http`, `test_security` and a headless-browser run |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | open |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
 | 17 | Release builds with PIE, a stack protector, `_FORTIFY_SOURCE=2` and full RELRO, checked | S | **closed** (#71): `STATIM_HARDEN`; `tools/release/check_hardening.py` in CI and release |

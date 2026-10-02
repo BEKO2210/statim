@@ -77,6 +77,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
 
 ### Security
+- The playground no longer keeps the API key in `localStorage` (shared by every tab, kept forever): it
+  lives only in the tab's `sessionStorage`, and a key stored by older versions is removed. `GET /` sends a
+  Content-Security-Policy that pins the page's inline script and style by SHA-256 and forbids framing;
+  every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 - Release binaries (`statim` and `statim-quantize` on Linux x86-64 and in the Android cross-build)
   are built with defense-in-depth compile and link hardening enabled by default (`STATIM_HARDEN`):
   PIE via CMake `check_pie_supported()`, `-fstack-protector-strong`, compile-time and runtime
