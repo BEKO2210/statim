@@ -80,7 +80,7 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 29 | an alerts file in deploy/, checked with `promtool`: ready, 503s, latency, busy workers | S | open |
-| 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | **closed** (this PR): [RUNBOOK.md](RUNBOOK.md), with the server's real event names, messages and metrics |
+| 30 | A runbook for SIGILL, OOM, 503, a bad GGUF and key rotation, using the server's real event names | M | **closed** (#80): [RUNBOOK.md](RUNBOOK.md), with the server's real event names, messages and metrics |
 | 31 | Upgrade and rollback steps; the 1.x promise for the GGUF formats (`statim-decision-v1`, `statim-lora-v1`) | S | **closed** (#75): [COMPATIBILITY.md](COMPATIBILITY.md#upgrading), with the 1.x promise for `statim-decision-v1` and `statim-lora-v1` |
 | 32 | The fingerprint (and the checkpoint SHA-256) on `/v1/models` and in `statim_model_info` | S | open |
 | 33 | A request counter labelled by adapter | S | open |
