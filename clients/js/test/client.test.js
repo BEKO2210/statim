@@ -546,7 +546,7 @@ test("handler errors on the real server", async () => {
     () => client.decide("x", { q: { type: "maybe", instructions: "?" } }),
     (err) => {
       assert.ok(err instanceof UnprocessableEntityError);
-      assert.equal(err.detail, "unknown question type; use choice, score or noul");
+      assert.equal(err.detail, "unknown question type; use choice, score, noul or yes_no");
       return true;
     },
   );

@@ -52,6 +52,7 @@ python3 tools/security/test_vendored_cves.py && python3 tools/security/vendored_
 python3 -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py \
     tools/finetune/test_gate.py tools/finetune/test_train_lora.py bench/test_eval_categories.py   # needs pytest, pyarrow
 python3 site/tests/check.py                                                  # after a site change (needs Playwright)
+clients/run_live_tests.sh build/statim models/laya-multilingual-f32.gguf build/lora/random.gguf   # both SDKs, live (needs a build and the lora fixture)
 ```
 
 ## Invariants

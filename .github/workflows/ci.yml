@@ -252,3 +252,37 @@ jobs:
           cmake --build build --target statim
       - name: NGINX configuration
         run: deploy/nginx/test_nginx.sh
+  sdk:
+    # Both official SDKs, hermetic and live, against three started servers: no key, a bearer key,
+    # and a test LoRA adapter (READINESS P1 #37). A skipped live case fails the job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          pip install --user --require-hashes -r requirements-ci.txt -r clients/python/requirements-test.txt
+          node --version && npm --version
+      - name: Cache models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build statim
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF -DSTATIM_BUILD_TESTS=OFF
+          cmake --build build --target statim
+      - name: Test LoRA adapter
+        run: python3 tests/lora/build_fixtures.py --base models/laya-multilingual-f32.gguf --out build/lora
+      - name: TypeScript SDK dependencies (lockfile)
+        working-directory: clients/js
+        run: npm ci
+      - name: SDK suites against live servers
+        run: clients/run_live_tests.sh build/statim models/laya-multilingual-f32.gguf build/lora/random.gguf
