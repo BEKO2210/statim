@@ -86,6 +86,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   regressions, and multilingual model and engine parity under AddressSanitizer and
   UndefinedBehaviorSanitizer on every pull request (READINESS P0 #7).
 - CI `vendored-cves` job and `tools/security/vendored_cves.py`: automated daily and pull-request scanning for known high and critical CVEs in vendored dependencies (`cpp-httplib`, `nlohmann/json`, `ggml`) via OSV.dev and GitHub Security Advisories, with semantic range parsing, an OSV coverage control check, and `tools/security/cve-triage.json` for manual ggml/GGUF advisory triage with expiry (READINESS P0 #6).
+- HTTP requests accept `yes_no` as a readable alias of the Jev/Laya `noul` question type; answers
+  remain wire-compatible and always use `noul`.
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter

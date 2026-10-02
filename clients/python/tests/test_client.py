@@ -202,7 +202,7 @@ def test_yes_no_probabilities_and_options_round_trip() -> None:
         client = Client(url, api_key="sdk-unit-key-0123456789abcdef0123", timeout=5, max_retries=0)
         decision = client.decide(
             "hello",
-            {"refund": {"type": "noul", "instructions": "Refund?"}},
+            {"refund": {"type": "yes_no", "instructions": "Refund?"}},
             model=None,
             calibrate=False,
             ensemble=1,
@@ -215,7 +215,7 @@ def test_yes_no_probabilities_and_options_round_trip() -> None:
 
     assert seen["body"] == {
         "state": "hello",
-        "questions": {"refund": {"type": "noul", "instructions": "Refund?"}},
+        "questions": {"refund": {"type": "yes_no", "instructions": "Refund?"}},
         "calibrate": False,
         "ensemble": 1,
     }

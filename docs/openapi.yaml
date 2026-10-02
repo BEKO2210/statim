@@ -299,6 +299,7 @@ components:
           - choice
           - score
           - noul
+          - yes_no
         instructions:
           description: Text the model answers. A non-string is serialized as JSON.
           x-max-rendered-bytes: 16384
@@ -307,7 +308,7 @@ components:
             descriptions. Noul: optional object keyed true and false.'
         labels:
           type: object
-          description: Noul only. Maps false and true to distinct non-empty strings.
+          description: Noul and its yes_no request alias only. Maps false and true to distinct non-empty strings.
           properties:
             'true':
               type: string
@@ -2502,7 +2503,7 @@ paths:
                   x-live: false
                 badType:
                   value:
-                    detail: unknown question type; use choice, score or noul
+                    detail: unknown question type; use choice, score, noul or yes_no
                 noInstructions:
                   value:
                     detail: question requires instructions
