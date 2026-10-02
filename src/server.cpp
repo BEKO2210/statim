@@ -850,11 +850,12 @@ int run_server(const ServerConfig& cfg) {
     srv.Post("/v1/systemone", [&](const httplib::Request& q, httplib::Response& r, const httplib::ContentReader& reader) { handle(q, r, false, reader); });
     srv.Post("/v1/systemone/batch", [&](const httplib::Request& q, httplib::Response& r, const httplib::ContentReader& reader) { handle(q, r, true, reader); });
 
-    static const std::string playground_policy = playground_csp(kPlaygroundHtml);
+    const std::string playground_policy = playground_csp(kPlaygroundHtml, cfg.frame_ancestors);
     srv.Get("/", [&](const httplib::Request&, httplib::Response& res) {
         if (cfg.playground) {
             res.set_header("Content-Security-Policy", playground_policy);
-            res.set_header("X-Frame-Options", "DENY");  // for browsers without frame-ancestors
+            if (cfg.frame_ancestors.empty())
+                res.set_header("X-Frame-Options", "DENY");  // for browsers without frame-ancestors
             res.set_content(kPlaygroundHtml, "text/html; charset=utf-8");
         } else {
             send_json(res, 404, {{"detail", "not found"}});

@@ -1,6 +1,7 @@
 #include "statim/security.h"
 #include "sha256.h"
 #include <algorithm>
+#include <cctype>
 #include <ctime>
 #include <fstream>
 #include <sstream>
@@ -296,6 +297,162 @@ bool is_loopback_host(const std::string& host) {
     }
     return octets[0] == 127;
 }
+
+namespace {
+bool valid_ipv4(const std::string& host) {
+    size_t begin = 0;
+    for (int i = 0; i < 4; ++i) {
+        const size_t end = host.find('.', begin);
+        if ((i < 3 && end == std::string::npos) || (i == 3 && end != std::string::npos)) return false;
+        const size_t stop = end == std::string::npos ? host.size() : end;
+        if (stop == begin || stop - begin > 3) return false;
+        int value = 0;
+        for (size_t j = begin; j < stop; ++j) {
+            if (host[j] < '0' || host[j] > '9') return false;
+            value = value * 10 + host[j] - '0';
+        }
+        if (value > 255 || (stop - begin > 1 && host[begin] == '0')) return false;
+        begin = stop + 1;
+    }
+    return true;
+}
+
+bool valid_dns_name(const std::string& host) {
+    if (host.empty() || host.size() > 253 || host.front() == '.' || host.back() == '.') return false;
+    size_t begin = 0;
+    while (begin < host.size()) {
+        const size_t end = host.find('.', begin);
+        const size_t stop = end == std::string::npos ? host.size() : end;
+        if (stop == begin || stop - begin > 63 || host[begin] == '-' || host[stop - 1] == '-') return false;
+        for (size_t i = begin; i < stop; ++i) {
+            const unsigned char c = static_cast<unsigned char>(host[i]);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) && c != '-') return false;
+        }
+        begin = stop + 1;
+    }
+    return true;
+}
+
+bool ipv6_groups(const std::string& part, bool allow_ipv4, size_t& groups) {
+    if (part.empty()) return true;
+    if (part.front() == ':' || part.back() == ':') return false;
+    size_t begin = 0;
+    while (begin < part.size()) {
+        const size_t end = part.find(':', begin);
+        const size_t stop = end == std::string::npos ? part.size() : end;
+        if (stop == begin) return false;
+        const std::string group = part.substr(begin, stop - begin);
+        if (group.find('.') != std::string::npos) {
+            if (!allow_ipv4 || end != std::string::npos || !valid_ipv4(group)) return false;
+            groups += 2;
+        } else {
+            if (group.size() > 4) return false;
+            for (unsigned char c : group)
+                if (!std::isxdigit(c)) return false;
+            ++groups;
+        }
+        if (end == std::string::npos) break;
+        begin = end + 1;
+    }
+    return true;
+}
+
+bool valid_ipv6(const std::string& host) {
+    if (host.empty() || host.find(':') == std::string::npos) return false;
+    const size_t compression = host.find("::");
+    if (compression != std::string::npos && host.find("::", compression + 2) != std::string::npos) return false;
+    size_t groups = 0;
+    if (compression == std::string::npos)
+        return ipv6_groups(host, true, groups) && groups == 8;
+    const std::string left = host.substr(0, compression);
+    const std::string right = host.substr(compression + 2);
+    return ipv6_groups(left, right.empty(), groups) && ipv6_groups(right, true, groups) && groups < 8;
+}
+
+bool valid_origin(const std::string& origin) {
+    const size_t scheme_end = origin.find("://");
+    if (scheme_end == std::string::npos) return false;
+    const std::string scheme = origin.substr(0, scheme_end);
+    if (scheme != "http" && scheme != "https") return false;
+    const std::string authority = origin.substr(scheme_end + 3);
+    if (authority.empty() || authority.find_first_of("/?#@*'\";,\\") != std::string::npos) return false;
+
+    std::string host;
+    std::string port;
+    if (authority.front() == '[') {
+        const size_t close = authority.find(']');
+        if (close == std::string::npos) return false;
+        host = authority.substr(1, close - 1);
+        if (close + 1 < authority.size()) {
+            if (authority[close + 1] != ':') return false;
+            port = authority.substr(close + 2);
+        }
+        if (!valid_ipv6(host)) return false;
+    } else {
+        const size_t colon = authority.rfind(':');
+        if (colon != std::string::npos) {
+            if (authority.find(':') != colon) return false;
+            host = authority.substr(0, colon);
+            port = authority.substr(colon + 1);
+        } else {
+            host = authority;
+        }
+        const bool numeric_dotted = !host.empty() &&
+            std::all_of(host.begin(), host.end(), [](unsigned char c) { return (c >= '0' && c <= '9') || c == '.'; });
+        if ((numeric_dotted && !valid_ipv4(host)) || (!numeric_dotted && !valid_dns_name(host))) return false;
+    }
+    if (!port.empty()) {
+        if (port.size() > 5) return false;
+        unsigned value = 0;
+        for (unsigned char c : port) {
+            if (c < '0' || c > '9') return false;
+            value = value * 10 + c - '0';
+        }
+        if (value == 0 || value > 65535) return false;
+    } else if (!authority.empty() && authority.back() == ':') {
+        return false;
+    }
+    return true;
+}
+}  // namespace
+
+std::vector<std::string> parse_frame_ancestors(const std::string& value) {
+    if (value.empty()) throw FrameAncestorsConfigError("--frame-ancestors requires at least one origin");
+    for (unsigned char c : value)
+        if (c < 0x20 || c == 0x7f)
+            throw FrameAncestorsConfigError("--frame-ancestors contains control characters");
+
+    std::vector<std::string> origins;
+    std::unordered_set<std::string> seen;
+    size_t begin = 0;
+    while (begin < value.size()) {
+        while (begin < value.size() && value[begin] == ' ') ++begin;
+        if (begin == value.size()) break;
+        if (value[begin] == ',') throw FrameAncestorsConfigError("--frame-ancestors contains an empty origin");
+        const size_t end = value.find_first_of(" ,", begin);
+        const std::string origin = value.substr(begin, end - begin);
+        if (origin.size() > 256)
+            throw FrameAncestorsConfigError("--frame-ancestors origin exceeds 256 bytes");
+        if (!valid_origin(origin))
+            throw FrameAncestorsConfigError("invalid --frame-ancestors origin '" + origin +
+                                            "' (expected http://host[:port] or https://host[:port])");
+        if (seen.insert(origin).second) {
+            origins.push_back(origin);
+            if (origins.size() > 8) throw FrameAncestorsConfigError("--frame-ancestors accepts at most 8 origins");
+        }
+        if (end == std::string::npos) break;
+        begin = end;
+        while (begin < value.size() && value[begin] == ' ') ++begin;
+        if (begin < value.size() && value[begin] == ',') {
+            ++begin;
+            while (begin < value.size() && value[begin] == ' ') ++begin;
+            if (begin == value.size() || value[begin] == ',')
+                throw FrameAncestorsConfigError("--frame-ancestors contains an empty origin");
+        }
+    }
+    if (origins.empty()) throw FrameAncestorsConfigError("--frame-ancestors requires at least one origin");
+    return origins;
+}
 bool valid_request_id(const std::string& v) {
     return !v.empty() && v.size() <= 128 && std::all_of(v.begin(), v.end(), [](unsigned char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
@@ -372,12 +529,19 @@ std::string inline_hash(const std::string& html, const std::string& tag) {
 }
 }  // namespace
 
-std::string playground_csp(const std::string& html) {
+std::string playground_csp(const std::string& html, const std::vector<std::string>& frame_ancestors) {
     // style-src-attr allows the inline style="--v:..." attributes the page renders for the
     // probability bars; attributes cannot run code, while scripts and style blocks stay hash-pinned.
+    if (frame_ancestors.size() > 8)
+        throw FrameAncestorsConfigError("playground frame ancestors exceed the limit of 8 origins");
+    for (const auto& origin : frame_ancestors)
+        if (origin.size() > 256 || !valid_origin(origin))
+            throw FrameAncestorsConfigError("invalid playground frame ancestor");
+    std::string ancestors = frame_ancestors.empty() ? "'none'" : frame_ancestors.front();
+    for (size_t i = 1; i < frame_ancestors.size(); ++i) ancestors += " " + frame_ancestors[i];
     return "default-src 'none'; script-src " + inline_hash(html, "script") + "; style-src " + inline_hash(html, "style") +
            "; style-src-attr 'unsafe-inline'; font-src data:; img-src data:; connect-src 'self'; base-uri 'none'; "
-           "form-action 'none'; frame-ancestors 'none'";
+           "form-action 'none'; frame-ancestors " + ancestors;
 }
 
 } // namespace statim

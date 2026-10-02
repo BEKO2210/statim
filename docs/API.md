@@ -194,8 +194,10 @@ The response headers on that call are:
 
 Every response, from every route and including errors, also carries `X-Content-Type-Options: nosniff` and
 `Referrer-Policy: no-referrer`. `GET /` (the playground) adds a `Content-Security-Policy` that allows only its own
-inline script and style block by SHA-256, connections to the same origin, and no framing
-(`frame-ancestors 'none'`, plus `X-Frame-Options: DENY`). The playground keeps an API key only in the
+inline script and style block by SHA-256 and connections to the same origin. Framing is denied by
+default (`frame-ancestors 'none'`, plus `X-Frame-Options: DENY`). With `--frame-ancestors`, the CSP
+instead lists the configured origins and omits `X-Frame-Options`, which cannot express an allow-list.
+The playground keeps an API key only in the
 tab's `sessionStorage`, so it is gone when the tab closes.
 
 HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
@@ -1545,8 +1547,9 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | `--request-timeout` | 30 seconds | Absolute combined header/body read deadline |
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
 | `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
+| `--frame-ancestors` | unset | Space- or comma-separated origins allowed to embed `GET /`; at most 8 unique origins, each at most 256 bytes |
 
-All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--frame-ancestors LIST`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Each frame ancestor must be an `http://host[:port]` or `https://host[:port]` origin with a DNS name or IP literal and no path, query, fragment, wildcard, quote, semicolon, comma, whitespace, or CSP keyword; duplicates are removed in input order. Invalid values exit 2 before models load. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
 
 Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 

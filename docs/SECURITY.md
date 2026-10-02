@@ -4,6 +4,8 @@ To report a vulnerability, see the [security policy](../SECURITY.md).
 
 The HTTP API retains successful Jev/Laya response shapes; `/health` is intentionally
 reduced to `status` and `version`. Limits and flags are documented in README → API.
+The playground denies framing unless the operator explicitly lists allowed origins with
+`--frame-ancestors`; other responses keep their existing security headers.
 
 | Finding | Fix | Regression coverage |
 |---|---|---|

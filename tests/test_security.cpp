@@ -82,11 +82,34 @@ int main(int argc, char** argv) try {
         require(csp.find("script-src 'sha256-PiPoFgA5WUoziU9lZOGxNIu9egCI1CxKy3PurtWcAJ0='") != std::string::npos, "playground CSP: script hash");
         require(csp.find("frame-ancestors 'none'") != std::string::npos && csp.find("default-src 'none'") != std::string::npos,
                 "playground CSP: closed defaults");
+        const std::string framed = playground_csp("<style>a</style><p>x</p><script>b</script>",
+                                                  {"https://a.example", "https://b.example:8443"});
+        const size_t frame_at = framed.find("frame-ancestors ");
+        require(frame_at != std::string::npos &&
+                    framed.substr(frame_at) == "frame-ancestors https://a.example https://b.example:8443",
+                "playground CSP: allowed frame ancestors");
         require(csp.find("script-src 'unsafe-inline'") == std::string::npos, "playground CSP: no inline scripts");
         bool threw = false;
         try { (void)playground_csp("<style>a</style><script>b</script><script>c</script>"); } catch (const std::exception&) { threw = true; }
         require(threw, "playground CSP: a second inline script is refused, not silently left unhashed");
     }
+    require(parse_frame_ancestors("https://a.example, http://127.0.0.1:8080 https://a.example") ==
+                std::vector<std::string>({"https://a.example", "http://127.0.0.1:8080"}),
+            "frame ancestors were not parsed and de-duplicated in order");
+    require(parse_frame_ancestors("https://[2001:db8::1]:8443") ==
+                std::vector<std::string>({"https://[2001:db8::1]:8443"}),
+            "IPv6 frame ancestor rejected");
+    const std::vector<std::string> invalid_ancestors = {
+        "*", "'self'", "https://a.example/path", "https://a.example?x", "javascript:alert(1)",
+        "https://a.example;script-src *", "https://a.example\r\nX-Test: injected",
+        "https://[1:2:3:4:5:6:7:8:]"};
+    for (const std::string& value : invalid_ancestors)
+        startup_rejects([&] { (void)parse_frame_ancestors(value); });
+    startup_rejects([] {
+        (void)parse_frame_ancestors("https://a.example https://b.example https://c.example https://d.example "
+                                    "https://e.example https://f.example https://g.example https://h.example https://i.example");
+    });
+    startup_rejects([] { (void)parse_frame_ancestors("https://" + std::string(250, 'a') + ".example"); });
     rejects(413, [&] { parse_request("{\"state\":" + std::string(30000, '[') + "0" + std::string(30000, ']') + ",\"questions\":{}}"); });
     require(parse_request(std::string(64, '[') + "0" + std::string(64, ']')).is_array(), "depth boundary rejected");
     rejects(413, [&] { parse_request(std::string(65, '[') + "0" + std::string(65, ']')); });
