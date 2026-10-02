@@ -17,6 +17,7 @@
 #include <random>
 #include <sstream>
 #include <thread>
+#include <tuple>
 
 #include "statim/http_security.h"
 #include "kernels.h"
@@ -555,6 +556,11 @@ int run_server(const ServerConfig& cfg) {
     std::atomic<uint64_t> req_total{0}, req_errors{0}, tokens_total{0}, rejected_busy{0};
     std::mutex status_mu;
     std::map<int, uint64_t> status_counts;
+    std::map<std::tuple<std::string, std::string, std::string>, uint64_t> adapter_request_counts;
+    for (const auto& m : models)
+        for (const auto& a : m.adapters)
+            for (const char* routing : {"requested", "auto"})
+                adapter_request_counts[{m.name, a.name, routing}] = 0;
     Histogram latency;
     Summary batch_size, batch_wait_ms;
     const auto started = std::chrono::steady_clock::now();
@@ -668,7 +674,7 @@ int run_server(const ServerConfig& cfg) {
         const auto supplied_id = req.get_header_value("X-Request-Id");
         const std::string rid = valid_request_id(supplied_id) ? supplied_id : new_request_id();
         res.set_header("X-Request-Id", rid);
-        std::string model_name = "-", adapter_name = "-";
+        std::string model_name = "-", adapter_name = "-", adapter_routing;
         size_t n_tokens = 0;
         int status = 200;
         struct InFlight {
@@ -753,6 +759,7 @@ int run_server(const ServerConfig& cfg) {
             opts.deadline = t0 + std::chrono::seconds(cfg.inference_timeout);
             model_name = want_consensus ? "consensus" : lm.name;
             adapter_name = adapter ? adapter->name : "-";
+            if (adapter) adapter_routing = adapter_reason == "requested" ? "requested" : "auto";
             std::vector<ojson> results;
             double infer_ms = 0;
             if (!batch && cfg.batch_window_ms > 0) {
@@ -830,6 +837,8 @@ int run_server(const ServerConfig& cfg) {
         {
             std::lock_guard<std::mutex> lk(status_mu);
             status_counts[status]++;
+            if (status == 200 && !adapter_routing.empty())
+                adapter_request_counts.at({model_name, adapter_name, adapter_routing})++;
         }
         if (cfg.access_log)
             std::fprintf(stdout, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "request"},
@@ -865,7 +874,9 @@ int run_server(const ServerConfig& cfg) {
             const HParams& h = m.model->hparams();
             data.push_back({{"id", m.name}, {"object", "model"}, {"owned_by", "statim"}, {"source", h.name},
                             {"weights", h.weight_type}, {"layers", h.n_layer}, {"hidden", h.n_embd}, {"max_len", h.max_len},
-                            {"vocab", m.model->tokenizer().vocab_size()}, {"device", m.model->device()}});
+                            {"vocab", m.model->tokenizer().vocab_size()}, {"device", m.model->device()},
+                            {"fingerprint", m.model->fingerprint()},
+                            {"checkpoint_sha256", m.model->checkpoint_sha256().empty() ? ojson(nullptr) : ojson(m.model->checkpoint_sha256())}});
             ojson adapters = ojson::array();
             for (auto& a : m.adapters) {
                 const AdapterInfo& ai = *a.model->adapter();
@@ -912,7 +923,8 @@ int run_server(const ServerConfig& cfg) {
         o << "# TYPE statim_model_info gauge\n";
         for (auto& m : models)
             o << "statim_model_info{model=\"" << prom_label(m.name) << "\",weights=\"" << prom_label(m.model->hparams().weight_type)
-              << "\",version=\"" << STATIM_VERSION << "\"} 1\n";
+              << "\",version=\"" << STATIM_VERSION << "\",fingerprint=\"" << prom_label(m.model->fingerprint())
+              << "\",checkpoint_sha256=\"" << prom_label(m.model->checkpoint_sha256()) << "\"} 1\n";
         if (any_adapters) {
             o << "# HELP statim_engines Engines (compute buffers) held or being built for a model and its adapters; at most --workers.\n"
                  "# TYPE statim_engines gauge\n";
@@ -928,6 +940,16 @@ int run_server(const ServerConfig& cfg) {
                 for (auto& a : m.adapters)
                     o << "statim_adapter_bytes{model=\"" << prom_label(m.name) << "\",adapter=\"" << prom_label(a.name) << "\"} "
                       << a.model->adapter()->bytes << "\n";
+            o << "# HELP statim_adapter_requests_total Decisions answered through an adapter, by how it was chosen.\n"
+                 "# TYPE statim_adapter_requests_total counter\n";
+            {
+                std::lock_guard<std::mutex> lk(status_mu);
+                for (const auto& [labels, count] : adapter_request_counts) {
+                    const auto& [model, adapter, routing] = labels;
+                    o << "statim_adapter_requests_total{model=\"" << prom_label(model) << "\",adapter=\""
+                      << prom_label(adapter) << "\",routing=\"" << prom_label(routing) << "\"} " << count << "\n";
+                }
+            }
         }
         res.set_content(o.str(), "text/plain; version=0.0.4");
     });

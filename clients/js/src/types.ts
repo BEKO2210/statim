@@ -171,6 +171,8 @@ export interface Model {
   max_len: number;
   vocab: number;
   device: string;
+  fingerprint?: string;
+  checkpoint_sha256?: string | null;
   adapters: Adapter[];
 }
 
@@ -436,6 +438,13 @@ export function parseModel(value: unknown): Model {
   if (!isRecord(value)) fail("model must be an object");
   const adapters = "adapters" in value ? value.adapters : [];
   if (!Array.isArray(adapters)) fail("adapters must be an array");
+  const fingerprint = "fingerprint" in value ? str(value.fingerprint, "fingerprint") : undefined;
+  let checkpointSha256: string | null | undefined;
+  if ("checkpoint_sha256" in value) {
+    checkpointSha256 = value.checkpoint_sha256 === null
+      ? null
+      : str(value.checkpoint_sha256, "checkpoint_sha256");
+  }
   return {
     id: str(field(value, "id"), "id"),
     object: str(field(value, "object"), "object"),
@@ -447,6 +456,8 @@ export function parseModel(value: unknown): Model {
     max_len: integer(field(value, "max_len"), "max_len"),
     vocab: integer(field(value, "vocab"), "vocab"),
     device: str(field(value, "device"), "device"),
+    ...(fingerprint !== undefined ? { fingerprint } : {}),
+    ...(checkpointSha256 !== undefined ? { checkpoint_sha256: checkpointSha256 } : {}),
     adapters: adapters.map((item) => parseAdapter(item)),
   };
 }

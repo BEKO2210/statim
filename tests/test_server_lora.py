@@ -146,6 +146,11 @@ def test_server_a(binary, model, adapters, tmp):
         check(ad["zero"]["categories"] == ["emotion"] and ad["random"]["categories"] == ["sentiment"]
               and ad["random"]["mode"] == "merge" and ad["random"]["pairs_applied"] == 87 and ad["zero"]["bytes"] == 0,
               "/v1/models adapter details (categories, mode, pairs applied, bytes)")
+        status, initial_metrics = call(p, "GET", "/metrics")
+        pairs = [(name, routing) for name in ("zero", "random") for routing in ("requested", "auto")]
+        check(status == 200 and all(metric(initial_metrics,
+              'statim_adapter_requests_total{model="multilingual",adapter="%s",routing="%s"}' % pair) == 0
+              for pair in pairs), "adapter request metrics expose every loaded pair at zero")
 
         base = decide(p, Q_ALL, model="multilingual")
         check(base["routing"]["adapter"] is None and base["routing"]["adapter_reason"] == "none",
@@ -158,6 +163,10 @@ def test_server_a(binary, model, adapters, tmp):
         check(zero["answers"] == base["answers"], "zero adapter: answers bit-identical to the base")
         check(zero["routing"]["adapter"] == "zero" and zero["routing"]["adapter_reason"] == "requested",
               "zero adapter: routing names it")
+        requested_metrics = call(p, "GET", "/metrics")[1]
+        check(metric(requested_metrics,
+              'statim_adapter_requests_total{model="multilingual",adapter="zero",routing="requested"}') == 1,
+              "a successful named-adapter request increments requested once")
         rnd = decide(p, Q_ALL, model="multilingual", adapter="random")
         check(max_logit_diff(rnd, base) > 1e-2 and rnd["routing"]["adapter"] == "random",
               "random adapter: logits differ from the base (max %.3f)" % max_logit_diff(rnd, base))
@@ -169,10 +178,15 @@ def test_server_a(binary, model, adapters, tmp):
               and r["routing"]["reason"] == "adapter", "a named adapter routes to the model that carries it")
 
         # auto routing by question family
+        before_auto = metric(call(p, "GET", "/metrics")[1],
+                             'statim_adapter_requests_total{model="multilingual",adapter="random",routing="auto"}')
         r = decide(p, Q_SENTIMENT, model="multilingual", adapter="auto")
+        after_auto = metric(call(p, "GET", "/metrics")[1],
+                            'statim_adapter_requests_total{model="multilingual",adapter="random",routing="auto"}')
         want = decide(p, Q_SENTIMENT, model="multilingual", adapter="random")
         check(r["routing"]["adapter"] == "random" and r["routing"]["adapter_reason"] == "auto:sentiment"
               and r["answers"] == want["answers"], "auto: sentiment question -> random (category sentiment)")
+        check(after_auto == before_auto + 1, "a successful auto-routed request increments auto once")
         r = decide(p, Q_EMOTION, model="multilingual", adapter="auto")
         check(r["routing"]["adapter"] == "zero" and r["routing"]["adapter_reason"] == "auto:emotion",
               "auto: emotion question -> zero (category emotion)")
@@ -188,13 +202,18 @@ def test_server_a(binary, model, adapters, tmp):
               and r["routing"]["adapter_reason"] == "auto:sentiment:no-adapter", "auto on a model without adapters")
 
         # batch endpoint
+        before_batch = metric(call(p, "GET", "/metrics")[1],
+                              'statim_adapter_requests_total{model="multilingual",adapter="random",routing="requested"}')
         status, batch = call(p, "POST", "/v1/systemone/batch",
                              {"states": STATES, "questions": Q_SENTIMENT, "model": "multilingual", "adapter": "random",
                               "return_logits": True})
+        after_batch = metric(call(p, "GET", "/metrics")[1],
+                             'statim_adapter_requests_total{model="multilingual",adapter="random",routing="requested"}')
         singles = [decide(p, Q_SENTIMENT, state=s, model="multilingual", adapter="random") for s in STATES]
         check(status == 200 and all(b["routing"]["adapter"] == "random" for b in batch["results"])
               and max(max_logit_diff(b, s) for b, s in zip(batch["results"], singles)) <= 1e-4,
               "batch endpoint applies the adapter to every state")
+        check(after_batch == before_batch + 1, "an adapter batch increments the request counter once")
 
         # errors
         for payload, code, needle, what in [

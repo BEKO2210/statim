@@ -14,7 +14,7 @@ are one JSON object per line on stderr; with systemd, `journalctl -u statim -o c
 ```sh
 curl -fsS http://127.0.0.1:8080/health          # {"status":"ok","version":"..."}: the process is up
 curl -fsS http://127.0.0.1:8080/ready           # 200 {"ready":true}: it accepts work; 503 while saturated
-curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/metrics | grep -E 'statim_(in_flight|workers_busy|rejected_busy_total|model_info)'
+curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/metrics | grep -E 'statim_(in_flight|workers_busy|rejected_busy_total|model_info|adapter_requests_total)'
 journalctl -u statim -o cat --since -10min | jq -c 'select(.level != "info")'
 ```
 
