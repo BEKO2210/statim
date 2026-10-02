@@ -5,6 +5,10 @@ ARG STATIM_VERSION=0.9.4
 ARG MODEL_SOURCE=hub
 ARG MODEL_REPO=Beko2210/statim-decide-multilingual-base
 ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
+# Pinned to the Hub commit of the released model and checked by SHA-256. A /resolve/main/ URL let
+# the Space keep a cached older model after the repository moved on (0.9.3 served a pre-0.7.0 file).
+ARG MODEL_REVISION=30fa9ad3183c3cef53b3ba5946d5a4a8abdffacb
+ARG MODEL_SHA256=96fb3971656ee6b596cb0c108aff4bbe1306d87707ffe9ae5f364a52b919ff1b
 
 FROM debian:bookworm-slim AS statim-release
 ARG STATIM_VERSION
@@ -33,15 +37,20 @@ FROM statim-${STATIM_SOURCE} AS statim
 FROM debian:bookworm-slim AS model-hub
 ARG MODEL_REPO
 ARG MODEL_FILE
+ARG MODEL_REVISION
+ARG MODEL_SHA256
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 RUN set -eu; \
     case "$MODEL_REPO" in (*[!0-9A-Za-z._/-]*|'') echo "invalid MODEL_REPO" >&2; exit 2;; esac; \
     case "$MODEL_FILE" in (*[!0-9A-Za-z._-]*|'') echo "invalid MODEL_FILE" >&2; exit 2;; esac; \
+    case "$MODEL_REVISION" in (*[!0-9a-f]*|'') echo "invalid MODEL_REVISION" >&2; exit 2;; esac; \
+    case "$MODEL_SHA256" in (*[!0-9a-f]*|'') echo "invalid MODEL_SHA256" >&2; exit 2;; esac; \
     mkdir -p /out; \
     curl -fL --retry 3 -o /out/model.gguf \
-      "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}"
+      "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}"; \
+    echo "${MODEL_SHA256}  /out/model.gguf" | sha256sum -c -
 
 FROM scratch AS model-local
 COPY model.gguf /out/model.gguf
