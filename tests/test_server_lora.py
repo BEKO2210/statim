@@ -269,7 +269,7 @@ def test_server_plain(binary, model, tmp):
 
 def test_server_d(binary, model, adapters, tmp, ref):
     print("server D: API key, --consensus, one worker")
-    key = "lora-test-key-0123456789abcdef"
+    key = "lora-test-key-0123456789abcdef00"
     (tmp / "keys").write_text(key + "\n")
     srv = Server(binary, ["-m", "multilingual=" + model, "-m", "english=" + model, "--consensus", "--workers", "1",
                           "--api-key-file", str(tmp / "keys"),

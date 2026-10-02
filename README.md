@@ -24,7 +24,7 @@
 </p>
 
 Statim answers typed questions about text or JSON: pick one of several labels (`choice`), rate on a
-scale (`score`), or give a yes/no probability (`noul`). It is a native C++20 engine for System-1
+scale (`score`), or give a yes/no probability (`noul`, alias `yes_no`). It is a native C++20 engine for System-1
 decision models and computes all answers in one encoder forward pass, served from one static binary.
 It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by changing the base URL.
@@ -235,7 +235,8 @@ responses, metrics, and tests. Trained adapters and the evidence for each are in
 
 Set `STATIM_API_KEY=key1,key2` or pass `--api-key-file FILE`. Authentication covers inference,
 `/metrics`, and `/v1/models`; health, readiness, and the playground remain public. Key sources fail
-closed and comparisons use constant-time code. A non-loopback server without keys emits
+closed and comparisons use constant-time code. Every key must be 32–4096 printable ASCII characters
+without whitespace; generate one with `openssl rand -hex 32`. A non-loopback server without keys emits
 an error and exits before loading models. Pass `--allow-unauthenticated` to opt in explicitly on a
 trusted network; that mode retains the `auth_off_on_network` warning.
 

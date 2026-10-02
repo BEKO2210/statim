@@ -102,13 +102,19 @@ std::string trim(std::string s) {
     if (first == std::string::npos) return {};
     return s.substr(first, s.find_last_not_of(" \t\r\n") - first + 1);
 }
-void add_key(std::vector<std::string>& keys, std::string key) {
+void add_key(std::vector<std::string>& keys, std::string key, const std::string& source) {
     key = trim(std::move(key));
     if (key.empty()) return;
-    if (key.size() > 4096 || std::any_of(key.begin(), key.end(), [](unsigned char c) { return c <= 32 || c >= 127; }))
-        throw std::runtime_error("API key must be 1-4096 printable ASCII characters without whitespace");
+    validate_api_key(key, source);
     keys.push_back(std::move(key));
 }
+}
+void validate_api_key(const std::string& key, const std::string& source) {
+    if (key.size() < 32)
+        throw ApiKeyConfigError("API key from " + source + " has length " + std::to_string(key.size()) +
+                                "; minimum is 32 characters; generate a key with: openssl rand -hex 32");
+    if (key.size() > 4096 || std::any_of(key.begin(), key.end(), [](unsigned char c) { return c <= 32 || c >= 127; }))
+        throw ApiKeyConfigError("API key from " + source + " must be 32-4096 printable ASCII characters without whitespace");
 }
 ojson parse_request(const std::string& text, const SecurityLimits& limits) {
     if (text.size() > max_body_bytes) throw HttpError(413, "request body exceeds 2 MiB");
@@ -133,8 +139,8 @@ void validate_request_fields(const ojson& body) {
         const auto& q = it.value();
         fields(q, {"type", "instructions", "criteria", "labels"});
         if (!q.contains("type") || !q["type"].is_string() ||
-            (q["type"] != "choice" && q["type"] != "score" && q["type"] != "noul"))
-            throw HttpError(422, "unknown question type; use choice, score or noul");
+            (q["type"] != "choice" && q["type"] != "score" && q["type"] != "noul" && q["type"] != "yes_no"))
+            throw HttpError(422, "unknown question type; use choice, score, noul or yes_no");
         if (!q.contains("instructions")) throw HttpError(422, "question requires instructions");
         if (q.contains("instructions") && rendered_size(q["instructions"]) > 16384)
             throw HttpError(413, "instructions exceed 16384 bytes");
@@ -152,8 +158,10 @@ DecideRequest parse_decide_request(const std::string& raw, bool batch, const Req
                                    const SecurityLimits& limits) {
     DecideRequest r;
     r.body = parse_request(raw, limits);
+    validate_request_fields(r.body);
+    for (auto& q : r.body["questions"])
+        if (q["type"] == "yes_no") q["type"] = "noul";
     const ojson& body = r.body;
-    validate_request_fields(body);
     if (!body.is_object() || !body.contains("questions"))
         throw HttpError{400, "request body must be an object with a 'questions' field"};
     const ojson& questions = body["questions"];
@@ -246,22 +254,25 @@ void check_work(const ojson& qs, size_t states, const HParams& h, const DecideOp
 }
 std::vector<std::string> load_key_file(const std::string& path) {
     std::ifstream f(path);
-    if (!f) throw std::runtime_error("cannot open configured API key file: " + path);
+    if (!f) throw ApiKeyConfigError("cannot open configured API key file: " + path);
     std::vector<std::string> keys;
     std::string line;
+    size_t line_number = 0;
     while (std::getline(f, line)) {
+        ++line_number;
         line = trim(std::move(line));
-        if (!line.empty() && line.front() != '#') add_key(keys, std::move(line));
+        if (!line.empty() && line.front() != '#')
+            add_key(keys, std::move(line), path + ":" + std::to_string(line_number));
     }
-    if (f.bad() || keys.empty()) throw std::runtime_error("configured API key file contains no valid keys or cannot be read: " + path);
+    if (f.bad() || keys.empty()) throw ApiKeyConfigError("configured API key file contains no valid keys or cannot be read: " + path);
     return keys;
 }
 std::vector<std::string> load_key_env(const std::string& value) {
     std::vector<std::string> keys;
     std::istringstream in(value);
     std::string key;
-    while (std::getline(in, key, ',')) add_key(keys, std::move(key));
-    if (keys.empty()) throw std::runtime_error("configured STATIM_API_KEY contains no valid keys");
+    while (std::getline(in, key, ',')) add_key(keys, std::move(key), "STATIM_API_KEY");
+    if (keys.empty()) throw ApiKeyConfigError("configured STATIM_API_KEY contains no valid keys");
     return keys;
 }
 bool is_loopback_host(const std::string& host) {
