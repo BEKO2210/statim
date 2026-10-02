@@ -54,6 +54,7 @@ x-server-configuration:
   - --consensus
   - --no-access-log
   - --no-playground
+  - --frame-ancestors LIST (space- or comma-separated origins; at most 8, each at most 256 bytes)
   - --allow-unauthenticated
   - --adapter [model:]name=adapter.gguf (repeatable; see docs/API.md, LoRA adapters)
   - --adapter-mode merge|runtime

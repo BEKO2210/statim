@@ -65,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/statim"]
 # The public demo is intentionally unauthenticated; production images fail closed instead.
-CMD ["serve", "-m", "multilingual=/models/model.gguf", "--host", "0.0.0.0", "--port", "7860", "--allow-unauthenticated", "--threads", "2", "--workers", "1", "--max-concurrent", "2", "--http-queue", "8", "--max-request-work", "128", "--max-request-tokens", "131072", "--max-attention-mib", "1024", "--max-response-bytes", "1048576", "--request-timeout", "15", "--inference-timeout", "120"]
+CMD ["serve", "-m", "multilingual=/models/model.gguf", "--host", "0.0.0.0", "--port", "7860", "--allow-unauthenticated", "--frame-ancestors", "https://huggingface.co", "--threads", "2", "--workers", "1", "--max-concurrent", "2", "--http-queue", "8", "--max-request-work", "128", "--max-request-tokens", "131072", "--max-attention-mib", "1024", "--max-response-bytes", "1048576", "--request-timeout", "15", "--inference-timeout", "120"]

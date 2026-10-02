@@ -12,6 +12,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   shipped file, the compiled-in components with their versions and licences, and the system
   libraries the binaries load; it validates as SPDX 2.3. The 0.9.3 release assets were replaced
   with SBOMs generated this way from the same archives (READINESS P1 #20).
+- The Hugging Face Space could not show the playground since 0.9.3 because its CSP set
+  `frame-ancestors 'none'`. The new `--frame-ancestors` serve flag permits named embedding origins,
+  and the Space now passes `https://huggingface.co`.
 
 ## [0.9.3] - 2026-10-02
 

@@ -199,7 +199,9 @@ deadline, and `proxy_read_timeout` is 125s, just past the 120-second inference d
 proxy forwards `Authorization` and does not log it. `/metrics` is allowed only from 127.0.0.1;
 name a Prometheus host above `deny all` to scrape from another machine. `/health` and `/ready`
 stay reachable. The proxy sends no Content-Security-Policy: `src/playground.html` uses an inline
-script and style, and the server sends its own policy once READINESS P1 #14 lands. Network-level
+script and style, and the server sends its own hash-pinned policy. The playground denies framing by
+default; pass `--frame-ancestors https://frontend.example` (up to eight space- or comma-separated
+origins) when a named frontend must embed it. Network-level
 rate limits stay here because application admission is not a complete denial-of-service boundary.
 
 ## Probes and metrics

@@ -71,6 +71,18 @@ def main():
                 checks += 1
 
         test_short_keys_fail_before_model_load()
+        def test_invalid_frame_ancestors_fails_before_model_load():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'frame-ancestors-must-not-load.gguf')
+            p = subprocess.run([args.binary, 'serve', '-m', missing_model,
+                                '--frame-ancestors', 'https://a.example/path'],
+                               env=env, capture_output=True, text=True, timeout=5)
+            assert p.returncode == 2, (p.returncode, p.stderr)
+            assert 'invalid --frame-ancestors origin' in p.stderr, p.stderr
+            assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+            checks += 1
+
+        test_invalid_frame_ancestors_fails_before_model_load()
         fail_start(['--api-key-file', str(Path(tmp) / 'missing')])
         for contents in ('', '# comments only\n  # comment\r\n'):
             keyfile = Path(tmp) / 'keys'
@@ -118,6 +130,36 @@ def main():
                 except (OSError, http.client.HTTPException):
                     time.sleep(.1)
             raise AssertionError('server did not become healthy:\n' + logfile.read_text())
+
+        def test_allowed_frame_ancestor():
+            nonlocal checks
+            server_port = reserve_port()
+            logfile = Path(tmp) / 'frame-ancestor-server.log'
+            command = base + ['--port', str(server_port), '--frame-ancestors', 'https://huggingface.co']
+            with logfile.open('w+') as log:
+                proc = subprocess.Popen(command, env=env, stdout=log, stderr=log)
+                try:
+                    wait_for_health(proc, logfile, '127.0.0.1', server_port)
+                    conn = http.client.HTTPConnection('127.0.0.1', server_port, timeout=3)
+                    conn.request('GET', '/')
+                    response = conn.getresponse()
+                    response.read()
+                    headers = dict(response.getheaders())
+                    conn.close()
+                    assert response.status == 200, response.status
+                    assert 'X-Frame-Options' not in headers, headers
+                    csp = headers.get('Content-Security-Policy', '')
+                    assert 'frame-ancestors https://huggingface.co' in csp, csp
+                    checks += 1
+                finally:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+
+        test_allowed_frame_ancestor()
 
         def run_startup_server(name, host, connect_host, keys=None, allow=False, family=socket.AF_INET):
             nonlocal checks
