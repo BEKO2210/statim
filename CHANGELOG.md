@@ -7,6 +7,20 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-02
+
+**Upgrade first.** Two security changes stop a misconfigured server from starting (exit status 2,
+before any model loads), as docs/COMPATIBILITY.md allows for security fixes in a patch release:
+- every API key (`STATIM_API_KEY` and every entry of `--api-key-file`) must have at least 32
+  characters; replace shorter keys, for example with `openssl rand -hex 32`;
+- a server on a non-loopback address needs an API key; to keep an unauthenticated network
+  deployment, pass `--allow-unauthenticated`.
+
+Also in this release: a playground with a Simple mode and a question builder; `yes_no` as a request
+alias of `noul`; cooperative cancellation when a client disconnects; model identity and per-adapter
+counts in `/metrics`; Prometheus alert rules; an NGINX configuration; and CI for GPU parity, both
+SDKs, secrets and a weekly fuzz campaign. Every decision is unchanged.
+
 ### Changed
 - The engine parity tests fail above 1.5e-4 instead of 2e-3: one step of the API's 4-decimal
   rounding, which is what the README's "within 1e-4" claims. Measured worst on x86-64, arm64, Vulkan
@@ -25,6 +39,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   `--allow-unauthenticated` to retain the previous behavior and `auth_off_on_network` warning.
 - README "At a glance": the columns name the model and the protocol, "Statim Decide Multilingual
   0.7.0, trained" against "Qwen3-8B, zero-shot" (READINESS P1 #40).
+- README: a short comparison with ONNX Runtime on CPU under "At a glance", from the measurements in
+  docs/ORT.md, including where ORT is faster. TensorRT and GPU are stated as not measured.
 
 ### Fixed
 - Inference now stops cooperatively when its HTTP client disconnects, without cancelling live
@@ -132,8 +148,6 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   - Build provenance attestations generated for all release archives using `actions/attest-build-provenance` and verifiable with `gh attestation verify`.
   - Added weekly Dependabot updates (`.github/dependabot.yml`) for GitHub Actions.
   - CI Python dependencies pinned to exact versions with SHA-256 integrity hashes in `requirements-ci.txt` and verified via `--require-hashes`.
-- README: a short comparison with ONNX Runtime on CPU under "At a glance", from the measurements in
-  docs/ORT.md, including where ORT is faster. TensorRT and GPU are stated as not measured.
 
 ## [0.9.2] - 2026-09-30
 
@@ -914,7 +928,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/BEKO2210/statim/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/BEKO2210/statim/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/BEKO2210/statim/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/BEKO2210/statim/compare/v0.8.7...v0.9.0

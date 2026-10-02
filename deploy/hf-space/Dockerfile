@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG STATIM_SOURCE=release
-ARG STATIM_VERSION=0.9.2
+ARG STATIM_VERSION=0.9.3
 ARG MODEL_SOURCE=hub
 ARG MODEL_REPO=Beko2210/statim-decide-multilingual-base
 ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
