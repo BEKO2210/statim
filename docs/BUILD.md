@@ -52,6 +52,20 @@ Tested on a Galaxy A15 5G (MediaTek Dimensity 6100+: 2 Cortex-A76 and 6 Cortex-A
   multilingual model takes about 1.0–1.2 s per golden item in q8_0 and 2.1–3.9 s in f32. On this
   CPU, q8_0 is the faster format: the dot-product instructions do the int8 work, and the custom f32
   kernel is x86-only.
+- **Galaxy Tab S9 Ultra** (Snapdragon 8 Gen 2: 1 Cortex-X3, 2 A715, 2 A710, 3 A510, 12 GB, Android 16),
+  on 2026-10-02 at commit `34c635c`. The same suite passes: 13 of 13, with both parity tests at 240/240 argmax.
+  This CPU has int8 matrix-multiply instructions (`i8mm`). Building with
+  `-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+i8mm+fp16` makes q8_0 the clear winner. With 5 threads on the
+  big cores, measured per golden item (10 items, indicative):
+
+  | Build | f32 | q8_0 |
+  |---|---:|---:|
+  | `armv8.2-a+dotprod+fp16` | 0.67 s | 0.69 s |
+  | `armv8.2-a+dotprod+i8mm+fp16` | 0.67–1.5 s | **0.28 s** |
+
+  An `i8mm` build stops with `SIGILL` on CPUs without the instruction, such as the A15, so it needs a
+  matching device. From `adb shell`, Android does not let a process use the prime core (cpu7). An app with
+  its own process may get it and be faster still.
 - **Replays.** The fuzz replay binaries need `STATIM_FUZZ_DATA` set to the copied `fuzz/data`
   directory, because their build-time path does not exist on the phone.
 

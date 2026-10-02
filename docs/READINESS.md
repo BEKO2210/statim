@@ -48,7 +48,7 @@ for them like a P0.
 | 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | **closed** (#76): [THREAT_MODEL.md](THREAT_MODEL.md), linked from `SECURITY.md` |
 | 11 | CI fails when `security_http` skips | S | **closed** (#73): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
 | 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
-| 13 | API keys shorter than 32 characters are rejected | S | open |
+| 13 | API keys shorter than 32 characters are rejected | S | **closed** (#87): a shorter key from `--api-key`, `STATIM_API_KEY` or `--api-keys-file` exits with status 2 before the model loads, naming the source and length; `test_short_keys_fail_before_model_load` in `tests/security/test_http.py`, key cases in `tests/test_security.cpp` |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | **closed** (#81): key in `sessionStorage` only; hash-pinned CSP, `frame-ancestors 'none'`, `nosniff` and `Referrer-Policy` on every response; checked in `security_http`, `test_security` and a headless-browser run |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | **closed** (#83): `deploy/nginx/`; `test_nginx.sh` runs `nginx -t` and 12 live checks in the `nginx` CI job |
 | 16 | A weekly fuzz campaign longer than 60 s, with a coverage note per harness | M | open |
@@ -114,7 +114,7 @@ for them like a P0.
 | # | Item | Effort | Status |
 |---|---|---|---|
 | 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | partly: Vulkan and CUDA parity pass on an RTX 3070 (2026-10-01, manual); not yet a release step |
-| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | partly: Galaxy A15 passes the native suite and both parity tests (2026-10-01), CI cross-builds Android arm64; the Tab S9 Ultra (i8mm) is next |
+| 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | **closed** (#84): Galaxy A15 and Galaxy Tab S9 Ultra pass the native suite and both parity tests; CI cross-builds Android arm64; [BUILD.md](BUILD.md#android-arm64) |
 
 ### From the external reviews (2026-10-01)
 
@@ -127,7 +127,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 45 | GGUF preflight, ggml and the mmap open the model path separately; a file swapped between them skips the preflight. Open once and check the same file (descriptor, or device, inode and size) | Security | M | **closed** (#70): one `MappedFile` per load; `test_gguf_preflight` covers a rename over the mapped path, directories, FIFOs and empty files |
 | 46 | ThreadSanitizer on the server with 32 concurrent clients, micro-batching and adapter switches | Reliability | M | **closed** (#79): `tsan` job; `server_concurrency` with 32 clients, 0 warnings |
 | 47 | The inference deadline is checked inside the custom SGEMM op too, so a long batch cannot overrun it by a whole matrix product | Reliability | S | **closed** (#77): the SGEMM op polls the deadline and the cancel flag between panels; `test_sgemm` covers an expired deadline and a cancel at the barrier |
-| 48 | The start-up log names the active matrix-product path (custom SGEMM or ggml) and the CPU features in use | Operability | S | open |
+| 48 | The start-up log names the active matrix-product path (custom SGEMM or ggml) and the CPU features in use | Operability | S | **closed** (#87): `model_loaded` logs `gemm` (`packed_sgemm` or `ggml`) and `cpu_features` |
 | 49 | A native C++ ONNX Runtime benchmark next to the Python one, so the binding overhead is excluded by construction | Correctness | M | open |
 | 50 | Claim hygiene: the Hugging Face cards' q8_0 lines ("faster on CPU", "4x smaller") match the measurements (q8_0 is slower than f32 on AVX2, about 2.6x smaller); every speed claim names its hardware and protocol | Documentation | S | **closed** (#72): the cards compute the q8_0 size ratio from the files and state where q8_0 is slower (AVX2) and faster (ARM dotprod, CUDA); README corrected |
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
