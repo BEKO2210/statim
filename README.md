@@ -24,7 +24,7 @@
 </p>
 
 Statim answers typed questions about text or JSON: pick one of several labels (`choice`), rate on a
-scale (`score`), or give a yes/no probability (`noul`). It is a native C++20 engine for System-1
+scale (`score`), or give a yes/no probability (`noul`, alias `yes_no`). It is a native C++20 engine for System-1
 decision models and computes all answers in one encoder forward pass, served from one static binary.
 It needs no Python, PyTorch, or GPU at runtime. Statim runs Laya checkpoints and implements
 the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by changing the base URL.

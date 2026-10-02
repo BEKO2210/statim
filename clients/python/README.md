@@ -53,9 +53,10 @@ print(decision.request_id, decision.inference_time_ms)
 
 Options are `model`, `adapter`, `lang`, `ensemble`, `ensemble_margin`, `calibrate`,
 `return_logits`, `min_confidence`, `max_len`, `head_max_len`, and `request_id`. Pass `None` to
-omit a field; request base weights explicitly with `adapter="none"`. Question
-type `noul` is the yes/no question; the parsed object is `YesNoAnswer`. Its `noul` field is the server probability that the
-statement holds, and `probabilities` is `{"yes": noul, "no": 1 - noul}`.
+omit a field; request base weights explicitly with `adapter="none"`. Request type `yes_no` is
+accepted as an alias of `noul` and is sent unchanged. Responses always use type `noul`; the parsed
+object is `YesNoAnswer`. Its `noul` field is the server probability that the statement holds, and
+`probabilities` is `{"yes": noul, "no": 1 - noul}`.
 Every answer has optional `escalate`, which is `None` unless a positive
 confidence threshold applied to the response.
 
