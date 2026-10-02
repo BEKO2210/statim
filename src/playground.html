@@ -440,37 +440,63 @@ function countUp(el, to, fmt, ms = 700) { return tween(ms, p => { el.textContent
 const SCENARIOS = {
   "Route a support ticket": {
     use: "Pick the team, rate the urgency and spot a refund request in one go.",
-    text: {subject: "Duplicate charge on invoice #4411", body: "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."},
+    text: {"subject": "Duplicate charge on invoice #4411", "body": "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."},
     qs: [
       {id: "department", type: "choice", q: "Which department should handle this request?", opts: [["billing", "invoices, payments, refunds"], ["technical", "bugs, outages, system errors"], ["sales", "pricing, new contracts"], ["other", "everything else"]]},
       {id: "urgency", type: "score", q: "How urgent is this request?", levels: ["not urgent", "soon", "critical deadline or blocking issue"]},
       {id: "refund", type: "noul", q: "Does the customer explicitly ask for a refund?"}
     ]
   },
-  "Triage a German bug report": {
-    use: "Questions and text in German: the multilingual model reads both.",
-    text: "Seit dem Update gestern stürzt die App beim Start ab und wir können nicht verkaufen. Bitte dringend melden!",
+  "Triage an outage": {
+    use: "A production incident: the right team, top urgency, a blocked customer.",
+    text: "Since this morning's update our app crashes on startup with error 500 and nobody can log in. Our whole team is blocked. Please fix this immediately.",
     qs: [
-      {id: "department", type: "choice", q: "Welche Abteilung ist zuständig?", opts: [["billing", "Rechnungen, Zahlungen"], ["technical", "Fehler, Abstürze, Ausfälle"], ["sales", "Preise, Verträge"], ["other", "Sonstiges"]]},
-      {id: "urgency", type: "score", q: "Wie dringend ist die Anfrage?", levels: ["nicht dringend", "bald", "kritisch, blockiert die Arbeit"]},
-      {id: "revenue_impact", type: "noul", q: "Verhindert das Problem Verkäufe oder kostet es Umsatz?"}
+      {id: "department", type: "choice", q: "Which department should handle this request?", opts: [["billing", "invoices, payments, refunds"], ["technical", "bugs, crashes, outages, error messages"], ["sales", "pricing, quotes, new contracts"], ["other", "everything else"]]},
+      {id: "urgency", type: "score", q: "How urgent is this request?", levels: ["not urgent", "soon", "critical deadline or blocking issue"]},
+      {id: "blocked", type: "noul", q: "Is the customer unable to work because of the problem?"}
     ]
   },
-  "Read a product review": {
-    use: "Sentiment, a star rating and a support complaint from one review.",
-    text: "The battery life is fantastic, but the screen scratches way too easily and support never answered my emails.",
+  "Read an angry review": {
+    use: "Sentiment, a star rating, a support complaint and a refund request from one review.",
+    text: "Arrived two weeks late, the screen was cracked, and support never answered my three emails. I want my money back.",
     qs: [
-      {id: "sentiment", type: "choice", q: "What is the overall tone of the review?", opts: [["positive", "mostly praise"], ["mixed", "both praise and complaints"], ["negative", "mostly complaints"]]},
-      {id: "rating", type: "score", q: "Which star rating fits this review?", levels: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]},
-      {id: "support_issue", type: "noul", q: "Does the reviewer complain about customer support?"}
+      {id: "sentiment", type: "choice", q: "What is the overall sentiment of the review?", opts: [["positive", "the customer is satisfied"], ["neutral", "neither satisfied nor dissatisfied"], ["negative", "the customer is dissatisfied"]]},
+      {id: "rating", type: "score", q: "How many stars would this customer give?", levels: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]},
+      {id: "support_issue", type: "noul", q: "Does the customer complain about customer support?"},
+      {id: "refund", type: "noul", q: "Does the customer ask for a refund?"}
     ]
   },
   "Moderate a chat message": {
     use: "Classify a message and decide whether it should come down.",
-    text: {author: "guest_2291", message: "Click here to claim your free iPhone!!! Limited offer: bit.ly/xyz"},
+    text: {"author": "guest_2291", "message": "Click here to claim your free iPhone!!! Limited offer: bit.ly/xyz"},
     qs: [
       {id: "category", type: "choice", q: "What kind of message is this?", opts: [["spam", "ads, scams, unsolicited links"], ["abuse", "insults, harassment"], ["normal", "regular conversation"]]},
       {id: "remove", type: "noul", q: "Should this message be removed?"}
+    ]
+  },
+  "Find personal data": {
+    use: "Find personal data before a message is logged or shared.",
+    text: "Please update the shipping address for Maria Lopez to 42 Elm Street, Springfield. You can reach her at maria.lopez@example.com or +1 415 555 0134.",
+    qs: [
+      {id: "contains_pii", type: "noul", q: "Does the text contain personal data such as names, addresses, emails or phone numbers?"},
+      {id: "data_type", type: "choice", q: "What kind of personal data does the text contain?", opts: [["contact", "names, addresses, emails, phone numbers"], ["financial", "bank account or credit card numbers"], ["health", "medical conditions or treatments"], ["none", "no personal data"]]}
+    ]
+  },
+  "Qualify a sales lead": {
+    use: "Intent, the next step and the buyer from one inbound email.",
+    text: {"from": "Head of Operations, 400-person logistics company", "message": "We want to roll out your platform to all 120 dispatchers this quarter. Please send a quote for an annual enterprise plan and book a demo for next week."},
+    qs: [
+      {id: "intent", type: "choice", q: "What does the sender want?", opts: [["buy", "wants to purchase or get a quote"], ["support", "needs help with a problem"], ["cancel", "wants to cancel"], ["other", "something else"]]},
+      {id: "demo", type: "noul", q: "Does the sender ask for a demo or a meeting?"},
+      {id: "business", type: "noul", q: "Is the sender writing on behalf of a company?"}
+    ]
+  },
+  "Understand a banking request": {
+    use: "Banking intents, one of Statim's strengths: the right intent and how urgent it is.",
+    text: "I lost my card yesterday and I think someone used it at a gas station. Can you block it right away?",
+    qs: [
+      {id: "intent", type: "choice", q: "What does the customer need?", opts: [["lost_or_stolen_card", "report a lost or stolen card"], ["card_payment_not_recognised", "dispute an unknown card payment"], ["exchange_rate", "question about exchange rates"], ["top_up", "add money to the account"]]},
+      {id: "urgency", type: "score", q: "How urgent is this request?", levels: ["not urgent", "soon", "critical"]}
     ]
   }
 };

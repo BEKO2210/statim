@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- Playground examples are all in English and were checked against the Space's model
+  (statim-decide-multilingual-base, q8_0) before shipping: seven use cases, 21 answers, all correct.
+  The previous product-review example got its tone, rating and support complaint wrong.
+
 ### Fixed
 - The release SBOMs (Syft) listed only the archive file. `tools/release/sbom.py` now lists every
   shipped file, the compiled-in components with their versions and licences, and the system
