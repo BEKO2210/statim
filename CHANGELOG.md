@@ -7,6 +7,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-10-03
+
+The Hugging Face Space shows the playground again (0.9.3 blocked its embedding), the playground
+examples are in English and checked against the Space's model, and release SBOMs now list what the
+binaries contain. Every decision is unchanged.
+
 ### Changed
 - Playground examples are all in English and were checked against the Space's model
   (statim-decide-multilingual-base, q8_0) before shipping: seven use cases, 21 answers, all correct.
@@ -942,7 +948,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/BEKO2210/statim/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/BEKO2210/statim/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/BEKO2210/statim/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/BEKO2210/statim/compare/v0.9.0...v0.9.1
