@@ -50,20 +50,30 @@ top of 0.7.0, close that gap?
   - 150 items per language cell, seed 20260927.
   - Items whose text occurs in the training mixture are removed.
   - The same server answers every item twice: once without the adapter and once with it.
-- **Decision** (`gate.adapter_decision`): promote when the category family gains more than 2
-  standard errors, pooled by rows or by suites, and nothing regresses. A regression is a pooled drop
-  beyond 2 standard errors under either pooling, or a drop in one language cell that stays
-  significant after Holm-Bonferroni (family-wise 5 %).
+- **Decision** (`gate.adapter_decision`): promote when the category family gains significantly,
+  pooled by rows or by suites, and nothing regresses. A regression is a pooled drop beyond 2
+  standard errors under either pooling, or a drop in one language cell that stays significant after
+  Holm-Bonferroni (family-wise 5 %).
+  - Base and adapter answer the same items, so every test is paired: an exact McNemar test per cell
+    and the standard error of the per-item differences for the pools. Family gains are
+    Holm-corrected.
+  - These decisions were first made with an unpaired rule, which treated the two runs as
+    independent samples. On 2026-10-01 they were recomputed with the paired rule: the same
+    adapter files (SHA-256 identical), the same items, the same accuracies. The table shows
+    both.
 
 ### Results
 
-| Category | Language cells | Pooled change (points) | 2 SE (points) | Decision |
-|---|---:|---:|---:|---|
-| PII | 11 | +5.46 | 2.22 | **promote** |
-| emotion | 8 | +4.75 | 3.88 | **promote** |
-| safety | 1 | +8.00 | 9.72 | reject, within noise |
-| sentiment | 2 | +2.33 | 6.38 | reject, within noise |
-| fact-check | 1 | +0.67 | 10.74 | reject, within noise |
+| Category | Language cells | Pooled change (points) | 2 SE unpaired | Decision then | 2 SE paired | Paired decision |
+|---|---:|---:|---:|---|---:|---|
+| PII | 11 | +5.46 | 2.22 | **promote** | 1.40 | **promote** |
+| emotion | 8 | +4.75 | 3.88 | **promote** | 2.12 | **promote** |
+| safety | 1 | +8.00 | 9.72 | reject, within noise | 7.45 | promote (Holm p = 0.03) |
+| sentiment | 2 | +2.33 | 6.38 | reject, within noise | not recomputed | — |
+| fact-check | 1 | +0.67 | 10.74 | reject, within noise | not recomputed | — |
+
+The pooled PII change is +5.45 points when recomputed from the items; the table keeps the published
++5.46, a rounding difference.
 
 No language cell regressed in any category. Accuracy per cell for the two promoted adapters:
 
@@ -118,9 +128,10 @@ on items the first run never scored.
 **Result: promote.**
 
 - On the 1,350 fresh items, accuracy rises from 0.708 to 0.806: +9.78 points, 2 SE 3.28, and no
-  regression.
+  regression. Recomputed with the paired rule: 2 SE 2.39, Holm p = 2.5e-16, promote.
 - The converted file is byte-identical to the registered one (the SHA-256 above).
-- The first run's +8.0 on 150 items was therefore an underpowered true effect, not noise.
+- The first run's +8.0 on 150 items was therefore an underpowered true effect, not noise. The
+  paired rule detects it on those 150 items too (Holm p = 0.03). The unpaired rule could not.
 - The adapter is published (see above).
 - A zero-shot Qwen3-8B was measured only on the first 150 items (0.753), so no comparison on the
   fresh items is claimed.

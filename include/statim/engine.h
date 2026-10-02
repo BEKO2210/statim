@@ -2,6 +2,7 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -32,6 +33,9 @@ struct DecideOptions {
     bool calibrate = false;
     // Cooperative request deadline; disabled for ordinary in-process inference.
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
+    // Shared because one HTTP watcher may outlive the stack frame that starts a forward pass.
+    // Null keeps ordinary in-process inference free of an atomic load.
+    std::shared_ptr<std::atomic<bool>> cancelled;
 };
 
 // Python json.dumps(ensure_ascii=False) with the given separators; key order preserved.

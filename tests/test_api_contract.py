@@ -301,7 +301,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="statim-api-contract-") as directory:
         tmp = Path(directory)
         key_file = tmp / "api-key"
-        key_file.write_text("contract-secret\n", encoding="ascii")
+        key_file.write_text("contract-test-key-0123456789abcdef\n", encoding="ascii")
         # Both checkpoints and no --consensus: the documented examples use language routing when
         # "model" is omitted, and opt into consensus per request ("model": "consensus").
         normal = Server(args.binary, ["-m", "english=" + args.english,

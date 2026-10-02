@@ -2,6 +2,8 @@ name: ci
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 6 * * *'
 
 permissions:
   contents: read
@@ -14,13 +16,13 @@ jobs:
         with:
           submodules: recursive
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
-        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/docs/check_docs.py
+        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/release/test_check_hardening.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/ci/test_parity_summary.py && python3 tools/docs/check_docs.py
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
       - name: API v1 contract compatibility
         run: python3 tools/docs/test_api_contract.py && python3 tools/docs/api_contract.py --check
       - name: Cache models
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: models
           key: laya-models-v2
@@ -30,12 +32,127 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF -DPython3_EXECUTABLE="$(command -v python3)"
           cmake --build build
+      - name: Check hardening of release binaries
+        run: python3 tools/release/check_hardening.py build/statim build/statim-quantize
       - name: Parity gates vs. the official Laya package
         env:
           STATIM_CONTRACT_REQUIRED: "1"  # the API contract test must run in CI, never skip
-        run: ctest --test-dir build --output-on-failure -E lora
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir build --output-on-failure -E lora --output-junit "$PWD/ctest-main.xml" | tee ctest-main.log
+          python3 tools/ci/fail_on_skip.py ctest-main.log  # a skipped suite (exit 77) must not pass CI
       - name: LoRA gates (verbose, so the measured differences stay in the log)
-        run: ctest --test-dir build -R lora -V
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir build -R lora -V --output-junit "$PWD/ctest-lora.xml" | tee ctest-lora.log
+          python3 tools/ci/fail_on_skip.py ctest-lora.log
+      - name: Record the measured parity of this run
+        run: python3 tools/ci/parity_summary.py ctest-main.xml ctest-lora.xml --json parity.json --markdown "$GITHUB_STEP_SUMMARY"
+      - name: Archive the parity record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: parity-${{ github.sha }}-${{ github.event_name }}
+          path: parity.json
+          retention-days: 90
+  sanitize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (ASan + UBSan)
+        run: |
+          cmake -S . -B build-sanitize -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_SANITIZE=ON \
+            -DPython3_EXECUTABLE="$(command -v python3)"
+          cmake --build build-sanitize
+      - name: Memory safety and deterministic security suites (ASan + UBSan)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          STATIM_CONTRACT_REQUIRED: "1"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+        run: |
+          set -o pipefail  # without it a failing ctest would be hidden behind tee
+          ctest --test-dir build-sanitize --output-on-failure --timeout 600 \
+            -R '^(security|security_model|model_validation|gguf_preflight|tokenizer|cpu_check|security_http|api_contract|server_microbatch|server_lifecycle|fuzz_regressions_.*|model_parity_multilingual|engine_parity_multilingual|sgemm)$' \
+            | tee ctest-sanitize.log
+          python3 tools/ci/fail_on_skip.py ctest-sanitize.log
+  tsan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60  # server_lifecycle alone takes ~12 min under TSan locally; CI runners are slower
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build (ThreadSanitizer)
+        run: |
+          cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSTATIM_NATIVE=OFF \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DSTATIM_TSAN=ON \
+            -DPython3_EXECUTABLE="$(command -v python3)"
+          cmake --build build-tsan
+      - name: Concurrency stress and thread safety suites (TSan)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          STATIM_LIFECYCLE_SIGTERM_RUNS: "1"  # five runs at TSan speed exceed the test's limit; ASan and release run five
+          TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1"
+        run: |
+          set -o pipefail
+          ctest --test-dir build-tsan --output-on-failure --timeout 1500 \
+            -R '^(server_concurrency|sgemm|server_microbatch|server_lifecycle)$' \
+            | tee ctest-tsan.log
+          python3 tools/ci/fail_on_skip.py ctest-tsan.log
+  android-arm64:
+    # Cross-compiles every target for Android arm64 (NEON + dotprod) with the runner's NDK, so an
+    # x86-only construct cannot break the ARM build again. No device here: the test run on real
+    # hardware is recorded in the README's platform-support table.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build (Android arm64, NDK from the runner image)
+        run: |
+          echo "NDK: $ANDROID_NDK_LATEST_HOME"
+          cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DSTATIM_NATIVE=OFF \
+            -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DGGML_OPENMP=OFF
+          cmake --build build-android
+          file build-android/statim | grep -q 'ARM aarch64'
+      - name: Check hardening of Android binaries
+        run: |
+          python3 tools/release/check_hardening.py \
+            --readelf "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            build-android/statim
   fuzz:
     # 60 s per libFuzzer harness under ASan + UBSan, from the committed seeds and regressions plus the
     # corpus grown in earlier runs (actions/cache; fuzz/README.md).
@@ -48,7 +165,7 @@ jobs:
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang-18 libclang-rt-18-dev
       - name: Cache Laya tokenizers
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             models/laya/tokenizer
@@ -62,7 +179,7 @@ jobs:
               "https://huggingface.co/convaiinnovations/$repo/resolve/main/tokenizer/tokenizer.json"
           done
       - name: Restore the grown fuzz corpus
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build-fuzz/corpus-*
           key: fuzz-corpus-${{ github.run_id }}
@@ -87,3 +204,51 @@ jobs:
           name: fuzz-artifacts
           path: build-fuzz/artifacts/
           if-no-files-found: ignore
+  vendored-cves:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Self-test vendored CVE tooling
+        run: python3 tools/security/test_vendored_cves.py
+      - name: Live control step (OSV database coverage check)
+        run: python3 tools/security/vendored_cves.py --control
+      - name: Check vendored CVEs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/security/vendored_cves.py
+  nginx:
+    # Host binary, not the image. Measured 2026-10-02 on this 16-core machine:
+    # cmake --target statim 24.4 s; test_nginx.sh 2.3 s (q8, page cache warm).
+    # docker build -f Dockerfile was 30.5 s with the apt layer already cached
+    # (the compile step was 27.6 s and also builds quantize and the healthcheck).
+    # This workflow does not cache that image, so the job builds statim on the
+    # runner and the script runs it on the host network. 20 min covers a 4-vCPU
+    # runner and a cold fetch of the checkpoints (~1.4 GB of safetensors).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build statim
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF -DSTATIM_BUILD_TESTS=OFF
+          cmake --build build --target statim
+      - name: NGINX configuration
+        run: deploy/nginx/test_nginx.sh

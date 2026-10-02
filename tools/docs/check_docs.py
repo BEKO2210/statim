@@ -233,7 +233,7 @@ def token(word, text):
 # Question checks in src/engine.cpp that src/security.cpp always makes first, so no HTTP client
 # receives these messages and the API reference need not list them.
 ENGINE_ONLY = {"definition must be an object", "no 'instructions'; add the text the model should answer",
-               "unknown type; use one of ['choice', 'noul', 'score']"}
+               "unknown type; use one of ['choice', 'noul', 'score', 'yes_no']"}
 
 
 def check_server(problems):

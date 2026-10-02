@@ -4,13 +4,17 @@
 #include "kernels.h"
 
 #include "ggml.h"
-
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 #endif
 
 namespace statim {
@@ -160,10 +164,12 @@ STATIM_AVX2_FMA void pack_w_tile(float* dst, const float* w, int64_t M, int64_t 
 
 // Phase 1, all threads: pack the activations once, as [K block][6-row tile][kb, 6]. They are
 // shared by every thread and fit in L3 for the sequence lengths Statim serves.
-STATIM_AVX2_FMA void pack_avx2(float* workspace, const float* x, int64_t N, int64_t K, int ith, int nth) {
+STATIM_AVX2_FMA void pack_avx2(float* workspace, const float* x, int64_t N, int64_t K, int ith, int nth,
+                              const SgemmAbort* abort = nullptr) {
     const int64_t nt = (N + kNR - 1) / kNR;
     const int64_t kp = (K + kKC - 1) / kKC;
     for (int64_t index = ith; index < kp * nt; index += nth) {
+        if (abort && abort->requested()) return;
         const int64_t p = index / nt, ti = index % nt;
         const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
         float* dst = workspace + index * kKC * kNR;
@@ -178,7 +184,8 @@ STATIM_AVX2_FMA void pack_avx2(float* workspace, const float* x, int64_t N, int6
 // MC x KC weight block into a thread-local buffer that stays in L2 and streams every activation
 // tile through it (GotoBLAS order), so the weights cross memory once and are never written back.
 STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace, const float* w,
-                                   int64_t M, int64_t N, int64_t K, int ith, int nth) {
+                                   int64_t M, int64_t N, int64_t K, int ith, int nth,
+                                   const SgemmAbort* abort = nullptr) {
     const int64_t mt = (M + kMR - 1) / kMR;
     const int64_t nt = (N + kNR - 1) / kNR;
     const int64_t mbeg = mt * ith / nth;
@@ -191,6 +198,7 @@ STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace, const float*
     for (int64_t p = 0; p < kp; ++p) {
         const int kb = static_cast<int>(std::min<int64_t>(kKC, K - p * kKC));
         for (int64_t mt0 = mbeg; mt0 < mend; mt0 += mc_tiles) {
+            if (abort && abort->requested()) return;
             const int64_t mt1 = std::min(mend, mt0 + mc_tiles);
             for (int64_t tj = mt0; tj < mt1; ++tj)
                 pack_w_tile(wbuf.data() + (tj - mt0) * kKC * kMR, w, M, K, p, tj);
@@ -209,13 +217,57 @@ STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace, const float*
 
 }  // namespace
 
-bool packed_sgemm_available() {
+namespace {
+
+struct MatrixCpuFeatures {
+    bool avx2 = false, fma = false, f16c = false, avx512f = false;
+};
+
+MatrixCpuFeatures detect_matrix_cpu_features() {
+    MatrixCpuFeatures result;
 #if defined(__GNUC__) || defined(__clang__)
     __builtin_cpu_init();
-    return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
-#else
-    return true;  // x86-64-v3 release builds provide both features
+    result.avx2 = __builtin_cpu_supports("avx2");
+    result.fma = __builtin_cpu_supports("fma");
+    result.f16c = __builtin_cpu_supports("f16c");
+    result.avx512f = __builtin_cpu_supports("avx512f");
+#elif defined(_MSC_VER)
+    int regs[4];
+    __cpuid(regs, 0);
+    const int max_leaf = regs[0];
+    __cpuidex(regs, 1, 0);
+    const bool avx_state = (regs[2] & (1 << 27)) && (regs[2] & (1 << 28)) && (_xgetbv(0) & 0x6) == 0x6;
+    result.fma = avx_state && (regs[2] & (1 << 12));
+    result.f16c = avx_state && (regs[2] & (1 << 29));
+    if (max_leaf >= 7) {
+        __cpuidex(regs, 7, 0);
+        result.avx2 = avx_state && (regs[1] & (1 << 5));
+        result.avx512f = (_xgetbv(0) & 0xe6) == 0xe6 && (regs[1] & (1 << 16));
+    }
 #endif
+    return result;
+}
+
+}  // namespace
+
+bool packed_sgemm_available() {
+    const MatrixCpuFeatures features = detect_matrix_cpu_features();
+    return features.avx2 && features.fma;
+}
+
+bool packed_sgemm_enabled() {
+    const char* value = std::getenv("STATIM_SGEMM");
+    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
+}
+
+std::vector<std::string> matrix_cpu_features() {
+    std::vector<std::string> features;
+    const MatrixCpuFeatures detected = detect_matrix_cpu_features();
+    if (detected.avx2) features.emplace_back("avx2");
+    if (detected.fma) features.emplace_back("fma");
+    if (detected.f16c) features.emplace_back("f16c");
+    if (detected.avx512f) features.emplace_back("avx512f");
+    return features;
 }
 
 size_t packed_sgemm_workspace_floats(int64_t, int64_t N, int64_t K) {
@@ -233,9 +285,25 @@ void packed_sgemm_compute(float* y, const float* workspace, const float* w,
     compute_avx2(y, workspace, w, M, N, K, ith, nth);
 }
 
+// The graph op's two phases, with the cooperative abort (deadline or cancelled client).
+static void op_pack(float* workspace, const float* x, int64_t N, int64_t K, int ith, int nth,
+                    const SgemmAbort* abort) {
+    pack_avx2(workspace, x, N, K, ith, nth, abort);
+}
+static void op_compute(float* y, const float* workspace, const float* w, int64_t M, int64_t N, int64_t K,
+                       int ith, int nth, const SgemmAbort* abort) {
+    compute_avx2(y, workspace, w, M, N, K, ith, nth, abort);
+}
+
 #else
 
+// packed_sgemm_available() is false here, so the op is never put in a graph; these keep it linkable.
+static void op_pack(float*, const float*, int64_t, int64_t, int, int, const SgemmAbort*) {}
+static void op_compute(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int, const SgemmAbort*) {}
+
 bool packed_sgemm_available() { return false; }
+bool packed_sgemm_enabled() { return false; }
+std::vector<std::string> matrix_cpu_features() { return {}; }
 size_t packed_sgemm_workspace_floats(int64_t, int64_t, int64_t) { return 0; }
 void packed_sgemm_pack(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
 void packed_sgemm_compute(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
@@ -249,8 +317,7 @@ void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
     const int64_t M = w->ne[1], N = ggml_nrows(x), K = w->ne[0];
     // Read the generation before arriving, so the last arriver's publish is always seen as a change.
     const uint32_t generation = sync->generation.load(std::memory_order_acquire);
-    packed_sgemm_pack(sync->workspace, static_cast<const float*>(x->data),
-                      static_cast<const float*>(w->data), M, N, K, ith, nth);
+    op_pack(sync->workspace, static_cast<const float*>(x->data), N, K, ith, nth, sync->abort);
     if (sync->arrived.fetch_add(1, std::memory_order_acq_rel) == nth - 1) {
         sync->arrived.store(0, std::memory_order_relaxed);  // ready for the next evaluation
         sync->generation.store(generation + 1, std::memory_order_release);
@@ -258,8 +325,9 @@ void sgemm_custom_op(ggml_tensor* dst, int ith, int nth, void* userdata) {
     } else {
         sync->generation.wait(generation, std::memory_order_acquire);
     }
-    packed_sgemm_compute(static_cast<float*>(dst->data), sync->workspace,
-                         static_cast<const float*>(w->data), M, N, K, ith, nth);
+    if (sync->abort && sync->abort->requested()) return;
+    op_compute(static_cast<float*>(dst->data), sync->workspace,
+                 static_cast<const float*>(w->data), M, N, K, ith, nth, sync->abort);
 }
 
 }  // namespace statim

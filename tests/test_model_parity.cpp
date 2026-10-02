@@ -38,6 +38,8 @@ int main(int argc, char** argv) {
     }
     size_t n = 0, argmax_ok = 0;
     double max_diff = 0, max_act = 0, total_ms = 0;
+    std::ofstream dump;
+    if (const char* path = std::getenv("STATIM_PARITY_DUMP")) dump.open(path);
     for (auto& [si, recs] : by_state) {
         std::vector<statim::Item> items;
         for (auto& r : recs) items.push_back({r["ids"].get<std::vector<int32_t>>(), r["markers"].get<std::vector<int32_t>>(), r["qtype"].get<int>()});
@@ -63,6 +65,11 @@ int main(int argc, char** argv) {
                 if (res[i].logits[k] > res[i].logits[am]) am = k;
             }
             for (size_t k = 0; k < refa.size(); ++k) max_act = std::max(max_act, std::fabs(refa[k] - res[i].act_probs[k]));
+            if (dump) {
+                json row = {{"state_index", si}, {"logits", res[i].logits}, {"act", res[i].act_probs}};
+                if (recs[i].contains("question")) row["question"] = recs[i]["question"];
+                dump << row.dump() << '\n';
+            }
             argmax_ok += am == am_ref;
             ++n;
             if (si == 0 && i < 2) {

@@ -1,6 +1,6 @@
 # Statim HTTP API
 
-Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and zero or more questions. Each question has type `choice`, `score`, or `noul`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object.
+Statim serves typed decisions over HTTP. A request carries a state, which is text or any JSON value except null, and zero or more questions. Each question has type `choice`, `score`, `noul`, or `yes_no`. The server scores every option of every question in one forward pass and returns the Jev/Laya `POST /v1/systemone` object. `yes_no` is an alias of `noul` in requests; answers always use the wire name `noul`.
 
 The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 `{"detail":"HTTP request failed"}`. When authentication is configured, a nonpublic unknown path is rejected with 401 before route lookup unless it has a valid bearer key.
 
@@ -192,6 +192,12 @@ The response headers on that call are:
 | `Server-Timing` | Same responses. The value is `inference;dur=` followed by the same number. |
 | `Retry-After` | `503` from the decision handler only. The value is `1`. |
 
+Every response, from every route and including errors, also carries `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: no-referrer`. `GET /` (the playground) adds a `Content-Security-Policy` that allows only its own
+inline script and style block by SHA-256, connections to the same origin, and no framing
+(`frame-ancestors 'none'`, plus `X-Frame-Options: DENY`). The playground keeps an API key only in the
+tab's `sessionStorage`, so it is gone when the tab closes.
+
 HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
 
 ## Endpoints
@@ -261,10 +267,10 @@ Each question is an object:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `type` | yes | `choice`, `score`, or `noul`. |
+| `type` | yes | `choice`, `score`, `noul`, or `yes_no`; `yes_no` is a request alias of `noul`. |
 | `instructions` | yes | The text to answer. A non-string is serialized as JSON and used as text. |
 | `criteria` | depends on type | Options. See the next section. |
-| `labels` | no | Only valid on `noul`. Maps `false` and `true` to two different non-empty strings. |
+| `labels` | no | Only valid on `noul` and its `yes_no` request alias. Maps `false` and `true` to two different non-empty strings. |
 
 Unknown fields in a question definition are also ignored. They do not affect inference or calibration-cache keys.
 
@@ -1000,9 +1006,9 @@ for flag in (False, True):
 
 ## Authentication
 
-Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line). Comma-separated values and file lines are trimmed and blank values are skipped; in files, trimmed lines beginning with `#` are also skipped. A key must contain 1–4096 printable ASCII characters and no whitespace.
+Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line). Comma-separated values and file lines are trimmed and blank values are skipped; in files, trimmed lines beginning with `#` are also skipped. Every key must contain 32–4096 printable ASCII characters and no whitespace. Generate a key with `openssl rand -hex 32`.
 
-Authentication is fail-closed per configured source. If `STATIM_API_KEY` is present but empty or contains no valid key, startup aborts. Each `--api-key-file` must be readable and contain at least one valid key; a missing, unreadable, empty, or comment-only file aborts startup even if another source supplied a valid key. With neither source configured, authentication is off and the startup log says `"auth":false,"auth_status":"off"`.
+Authentication is fail-closed per configured source. If `STATIM_API_KEY` is present but empty, contains no valid key, or contains a key shorter than 32 characters, startup aborts. Each `--api-key-file` must be readable and contain at least one valid key; a missing, unreadable, empty, comment-only, or weak-key file aborts startup even if another source supplied a valid key. Key errors name `STATIM_API_KEY` or the file and line, but never include key bytes. With neither source configured, startup is allowed only on `localhost`, `::1`, or an IPv4 address in `127.0.0.0/8`. Other hosts, including `0.0.0.0`, `::`, LAN addresses, and hostnames, exit with status 2 before model loading. `--allow-unauthenticated` explicitly permits an unauthenticated non-loopback listener and retains the `auth_off_on_network` warning and `"auth":false,"auth_status":"off"` listening log.
 
 The client sends `Authorization: Bearer <key>`. The comparison is constant-time over the full header. A missing header, a wrong scheme, or a wrong key is:
 
@@ -1075,7 +1081,7 @@ Question validation messages:
 | `detail` | Trigger |
 |---|---|
 | `expected JSON object` (HTTP 400) | the question value is not an object |
-| `unknown question type; use choice, score or noul` | `type` is missing, not a string, or not one of those three |
+| `unknown question type; use choice, score, noul or yes_no` | `type` is missing, not a string, or not one of those four |
 | `question requires instructions` | `instructions` is missing |
 | `question '<id>': a choice question takes 'criteria' as a dict of label -> description, or a list of labels` | choice `criteria` is missing or not an object or list |
 | `question '<id>': a choice question needs at least one criterion` | the object or list is empty |
@@ -1245,7 +1251,7 @@ curl -sS -w '\n%{http_code}\n' \
 ```
 
 ```text
-{"detail":"unknown question type; use choice, score or noul"}
+{"detail":"unknown question type; use choice, score, noul or yes_no"}
 422
 ```
 
@@ -1540,7 +1546,7 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
 | `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
 
-All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--no-access-log`, `--no-playground`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
 
 Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 
