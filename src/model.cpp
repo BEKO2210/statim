@@ -1,5 +1,6 @@
 #include "statim/model.h"
 #include "statim/gguf_preflight.h"
+#include "statim/mapped_file.h"
 #include "statim/security.h"
 
 #include "kernels.h"
@@ -154,6 +155,9 @@ const HParams& Model::hparams() const { return impl_->hp; }
 const Tokenizer& Model::tokenizer() const { return *impl_->tok; }
 size_t Model::weight_bytes() const { return impl_->weight_bytes; }
 const std::string& Model::device() const { return impl_->device_desc; }
+const char* Model::gemm_path() const {
+    return impl_->on_cpu() && impl_->hp.weight_type == "f32" && packed_sgemm_enabled() ? "packed_sgemm" : "ggml";
+}
 const AdapterInfo* Model::adapter() const { return impl_->adapter.get(); }
 const std::string& Model::fingerprint() const { return impl_->fingerprint; }
 const std::string& Model::checkpoint_sha256() const { return impl_->checkpoint_sha256; }
@@ -398,6 +402,26 @@ static void validate(const Model::Impl& M) {
         if (id < 0 || id >= V) fail("special token id outside the embedding table");
 }
 
+namespace {
+// Maps a GGUF file once and runs the structural preflight on that mapping. Errors keep the load
+// error's usual form: "cannot read <what> '<path>': GGUF preflight: <reason>".
+std::unique_ptr<MappedFile> map_gguf(const std::string& path, const char* what) {
+    const std::string prefix = std::string("cannot read ") + what + " '" + path + "': ";
+    std::unique_ptr<MappedFile> file;
+    try {
+        file = std::make_unique<MappedFile>(path);
+    } catch (const std::exception& e) {
+        fail(prefix + "GGUF preflight: " + e.what());
+    }
+    try {
+        gguf_preflight(file->data(), file->size());
+    } catch (const std::exception& e) {
+        fail(prefix + e.what());
+    }
+    return file;
+}
+}  // namespace
+
 std::shared_ptr<Model> Model::load(const std::string& path, const std::string& device) {
     std::shared_ptr<Model> m(new Model());
     Impl& M = *m->impl_;
@@ -406,33 +430,23 @@ std::shared_ptr<Model> Model::load(const std::string& path, const std::string& d
     if (!M.on_cpu())
         M.device_desc = std::string(ggml_backend_dev_name(M.dev)) + " (" + ggml_backend_dev_description(M.dev) + ")";
 
-    try {
-        gguf_preflight(path);
-    } catch (const std::exception& e) {  // keep the load error's usual prefix and name the file
-        fail("cannot read GGUF model '" + path + "': " + e.what());
-    }
+    // Open and map the file once, read-only. The preflight, ggml's parser and the tensors all read
+    // this one mapping (no second open by name), and the tensors point straight into the page cache:
+    // a zero-copy load, shared between processes serving the same model.
+    std::unique_ptr<MappedFile> file = map_gguf(path, "GGUF model");
     gguf_init_params gp{/*no_alloc=*/true, &M.ctx_w};
-    M.gguf = gguf_init_from_file(path.c_str(), gp);
+    M.gguf = gguf_init_from_buffer(file->data(), file->size(), gp);
     if (!M.gguf) fail("cannot read GGUF model '" + path + "'");
+    std::tie(M.map, M.map_size) = file->release();
+    // The preflight and ggml read the header and metadata (mostly the tokenizer vocabulary) through
+    // the mapping; ggml has copied what it needs, so hand those pages back instead of keeping them
+    // resident. They are clean, file-backed pages: touching them again would just re-read the file.
+    if (const long page = sysconf(_SC_PAGESIZE); page > 0) {
+        const size_t meta = std::min(gguf_get_data_offset(M.gguf), M.map_size) & ~(static_cast<size_t>(page) - 1);
+        if (meta > 0) madvise(M.map, meta, MADV_DONTNEED);
+    }
     if (get_str(M.gguf, "statim.format") != "statim-decision-v1")
         fail("'" + path + "' is not a Statim decision model (convert it with tools/convert_laya.py)");
-
-    // Map the file read-only; tensors point straight into the page cache (zero-copy load,
-    // shared between processes serving the same model).
-    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd < 0) fail("cannot open '" + path + "'");
-    struct stat st{};
-    if (fstat(fd, &st) != 0) {
-        close(fd);
-        fail("cannot stat '" + path + "'");
-    }
-    M.map_size = static_cast<size_t>(st.st_size);
-    M.map = mmap(nullptr, M.map_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    close(fd);
-    if (M.map == MAP_FAILED) {
-        M.map = nullptr;
-        fail("mmap failed for '" + path + "'");
-    }
     const size_t data_off = gguf_get_data_offset(M.gguf);
     for (int64_t i = 0; i < gguf_get_n_tensors(M.gguf); ++i) {
         ggml_tensor* x = ggml_get_tensor(M.ctx_w, gguf_get_tensor_name(M.gguf, i));
@@ -630,14 +644,12 @@ std::shared_ptr<Model> Model::with_adapter(std::shared_ptr<Model> base_model, co
     if (n_threads <= 0) n_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
 
     // the adapter file is small: read it fully into memory
-    try {
-        gguf_preflight(path);
-    } catch (const std::exception& e) {
-        fail("cannot read LoRA adapter '" + path + "': " + e.what());
-    }
+    // one open and one mapping for the preflight and ggml (see Model::load); ggml copies the
+    // tensors out, and the mapping goes away at the end of this function
+    std::unique_ptr<MappedFile> file = map_gguf(path, "LoRA adapter");
     ggml_context* ctx_file = nullptr;
     gguf_init_params gp{/*no_alloc=*/false, &ctx_file};
-    gguf_context* g = gguf_init_from_file(path.c_str(), gp);
+    gguf_context* g = gguf_init_from_buffer(file->data(), file->size(), gp);
     if (!g) fail("cannot read LoRA adapter '" + path + "'");
     struct FileGuard {
         gguf_context* g;
@@ -868,11 +880,6 @@ ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_te
     return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
-bool sgemm_enabled() {
-    const char* value = std::getenv("STATIM_SGEMM");
-    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
-}
-
 // W*x for activations [d,L,B,...].  Flattening exposes all L*B rows to one GEMM.
 // Name the actual compute node (not a trailing reshape), so STATIM_PROFILE keeps
 // projection time in its projection category.
@@ -882,7 +889,7 @@ ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
     ggml_tensor* x2 = flat ? ggml_reshape_2d(c, x, x->ne[0], x->ne[1] * x->ne[2] * x->ne[3]) : x;
     // x need not be flattened: a single sequence [d, L, 1, 1] is already one [d, L] matrix
     const bool use_custom = sync && ggml_n_dims(w) <= 2 && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
-                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
+                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && packed_sgemm_enabled();
     ggml_tensor* y;
     if (use_custom) {
         sync->workspace_floats = packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]);
@@ -948,11 +955,22 @@ ggml_tensor* attention(ggml_context* c, ggml_tensor* q, ggml_tensor* k, ggml_ten
 
 struct Runner::Impl {
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
+    std::shared_ptr<std::atomic<bool>> cancelled;
+    SgemmAbort abort;
     RunOptions opts;
     ggml_backend_t backend = nullptr;
     ggml_gallocr_t galloc = nullptr;
     std::vector<uint8_t> meta_buf;
     std::vector<float> sgemm_workspace;  // shared by this runner's packed projections
+
+    bool cancellation_requested() const {
+        return cancelled && cancelled->load(std::memory_order_relaxed);
+    }
+    void throw_if_aborted() const {
+        if (std::chrono::steady_clock::now() >= deadline)
+            throw HttpError(422, "inference deadline exceeded");
+        if (cancellation_requested()) throw InferenceCancelled();
+    }
 
     ~Impl() {
         if (galloc) ggml_gallocr_free(galloc);
@@ -975,10 +993,14 @@ Runner::Runner(std::shared_ptr<Model> model, RunOptions opts) : model_(std::move
 
 Runner::~Runner() = default;
 
-void Runner::set_deadline(std::chrono::steady_clock::time_point deadline) {
+void Runner::set_deadline(std::chrono::steady_clock::time_point deadline,
+                          std::shared_ptr<std::atomic<bool>> cancelled) {
     impl_->deadline = deadline;
+    impl_->cancelled = std::move(cancelled);
+    impl_->abort.deadline = deadline;
+    impl_->abort.cancelled = impl_->cancelled.get();
     if (model_->impl()->on_cpu()) ggml_backend_cpu_set_abort_callback(impl_->backend, [](void* p) {
-        return std::chrono::steady_clock::now() >= static_cast<Impl*>(p)->deadline;
+        return static_cast<Impl*>(p)->abort.requested();
     }, impl_.get());
 }
 
@@ -1007,7 +1029,7 @@ static void build_masks(const std::vector<const std::vector<int32_t>*>& seqs, in
 std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     const char* profile_path = std::getenv("STATIM_PROFILE");
     const auto total_t0 = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+    impl_->throw_if_aborted();
     if (items.empty()) return {};
     const Model::Impl& M = *model_->impl();
     const HParams& h = M.hp;
@@ -1172,7 +1194,10 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     size_t sgemm_floats = 0;
     for (const auto& sync : sgemm_syncs) sgemm_floats = std::max(sgemm_floats, sync->workspace_floats);
     if (impl_->sgemm_workspace.size() < sgemm_floats) impl_->sgemm_workspace.resize(sgemm_floats);
-    for (const auto& sync : sgemm_syncs) sync->workspace = impl_->sgemm_workspace.data();
+    for (const auto& sync : sgemm_syncs) {
+        sync->workspace = impl_->sgemm_workspace.data();
+        sync->abort = &impl_->abort;
+    }
 
     // Explicit semantic names above cover compute-heavy nodes. Name any remaining view/copy
     // plumbing deterministically so a profile never contains an unattributed node.
@@ -1234,9 +1259,9 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
     ggml_backend_tensor_set(io.pool_rows, pool.data(), 0, ggml_nbytes(io.pool_rows));
     const auto upload_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
-    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+    if (impl_->abort.requested()) {
         ggml_free(c);
-        throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
     }
     std::unique_ptr<std::ostringstream> profile_nodes;
     if (profile_path) {
@@ -1249,7 +1274,7 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
             auto t0 = std::chrono::steady_clock::now();
             if (ggml_backend_graph_compute(impl_->backend, &gv) != GGML_STATUS_SUCCESS) {
                 ggml_free(c);
-                if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+                impl_->throw_if_aborted();
                 fail("graph compute failed");
             }
             ggml_backend_synchronize(impl_->backend);
@@ -1277,19 +1302,21 @@ std::vector<ItemResult> Runner::run(const std::vector<Item>& items) {
         }
     } else if (ggml_backend_graph_compute(impl_->backend, gf) != GGML_STATUS_SUCCESS) {
         ggml_free(c);
-        if (std::chrono::steady_clock::now() >= impl_->deadline) throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
         fail("graph compute failed");
     }
     const auto compute_done = profile_path ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
-    if (std::chrono::steady_clock::now() >= impl_->deadline) {
+    if (impl_->abort.requested()) {
         ggml_free(c);
-        throw HttpError(422, "inference deadline exceeded");
+        impl_->throw_if_aborted();
     }
     std::vector<float> logits(n_markers), pooled(static_cast<size_t>(d) * B);
     if (n_markers) ggml_backend_tensor_get(io.logits, logits.data(), 0, ggml_nbytes(io.logits));
     ggml_backend_tensor_get(io.pooled, pooled.data(), 0, ggml_nbytes(io.pooled));
+    const bool aborted_after_read = impl_->abort.requested();
     ggml_free(c);
+    if (aborted_after_read) impl_->throw_if_aborted();
 
     // ---- per-item outputs + act head on the host
     std::vector<ItemResult> out(B);

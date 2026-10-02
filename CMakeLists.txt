@@ -13,10 +13,21 @@ option(STATIM_BUILD_TESTS "Build tests" ON)
 option(STATIM_VULKAN "Build the Vulkan GPU backend (--device vulkan)" OFF)
 option(STATIM_CUDA "Build the CUDA GPU backend (--device cuda)" OFF)
 option(STATIM_FUZZ "Build the libFuzzer harnesses (clang; instruments everything with ASan + UBSan)" OFF)
+option(STATIM_SANITIZE "Build everything with ASan and UBSan" OFF)
+option(STATIM_TSAN "Build everything with ThreadSanitizer" OFF)
+option(STATIM_HARDEN "Hardening flags for release builds" ON)
 
-if(STATIM_FUZZ)
+if(STATIM_TSAN AND (STATIM_SANITIZE OR STATIM_FUZZ))
+  message(FATAL_ERROR "STATIM_TSAN cannot be combined with STATIM_SANITIZE or STATIM_FUZZ")
+endif()
+
+if(STATIM_FUZZ OR STATIM_SANITIZE)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    if(STATIM_FUZZ)
+      message(FATAL_ERROR "STATIM_FUZZ needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    else()
+      message(FATAL_ERROR "STATIM_SANITIZE needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+    endif()
   endif()
   # ASan + UBSan for every object, ggml included, so memory errors our inputs cause inside ggml are
   # reported; coverage feedback only for Statim's parsers/runtime (below), which keeps
@@ -26,8 +37,55 @@ if(STATIM_FUZZ)
   # before it reaches ggml.
   add_compile_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined
                       -fno-omit-frame-pointer -g)
-  add_link_options(-fsanitize=address,undefined -fno-sanitize=function)
+  add_link_options(-fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined)
   set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not ASan-instrumented
+endif()
+
+if(STATIM_TSAN)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "STATIM_TSAN needs clang (-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)")
+  endif()
+  add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g -O1)
+  add_link_options(-fsanitize=thread)
+  set(GGML_OPENMP OFF CACHE BOOL "" FORCE)  # libomp's thread pool is not instrumented
+endif()
+
+if(STATIM_HARDEN AND CMAKE_SYSTEM_NAME MATCHES "Linux|Android" AND (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+  include(CheckPIESupported)
+  check_pie_supported(OUTPUT_VARIABLE STATIM_PIE_ERR LANGUAGES C CXX)
+  if(CMAKE_C_LINK_PIE_SUPPORTED AND CMAKE_CXX_LINK_PIE_SUPPORTED)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  else()
+    message(WARNING "PIE is not supported: ${STATIM_PIE_ERR}")
+  endif()
+
+  add_compile_options(-fstack-protector-strong)
+  add_link_options(-Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+
+  if(NOT (STATIM_FUZZ OR STATIM_SANITIZE OR STATIM_TSAN))
+    include(CheckCSourceCompiles)
+    set(_orig_req_flags "${CMAKE_REQUIRED_FLAGS}")
+    set(CMAKE_REQUIRED_FLAGS "-O2 -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3")
+    check_c_source_compiles("
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char buf[16];
+    memcpy(buf, \"test\", 4);
+    return 0;
+}
+" STATIM_HAS_FORTIFY_3)
+    set(CMAKE_REQUIRED_FLAGS "${_orig_req_flags}")
+
+    if(STATIM_HAS_FORTIFY_3)
+      set(STATIM_FORTIFY_LEVEL 3)
+    else()
+      set(STATIM_FORTIFY_LEVEL 2)
+    endif()
+
+    add_compile_options($<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>
+                        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=${STATIM_FORTIFY_LEVEL}>)
+  endif()
 endif()
 
 # ---- ggml (vendored)
@@ -96,11 +154,18 @@ if(STATIM_BUILD_TESTS)
   add_executable(test_security tests/test_security.cpp)
   target_link_libraries(test_security PRIVATE statim_core)
   enable_testing()
+# Keep the whole output of passing tests in ctest's logs and JUnit file (default: 1 KB), so CI can
+# archive the measured parity of green runs (tools/ci/parity_summary.py).
+file(WRITE ${CMAKE_BINARY_DIR}/CTestCustom.cmake "set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE 1048576)\n")
   add_test(NAME security COMMAND test_security)
   add_executable(test_model_validation tests/test_model_validation.cpp)
   target_include_directories(test_model_validation PRIVATE third_party/ggml/src)
   target_link_libraries(test_model_validation PRIVATE statim_core)
   add_test(NAME model_validation COMMAND test_model_validation ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/data/tiny-metaspace.gguf)
+  add_executable(test_cpu_check tests/test_cpu_check.cpp)
+  target_include_directories(test_cpu_check PRIVATE include)
+  target_compile_definitions(test_cpu_check PRIVATE STATIM_REQUIRE_X86_V3)
+  add_test(NAME cpu_check COMMAND test_cpu_check)
   add_executable(test_gguf_preflight tests/test_gguf_preflight.cpp)
   target_link_libraries(test_gguf_preflight PRIVATE statim_core)
   add_test(NAME gguf_preflight COMMAND test_gguf_preflight ${CMAKE_CURRENT_SOURCE_DIR})
@@ -119,6 +184,10 @@ if(STATIM_BUILD_TESTS)
       --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
       --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)
     set_tests_properties(server_microbatch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+    add_test(NAME server_lifecycle COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lifecycle.py
+      --binary $<TARGET_FILE:statim> --model ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf
+      --inputs ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/golden_inputs.json)
+    set_tests_properties(server_lifecycle PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1500)
     # LoRA adapters: PEFT fixtures (numpy only) -> tools/convert_lora.py -> engine and server gates
     set(LORA ${CMAKE_CURRENT_BINARY_DIR}/lora)
     set(LORA_BASE ${CMAKE_CURRENT_SOURCE_DIR}/models/laya-multilingual-f32.gguf)
@@ -147,6 +216,11 @@ if(STATIM_BUILD_TESTS)
     add_test(NAME server_lora COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_lora.py
       --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
     set_tests_properties(server_lora PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 600)
+    add_test(NAME server_concurrency COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_server_concurrency.py
+      --binary $<TARGET_FILE:statim> --model ${LORA_BASE} --adapters ${LORA})
+    # 1500 s like the tsan job's --timeout: the per-test property wins over ctest --timeout, and its
+    # clients may wait up to the server's 900 s deadline under ThreadSanitizer
+    set_tests_properties(server_concurrency PROPERTIES FIXTURES_REQUIRED lora SKIP_RETURN_CODE 77 TIMEOUT 1500)
   endif()
   set(M ${CMAKE_CURRENT_SOURCE_DIR}/models)
   set(D ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)
@@ -155,25 +229,29 @@ if(STATIM_BUILD_TESTS)
   add_test(NAME sgemm COMMAND test_sgemm)
   set_tests_properties(sgemm PROPERTIES SKIP_RETURN_CODE 77)  # no AVX2/FMA (e.g. arm64)
   add_test(NAME model_parity_multilingual COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
-  add_test(NAME engine_parity_multilingual COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl)
+  # Answers are rounded to 4 decimals by the API and in the golden files, so two correct values can
+  # differ by one rounding step (1e-4) and never by two: the README's "within 1e-4". Measured worst
+  # on CPU (x86-64, arm64), Vulkan and CUDA: 1.00e-4.
+  set(ANSWER_TOL 1.5e-4)
+  add_test(NAME engine_parity_multilingual COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl ${ANSWER_TOL})
   add_test(NAME batch_parity_multilingual COMMAND test_batch_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json)
   add_test(NAME model_parity_english COMMAND test_model_parity ${M}/laya-english-f32.gguf ${D}/golden_laya.jsonl 1e-3)
-  add_test(NAME engine_parity_english COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl)
+  add_test(NAME engine_parity_english COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl ${ANSWER_TOL})
   if(STATIM_VULKAN)
     # same gates on the GPU (needs a Vulkan device at test time)
     add_test(NAME model_parity_multilingual_vulkan COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
-    add_test(NAME engine_parity_multilingual_vulkan COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl)
+    add_test(NAME engine_parity_multilingual_vulkan COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl ${ANSWER_TOL})
     add_test(NAME model_parity_english_vulkan COMMAND test_model_parity ${M}/laya-english-f32.gguf ${D}/golden_laya.jsonl 1e-3)
-    add_test(NAME engine_parity_english_vulkan COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl)
+    add_test(NAME engine_parity_english_vulkan COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl ${ANSWER_TOL})
     set_tests_properties(model_parity_multilingual_vulkan engine_parity_multilingual_vulkan model_parity_english_vulkan
                          engine_parity_english_vulkan PROPERTIES ENVIRONMENT STATIM_DEVICE=vulkan)
   endif()
   if(STATIM_CUDA)
     # same gates on CUDA (needs an NVIDIA GPU at test time)
     add_test(NAME model_parity_multilingual_cuda COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
-    add_test(NAME engine_parity_multilingual_cuda COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl)
+    add_test(NAME engine_parity_multilingual_cuda COMMAND test_engine_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya-multilingual.jsonl ${ANSWER_TOL})
     add_test(NAME model_parity_english_cuda COMMAND test_model_parity ${M}/laya-english-f32.gguf ${D}/golden_laya.jsonl 1e-3)
-    add_test(NAME engine_parity_english_cuda COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl)
+    add_test(NAME engine_parity_english_cuda COMMAND test_engine_parity ${M}/laya-english-f32.gguf ${D}/golden_inputs.json ${D}/golden_laya.jsonl ${ANSWER_TOL})
     set_tests_properties(model_parity_multilingual_cuda engine_parity_multilingual_cuda model_parity_english_cuda
                          engine_parity_english_cuda PROPERTIES ENVIRONMENT STATIM_DEVICE=cuda)
   endif()
@@ -198,5 +276,10 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/playground.inc
 add_executable(statim src/main.cpp src/server.cpp ${CMAKE_CURRENT_BINARY_DIR}/playground.inc)
 target_include_directories(statim PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(statim PRIVATE STATIM_VERSION="${PROJECT_VERSION}")
+if(NOT STATIM_NATIVE AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  # the portable build assumes x86-64-v3 (see GGML_AVX2 above); check it before any vector code runs
+  target_compile_definitions(statim PRIVATE STATIM_REQUIRE_X86_V3)
+  target_compile_definitions(statim-quantize PRIVATE STATIM_REQUIRE_X86_V3)
+endif()
 target_link_libraries(statim PRIVATE statim_core Threads::Threads)
 install(TARGETS statim statim-quantize RUNTIME DESTINATION bin)

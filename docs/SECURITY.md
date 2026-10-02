@@ -1,11 +1,13 @@
 # Security hardening
 
+To report a vulnerability, see the [security policy](../SECURITY.md).
+
 The HTTP API retains successful Jev/Laya response shapes; `/health` is intentionally
 reduced to `status` and `version`. Limits and flags are documented in README → API.
 
 | Finding | Fix | Regression coverage |
 |---|---|---|
-| 1 — key sources fail open | Validate each configured source before model loading; abort on unreadable/missing/empty/comment-only/invalid sources. Explicit auth-off log only with no source. Mandatory systemd env file and nonempty key. | C++ file/env tests (including unreadable file); HTTP startup subprocesses with invalid sources, multiple sources, and auth-off startup/log check. |
+| 1 — authentication fails open or uses weak keys | Validate each configured key source before model loading; require every key to be 32–4096 printable ASCII characters without whitespace; abort on unreadable/missing/empty/comment-only/weak/invalid sources. Refuse non-loopback listeners without keys before model loading unless `--allow-unauthenticated` explicitly opts in and logs `auth_off_on_network`. Mandatory systemd env file and valid key. | C++ 31/32-character boundary, multi-key file, secret-free error, file/env, and loopback-predicate tests; HTTP startup subprocesses cover weak and invalid sources before model loading, fail-closed `0.0.0.0`, explicit opt-in, authenticated non-loopback, IPv4 loopback, and IPv6 loopback when supported. |
 | 2 — deep JSON | SAX preflight caps depth and nodes before constructing/copying/serializing the ordered DOM. | 30,000 nested arrays; exact depth boundary; node-count boundary; live HTTP 413 and server survival. |
 | 3 — connection exhaustion | Fixed HTTP worker count, bounded pending socket queue, early auth/admission, absolute header/body deadlines, immediate close on rejected bodies. | Socket-free real HTTP processing verifies 401/413 without reads or draining; deterministic full-queue rejection; live admission saturation and drip-fed headers/bodies with health checks. |
 | 4 — batch amplification | Bound fields, aggregate evaluations/tokens, conservative attention and response estimates; final response cap; cooperative inference/queue deadlines; deployment ceilings. Existing graph packing is preserved. | C++ field/work/token/attention/response limits, ensemble/calibration/consensus multipliers; live oversized batch rejection; CPU model deadline, bit-identical finite-deadline output, cancellation and executor recovery. |
@@ -74,7 +76,7 @@ counts). Release configure/build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Re
   executor recovered after cancellation with identical logits and action probabilities.
 - `git diff --check` and Python syntax compilation passed.
 
-Findings come from an independent review of 0.2.1 (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
+Findings come from a review of 0.2.1 by a separate AI coding agent (Codex), not a third-party audit (12 issues: 5 high, 4 medium, 3 low); every fix has a regression test in `tests/test_security.cpp` or `tests/security/test_http.py`, both part of `ctest`.
 
 ## Supply chain
 
@@ -92,3 +94,5 @@ Statim hardens its continuous integration and release pipeline against supply-ch
   ```bash
   sha256sum --check --ignore-missing SHA256SUMS
   ```
+- **Vendored CVE scanning and triage.** CI runs `tools/security/vendored_cves.py` daily and on every change to detect known high or critical vulnerabilities across vendored dependencies (`cpp-httplib`, `nlohmann/json`, and `ggml`) using OSV.dev and GitHub Security Advisories. For upstream advisories that cannot be matched automatically to a pinned commit (such as ggml and GGUF advisories filed against `ggml-org/llama.cpp`), each advisory concerning ggml or GGUF must have an explicit entry in `tools/security/cve-triage.json` recording a decision (`fixed-in-pinned`, `not-affected`, or `accepted-risk`), commit and file/line evidence, and a `review_by` expiry date. To triage a new advisory, locate the upstream fixing commit or PR, inspect whether that change is present in `third_party/ggml` or whether the affected subsystem (such as RPC or llama-server) is unbuilt, add the entry to `tools/security/cve-triage.json` with the evidence, and set a future `review_by` date.
+- **Binary hardening.** Release binaries (`statim` and `statim-quantize` on Linux x86-64 and in the Android cross-build) are built with defense-in-depth compile and link flags enabled by default (`STATIM_HARDEN`): Position Independent Executables (`-fPIE` / `-pie` via CMake `check_pie_supported()`), stack protector (`-fstack-protector-strong`), compile-time and runtime buffer fortification (`-D_FORTIFY_SOURCE=2`, or `=3` when supported by the compiler; skipped under ASan to prevent interceptor conflicts), full RELRO (`-Wl,-z,relro,-z,now`), and a non-executable stack (`-Wl,-z,noexecstack`). The standard-library checker `tools/release/check_hardening.py` inspects every release binary and archive using `readelf` or `llvm-readelf` in CI and release workflows, verifying `Type: DYN`, `GNU_RELRO`, `BIND_NOW` or `FLAGS_1 NOW`, `GNU_STACK` (without executable `E` flag), `__stack_chk_fail`, and fortified imported symbols.

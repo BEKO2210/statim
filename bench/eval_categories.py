@@ -74,6 +74,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "bench"))
+from prediction_items import write_prediction_rows  # noqa: E402
 
 CACHE = ROOT / "data" / "category-suites.jsonl.gz"
 POOL_ROWS = 3000        # rows read per source split, spread evenly over the split
@@ -934,14 +935,10 @@ def main(argv=None):
             probs = run_items(a.url, items, model=a.model, api_key=os.environ.get("STATIM_API_KEY"),
                               head_max_len=a.head_max_len, adapter=a.adapter)
             if predictions:
-                for i, (item, p) in enumerate(zip(items, probs)):
-                    # "item" identifies the text and question, so paired comparisons can refuse
-                    # two runs whose samples differ (a missing source, another --exclude-mixture)
-                    identity = json.dumps([item["state"], item["q"]], sort_keys=True, ensure_ascii=False)
-                    predictions.write(json.dumps({"suite": suite, "lang": lang, "i": i,
-                                                  "item": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16],
-                                                  "gold": gold_index(item),
-                                                  "pred": max(range(len(p)), key=p.__getitem__)}) + "\n")
+                write_prediction_rows(predictions, suite, lang,
+                                      [item["state"][:STATE_CHARS] for item in items],
+                                      [{"q": item["q"]} for item in items],
+                                      [gold_index(item) for item in items], probs)
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
             row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra,
                    "n": len(items), "seed": a.seed, "skip": a.skip,

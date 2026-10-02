@@ -11,6 +11,7 @@ RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_CXX_FLAGS="-march=x86-64-v3" -DCMAKE_C_FLAGS="-march=x86-64-v3" \
       -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
     && cmake --build build --target statim statim-quantize \
+    && g++ -O2 -s -static tools/docker/healthcheck.cpp -o build/statim-healthcheck \
     && strip build/statim build/statim-quantize
 
 FROM ubuntu:24.04
@@ -19,10 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && groupadd --gid 65532 statim \
     && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin statim \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=build /src/build/statim /src/build/statim-quantize /usr/local/bin/
+COPY --from=build /src/build/statim /src/build/statim-quantize /src/build/statim-healthcheck /usr/local/bin/
 ENV XDG_CACHE_HOME=/tmp/statim-cache
 EXPOSE 8080
 USER 65532:65532
-# Mount a converted model at /models/model.gguf and pass the host GPU device at runtime.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["/usr/local/bin/statim-healthcheck"]
+# Mount a model, provide STATIM_API_KEY or --api-key-file, and pass the GPU device at runtime.
 ENTRYPOINT ["/usr/local/bin/statim"]
 CMD ["serve", "--device", "vulkan", "-m", "/models/model.gguf", "--host", "0.0.0.0", "--port", "8080"]

@@ -20,6 +20,55 @@ ctest --test-dir build                        # parity gates against the officia
 Quantized variants: `build/statim-quantize models/laya-multilingual-f32.gguf out.gguf q8_0`. See
 [quantization results](RESULTS.md#consensus-calibration-and-quantization) before choosing 4-bit weights.
 
+### Older x86 CPUs
+
+The release binaries are built for x86-64-v3: AVX2, FMA, F16C and BMI2, which means Intel Haswell,
+AMD Excavator or newer. On an older CPU, `statim` and `statim-quantize` stop before any inference,
+name the missing features and exit with status 1. Build from source on that machine with
+`-DSTATIM_NATIVE=ON` instead.
+
+### Android arm64
+
+Statim builds for Android with the NDK (r27 or newer). CI cross-compiles every target on each
+push; there is no release binary.
+
+```bash
+cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DSTATIM_NATIVE=OFF \
+  -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DGGML_OPENMP=OFF
+cmake --build build-android
+adb push build-android/statim models/laya-multilingual-f32.gguf /data/local/tmp/   # no root needed
+```
+
+Tested on a Galaxy A15 5G (MediaTek Dimensity 6100+: 2 Cortex-A76 and 6 Cortex-A55, 4 GB, Android
+16) on 2026-10-01:
+
+- **Correctness.** The native test suite passes: security, model validation, GGUF preflight,
+  tokenizer, and multilingual and English parity. Both parity tests agree on all 240 argmaxes, with
+  a max |Δlogit| of 3.2e-4 (multilingual) and 2.0e-4 (English), within the 1e-3 tolerance.
+  `statim-quantize` runs on the phone too.
+- **Speed (indicative only; a phone's clock and scheduler move these by up to 2×).** The
+  multilingual model takes about 1.0–1.2 s per golden item in q8_0 and 2.1–3.9 s in f32. On this
+  CPU, q8_0 is the faster format: the dot-product instructions do the int8 work, and the custom f32
+  kernel is x86-only.
+- **Galaxy Tab S9 Ultra** (Snapdragon 8 Gen 2: 1 Cortex-X3, 2 A715, 2 A710, 3 A510, 12 GB, Android 16),
+  on 2026-10-02 at commit `34c635c`. The same suite passes: 13 of 13, with both parity tests at 240/240 argmax.
+  This CPU has int8 matrix-multiply instructions (`i8mm`). Building with
+  `-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+i8mm+fp16` makes q8_0 the clear winner. With 5 threads on the
+  big cores, measured per golden item (10 items, indicative):
+
+  | Build | f32 | q8_0 |
+  |---|---:|---:|
+  | `armv8.2-a+dotprod+fp16` | 0.67 s | 0.69 s |
+  | `armv8.2-a+dotprod+i8mm+fp16` | 0.67–1.5 s | **0.28 s** |
+
+  An `i8mm` build stops with `SIGILL` on CPUs without the instruction, such as the A15, so it needs a
+  matching device. From `adb shell`, Android does not let a process use the prime core (cpu7). An app with
+  its own process may get it and be faster still.
+- **Replays.** The fuzz replay binaries need `STATIM_FUZZ_DATA` set to the copied `fuzz/data`
+  directory, because their build-time path does not exist on the phone.
+
 ### GPU backends
 
 GPU support is optional. Vulkan requires Vulkan headers, `glslc`, SPIR-V headers, and a runtime

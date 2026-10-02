@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ggml.h"
+#include "statim/cpu_check.h"
 #include "statim/engine.h"
 #include "statim/server.h"
 
@@ -29,7 +30,7 @@ void usage() {
                  "                 [--device cpu|gpu|vulkan|Vulkan0] [--gpu-fast] [--threads N] [--workers W] [--max-concurrent 16] [--ensemble K]\n"
                  "                 [--batch-window-ms 0] [--max-batch 16]\n"
                  "                 [--min-confidence P]\n"
-                 "                 [--api-key-file FILE] [--no-access-log] [--no-playground]\n"
+                 "                 [--api-key-file FILE] [--allow-unauthenticated] [--no-access-log] [--no-playground]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
                  "                 [--max-json-depth 64] [--max-json-nodes 100000] [--max-object-members 1024]\n"
                  "                 [--max-request-work 4096] [--max-request-tokens 1048576]\n"
@@ -83,6 +84,10 @@ int main(int argc, char** argv) {
     if (cmd == "version" || cmd == "--version") {
         std::printf("statim %s\n", STATIM_VERSION);
         return 0;
+    }
+    if (const std::string missing = statim::missing_cpu_features(); !missing.empty()) {
+        std::fprintf(stderr, "statim: %s\n", statim::cpu_requirement_message(missing).c_str());
+        return 1;
     }
     try {
         statim::ServerConfig cfg;
@@ -162,6 +167,7 @@ int main(int argc, char** argv) {
             else if (a == "--inference-timeout") cfg.inference_timeout = limit();
             else if (a == "--no-access-log") cfg.access_log = false;
             else if (a == "--no-playground") cfg.playground = false;
+            else if (a == "--allow-unauthenticated") cfg.allow_unauthenticated = true;
             else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
             else if (a == "--consensus") cfg.consensus = true;
             else if (a == "--api-key-file") {
@@ -270,6 +276,9 @@ int main(int argc, char** argv) {
             return 0;
         }
         usage();
+        return 2;
+    } catch (const statim::ApiKeyConfigError& e) {
+        std::fprintf(stderr, "error: %s\n", e.what());
         return 2;
     } catch (const statim::QuestionError& e) {
         std::fprintf(stderr, "error: %s\n", e.what());

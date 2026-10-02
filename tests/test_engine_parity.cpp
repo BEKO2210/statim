@@ -93,6 +93,6 @@ int main(int argc, char** argv) {
     std::printf("token ids identical: %d/%d | choice identical: %d/%d | answer fields over tol: %d | worst |diff| %.2e\n",
                 id_ok, id_total, choice_ok, choice_total, mismatches, worst);
     bool ok = id_ok == id_total && choice_ok == choice_total && mismatches == 0;
-    std::printf("%s (tol %.0e)\n", ok ? "PASS" : "FAIL", tol);
+    std::printf("%s (tol %.1e)\n", ok ? "PASS" : "FAIL", tol);
     return ok ? 0 : 1;
 }

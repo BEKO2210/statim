@@ -17,8 +17,9 @@ x-server-configuration:
     env: STATIM_API_KEY=key1,key2
     flag: --api-key-file FILE (repeatable; one key per line)
     behavior: Each explicitly configured source must independently yield a valid key or startup aborts.
-      Keys are trimmed 1-4096 byte printable ASCII strings without whitespace. With no source configured,
-      authentication is off and the listening log records auth=false and auth_status=off.
+      Keys are trimmed 32-4096 byte printable ASCII strings without whitespace. With no source configured,
+      only loopback listeners start unless --allow-unauthenticated is passed; that explicit opt-in logs
+      auth_off_on_network and records auth=false and auth_status=off.
   environment:
     STATIM_DEVICE: Default compute device.
     STATIM_GPU_FAST: Set to 1 for --gpu-fast.
@@ -53,6 +54,7 @@ x-server-configuration:
   - --consensus
   - --no-access-log
   - --no-playground
+  - --allow-unauthenticated
   - --adapter [model:]name=adapter.gguf (repeatable; see docs/API.md, LoRA adapters)
   - --adapter-mode merge|runtime
 x-request-limits:
@@ -297,6 +299,7 @@ components:
           - choice
           - score
           - noul
+          - yes_no
         instructions:
           description: Text the model answers. A non-string is serialized as JSON.
           x-max-rendered-bytes: 16384
@@ -305,7 +308,7 @@ components:
             descriptions. Noul: optional object keyed true and false.'
         labels:
           type: object
-          description: Noul only. Maps false and true to distinct non-empty strings.
+          description: Noul and its yes_no request alias only. Maps false and true to distinct non-empty strings.
           properties:
             'true':
               type: string
@@ -2500,7 +2503,7 @@ paths:
                   x-live: false
                 badType:
                   value:
-                    detail: unknown question type; use choice, score or noul
+                    detail: unknown question type; use choice, score, noul or yes_no
                 noInstructions:
                   value:
                     detail: question requires instructions

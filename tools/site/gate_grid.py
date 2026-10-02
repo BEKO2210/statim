@@ -3,14 +3,12 @@
 
     python3 tools/site/gate_grid.py models/laya-multilingual models/laya-multilingual-big1 site/index.html
 
-Reads both models' eval.json (written by tools/finetune/gate.py eval), classifies every held-out
-suite with the gate's rule (a gain is more than two combined binomial standard errors; a regression
-must stay significant after Holm-Bonferroni over all suites, a nominal drop counts as noise) and
+Reads both verified gate evaluations, classifies every held-out suite with paired exact McNemar
+tests and separate Holm-Bonferroni correction for gains and regressions, and
 replaces the block between <!-- gate-grid:start --> and <!-- gate-grid:end --> in the page.
 """
 import html
 import json
-import math
 import os
 import re
 import sys
@@ -39,28 +37,25 @@ def label(k):
     return NAMES.get(suite, suite), lang
 
 
-def main(champ, chall, page):
-    a = json.load(open(os.path.join(champ, "eval.json")))["heldout"]
-    b = json.load(open(os.path.join(chall, "eval.json")))["heldout"]
+def gate_summary(champ, chall):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "finetune"))
-    from gate import holm_regressions  # the gate's own rule
-    keys = [k for k in sorted(set(a) & set(b), key=lambda k: (not k.startswith("test/"), k))
-            if not (k.startswith("categories:") and a[k].get("pool") != b[k].get("pool"))]
-    tests = []
-    for k in keys:
-        x, y = a[k], b[k]
-        se = math.sqrt(x["acc"] * (1 - x["acc"]) / x["n"] + y["acc"] * (1 - y["acc"]) / y["n"])
-        tests.append((k, x["acc"], y["acc"], y["acc"] - x["acc"], se))
-    losses = {t[0] for t in holm_regressions(tests)}
+    from gate import summary  # noqa: PLC0415
+    return summary(champ, chall)
+
+
+def main(champ, chall, page):
+    summary = gate_summary(champ, chall)
+    a, b = summary["champion"]["heldout"], summary["challenger"]["heldout"]
+    tests = sorted(summary["cells"].values(),
+                   key=lambda t: (not t["name"].startswith("test/"), t["name"]))
     cells = {"trained": [], "categories": [], "held": []}
-    counts = {"gain": 0, "noise": 0, "loss": 0}
-    for k, xa, ya, d, se in tests:
+    counts = summary["counts"]
+    for test in tests:
+        k, d, kind = test["name"], test["d"], test["verdict"]
         x, y = a[k], b[k]
-        kind = "gain" if d > 2 * se else "loss" if k in losses else "noise"
-        counts[kind] += 1
         name, lang = label(k)
-        note = " (nominal drop, not significant after Holm-Bonferroni)" if kind == "noise" and d < -2 * se else ""
-        text = f"{name}{' ' + lang if lang else ''}: {x['acc']:.3f} to {y['acc']:.3f}{note}"
+        verdict = {"gain": "significant gain", "loss": "significant regression", "noise": "within noise"}[kind]
+        text = f"{name}{' ' + lang if lang else ''}: {x['acc']:.3f} to {y['acc']:.3f}, {verdict}"
         group = "categories" if k.startswith("categories:") else "trained" if TRAINED(k) else "held"
         cells[group].append(
             f'<li class="cell {kind}" title="{html.escape(text)}"><span class="sr">{html.escape(text)}</span>'

@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <array>
@@ -15,6 +16,7 @@
 #include "ggml.h"
 #include "gguf.h"
 #include "statim/gguf_preflight.h"
+#include "statim/mapped_file.h"
 #include "statim/model.h"
 
 namespace fs = std::filesystem;
@@ -187,6 +189,49 @@ int main(int argc, char** argv) try {
     b = header(0, 0, 2);
     const std::string v2 = write_temp(b); expect_passes("valid empty GGUF v2", v2); std::remove(v2.c_str());
     const std::string written = writer_file(); expect_passes("ggml writer output", written); std::remove(written.c_str());
+
+    // Open once (READINESS #45): the preflight, ggml and the tensors read one mapping of one open
+    // file, so a file renamed over the path after the open cannot slip past the preflight.
+    {
+        auto expect_map_rejected = [&](const char* what, const std::string& path, const char* needle) {
+            try {
+                statim::MappedFile m(path);
+                ++failures;
+                std::printf("FAIL %-44s mapped\n", what);
+            } catch (const std::runtime_error& e) {
+                const bool ok = std::strstr(e.what(), needle) != nullptr;
+                failures += !ok;
+                std::printf("%s %-44s %s\n", ok ? "ok  " : "FAIL", what, e.what());
+            }
+        };
+        const fs::path dir = fs::temp_directory_path() / ("statim-mapped-" + std::to_string(getpid()));
+        fs::create_directories(dir);
+        expect_map_rejected("a directory is not a model file", dir.string(), "not a regular file");
+        const std::string fifo = (dir / "fifo").string();
+        if (mkfifo(fifo.c_str(), 0600) == 0)  // must not block: no writer ever opens it
+            expect_map_rejected("a FIFO is refused without blocking", fifo, "not a regular file");
+        const std::string empty = (dir / "empty.gguf").string();
+        std::ofstream(empty).close();
+        expect_map_rejected("an empty file", empty, "is empty");
+
+        const std::string original = writer_file();
+        statim::MappedFile mapped(original);
+        const std::vector<char> before(static_cast<const char*>(mapped.data()),
+                                       static_cast<const char*>(mapped.data()) + mapped.size());
+        std::vector<uint8_t> other = header(0, 0);  // a different, smaller valid file
+        const std::string swap = write_temp(other);
+        fs::rename(swap, original);  // the path now names another file
+        const bool same = mapped.size() == before.size() &&
+                          std::memcmp(mapped.data(), before.data(), before.size()) == 0;
+        bool checked = true;
+        try { statim::gguf_preflight(mapped.data(), mapped.size()); } catch (const std::exception&) { checked = false; }
+        const bool ok = same && checked && fs::file_size(original) != mapped.size();
+        failures += !ok;
+        std::printf("%s %-44s mapping unchanged after the path was swapped\n", ok ? "ok  " : "FAIL",
+                    "rename over a mapped model");
+        std::remove(original.c_str());
+        fs::remove_all(dir);
+    }
 
     const fs::path regressions = source / "fuzz/regressions/gguf";
     for (const fs::directory_entry& entry : fs::directory_iterator(regressions)) {
