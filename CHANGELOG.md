@@ -41,6 +41,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
+  401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
+  server's real log events, messages and metrics.
 - docs/THREAT_MODEL.md: assets, actors, trust boundaries, the control and proving test for each
   threat, and the residual risks left to the operator. Linked from `SECURITY.md`.
 - docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
