@@ -155,6 +155,9 @@ const HParams& Model::hparams() const { return impl_->hp; }
 const Tokenizer& Model::tokenizer() const { return *impl_->tok; }
 size_t Model::weight_bytes() const { return impl_->weight_bytes; }
 const std::string& Model::device() const { return impl_->device_desc; }
+const char* Model::gemm_path() const {
+    return impl_->on_cpu() && impl_->hp.weight_type == "f32" && packed_sgemm_enabled() ? "packed_sgemm" : "ggml";
+}
 const AdapterInfo* Model::adapter() const { return impl_->adapter.get(); }
 const std::string& Model::fingerprint() const { return impl_->fingerprint; }
 const std::string& Model::checkpoint_sha256() const { return impl_->checkpoint_sha256; }
@@ -877,11 +880,6 @@ ggml_tensor* layer_norm(ggml_context* c, ggml_tensor* x, ggml_tensor* w, ggml_te
     return b ? named(ggml_add(c, x, b), name + ".bias") : x;
 }
 
-bool sgemm_enabled() {
-    const char* value = std::getenv("STATIM_SGEMM");
-    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
-}
-
 // W*x for activations [d,L,B,...].  Flattening exposes all L*B rows to one GEMM.
 // Name the actual compute node (not a trailing reshape), so STATIM_PROFILE keeps
 // projection time in its projection category.
@@ -891,7 +889,7 @@ ggml_tensor* project(ggml_context* c, ggml_tensor* w, ggml_tensor* x,
     ggml_tensor* x2 = flat ? ggml_reshape_2d(c, x, x->ne[0], x->ne[1] * x->ne[2] * x->ne[3]) : x;
     // x need not be flattened: a single sequence [d, L, 1, 1] is already one [d, L] matrix
     const bool use_custom = sync && ggml_n_dims(w) <= 2 && w->type == GGML_TYPE_F32 && x->type == GGML_TYPE_F32 &&
-                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && sgemm_enabled();
+                            ggml_is_contiguous(w) && ggml_is_contiguous(x) && packed_sgemm_enabled();
     ggml_tensor* y;
     if (use_custom) {
         sync->workspace_floats = packed_sgemm_workspace_floats(w->ne[1], ggml_nrows(x2), w->ne[0]);

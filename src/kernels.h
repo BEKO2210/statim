@@ -4,6 +4,8 @@
 #include <atomic>
 #include <cstdint>
 #include <chrono>
+#include <string>
+#include <vector>
 
 struct ggml_tensor;
 
@@ -23,6 +25,8 @@ void geglu_rows(float* dst, const float* src, long rows, long ff, long row_begin
 // [M, N], [K, N], and [K, M], so dimension zero is the contiguous dimension.
 // Each caller handles one of nth disjoint groups of 16-column output tiles.
 bool packed_sgemm_available();
+bool packed_sgemm_enabled();
+std::vector<std::string> matrix_cpu_features();
 size_t packed_sgemm_workspace_floats(int64_t M, int64_t N, int64_t K);
 void packed_sgemm_pack(float* workspace, const float* x, const float* w,
                        int64_t M, int64_t N, int64_t K, int ith, int nth);

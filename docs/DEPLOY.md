@@ -16,15 +16,16 @@ sudo install -Dm0755 statim /usr/local/bin/statim
 sudo install -Dm0644 model.gguf /var/lib/statim/multilingual.gguf
 sudo install -Dm0644 deploy/statim.service /etc/systemd/system/statim.service
 sudo install -d -m0750 /etc/statim
-printf 'STATIM_API_KEY=%s\n' 'replace-with-a-long-random-key' | sudo tee /etc/statim/env >/dev/null
+printf 'STATIM_API_KEY=%s\n' "$(openssl rand -hex 32)" | sudo tee /etc/statim/env >/dev/null
 sudo chmod 0600 /etc/statim/env
 sudo systemctl daemon-reload
 sudo systemctl enable --now statim
 ```
 
 The unit binds to `127.0.0.1:8080`, runs as a dynamic unprivileged user, and requires a nonempty
-`STATIM_API_KEY`. A comma-separated value supports key rotation. An explicitly configured empty or
-invalid environment value makes startup fail closed.
+`STATIM_API_KEY`. A comma-separated value supports key rotation. Every key must be 32–4096 printable
+ASCII characters without whitespace; `openssl rand -hex 32` generates a suitable key. An explicitly
+configured empty, weak, or invalid environment value makes startup fail closed before model loading.
 
 The shipped unit starts two workers and enforces `MemoryHigh=6G`, `MemoryMax=8G`, `CPUQuota=400%`,
 `TasksMax=256`, and `LimitNOFILE=4096`. Tune the workers and ceilings together after measuring the
@@ -86,6 +87,11 @@ The CPU and Vulkan images deliberately keep `--host 0.0.0.0`. With neither a val
 configuration error and exits with status 2 before loading the model. Both images run as an
 unprivileged user (distroless `nonroot` in the CPU image and UID/GID 65532 in the Vulkan image), so
 the mounted key must be readable by that user.
+
+At startup, each `model_loaded` JSON record includes `gemm` (`packed_sgemm` for eligible f32 CPU
+projections, otherwise `ggml`) and `cpu_features` (the detected `avx2`, `fma`, `f16c`, and `avx512f`
+features on x86, or an empty array on other architectures). `STATIM_SGEMM=0`, quantized weights, and
+GPU devices therefore report `"gemm":"ggml"`.
 
 ## Docker GPU (Vulkan)
 
