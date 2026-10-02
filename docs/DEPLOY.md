@@ -169,45 +169,30 @@ HTTP 200 (or 1 on connection refusal, timeout, or non-200 responses).
 
 ## TLS reverse proxy
 
-Keep Statim bound to loopback or a private container network. In the NGINX `http` context, define
-connection and request-rate zones:
+Keep Statim bound to loopback or a private container network. The configuration CI tests is
+[deploy/nginx/statim.conf](../deploy/nginx/statim.conf). The `http`-context zones and the
+`statim_noauth` access-log format live in
+[deploy/nginx/statim-zones.conf](../deploy/nginx/statim-zones.conf). Include that file first
+(`limit_req_zone` and `log_format` are valid only in `http`):
 
 ```nginx
 limit_req_zone $binary_remote_addr zone=statim_rate:10m rate=10r/s;
 limit_conn_zone $binary_remote_addr zone=statim_conn:10m;
 ```
 
-Then use a TLS server block such as:
+[deploy/nginx/test_nginx.sh](../deploy/nginx/test_nginx.sh) runs `nginx -t` and then checks a
+live server through the proxy. The config needs nginx 1.25.1 or newer (`http2 on;`). Port 80
+redirects to 443. TLS is 1.2 and 1.3 with the Mozilla intermediate cipher list. Certificate
+paths in the file are placeholders.
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name statim.example.com;
-    ssl_certificate /etc/letsencrypt/live/statim.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/statim.example.com/privkey.pem;
-
-    client_max_body_size 2m;
-    limit_req zone=statim_rate burst=20 nodelay;
-    limit_conn statim_conn 20;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Request-ID $request_id;
-        proxy_connect_timeout 5s;
-        proxy_read_timeout 125s;
-        proxy_send_timeout 35s;
-    }
-}
-```
-
-Add a separate port-80 redirect and manage certificates with the mechanism appropriate to the
-site. The proxy passes `Authorization` by default; never log bearer values. Align proxy timeouts
-with Statim's 30-second request and 120-second inference deadlines, and apply network-level rate
-limits because application admission control is not a complete denial-of-service boundary.
+`client_max_body_size` is `2m`, the same 2 MiB as `max_body_bytes` in
+`include/statim/security.h`. `proxy_send_timeout` is 35s, just past the 30-second request-read
+deadline, and `proxy_read_timeout` is 125s, just past the 120-second inference deadline. The
+proxy forwards `Authorization` and does not log it. `/metrics` is allowed only from 127.0.0.1;
+name a Prometheus host above `deny all` to scrape from another machine. `/health` and `/ready`
+stay reachable. The proxy sends no Content-Security-Policy: `src/playground.html` uses an inline
+script and style, and the server sends its own policy once READINESS P1 #14 lands. Network-level
+rate limits stay here because application admission is not a complete denial-of-service boundary.
 
 ## Probes and metrics
 

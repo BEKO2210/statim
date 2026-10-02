@@ -186,3 +186,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/security/vendored_cves.py
+  nginx:
+    # Host binary, not the image. Measured 2026-10-02 on this 16-core machine:
+    # cmake --target statim 24.4 s; test_nginx.sh 2.3 s (q8, page cache warm).
+    # docker build -f Dockerfile was 30.5 s with the apt layer already cached
+    # (the compile step was 27.6 s and also builds quantize and the healthcheck).
+    # This workflow does not cache that image, so the job builds statim on the
+    # runner and the script runs it on the host network. 20 min covers a 4-vCPU
+    # runner and a cold fetch of the checkpoints (~1.4 GB of safetensors).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
+      - name: Cache models
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: models
+          key: laya-models-v2
+      - name: Fetch + convert Laya checkpoints
+        run: tools/fetch_models.sh multilingual english
+      - name: Build statim
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIM_NATIVE=OFF -DSTATIM_BUILD_TESTS=OFF
+          cmake --build build --target statim
+      - name: NGINX configuration
+        run: deploy/nginx/test_nginx.sh

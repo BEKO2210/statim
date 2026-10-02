@@ -41,6 +41,7 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- `deploy/nginx/`: NGINX reverse proxy (TLS 1.2 and 1.3, HSTS, nosniff, referrer policy, `X-Frame-Options`, 2 MiB body limit, the existing rate and connection zones, `/metrics` denied except from 127.0.0.1, access log without `Authorization`). `deploy/nginx/test_nginx.sh` runs `nginx -t` and a live server through the proxy. CI job `nginx` (READINESS P1 #15).
 - docs/THREAT_MODEL.md: assets, actors, trust boundaries, the control and proving test for each
   threat, and the residual risks left to the operator. Linked from `SECURITY.md`.
 - docs/COMPATIBILITY.md: what the engine version promises (HTTP API v1, CLI, the
