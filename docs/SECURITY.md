@@ -90,6 +90,7 @@ Statim hardens its continuous integration and release pipeline against supply-ch
   ```bash
   gh attestation verify statim-0.9.2-linux-x86_64-cpu.tar.gz --owner BEKO2210
   ```
+- **Secret scanning.** GitHub push protection rejects pushes that contain known credential formats. CI job `secrets` also runs gitleaks 8.30.1 (pinned, SHA-256-checked) over the commits each push or pull request adds, and over the whole history daily. `.gitleaks.toml` adds only a narrow allowlist: test keys of the form `<name>-test-key-<hex>` and the description hashes in `docs/api-v1.contract.json`.
 - **Checksums.** Each release attaches `SHA256SUMS` covering all released archives:
   ```bash
   sha256sum --check --ignore-missing SHA256SUMS

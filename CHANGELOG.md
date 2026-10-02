@@ -102,6 +102,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - Prometheus alert rules and promtool unit tests cover availability, readiness, busy rejection
   share, server errors, p95 latency and worker saturation. `/metrics` now exports the configured
   concurrency and per-checkpoint worker limits used by those rules (READINESS P1 #29).
+- CI `secrets` job: gitleaks over the commits each push or pull request adds, and daily over all
+  history, with a narrow allowlist in `.gitleaks.toml` (READINESS P1 #18).
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter
