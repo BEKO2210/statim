@@ -41,6 +41,7 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- `deploy/nginx/`: NGINX reverse proxy (TLS 1.2 and 1.3, HSTS, nosniff, referrer policy, `X-Frame-Options`, 2 MiB body limit, the existing rate and connection zones, `/metrics` denied except from 127.0.0.1, access log without `Authorization`). `deploy/nginx/test_nginx.sh` runs `nginx -t` and a live server through the proxy. CI job `nginx` (READINESS P1 #15).
 - The playground (also the Hugging Face Space) has a **Simple** mode for first-time and non-technical
   users: examples presented as use cases, a question builder in plain words (kinds of answer as tiles,
   answers as chips, no question names or JSON), and a plain-language summary of what Statim decided,
