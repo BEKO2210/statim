@@ -76,9 +76,10 @@ client ──TLS──▶ reverse proxy ──HTTP (loopback/private)──▶ s
   (READINESS #12). Rotate keys by restarting with the new key source.
 - **Minimum key length.** Short keys are not rejected yet (READINESS #13). Use at least 32 random
   characters, for example `openssl rand -hex 32`.
-- **The playground.** It keeps the bearer token in the browser's `localStorage`, and the server does
-  not yet send CSP or `frame-ancestors` headers (READINESS #14). Run it with `--no-playground` on
-  servers that untrusted browsers can reach.
+- **The playground.** It is public by design and sends a strict Content-Security-Policy (only its own
+  hash-pinned script, no framing); it keeps an API key only in the tab's `sessionStorage`. A key typed
+  into it is still readable by anything that runs in that tab. Run with `--no-playground` where
+  untrusted users reach the server.
 - **Request data in memory.** Request texts stay in process memory and in the bounded calibration
   cache. A core dump would contain them. Disable core dumps on hosts that handle personal data.
 - **Untrusted model files.** The parser is hardened, fuzzed and sanitized, but a model file is still

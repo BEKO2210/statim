@@ -284,7 +284,7 @@ dialog p { margin: 0; font-size: 13px; color: var(--fg3); }
 
 <dialog id="keyDlg"><form method="dialog">
   <h2>API key</h2>
-  <p>Sent as <code>Authorization: Bearer …</code> and stored only in this browser. Needed when the server runs with <code>--api-key-file</code>.</p>
+  <p>Sent as <code>Authorization: Bearer …</code> and kept only in this browser tab until it closes. Needed when the server runs with <code>--api-key-file</code>.</p>
   <input class="field" id="keyIn" type="password" placeholder="Key" autocomplete="off" aria-label="API key">
   <div class="acts"><button class="btn" value="clear">Remove</button><button class="btn" value="cancel">Cancel</button><button class="btn pri" value="save">Save</button></div>
 </form></dialog>
@@ -298,6 +298,13 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 };
+/* The API key lives only in this tab's sessionStorage: it is gone when the tab closes and never
+   shared with other tabs. Older versions kept it in localStorage; that copy is removed. */
+const keyStore = {
+  get() { try { return sessionStorage.getItem("statim_key"); } catch { return null; } },
+  set(v) { try { v == null ? sessionStorage.removeItem("statim_key") : sessionStorage.setItem("statim_key", v); } catch {} }
+};
+store.set("statim_key", null);
 const pct = v => (v * 100).toFixed(1) + "%";
 const p3 = v => v < 0.001 ? "<0.001" : v.toFixed(3);
 
@@ -362,16 +369,16 @@ let toastT;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1700); }
 
 /* ---------- API key ---------- */
-function keyUi() { const on = !!store.get("statim_key"); $("keyBtn").classList.toggle("on", on); $("keyLbl").textContent = on ? "Key set" : "API key"; }
+function keyUi() { const on = !!keyStore.get(); $("keyBtn").classList.toggle("on", on); $("keyLbl").textContent = on ? "Key set" : "API key"; }
 keyUi();
-$("keyBtn").onclick = () => { $("keyIn").value = store.get("statim_key") || ""; $("keyDlg").showModal(); };
+$("keyBtn").onclick = () => { $("keyIn").value = keyStore.get() || ""; $("keyDlg").showModal(); };
 $("keyDlg").addEventListener("close", () => {
   const v = $("keyDlg").returnValue;
-  if (v === "save") store.set("statim_key", $("keyIn").value.trim() || null);
-  if (v === "clear") store.set("statim_key", null);
+  if (v === "save") keyStore.set($("keyIn").value.trim() || null);
+  if (v === "clear") keyStore.set(null);
   keyUi(); loadModels();
 });
-const authHeaders = () => { const k = store.get("statim_key"); return k ? {Authorization: "Bearer " + k} : {}; };
+const authHeaders = () => { const k = keyStore.get(); return k ? {Authorization: "Bearer " + k} : {}; };
 
 /* ---------- settings ---------- */
 $("setBtn").onclick = () => $("setDlg").showModal();
@@ -524,13 +531,13 @@ function buildBody() {
 const origin = () => location.origin;
 function curlFor(b) {
   const payload = JSON.stringify(b, null, 2).replace(/'/g, "'\\''");
-  return `curl -s ${origin()}/v1/systemone \\\n  -H 'Content-Type: application/json' \\\n${store.get("statim_key") ? "  -H \"Authorization: Bearer $STATIM_KEY\" \\\n" : ""}  -d '${payload}'`;
+  return `curl -s ${origin()}/v1/systemone \\\n  -H 'Content-Type: application/json' \\\n${keyStore.get() ? "  -H \"Authorization: Bearer $STATIM_KEY\" \\\n" : ""}  -d '${payload}'`;
 }
 function pyFor(b) {
   const opts = ["model", "lang", "ensemble", "calibrate", "min_confidence"].filter(k => b[k] !== undefined)
     .map(k => `    ${k}=${JSON.stringify(b[k]).replace(/^true$/, "True")},`).join("\n");
   const py = v => JSON.stringify(v, null, 4).replace(/\n/g, "\n    ");
-  return `# pip install ./clients/python   (github.com/BEKO2210/statim)\nfrom statim import Client\n\nclient = Client("${origin()}"${store.get("statim_key") ? ", api_key=os.environ[\"STATIM_KEY\"]" : ""})\ndecision = client.decide(\n    ${py(b.state)},\n    ${py(b.questions)},\n${opts ? opts + "\n" : ""})\nfor name, answer in decision.answers.items():\n    print(name, answer)`;
+  return `# pip install ./clients/python   (github.com/BEKO2210/statim)\nfrom statim import Client\n\nclient = Client("${origin()}"${keyStore.get() ? ", api_key=os.environ[\"STATIM_KEY\"]" : ""})\ndecision = client.decide(\n    ${py(b.state)},\n    ${py(b.questions)},\n${opts ? opts + "\n" : ""})\nfor name, answer in decision.answers.items():\n    print(name, answer)`;
 }
 function highlight(json) {
   return esc(json).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (m, s, colon, kw) => {

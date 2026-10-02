@@ -123,6 +123,9 @@ inline void configure_http_security(httplib::Server& srv, std::vector<std::strin
         if (res.body.empty()) send_error(res, res.status, res.status == 413 ? "request body exceeds limit" : "HTTP request failed");
     });
     srv.set_pre_routing_handler([keys = std::move(keys)](const httplib::Request& req, httplib::Response& res) {
+        // On every response, including errors: no MIME sniffing, no referrer to other sites.
+        res.set_header("X-Content-Type-Options", "nosniff");
+        res.set_header("Referrer-Policy", "no-referrer");
         if (reject_framing(req, res)) return httplib::Server::HandlerResponse::Handled;
         const bool public_path = req.path == "/health" || req.path == "/ready" || req.path == "/";
         if (!public_path && !bearer_authorized(req, keys)) {
