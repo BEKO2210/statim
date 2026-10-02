@@ -472,6 +472,8 @@ components:
       - max_len
       - vocab
       - device
+      - fingerprint
+      - checkpoint_sha256
       properties:
         id:
           type: string
@@ -493,6 +495,16 @@ components:
           type: integer
         device:
           type: string
+        fingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: SHA-256 fingerprint of the checkpoint vectors.
+        checkpoint_sha256:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9a-f]{64}$
+          description: Full source-checkpoint tensor hash, or null for older GGUF files without it.
         adapters:
           type: array
           description: Present only when the server was started with --adapter.
@@ -3150,6 +3162,8 @@ paths:
                       max_len: 512
                       vocab: 50368
                       device: cpu
+                      fingerprint: 0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65
+                      checkpoint_sha256: null
                     - id: multilingual
                       object: model
                       owned_by: statim
@@ -3160,6 +3174,8 @@ paths:
                       max_len: 1024
                       vocab: 256000
                       device: cpu
+                      fingerprint: 8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794
+                      checkpoint_sha256: null
         '401':
           description: Keys are configured and the bearer token does not match.
           content:
@@ -3186,8 +3202,8 @@ paths:
       responses:
         '200':
           description: Prometheus exposition, version 0.0.4. Counter values change. See docs/API.md for
-            each series. With LoRA adapters loaded, statim_engines, statim_adapter_info and
-            statim_adapter_bytes follow the lines below.
+            each series. With LoRA adapters loaded, statim_engines, statim_adapter_info,
+            statim_adapter_bytes and statim_adapter_requests_total follow the lines below.
           content:
             text/plain:
               schema:
@@ -3246,7 +3262,7 @@ paths:
 
                 # TYPE statim_model_info gauge
 
-                statim_model_info{model="english",weights="f32",version="0.9.2"} 1
+                statim_model_info{model="english",weights="f32",version="0.9.2",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
 
                 '
               x-verify: metrics

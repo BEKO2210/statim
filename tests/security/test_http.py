@@ -242,6 +242,16 @@ def main():
                 for path in ('/metrics', '/v1/models'):
                     assert request(path, auth=False)[0] == 401
                     assert request(path)[0] == 200
+                _, models_body, _ = request('/v1/models')
+                listed_model = json.loads(models_body)['data'][0]
+                fingerprint = listed_model['fingerprint']
+                checkpoint_sha256 = listed_model['checkpoint_sha256']
+                assert re.fullmatch(r'[0-9a-f]{64}', fingerprint), fingerprint
+                assert checkpoint_sha256 is None or re.fullmatch(r'[0-9a-f]{64}', checkpoint_sha256), checkpoint_sha256
+                _, metrics_body, _ = request('/metrics')
+                model_info = next(line for line in metrics_body.decode().splitlines()
+                                  if line.startswith('statim_model_info{model="multilingual",'))
+                assert 'fingerprint="%s"' % fingerprint in model_info, model_info
                 q = {'x': {'type': 'choice', 'instructions': 'Choose', 'criteria': ['yes', 'no']}}
                 req = {'state': 'hello', 'questions': q}
                 assert request('/v1/systemone', req, auth=False)[0] == 401

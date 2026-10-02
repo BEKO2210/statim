@@ -438,8 +438,13 @@ def test_models_parse_adapters_and_reject_malformed(monkeypatch: pytest.MonkeyPa
         "categories": ["emotion", "sentiment"],
         "bytes": 3456,
     }
+    fingerprint = "a" * 64
+    checkpoint_sha256 = "b" * 64
     payloads = [
-        {"object": "list", "data": [model, {**model, "id": "with-adapter", "adapters": [adapter]}]},
+        {"object": "list", "data": [model,
+         {**model, "id": "modern-null", "fingerprint": fingerprint, "checkpoint_sha256": None},
+         {**model, "id": "with-adapter", "fingerprint": fingerprint,
+          "checkpoint_sha256": checkpoint_sha256, "adapters": [adapter]}]},
         {"object": "list", "data": [{**model, "adapters": None}]},
         {"object": "list", "data": [{**model, "adapters": {"bad": True}}]},
         {"object": "list", "data": [{**model, "adapters": [{key: value for key, value in adapter.items() if key != "id"}]}]},
@@ -463,7 +468,10 @@ def test_models_parse_adapters_and_reject_malformed(monkeypatch: pytest.MonkeyPa
     client = Client("http://statim.invalid", max_retries=0)
     listed = client.models()
     assert listed.data[0].adapters == ()
-    parsed = listed.data[1].adapters[0]
+    assert listed.data[0].fingerprint is None and listed.data[0].checkpoint_sha256 is None
+    assert listed.data[1].fingerprint == fingerprint and listed.data[1].checkpoint_sha256 is None
+    assert listed.data[2].checkpoint_sha256 == checkpoint_sha256
+    parsed = listed.data[2].adapters[0]
     assert isinstance(parsed, Adapter)
     assert parsed.id == "emotion"
     assert parsed.alpha == 8.0

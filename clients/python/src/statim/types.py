@@ -172,6 +172,8 @@ class Model:
     max_len: int
     vocab: int
     device: str
+    fingerprint: str | None = None
+    checkpoint_sha256: str | None = None
     adapters: tuple[Adapter, ...] = ()
 
 
@@ -396,6 +398,12 @@ def parse_model(value: Any) -> Model:
         max_len=_integer(_field(obj, "max_len"), "max_len"),
         vocab=_integer(_field(obj, "vocab"), "vocab"),
         device=_string(_field(obj, "device"), "device"),
+        fingerprint=_string(obj["fingerprint"], "fingerprint") if "fingerprint" in obj else None,
+        checkpoint_sha256=(
+            _string(obj["checkpoint_sha256"], "checkpoint_sha256")
+            if obj.get("checkpoint_sha256") is not None
+            else None
+        ),
         adapters=tuple(parse_adapter(item) for item in adapters),
     )
 

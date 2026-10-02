@@ -815,7 +815,7 @@ Measured on 4 threads of an Intel Xeon @ 2.10 GHz, `laya-multilingual`, every pr
 
 ### Inspect
 
-`GET /v1/models` lists each model's adapters: `id`, `source` (the adapter's `general.name`), `mode`, `rank`, `alpha`, `pairs` (LoRA pairs in the file), `pairs_applied` (non-zero pairs), `categories` and `bytes` (memory added on top of the base). `/metrics` exports `statim_adapter_info{model,adapter,mode} 1` and `statim_adapter_bytes{model,adapter}` per adapter, and `statim_engines{model}` (engines alive for a model and its adapters, at most `--workers`). `statim info -m base.gguf --adapter name=file.gguf` prints the same fields; `statim info` also prints the model's `fingerprint`.
+`GET /v1/models` lists each model's adapters: `id`, `source` (the adapter's `general.name`), `mode`, `rank`, `alpha`, `pairs` (LoRA pairs in the file), `pairs_applied` (non-zero pairs), `categories` and `bytes` (memory added on top of the base). `/metrics` exports `statim_adapter_info{model,adapter,mode} 1` and `statim_adapter_bytes{model,adapter}` per adapter, `statim_adapter_requests_total{model,adapter,routing}` for both `requested` and `auto` routing (including zero-valued series), and `statim_engines{model}` (engines alive for a model and its adapters, at most `--workers`). `statim info -m base.gguf --adapter name=file.gguf` prints the same fields; `statim info` also prints the model's `fingerprint`.
 
 ### Tests
 
@@ -1574,14 +1574,24 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/ready
 200
 ```
 
-`GET /v1/models` lists checkpoints in load order. `id` is the `-m` name. `source` is the GGUF `general.name`. `max_len` is the checkpoint default. `head_max_len` is not in this object. `device` is the actual compute device used by that model. When the server was started with `--adapter`, every entry also has `adapters`, the model's LoRA adapters (possibly empty; fields in [LoRA adapters](#lora-adapters)). This endpoint requires the bearer key when authentication is configured.
+`GET /v1/models` lists checkpoints in load order. This endpoint requires the bearer key when authentication is configured.
+
+| Field | Meaning |
+|---|---|
+| `id` | The `-m` name used for routing. |
+| `object`, `owned_by` | Always `model` and `statim`. |
+| `source` | The GGUF `general.name`. |
+| `weights`, `layers`, `hidden`, `max_len`, `vocab`, `device` | Checkpoint architecture, default maximum sequence length, vocabulary size, and actual compute device. `head_max_len` is not in this object. |
+| `fingerprint` | The model's 64-lowercase-hex vector fingerprint. |
+| `checkpoint_sha256` | The 64-lowercase-hex full source-checkpoint hash, or JSON `null` for old GGUF files without `statim.checkpoint_sha256`. |
+| `adapters` | Present only when the server was started with `--adapter`; the model's adapters, possibly empty (fields in [LoRA adapters](#lora-adapters)). |
 
 ```bash
 curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/v1/models
 ```
 
 ```text
-{"object":"list","data":[{"id":"english","object":"model","owned_by":"statim","source":"laya","weights":"f32","layers":28,"hidden":1024,"max_len":512,"vocab":50368,"device":"cpu"},{"id":"multilingual","object":"model","owned_by":"statim","source":"laya-multilingual","weights":"f32","layers":22,"hidden":768,"max_len":1024,"vocab":256000,"device":"cpu"}]}
+{"object":"list","data":[{"id":"english","object":"model","owned_by":"statim","source":"laya","weights":"f32","layers":28,"hidden":1024,"max_len":512,"vocab":50368,"device":"cpu","fingerprint":"0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65","checkpoint_sha256":null},{"id":"multilingual","object":"model","owned_by":"statim","source":"laya-multilingual","weights":"f32","layers":22,"hidden":768,"max_len":1024,"vocab":256000,"device":"cpu","fingerprint":"8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794","checkpoint_sha256":null}]}
 200
 ```
 
@@ -1622,7 +1632,8 @@ playground-ok
 | `statim_in_flight` | Requests currently in the handler. |
 | `statim_uptime_seconds` | Seconds since the process started listening. |
 | `statim_workers_busy{model="<id>"}` | Workers currently running inference for that checkpoint, one line per checkpoint under one `# TYPE statim_workers_busy gauge`. |
-| `statim_model_info{model="...",weights="...",version="..."} 1` | One line per checkpoint under one `# TYPE statim_model_info gauge`. `version` is the build version. |
+| `statim_model_info{model="...",weights="...",version="...",fingerprint="...",checkpoint_sha256="..."} 1` | One line per checkpoint under one `# TYPE statim_model_info gauge`. `version` is the build version; `checkpoint_sha256` is empty for an old GGUF without that metadata. |
+| `statim_adapter_requests_total{model="...",adapter="...",routing="requested|auto"}` | With adapters loaded, successful decision requests answered through each adapter, split by explicit or automatic selection. Every loaded pair starts at zero; a batch counts once. |
 
 ```text
 # HELP statim_requests_total Inference requests by HTTP status.
@@ -1652,10 +1663,10 @@ statim_uptime_seconds N
 # TYPE statim_workers_busy gauge
 statim_workers_busy{model="english"} N
 # TYPE statim_model_info gauge
-statim_model_info{model="english",weights="f32",version="0.9.2"} 1
+statim_model_info{model="english",weights="f32",version="0.9.2",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
 ```
 
-Label values are escaped as the text format requires (backslash, double quote and newline), so any `-m` name is safe. With LoRA adapters loaded, `statim_engines`, `statim_adapter_info` and `statim_adapter_bytes` follow; see [LoRA adapters](#lora-adapters).
+Label values are escaped as the text format requires (backslash, double quote and newline), so any `-m` name is safe. With LoRA adapters loaded, `statim_engines`, `statim_adapter_info`, `statim_adapter_bytes` and `statim_adapter_requests_total` follow; see [LoRA adapters](#lora-adapters).
 
 `N` stands for a live number. The check below reads the endpoint and requires those names.
 
@@ -1703,8 +1714,8 @@ required = [
     'statim_workers_busy{model="english"}',
     'statim_workers_busy{model="multilingual"}',
     "# TYPE statim_model_info gauge",
-    'statim_model_info{model="english",weights="f32",version="0.9.2"} 1',
-    'statim_model_info{model="multilingual",weights="f32",version="0.9.2"} 1',
+    'statim_model_info{model="english",weights="f32",version="0.9.2",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1',
+    'statim_model_info{model="multilingual",weights="f32",version="0.9.2",fingerprint="8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794",checkpoint_sha256=""} 1',
 ]
 missing = [line for line in required if line not in text]
 if response.status_code != 200 or response.headers["Content-Type"] != "text/plain; version=0.0.4":

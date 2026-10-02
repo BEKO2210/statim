@@ -307,8 +307,12 @@ test("models parse adapters and reject malformed adapters", async () => {
     bytes: 3456,
   };
   const adapterWithoutId = Object.fromEntries(Object.entries(adapter).filter(([key]) => key !== "id"));
+  const fingerprint = "a".repeat(64);
+  const checkpoint_sha256 = "b".repeat(64);
   const payloads = [
-    { object: "list", data: [model, { ...model, id: "with-adapter", adapters: [adapter] }] },
+    { object: "list", data: [model,
+      { ...model, id: "modern-null", fingerprint, checkpoint_sha256: null },
+      { ...model, id: "with-adapter", fingerprint, checkpoint_sha256, adapters: [adapter] }] },
     { object: "list", data: [{ ...model, adapters: null }] },
     { object: "list", data: [{ ...model, adapters: { bad: true } }] },
     { object: "list", data: [{ ...model, adapters: [adapterWithoutId] }] },
@@ -320,7 +324,12 @@ test("models parse adapters and reject malformed adapters", async () => {
     const client = new Client("http://statim.invalid", null, 5, { max_retries: 0 });
     const listed = await client.models();
     assert.deepEqual(listed.data[0].adapters, []);
-    assert.deepEqual(listed.data[1].adapters[0], adapter);
+    assert.equal(listed.data[0].fingerprint, undefined);
+    assert.equal(listed.data[0].checkpoint_sha256, undefined);
+    assert.equal(listed.data[1].fingerprint, fingerprint);
+    assert.equal(listed.data[1].checkpoint_sha256, null);
+    assert.equal(listed.data[2].checkpoint_sha256, checkpoint_sha256);
+    assert.deepEqual(listed.data[2].adapters[0], adapter);
     await assert.rejects(() => client.models(), /adapters must be an array/);
     await assert.rejects(() => client.models(), /adapters must be an array/);
     await assert.rejects(() => client.models(), /missing id/);

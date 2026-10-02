@@ -94,6 +94,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - CI `sdk` job and `clients/run_live_tests.sh`: both SDK suites, hermetic and live, against three
   started servers (no key, bearer key, test LoRA adapter); a skipped live case fails the job
   (READINESS P1 #37). pytest is hash-pinned in `clients/python/requirements-test.txt`.
+- `/v1/models` and `statim_model_info` expose each checkpoint's fingerprint and optional full
+  checkpoint SHA-256; `statim_adapter_requests_total` counts successful adapter-backed requests by
+  explicit or automatic routing (READINESS P1 #32 and #33).
 
 ### Security
 - **Breaking:** `statim serve` now refuses every `STATIM_API_KEY` and `--api-key-file` entry shorter
