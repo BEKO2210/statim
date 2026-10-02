@@ -41,6 +41,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   i3-3227U (Ivy Bridge).
 
 ### Added
+- The playground (also the Hugging Face Space) has a **Simple** mode for first-time and non-technical
+  users: examples presented as use cases, a question builder in plain words (kinds of answer as tiles,
+  answers as chips, no question names or JSON), and a plain-language summary of what Statim decided,
+  with how sure it is. **Expert** mode keeps the full editor and the developer view. Motion follows the
+  brand's pulse line: a title sequence, a scan over the text and a live signal trace while the model
+  reads, then every answer resolves in the same frame (springs, decoding text, counting numbers).
+  All motion is off under `prefers-reduced-motion`; the page stays inside the hash-pinned CSP.
 - docs/RUNBOOK.md: start-up failures (CPU, configuration, bad GGUF, adapter mismatch), 503, 422,
   401 and 500 responses, OOM and unhealthy containers, key rotation without downtime, each with the
   server's real log events, messages and metrics.
