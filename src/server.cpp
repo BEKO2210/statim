@@ -19,6 +19,7 @@
 #include <thread>
 
 #include "statim/http_security.h"
+#include "kernels.h"
 #include "playground.inc"
 #include "statim/engine.h"
 
@@ -446,6 +447,7 @@ int run_server(const ServerConfig& cfg) {
         lm.pool = std::make_unique<EnginePool>(lm.model, workers, per_worker);
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "model_loaded"},
             {"model", name}, {"path", path}, {"weights", lm.model->hparams().weight_type}, {"device", lm.model->device()},
+            {"gemm", lm.model->gemm_path()}, {"cpu_features", matrix_cpu_features()},
             {"bytes", lm.model->weight_bytes()}, {"workers", workers}, {"threads_per_worker", per_worker},
             {"ms", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()}}.dump(-1, ' ', false, ojson::error_handler_t::replace).c_str());
         models.push_back(std::move(lm));

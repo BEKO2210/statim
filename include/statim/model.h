@@ -90,6 +90,7 @@ public:
     const Tokenizer& tokenizer() const;
     size_t weight_bytes() const;
     const std::string& device() const;  // e.g. "cpu", "Vulkan0 (NVIDIA GeForce RTX 3070)"
+    const char* gemm_path() const;       // projection matrix-product implementation
     // SHA-256 (hex) of the checkpoint's vectors (normalisation weights and biases): the same for every
     // weight type of one checkpoint, different between fine-tunes that train them (full fine-tuning
     // does). A LoRA adapter records the one it was converted for.

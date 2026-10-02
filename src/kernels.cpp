@@ -4,13 +4,17 @@
 #include "kernels.h"
 
 #include "ggml.h"
-
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 #endif
 
 namespace statim {
@@ -209,13 +213,57 @@ STATIM_AVX2_FMA void compute_avx2(float* y, const float* workspace, const float*
 
 }  // namespace
 
-bool packed_sgemm_available() {
+namespace {
+
+struct MatrixCpuFeatures {
+    bool avx2 = false, fma = false, f16c = false, avx512f = false;
+};
+
+MatrixCpuFeatures detect_matrix_cpu_features() {
+    MatrixCpuFeatures result;
 #if defined(__GNUC__) || defined(__clang__)
     __builtin_cpu_init();
-    return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
-#else
-    return true;  // x86-64-v3 release builds provide both features
+    result.avx2 = __builtin_cpu_supports("avx2");
+    result.fma = __builtin_cpu_supports("fma");
+    result.f16c = __builtin_cpu_supports("f16c");
+    result.avx512f = __builtin_cpu_supports("avx512f");
+#elif defined(_MSC_VER)
+    int regs[4];
+    __cpuid(regs, 0);
+    const int max_leaf = regs[0];
+    __cpuidex(regs, 1, 0);
+    const bool avx_state = (regs[2] & (1 << 27)) && (regs[2] & (1 << 28)) && (_xgetbv(0) & 0x6) == 0x6;
+    result.fma = avx_state && (regs[2] & (1 << 12));
+    result.f16c = avx_state && (regs[2] & (1 << 29));
+    if (max_leaf >= 7) {
+        __cpuidex(regs, 7, 0);
+        result.avx2 = avx_state && (regs[1] & (1 << 5));
+        result.avx512f = (_xgetbv(0) & 0xe6) == 0xe6 && (regs[1] & (1 << 16));
+    }
 #endif
+    return result;
+}
+
+}  // namespace
+
+bool packed_sgemm_available() {
+    const MatrixCpuFeatures features = detect_matrix_cpu_features();
+    return features.avx2 && features.fma;
+}
+
+bool packed_sgemm_enabled() {
+    const char* value = std::getenv("STATIM_SGEMM");
+    return (!value || std::strcmp(value, "0") != 0) && packed_sgemm_available();
+}
+
+std::vector<std::string> matrix_cpu_features() {
+    std::vector<std::string> features;
+    const MatrixCpuFeatures detected = detect_matrix_cpu_features();
+    if (detected.avx2) features.emplace_back("avx2");
+    if (detected.fma) features.emplace_back("fma");
+    if (detected.f16c) features.emplace_back("f16c");
+    if (detected.avx512f) features.emplace_back("avx512f");
+    return features;
 }
 
 size_t packed_sgemm_workspace_floats(int64_t, int64_t N, int64_t K) {
@@ -236,6 +284,8 @@ void packed_sgemm_compute(float* y, const float* workspace, const float* w,
 #else
 
 bool packed_sgemm_available() { return false; }
+bool packed_sgemm_enabled() { return false; }
+std::vector<std::string> matrix_cpu_features() { return {}; }
 size_t packed_sgemm_workspace_floats(int64_t, int64_t, int64_t) { return 0; }
 void packed_sgemm_pack(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
 void packed_sgemm_compute(float*, const float*, const float*, int64_t, int64_t, int64_t, int, int) {}
