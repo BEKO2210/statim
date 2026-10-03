@@ -4,24 +4,73 @@ Released Statim weights are trained only on data whose licence permits commercia
 not impose ShareAlike or copyleft terms on the model: Apache-2.0, MIT, BSD, CC0, CC-BY, ODC-By,
 AFL-3.0. Excluded: non-commercial or research-only terms, ShareAlike (CC-BY-SA), copyleft (GPL,
 AGPL, MPL, ODbL), custom or unknown terms. Datasets used only to *measure* the model are listed
-separately; the model never trains on them.
+separately; the model never trains on them. The weights listed under [Licence findings](#licence-findings-2026-10-03) do not meet
+this rule.
 
 ## Licence findings (2026-10-03)
 
-A licence re-audit compared each source's recorded licence with the licence of its upstream original.
-Where they disagree, the stricter one applies. Two findings concern the released multilingual model:
+A licence re-audit traced every source of mixtures v5 (163 sources) and v6 (111 sources) back to its
+upstream original: the original repository's LICENSE or README, the paper, the project website, or
+the terms of the model that generated the text. Where the dataset card and the upstream disagree, the
+stricter licence applies.
 
-| Source in mixture v6 | Rows | Recorded as | Upstream licence | Problem |
-|---|---:|---|---|---|
-| [ankitkupadhyay/XNLI](https://huggingface.co/datasets/ankitkupadhyay/XNLI) | 6,200 | apache-2.0 (dataset card) | [facebookresearch/XNLI LICENSE](https://github.com/facebookresearch/XNLI/blob/main/LICENSE): "Attribution-NonCommercial 4.0 International" | non-commercial |
-| [nyu-mll/multi_nli](https://huggingface.co/datasets/nyu-mll/multi_nli) | 6,200 | OANC licence | the corpus card: most of it under the OANC licence, but the FICTION section includes *Seven Swords* under "Creative Commons Share-Alike 3.0 Unported" | ShareAlike in part of one genre; the mixture did not keep the genre, so fiction rows cannot be ruled out |
-| [boun-tabi/nli_tr](https://huggingface.co/datasets/boun-tabi/nli_tr) (`multinli_tr`) | 6,200 | same terms as MultiNLI | a translation of MultiNLI, same terms | as above |
+### Sources that break the data policy
 
-**Affected weights:** statim-decide-multilingual-base **0.7.0** (trained on mixture v8 = v6 + v5) and
-the adapters published on top of it. These weights do not meet this page's own rule. No commercial
-licence is granted for them; they stay available for noncommercial use and evaluation, and they will
-be replaced by a model trained only on data that passes the upstream check. The audit of the remaining
-sources of mixtures v5 and v6 is in progress and will be added here.
+| Source | Mixture | Rows | Recorded as | Found upstream | Problem |
+|---|---|---:|---|---|---|
+| [ankitkupadhyay/XNLI](https://huggingface.co/datasets/ankitkupadhyay/XNLI) | v6 | 6,200 | apache-2.0 (dataset card) | [facebookresearch/XNLI LICENSE](https://github.com/facebookresearch/XNLI/blob/main/LICENSE): "Attribution-NonCommercial 4.0 International" | non-commercial |
+| [nyu-mll/multi_nli](https://huggingface.co/datasets/nyu-mll/multi_nli) | v6 | 6,200 | OANC licence | the corpus card: most of it under the OANC licence, but the FICTION section includes *Seven Swords* under "Creative Commons Share-Alike 3.0 Unported" | ShareAlike in part of one genre; the mixture did not keep the genre, so fiction rows cannot be ruled out |
+| [boun-tabi/nli_tr](https://huggingface.co/datasets/boun-tabi/nli_tr) (`multinli_tr`) | v6 | 6,200 | same terms as MultiNLI | [boun-tabi/NLI-TR](https://github.com/boun-tabi/NLI-TR): "licensed under the same terms as MultiNLI"; the rows keep MultiNLI's order, and about a fifth of the sampled rows are fiction | as above; the loader had no genre filter |
+| [dhruv0808/indic_sentiment_analyzer](https://huggingface.co/datasets/dhruv0808/indic_sentiment_analyzer) | v6 | 6,200 | CC-BY-4.0 (card metadata) | the card's own License section: "Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)" | non-commercial |
+| [OrSabbach/food-delivery-support-tickets](https://huggingface.co/datasets/OrSabbach/food-delivery-support-tickets) | v6 | 6,200 | MIT | the card: every free-text field was generated with Qwen2.5-3B-Instruct, whose [Qwen Research License](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/LICENSE) allows non-commercial use only, including for outputs used to train a model | generator licence is non-commercial |
+| [Fumika/Wikinews-multilingual](https://huggingface.co/datasets/Fumika/Wikinews-multilingual), Arabic and Persian rows | v6 | 52 | CC-BY-2.5 | the ar.wikinews.org and fa.wikinews.org site licence: "Creative Commons Attribution-Share Alike 4.0" (the other editions are CC BY) | ShareAlike |
+| [SDOH-NLI](https://github.com/google-research-datasets/SDOH-NLI) | v5 | 2,000 | cc-by-4.0 | the repository is CC BY 4.0, but the paper ([arXiv 2310.18431](https://arxiv.org/abs/2310.18431)) built it from medical reports scraped from mtsamples.com, which grants no licence | unknown licence of the texts |
+| [lex_glue](https://huggingface.co/datasets/coastalcph/lex_glue) `ledgar` | v5 | 1,606 | cc-by-4.0 | neither the LEDGAR paper ([LREC 2020](https://aclanthology.org/2020.lrec-1.155/)) nor the LexGLUE repository states a data licence; the card's Licensing Information says "More Information Needed" | unknown licence |
+
+### Sources that could not be verified
+
+The creator's licence is permissive in each case, but the origin of the text or the terms of the model
+that wrote it could not be confirmed:
+
+- v5: circa (the README says CC BY 4.0 but links CC BY-SA 4.0), temporal-nli (no upstream found),
+  deepset/prompt-injections (no provenance), sms_spam (its component corpora carry no licence),
+  dnd_style_intents and shell-safety-v2 (generator not named);
+- v6: Console-AI/IT-helpdesk-synthetic-tickets, Process-Venue Prompt_Routing_Hindi,
+  lyon-nlp/clustering-hal-s2s, SINAI/ALIA-es-discriminative-stance-detection, and 15 synthetic sets
+  whose generator is not named (sutro, leonvanbokhorst, tanaos ×2, RichardSakaguchiMS, shreyaspullehf,
+  declare-lab/CategoricalHarmfulQA, E3-JSI, AshenFdo, Johnson8187, takehika/wanli-ja-nli, Wismut,
+  NABA-AI, 3nesdeniz/turkish-conversation-prompt-injection, alusci).
+
+Several sources that pass the licence check contain outputs of models whose terms restrict using them
+to train other models: OpenAI (WANLI, prosocial-dialog, Salad-Data GPT-Gen, SPML, hblim, cngchis,
+sweatSmile, parts of IRIS_sts and BRIGHTER hin/mar), Gemini (agent_action_safety, Adilbai, IDinsight,
+JusteLeo) and Doubao (YiMeng).
+
+### Affected weights
+
+| Weights | Trained on | Affected by |
+|---|---|---|
+| statim-decide-en-large 0.5.0 | mixture v5 | SDOH-NLI, ledgar |
+| statim-decide-multilingual-base 0.4.0 | mixture v5 | SDOH-NLI, ledgar |
+| statim-decide-multilingual-base 0.7.0 and the pii, emotion and safety adapters built on it | mixture v8 (v6 and v5) | every row of the first table |
+
+From 2026-10-03 these weights are offered only for noncommercial use under PolyForm Noncommercial
+1.0.0. The Small Business and Free Trial licences and the commercial licence do not apply to them,
+because rights in the training data that Statim does not hold cannot be passed on. They will be
+replaced by models trained only on data that passes the rule below.
+
+### Rule for every future mixture
+
+A source enters a mixture only if all three hold:
+
+1. its upstream licence is confirmed at the source and is one of the licences named at the top of
+   this page;
+2. the origin of its text is documented, and that text carries no stricter licence;
+3. if a model generated or labelled it, the model is named and its terms allow training other
+   models on its outputs.
+
+Sources that cannot be verified are left out, and so are outputs of OpenAI and Gemini models, of
+Llama, Gemma (up to version 3) and other models under restrictive terms.
 
 ## Base models
 
