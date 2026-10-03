@@ -160,10 +160,14 @@ def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0
         values = {r.get(field) for r in scored}
         if None in values or len(values) != 1:
             raise ValueError(f"base and adapter evaluations differ or lack {field}")
-    if gate.skipped_cells(base_records) != gate.skipped_cells(adapter_records):
-        raise ValueError("base and adapter evaluations skipped different category cells")
+    base_skips, adapter_skips = gate.skipped_cells(base_records), gate.skipped_cells(adapter_records)
+    if base_skips != adapter_skips or any(not v.get("pool") for v in base_skips.values()):
+        raise ValueError("base and adapter evaluations skipped different category cells, or a skip lacks its pool")
     base, base_reported = gate.heldout_cells(base_records)
     adapter, adapter_reported = gate.heldout_cells(adapter_records)
+    for key in sorted(set(base_reported) & set(adapter_reported)):
+        if gate.pools_differ(base_reported[key], adapter_reported[key]):
+            raise ValueError(f"item-pool mismatch: {key}")
     base_items = base_items or str(base_jsonl).replace(".jsonl", "-items.jsonl")
     adapter_items = adapter_items or str(adapter_jsonl).replace(".jsonl", "-items.jsonl")
     res = gate.adapter_decision(base, adapter, _category_items(base_items), _category_items(adapter_items),

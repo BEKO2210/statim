@@ -309,3 +309,14 @@ def test_decision_refuses_different_skipped_cells(tmp_path):
                             "skipped": "too few items"}) + "\n")
     with pytest.raises(ValueError, match="skipped different"):
         lora_experiment.decide(base, adapter, log=lambda *a: None)
+
+
+def test_decision_refuses_skips_without_pool(tmp_path):
+    base = _records(tmp_path / "base.jsonl", {"en": 0.4})
+    adapter = _records(tmp_path / "adapter.jsonl", {"en": 0.8})
+    for path in (base, adapter):
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"family": "categories", "suite": "emotion", "lang": "zh",
+                                "skipped": "only 1 pooled item"}) + "\n")
+    with pytest.raises(ValueError, match="lacks its pool"):
+        lora_experiment.decide(base, adapter, log=lambda *a: None)
