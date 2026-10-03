@@ -6,6 +6,8 @@ The HTTP API retains successful Jev/Laya response shapes; `/health` is intention
 reduced to `status` and `version`. Limits and flags are documented in README → API.
 The playground denies framing unless the operator explicitly lists allowed origins with
 `--frame-ancestors`; other responses keep their existing security headers.
+Key-file scopes separate inference from metrics, and logs use only an eight-hex SHA-256 key id,
+never the bearer key itself.
 
 | Finding | Fix | Regression coverage |
 |---|---|---|

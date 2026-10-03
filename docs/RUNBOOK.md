@@ -128,6 +128,13 @@ Statim checks its configuration before it loads a model. The message names the p
 - **Check.** The client sends `Authorization: Bearer <key>`, and the proxy passes the header on.
 - **Fix.** Set the key in the client. See [key rotation](#rotating-api-keys) if a key changed.
 
+### 403 `API key lacks the 'inference' scope` or `'metrics' scope`
+
+- **Check.** Find the request's non-secret `key_id` in the access log and its scopes in the
+  `listening` event. Confirm the client is using the intended key.
+- **Fix.** Add the required scope to that key's `--api-key-file` line and restart, or issue a
+  separate least-privilege key. `STATIM_API_KEY` keys always have both scopes.
+
 ### 500 `{"detail":"inference failed"}` with an `inference_failed` event
 
 - **Meaning.** An unexpected error inside inference. The event carries the request id and the
@@ -167,7 +174,8 @@ Statim checks its configuration before it loads a model. The message names the p
 ## Rotating API keys
 
 Keys are read at start-up. Several keys can be valid at once, one per line in `--api-key-file`, so
-a rotation needs no downtime for clients.
+a rotation needs no downtime for clients. Preserve the old key's optional `inference`, `metrics`,
+or `inference,metrics` suffix when the replacement should have the same privileges.
 
 1. Generate the new key: `openssl rand -hex 32`. Use at least 32 random characters.
 2. Add it as a second line to the key file (or switch from `STATIM_API_KEY` to a key file), then

@@ -7,11 +7,18 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- API key files support `inference` and `metrics` scopes. Valid keys without the required scope get
+  HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
+  secret key bytes (READINESS P1 #12). A key listed twice, in the file or in `STATIM_API_KEY`, is a
+  start-up error.
+
 ## [0.9.5] - 2026-10-03
 
 The Hugging Face Space now runs the released 0.7.0 model (it had served 0.4.0 since it was
 created), and the playground's review threshold alone decides which answers are flagged.
 Every decision of the engine is unchanged.
+
 ### Changed
 - Releases publish only after the CUDA and Vulkan parity gates pass on the self-hosted GPU runner
   for the tagged commit: `release.yml` calls the `gpu` workflow (READINESS P1 #43).
