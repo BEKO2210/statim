@@ -23,10 +23,16 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   0.7.0 scores 0.565 (Lev 0.635, Jev 0.766). The claim of leading on civil_comments is withdrawn.
 
 ### Changed
-- A grounded synthetic-data pilot can generate licence-traceable urgency and eight-language NLI
-  items from pinned BillSum, GovReport and EUR-Lex-Sum training text. Qwen3-8B generation must
-  agree with blind Phi-4-mini verification; exact eight-word held-out overlap is rejected, and the
-  runner records per-item provenance, supports parallel Ollama requests and emits review samples.
+- A grounded synthetic-data pilot (`tools/synth/grounded.py`) generates urgency and eight-language
+  NLI items from pinned BillSum, GovReport and EUR-Lex-Sum training text. Qwen3-8B writes, and an
+  item is kept only if a blind Phi-4-mini check agrees, the text is in the target language, it
+  names no label and copies no eight words of its seed. Items that share text with any held-out
+  evaluation text or S1Bench subset are rejected, with the same predicates as the mixture
+  contamination check: word 8-grams, 20-character shingles for short or unspaced text, 40-character
+  containment and exact match. Missing or stale evaluation texts stop the run. Each item carries an
+  id, its seed and passage hash, and the model digests. Runs resume after a crash. Output made
+  without the evaluation texts (Colab) is marked unchecked until `tools/synth/leakage.py --filter`
+  runs.
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
 - Release binaries are built in the manylinux_2_28 container (AlmaLinux 8, GCC 13) and run on
