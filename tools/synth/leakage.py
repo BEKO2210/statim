@@ -89,3 +89,59 @@ class LeakageGuard:
             if hit:
                 return True
         return False
+
+
+class DeferredGuard:
+    """For a machine without the held-out texts (e.g. Colab): nothing is rejected here, the manifest
+    records ``checked: false``, and `leakage.py --filter` must run on a machine that has them before
+    any item is used."""
+    texts = None
+    deferred = True
+
+    def overlap(self, value):
+        return False
+
+
+def filter_dir(src, dst, eval_cache=None, s1bench_dir=None):
+    """Copy a grounded-synthesis output dir from ``src`` to ``dst`` without leaking items."""
+    import gzip
+    src, dst = Path(src), Path(dst)
+    if dst.exists():
+        raise SystemExit("refusing to write into existing %s" % dst)
+    guard = LeakageGuard.from_local(eval_cache, s1bench_dir)
+    dst.mkdir(parents=True)
+    manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    removed = {}
+    for items_path in sorted(src.glob("*.jsonl.gz")):
+        if items_path.name.endswith(".provenance.jsonl.gz"):
+            continue
+        task = items_path.name[:-len(".jsonl.gz")]
+        prov_path = src / (task + ".provenance.jsonl.gz")
+        with gzip.open(items_path, "rt", encoding="utf-8") as f:
+            items = [json.loads(line) for line in f if line.strip()]
+        with gzip.open(prov_path, "rt", encoding="utf-8") as f:
+            prov = [json.loads(line) for line in f if line.strip()]
+        if len(items) != len(prov):
+            raise SystemExit("%s: items and provenance differ in length" % task)
+        keep = [i for i, item in enumerate(items) if not guard.overlap(item)]
+        removed[task] = len(items) - len(keep)
+        for name, rows in ((task + ".jsonl.gz", items), (task + ".provenance.jsonl.gz", prov)):
+            with gzip.open(dst / name, "wt", encoding="utf-8") as f:
+                for i in keep:
+                    f.write(json.dumps(rows[i], ensure_ascii=False) + "\n")
+    manifest["leakage"] = dict(manifest.get("leakage", {}), checked=True, checked_by="leakage.py --filter",
+                               heldout_texts_indexed=guard.texts, removed=removed, source_dir=str(src))
+    (dst / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                                       encoding="utf-8")
+    return removed
+
+
+if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description="Filter a deferred-check synthesis dir against held-out texts")
+    ap.add_argument("--filter", type=Path, required=True, help="input dir (written with --defer-leakage-check)")
+    ap.add_argument("--out", type=Path, required=True, help="new output dir (must not exist)")
+    ap.add_argument("--eval-cache", type=Path, default=None)
+    ap.add_argument("--s1bench-dir", type=Path, default=None)
+    a = ap.parse_args()
+    print(json.dumps(filter_dir(a.filter, a.out, a.eval_cache, a.s1bench_dir)))

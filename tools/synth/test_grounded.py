@@ -1,3 +1,4 @@
+import pytest
 import gzip
 import json
 import sys
@@ -114,3 +115,33 @@ def test_ollama_thinking_is_disabled():
     client._post = lambda path, body, timeout=None: seen.update(body) or {"message": {"content": "{}"}}
     client.chat([], {"type": "object"}, 0, 1)
     assert seen["think"] is False
+
+
+def test_deferred_output_is_filtered_locally_before_use(tmp_path):
+    import gzip
+    import pickle
+    import leakage
+    held = "the committee shall report the findings of the annual review to the board"
+    cache = tmp_path / "eval-texts.pkl"
+    cache.write_bytes(pickle.dumps({"texts": {held}}))
+    src = tmp_path / "colab"
+    src.mkdir()
+    items = [{"state": "a fresh request about a broken heating system in a public school", "id": 1},
+             {"state": "Note: " + held + " today.", "id": 2}]
+    for name, rows in (("nli.jsonl.gz", items), ("nli.provenance.jsonl.gz", [{"id": 1}, {"id": 2}])):
+        with gzip.open(src / name, "wt", encoding="utf-8") as f:
+            for row in rows:
+                f.write(json.dumps(row) + "\n")
+    (src / "manifest.json").write_text(json.dumps({"leakage": {"checked": False}}))
+    assert leakage.DeferredGuard().overlap(items[1]) is False
+    removed = leakage.filter_dir(src, tmp_path / "clean", eval_cache=cache,
+                                 s1bench_dir=tmp_path / "none")
+    assert removed == {"nli": 1}
+    with gzip.open(tmp_path / "clean" / "nli.jsonl.gz", "rt", encoding="utf-8") as f:
+        assert [json.loads(line)["id"] for line in f] == [1]
+    with gzip.open(tmp_path / "clean" / "nli.provenance.jsonl.gz", "rt", encoding="utf-8") as f:
+        assert [json.loads(line)["id"] for line in f] == [1]
+    manifest = json.loads((tmp_path / "clean" / "manifest.json").read_text())
+    assert manifest["leakage"]["checked"] is True and manifest["leakage"]["removed"] == {"nli": 1}
+    with pytest.raises(SystemExit):
+        leakage.filter_dir(src, tmp_path / "clean", eval_cache=cache)

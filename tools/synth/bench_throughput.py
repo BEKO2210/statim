@@ -33,6 +33,7 @@ def main(argv=None):
     ap.add_argument("--num-gpu", type=int, default=-1)
     ap.add_argument("--eval-cache", type=Path, default=None)
     ap.add_argument("--s1bench-dir", type=Path, default=None)
+    ap.add_argument("--defer-leakage-check", action="store_true")
     args = ap.parse_args(argv)
     if args.items < 1:
         ap.error("--items must be positive")
@@ -50,6 +51,8 @@ def main(argv=None):
                 cmd.extend(("--eval-cache", str(args.eval_cache)))
             if args.s1bench_dir:
                 cmd.extend(("--s1bench-dir", str(args.s1bench_dir)))
+            if args.defer_leakage_check:
+                cmd.append("--defer-leakage-check")
             start = time.monotonic()
             subprocess.run(cmd, check=True)
             elapsed = time.monotonic() - start

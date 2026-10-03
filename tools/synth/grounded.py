@@ -20,7 +20,7 @@ from corpora import CORPORA, PILOT_LANGUAGES, iter_corpus, validate_cache  # noq
 from generate import digest_from_show  # noqa: E402
 from grounded_prompts import (NLI_LABELS, PROMPT_VERSION, URGENCY_LABELS, generation_request,
                               prompts_digest, verification_request)  # noqa: E402
-from leakage import LeakageGuard  # noqa: E402
+from leakage import DeferredGuard, LeakageGuard  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from verify import parse_model_json  # noqa: E402
 
@@ -255,7 +255,8 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
         "models": [GENERATOR, VERIFIER], "ollama": {"qwen3:8b": generator_meta,
         "phi4-mini": verifier_meta}, "prompt_version": PROMPT_VERSION,
         "prompts_sha256": prompts_digest(), "corpora": CORPORA, "leakage": {
-            "n_gram": 8, "heldout_texts_indexed": getattr(guard, "texts", None)},
+            "n_gram": 8, "heldout_texts_indexed": getattr(guard, "texts", None),
+            "checked": not getattr(guard, "deferred", False)},
         "concurrency": concurrency, "seed": seed, "stats": stats,
         "elapsed_s": time.monotonic() - started,
     }
@@ -279,11 +280,15 @@ def main(argv=None):
     ap.add_argument("--max-jobs-factor", type=int, default=12)
     ap.add_argument("--eval-cache", type=Path, default=None)
     ap.add_argument("--s1bench-dir", type=Path, default=None)
+    ap.add_argument("--defer-leakage-check", action="store_true",
+                    help="no held-out texts on this machine (Colab): mark output unchecked; run "
+                         "`leakage.py --filter` locally before use")
     args = ap.parse_args(argv)
     if args.per_capability < 1 or args.concurrency < 1 or args.max_jobs_factor < 1:
         ap.error("counts, concurrency and max-jobs-factor must be positive")
     cache = validate_cache(args.cache)
-    guard = LeakageGuard.from_local(args.eval_cache, args.s1bench_dir)
+    guard = DeferredGuard() if args.defer_leakage_check else LeakageGuard.from_local(
+        args.eval_cache, args.s1bench_dir)
     generator = OllamaHTTP(args.host, args.generator_model, args.num_gpu)
     verifier = OllamaHTTP(args.host, args.verifier_model, args.num_gpu)
     gmeta, vmeta = digest_from_show(generator.show()), digest_from_show(verifier.show())
