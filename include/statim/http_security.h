@@ -98,25 +98,32 @@ inline bool reject_framing(const httplib::Request& req, httplib::Response& res) 
     }
     return false;
 }
-inline bool bearer_authorized(const httplib::Request& req, const std::vector<std::string>& keys) {
-    if (keys.empty()) return true;
-    if (req.get_header_value_count("Authorization") != 1) return false;
+inline const ApiKey* authenticated_key(const httplib::Request& req, const std::vector<ApiKey>& keys) {
+    if (req.get_header_value_count("Authorization") != 1) return nullptr;
     const auto auth = req.get_header_value("Authorization");
     // Every comparison runs over the longest possible header ("Bearer " + a 4096-byte key), so the
     // time depends on neither the configured keys' lengths nor the supplied header's.
     constexpr size_t n = 7 + 4096;
-    if (auth.size() > n) return false;
-    bool ok = false;
+    if (auth.size() > n) return nullptr;
+    const ApiKey* matched = nullptr;
     for (const auto& key : keys) {
-        const std::string expected = "Bearer " + key;
+        const std::string expected = "Bearer " + key.key;
         unsigned char diff = static_cast<unsigned char>(expected.size() != auth.size());
         for (size_t i = 0; i < n; ++i)
             diff |= static_cast<unsigned char>((i < expected.size() ? expected[i] : 0) ^ (i < auth.size() ? auth[i] : 0));
-        ok |= diff == 0;
+        if (diff == 0) matched = &key;
     }
-    return ok;
+    return matched;
 }
-inline void configure_http_security(httplib::Server& srv, std::vector<std::string> keys) {
+inline bool bearer_authorized(const httplib::Request& req, const std::vector<ApiKey>& keys) {
+    return keys.empty() || authenticated_key(req, keys) != nullptr;
+}
+inline bool bearer_authorized(const httplib::Request& req, const std::vector<ApiKey>& keys, ApiScope scope) {
+    if (keys.empty()) return true;
+    const ApiKey* key = authenticated_key(req, keys);
+    return key && key_has_scope(*key, scope);
+}
+inline void configure_http_security(httplib::Server& srv, std::vector<ApiKey> keys) {
     srv.set_payload_max_length(max_body_bytes);
     srv.set_exception_handler(sanitize_exception);
     srv.set_error_handler([](const httplib::Request&, httplib::Response& res) {
@@ -128,9 +135,22 @@ inline void configure_http_security(httplib::Server& srv, std::vector<std::strin
         res.set_header("Referrer-Policy", "no-referrer");
         if (reject_framing(req, res)) return httplib::Server::HandlerResponse::Handled;
         const bool public_path = req.path == "/health" || req.path == "/ready" || req.path == "/";
-        if (!public_path && !bearer_authorized(req, keys)) {
-            send_error(res, 401, "invalid or missing bearer token");
-            return httplib::Server::HandlerResponse::Handled;
+        if (!public_path && !keys.empty()) {
+            const ApiKey* key = authenticated_key(req, keys);
+            if (!key) {
+                send_error(res, 401, "invalid or missing bearer token");
+                return httplib::Server::HandlerResponse::Handled;
+            }
+            const bool inference = (req.method == "POST" &&
+                    (req.path == "/v1/systemone" || req.path == "/v1/systemone/batch")) ||
+                                   (req.method == "GET" && req.path == "/v1/models");
+            const bool metrics = req.method == "GET" && req.path == "/metrics";
+            if ((inference && !key_has_scope(*key, ApiScope::inference)) ||
+                (metrics && !key_has_scope(*key, ApiScope::metrics))) {
+                const char* scope = metrics ? "metrics" : "inference";
+                send_error(res, 403, std::string("API key lacks the '") + scope + "' scope");
+                return httplib::Server::HandlerResponse::Handled;
+            }
         }
         if (public_path || req.path == "/metrics" || req.path == "/v1/models") {
             if (req.has_header("Transfer-Encoding") || req.get_header_value_u64("Content-Length") != 0) {
