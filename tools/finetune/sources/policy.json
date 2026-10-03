@@ -139,6 +139,24 @@
       "licence_spdx": "CC-BY-4.0",
       "terms_url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-fr",
       "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507/blob/0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe/LICENSE",
+      "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507-FP8/blob/5a5a776300a41aaa681dd7ff0106608ef2bc90db/LICENSE",
+      "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-GPTQ-Int4",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-GPTQ-Int4/blob/9b534e4318b7ebc3c961a839f13eb18b1833f441/LICENSE",
+      "allows_training": true
     }
   ],
   "denied_generators": [

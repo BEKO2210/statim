@@ -7,6 +7,7 @@ import collections
 import gzip
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -23,10 +24,17 @@ from grounded_prompts import (NLI_LABELS, PROMPT_VERSION, URGENCY_LABELS, genera
                               prompts_digest, verification_request)  # noqa: E402
 from leakage import DeferredGuard, LeakageGuard, grams  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
+from openai_http import OpenAIHTTP  # noqa: E402
 from verify import parse_model_json  # noqa: E402
 
 GENERATOR = {"model": "Qwen/Qwen3-8B", "role": "text"}
 VERIFIER = {"model": "microsoft/Phi-4-mini-instruct", "role": "labels"}
+OLLAMA_TO_HF = {"qwen3:8b": GENERATOR["model"], "phi4-mini": VERIFIER["model"]}
+# models a vLLM (OpenAI-compatible) backend may serve; each id is approved in
+# tools/finetune/sources/policy.json and recorded with its exact revision
+HF_ALLOWLIST = {"Qwen/Qwen3-30B-A3B-Instruct-2507", "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8",
+                "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "Qwen/Qwen3-8B", "microsoft/phi-4",
+                "microsoft/Phi-4-mini-instruct"}
 MODEL_ALLOWLIST = {
     "qwen3:8b": {"families": {"qwen3"}, "parameter": re.compile(r"\b8(?:\.\d+)?\s*b\b", re.I)},
     "phi4-mini": {"families": {"phi3", "phi4"},
@@ -87,6 +95,23 @@ def validate_model_meta(tag, meta):
     return meta
 
 
+def validate_hf_meta(meta):
+    hf_id, revision = meta.get("hf_id"), str(meta.get("revision") or "")
+    if hf_id not in HF_ALLOWLIST:
+        raise SystemExit("model %r is not on the synthesis allowlist" % hf_id)
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise SystemExit("model %s needs its exact 40-hex revision, got %r" % (hf_id, revision))
+    return meta
+
+
+def _roles(model_meta):
+    """[generator, verifier] as policy model ids; model_meta is ordered generator first."""
+    out = []
+    for (tag, meta), role in zip(model_meta.items(), ("text", "labels")):
+        out.append({"model": (meta or {}).get("hf_id") or OLLAMA_TO_HF.get(tag, tag), "role": role})
+    return out
+
+
 def _chat(client, request, temperature, seed):
     messages, schema, predict = request
     return client.chat(messages, schema, temperature=temperature, num_predict=predict, seed=seed)
@@ -124,7 +149,7 @@ def _provenance(ident, task, lang, label, passage, source_id, revision, model_me
         "seed": {"source_id": source_id, "revision": revision,
                  "passage_sha256": sha256_text(passage), "lang": lang, "target": label},
         "seed_passage": passage,
-        "generator": [dict(GENERATOR), dict(VERIFIER)],
+        "generator": _roles(model_meta),
         "ollama_models": {tag: dict(meta or {}) for tag, meta in model_meta.items()},
         "ollama_model_digests": {tag: (meta or {}).get("digest") for tag, meta in model_meta.items()},
         "prompt_version": PROMPT_VERSION,
@@ -401,8 +426,8 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
     if out_dir.exists() and not resume:
         raise FileExistsError("refusing existing output directory without --resume: %s" % out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    model_meta = {"qwen3:8b": dict(generator_meta or {}),
-                  "phi4-mini": dict(verifier_meta or {})}
+    model_meta = {(generator_meta or {}).get("hf_id", "qwen3:8b"): dict(generator_meta or {}),
+                  (verifier_meta or {}).get("hf_id", "phi4-mini"): dict(verifier_meta or {})}
     passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
     started = time.monotonic()
     by_task, stats = {}, {}
@@ -427,6 +452,12 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
         if not finalized:
             item_path.replace(out_dir / (task + ".jsonl.gz"))
             prov_path.replace(out_dir / (task + ".provenance.jsonl.gz"))
+    return _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurrency, tasks,
+                   seed, started, {"phased_batch": phased_batch})
+
+
+def _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurrency, tasks, seed,
+            started, extra):
     write_samples(out_dir / "samples.md", by_task, 30, seed)
     leakage_meta = dict(getattr(guard, "metadata", {}) or {})
     leakage_meta.update({"word_shingle": 8, "char_shingle": 20, "contain_chars": 40,
@@ -436,10 +467,10 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
         "kind": "grounded-synthetic-pilot",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "items_per_capability": per_capability, "languages": list(PILOT_LANGUAGES),
-        "models": [GENERATOR, VERIFIER], "ollama": model_meta,
+        "models": _roles(model_meta), "ollama": model_meta,
         "prompt_version": PROMPT_VERSION, "prompts_sha256": prompts_digest(),
         "corpora": CORPORA, "leakage": leakage_meta, "concurrency": concurrency,
-        "tasks": list(tasks), "phased_batch": phased_batch,
+        "tasks": list(tasks), **extra,
         "seed": seed, "stats": stats, "elapsed_s": time.monotonic() - started,
     }
     manifest_part = out_dir / "manifest.json.part"
@@ -448,16 +479,186 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
     return manifest
 
 
+# --------------------------------------------------------------------------- two-stage runs
+# For a GPU that serves one large model at a time (vLLM on an A100): stage "generate" writes
+# checked candidates to a file with the generator loaded; stage "verify" then loads the verifier and
+# applies the blind check, the leakage guard and the quotas. Both stages resume.
+
+def _cell_targets(tasks, per_capability, oversample):
+    targets = {}
+    for task in tasks:
+        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        for cell, n in _quota(per_capability, PILOT_LANGUAGES, labels).items():
+            targets[(task,) + cell] = math.ceil(n * oversample)
+    return targets
+
+
+def _stage_line(stage, task, done, total, started, start_done, extra=""):
+    frac = done / total if total else 1.0
+    bar = "#" * int(30 * frac) + "-" * (30 - int(30 * frac))
+    elapsed = time.monotonic() - started
+    rate = (done - start_done) * 3600.0 / elapsed if elapsed > 0 and done > start_done else 0.0
+    eta = ("%d min" % round((total - done) / rate * 60)) if rate else "-"
+    print("[%-8s %-7s] |%s| %6d/%-6d %3.0f%%  %7.0f/h  ETA %s%s" % (
+        stage, task, bar, done, total, 100 * frac, rate, eta, extra), flush=True)
+
+
+def stage_generate(candidates, cache, generator, tasks, per_capability, concurrency, temperature,
+                   oversample=2.5, max_jobs_factor=12, passages=None):
+    """Append generated candidates to ``candidates`` (jsonl.gz) until every (task, language,
+    label) cell holds per-cell quota x ``oversample`` candidates. Resumes from the file."""
+    candidates = Path(candidates)
+    state_path = Path(str(candidates) + ".state.json")
+    state = json.loads(state_path.read_text()) if state_path.exists() else {"positions": {}, "jobs": {}}
+    have = collections.Counter()
+    if candidates.exists():
+        for row in _read_gzip(candidates):
+            have[(row["task"], row["passage_row"][1], row["label"])] += 1
+    targets = _cell_targets(tasks, per_capability, oversample)
+    passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
+    metrics = collections.Counter()
+    for task in tasks:
+        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        total = sum(n for cell, n in targets.items() if cell[0] == task)
+        done = lambda: sum(min(have[c], n) for c, n in targets.items() if c[0] == task)
+        started, start_done = time.monotonic(), done()
+        jobs = state["jobs"].get(task, 0)
+        positions = collections.Counter(state["positions"].get(task, {}))
+        max_jobs = per_capability * max_jobs_factor
+        _stage_line("generate", task, done(), total, started, start_done)
+        while done() < total and jobs < max_jobs:
+            batch = []
+            for lang in PILOT_LANGUAGES:
+                need = [l for l in labels if have[(task, lang, l)] < targets[(task, lang, l)]]
+                if not need:
+                    continue
+                for _ in range(max(1, concurrency // len(PILOT_LANGUAGES))):
+                    passage = passages[lang][positions[lang] % len(passages[lang])]
+                    positions[lang] += 1
+                    target = need[positions[lang] % len(need)] if task == "urgency" else None
+                    batch.append((task, passage, target))
+            if not batch:
+                break
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                results = list(pool.map(
+                    lambda a: _generate_candidates(a[0], a[1], a[2], generator, temperature), batch))
+            jobs += len(batch)
+            for rows, m in results:
+                metrics.update(m)
+                for row in rows:
+                    cell = (task, row["passage_row"][1], row["label"])
+                    if have[cell] >= targets[cell]:
+                        continue
+                    have[cell] += 1
+                    _append_gzip(candidates, dict(row, passage_row=list(row["passage_row"])))
+            state["jobs"][task], state["positions"][task] = jobs, dict(positions)
+            state_path.write_text(json.dumps(state))
+            _stage_line("generate", task, done(), total, started, start_done)
+    short = {"%s/%s/%s" % c: n - have[c] for c, n in targets.items() if have[c] < n}
+    return {"candidates": sum(have.values()), "short": short, "metrics": dict(metrics)}
+
+
+def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, concurrency,
+                 model_meta, seed=20261003, resume=False):
+    """Blind-verify candidates in file order and keep them up to the per-cell quotas; writes the
+    same outputs and manifest as run_pilot. A short cell is reported, never padded."""
+    out_dir = Path(out_dir)
+    if out_dir.exists() and not resume:
+        raise FileExistsError("refusing existing output directory without --resume: %s" % out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows_all = _read_gzip(candidates)
+    state_path = out_dir / "verify.state.json"
+    state = json.loads(state_path.read_text()) if resume and state_path.exists() else {}
+    started = time.monotonic()
+    by_task, stats = {}, {}
+    for task in tasks:
+        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        quota = _quota(per_capability, PILOT_LANGUAGES, labels)
+        initial, item_path, prov_path, finalized = _resume_rows(out_dir, task) if resume else (
+            [], out_dir / (task + ".jsonl.gz.part"), out_dir / (task + ".provenance.jsonl.gz.part"), False)
+        kept = list(initial)
+        counts = collections.Counter((r["provenance"]["seed"]["lang"], r["provenance"]["seed"]["target"])
+                                     for r in kept)
+        seen = {r["id"] for r in kept}
+        reasons = collections.Counter()
+        todo = [dict(r, passage_row=tuple(r["passage_row"])) for r in rows_all if r["task"] == task]
+        pos = state.get(task, 0)
+        t0, k0 = time.monotonic(), len(kept)
+        _stage_line("verify", task, len(kept), per_capability, t0, k0)
+        while not finalized and len(kept) < per_capability and pos < len(todo):
+            chunk = []
+            while pos < len(todo) and len(chunk) < concurrency * 4:
+                cand = todo[pos]
+                pos += 1
+                if counts[(cand["passage_row"][1], cand["label"])] < quota[(cand["passage_row"][1], cand["label"])]:
+                    chunk.append(cand)
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                verified = list(pool.map(lambda c: _verify_candidate(c, verifier, model_meta, guard), chunk))
+            for row, m in verified:
+                reasons.update(m)
+                if row is None:
+                    continue
+                cell = (row["provenance"]["seed"]["lang"], row["provenance"]["seed"]["target"])
+                if counts[cell] >= quota[cell] or len(kept) >= per_capability:
+                    continue
+                if row["id"] in seen:
+                    reasons["duplicate"] += 1
+                    continue
+                seen.add(row["id"])
+                counts[cell] += 1
+                kept.append(row)
+                _append_gzip(item_path, row["item"])
+                _append_gzip(prov_path, row["provenance"])
+            state[task] = pos
+            state_path.write_text(json.dumps(state))
+            called, agreed = reasons["verify_called"], reasons["verify_agree"]
+            agree = "  verifier agrees %3.0f%%" % (100.0 * agreed / called) if called else ""
+            _stage_line("verify", task, len(kept), per_capability, t0, k0, agree)
+        if len(kept) < per_capability:
+            short = {"%s/%s" % c: quota[c] - counts[c] for c in quota if counts[c] < quota[c]}
+            raise SystemExit("%s: %d/%d kept, candidates exhausted; short cells %s. Run "
+                             "--stage generate with a higher --oversample, then --stage verify "
+                             "--resume." % (task, len(kept), per_capability, short))
+        if not finalized:
+            item_path.replace(out_dir / (task + ".jsonl.gz"))
+            prov_path.replace(out_dir / (task + ".provenance.jsonl.gz"))
+        called, agreed = reasons["verify_called"], reasons["verify_agree"]
+        by_task[task] = kept
+        stats[task] = {"jobs": pos, "metrics": dict(reasons),
+                       "verify_acceptance_rate": (agreed / called) if called else None,
+                       "counts": {"%s/%s" % c: n for c, n in sorted(counts.items())}}
+    return _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurrency, tasks,
+                   seed, started, {"stages": "generate+verify", "candidates": str(candidates)})
+
+
+def _client_and_meta(args, role):
+    """Client plus validated provenance for the generator or the verifier."""
+    model = args.generator_model if role == "generator" else args.verifier_model
+    if args.backend == "ollama":
+        client = OllamaHTTP(args.host, model, args.num_gpu)
+        meta = validate_model_meta(model, digest_from_show(client.show()))
+        meta["requested_model"] = model
+        return client, model, meta
+    revision = args.generator_revision if role == "generator" else args.verifier_revision
+    client = OpenAIHTTP(args.host, model, revision)
+    return client, model, validate_hf_meta(client.show())
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--out-dir", type=Path, help="output directory (stage single or verify)")
     ap.add_argument("--cache", type=Path, default=None)
     ap.add_argument("--per-capability", type=int, default=200)
     ap.add_argument("--concurrency", type=int, default=4,
-                    help="simultaneous requests; set OLLAMA_NUM_PARALLEL >= this value")
+                    help="simultaneous requests (Ollama: set OLLAMA_NUM_PARALLEL >= this value)")
     ap.add_argument("--host", default="http://127.0.0.1:11434")
-    ap.add_argument("--generator-model", default="qwen3:8b", choices=("qwen3:8b",))
-    ap.add_argument("--verifier-model", default="phi4-mini", choices=("phi4-mini",))
+    ap.add_argument("--backend", choices=("ollama", "openai"), default="ollama",
+                    help="openai = an OpenAI-compatible server such as vLLM serving one HF model")
+    ap.add_argument("--generator-model", default="qwen3:8b",
+                    help="Ollama tag (qwen3:8b) or, with --backend openai, an allowlisted HF repo id")
+    ap.add_argument("--verifier-model", default="phi4-mini")
+    ap.add_argument("--generator-revision", default=None, help="exact HF commit sha (--backend openai)")
+    ap.add_argument("--verifier-revision", default=None, help="exact HF commit sha (--backend openai)")
     ap.add_argument("--num-gpu", type=int, default=-1)
     ap.add_argument("--temperature", type=float, default=0.4)
     ap.add_argument("--seed", type=int, default=20261003)
@@ -470,24 +671,54 @@ def main(argv=None):
     ap.add_argument("--phased-batch", type=int, default=0, metavar="N",
                     help="generate N seed jobs, then verify them (for GPUs that cannot hold both "
                          "models, e.g. 8 GB); 0 = generate and verify each job together")
+    ap.add_argument("--stage", choices=("single", "generate", "verify"), default="single",
+                    help="generate: only the generator runs and candidates go to --candidates; "
+                         "verify: only the verifier runs over --candidates (one model per GPU)")
+    ap.add_argument("--candidates", type=Path, default=None, help="candidate file (jsonl.gz)")
+    ap.add_argument("--oversample", type=float, default=2.5,
+                    help="stage generate: candidates per kept item to aim for")
     args = ap.parse_args(argv)
     tasks = tuple(t.strip() for t in args.tasks.split(",") if t.strip())
     if not tasks or any(t not in ("urgency", "nli") for t in tasks):
         ap.error("--tasks must name urgency and/or nli")
     if args.per_capability < 1 or args.concurrency < 1 or args.max_jobs_factor < 1:
         ap.error("counts, concurrency and max-jobs-factor must be positive")
+    if args.stage != "single" and not args.candidates:
+        ap.error("--stage %s needs --candidates" % args.stage)
+    if args.stage != "generate" and not args.out_dir:
+        ap.error("--out-dir is required")
     cache = validate_cache(args.cache)
+
+    if args.stage == "generate":
+        generator, _, gmeta = _client_and_meta(args, "generator")
+        state = Path(str(args.candidates) + ".state.json")
+        saved = json.loads(state.read_text()) if state.exists() else {}
+        if saved.get("generator_meta") not in (None, gmeta):
+            raise SystemExit("candidate file was started with another generator: %s" % saved["generator_meta"])
+        saved.setdefault("positions", {}), saved.setdefault("jobs", {})
+        saved["generator_meta"], saved["generator_tag"] = gmeta, args.generator_model
+        state.write_text(json.dumps(saved))
+        result = stage_generate(args.candidates, cache, generator, tasks, args.per_capability,
+                                args.concurrency, args.temperature, args.oversample, args.max_jobs_factor)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
     guard = DeferredGuard() if args.defer_leakage_check else LeakageGuard.from_local(
         args.eval_cache, args.s1bench_dir)
-    generator = OllamaHTTP(args.host, args.generator_model, args.num_gpu)
-    verifier = OllamaHTTP(args.host, args.verifier_model, args.num_gpu)
-    gmeta = validate_model_meta(args.generator_model, digest_from_show(generator.show()))
-    vmeta = validate_model_meta(args.verifier_model, digest_from_show(verifier.show()))
-    gmeta["requested_model"], vmeta["requested_model"] = args.generator_model, args.verifier_model
-    manifest = run_pilot(args.out_dir, cache, generator, verifier, guard, args.per_capability,
-                         args.concurrency, args.seed, args.temperature, args.max_jobs_factor,
-                         generator_meta=gmeta, verifier_meta=vmeta, resume=args.resume,
-                         tasks=tasks, phased_batch=args.phased_batch)
+    if args.stage == "verify":
+        verifier, vtag, vmeta = _client_and_meta(args, "verifier")
+        saved = json.loads(Path(str(args.candidates) + ".state.json").read_text())
+        model_meta = {saved["generator_tag"]: saved["generator_meta"], vtag: vmeta}
+        manifest = stage_verify(args.candidates, args.out_dir, verifier, guard, tasks,
+                                args.per_capability, args.concurrency, model_meta, args.seed,
+                                resume=args.resume)
+    else:
+        generator, _, gmeta = _client_and_meta(args, "generator")
+        verifier, _, vmeta = _client_and_meta(args, "verifier")
+        manifest = run_pilot(args.out_dir, cache, generator, verifier, guard, args.per_capability,
+                             args.concurrency, args.seed, args.temperature, args.max_jobs_factor,
+                             generator_meta=gmeta, verifier_meta=vmeta, resume=args.resume,
+                             tasks=tasks, phased_batch=args.phased_batch)
     print(json.dumps({"out_dir": str(args.out_dir), "stats": manifest["stats"],
                       "elapsed_s": manifest["elapsed_s"]}, ensure_ascii=False, indent=2))
 

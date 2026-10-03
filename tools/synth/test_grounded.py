@@ -426,3 +426,66 @@ def test_phased_batches_keep_the_same_items(tmp_path):
     only = run_pilot(tmp_path / "only", tmp_path / "cache", BlindFakeClient(), BlindFakeClient(),
                      guard, tasks=("nli",), **kwargs)
     assert list(only["stats"]) == ["nli"] and not (tmp_path / "only" / "urgency.jsonl.gz").exists()
+
+
+def test_openai_client_requests_schema_output_without_thinking_and_checks_the_served_model():
+    from openai_http import OpenAIHTTP
+    client = OpenAIHTTP("http://vllm", "microsoft/phi-4", "b" * 40)
+    sent = {}
+    client._post = lambda path, body, timeout=None: sent.update(path=path, body=body) or {
+        "choices": [{"message": {"content": '{"answer": "soon"}'}, "finish_reason": "stop"}],
+        "usage": {"completion_tokens": 5, "prompt_tokens": 50}}
+    out = client.chat([{"role": "user", "content": "x"}], {"type": "object"}, 0, 32, seed=7)
+    assert sent["path"] == "/v1/chat/completions" and out["content"] == '{"answer": "soon"}'
+    body = sent["body"]
+    assert body["response_format"]["json_schema"]["schema"] == {"type": "object"}
+    assert body["chat_template_kwargs"] == {"enable_thinking": False} and body["seed"] == 7
+    client._get = lambda path: {"data": [{"id": "microsoft/phi-4"}]}
+    assert client.show() == {"hf_id": "microsoft/phi-4", "revision": "b" * 40,
+                             "backend": "vllm-openai", "served_models": ["microsoft/phi-4"]}
+    client._get = lambda path: {"data": [{"id": "some/other-model"}]}
+    with pytest.raises(Exception, match="serves"):
+        client.show()
+
+
+def test_hf_models_need_allowlist_and_exact_revision():
+    import grounded
+    meta = {"hf_id": "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8", "revision": "a" * 40}
+    assert grounded.validate_hf_meta(meta) is meta
+    with pytest.raises(SystemExit, match="allowlist"):
+        grounded.validate_hf_meta({"hf_id": "meta-llama/Llama-3.1-8B", "revision": "a" * 40})
+    with pytest.raises(SystemExit, match="revision"):
+        grounded.validate_hf_meta({"hf_id": "microsoft/phi-4", "revision": "main"})
+
+
+def test_two_stage_generate_then_verify(tmp_path):
+    import grounded
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    cands = tmp_path / "cands.jsonl.gz"
+    passages = fixture_passages(count=40)
+    first = grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("urgency", "nli"),
+                                    48, 8, 0.4, oversample=2.0, passages=passages)
+    assert first["short"] == {} and first["candidates"] == 2 * 48 * 2
+    again = grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("urgency", "nli"),
+                                    48, 8, 0.4, oversample=2.0, passages=passages)
+    assert again["candidates"] == first["candidates"]  # resume: targets already met, nothing added
+    meta = {"Qwen/Qwen3-30B-A3B-Instruct-2507-FP8": {"hf_id": "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8",
+                                                     "revision": "a" * 40},
+            "microsoft/phi-4": {"hf_id": "microsoft/phi-4", "revision": "b" * 40}}
+    out = tmp_path / "out"
+    manifest = grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("urgency", "nli"), 48, 8, meta)
+    assert manifest["models"] == [{"model": "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8", "role": "text"},
+                                  {"model": "microsoft/phi-4", "role": "labels"}]
+    assert assert_ready(out) == manifest and manifest["stages"] == "generate+verify"
+    for task in ("urgency", "nli"):
+        with gzip.open(out / (task + ".provenance.jsonl.gz"), "rt") as f:
+            rows = [json.loads(x) for x in f]
+        assert len(rows) == 48 and rows[0]["generator"] == manifest["models"]
+        assert all(set(c.split("/")[0] for c in manifest["stats"][task]["counts"]) ==
+                   set(PILOT_LANGUAGES) for _ in [0])
+    # too few candidates: a clear message, never padding
+    few = tmp_path / "few.jsonl.gz"
+    grounded.stage_generate(few, tmp_path / "cache", BlindFakeClient(), ("nli",), 48, 8, 0.4,
+                            oversample=0.5, passages=passages)
+    with pytest.raises(SystemExit, match="short cells"):
+        grounded.stage_verify(few, tmp_path / "out2", BlindFakeClient(), guard, ("nli",), 48, 8, meta)

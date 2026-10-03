@@ -33,6 +33,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   id, its seed and passage hash, and the model digests. Runs resume after a crash. Output made
   without the evaluation texts (Colab) is marked unchecked until `tools/synth/leakage.py --filter`
   runs.
+- Grounded synthesis can run against vLLM (`--backend openai`) in two stages, one model on the GPU at
+  a time: `--stage generate` writes candidates with Qwen3-30B-A3B-Instruct-2507, `--stage verify`
+  checks them blind with Phi-4. Both models are recorded by Hugging Face id and exact revision and
+  are approved in `policy.json`. `tools/synth/colab_vllm.ipynb` runs this on a Colab A100 with live
+  progress. On an 8 GB GPU, `--phased-batch` generates and verifies in alternating batches.
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
 - Release binaries are built in the manylinux_2_28 container (AlmaLinux 8, GCC 13) and run on
