@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- S1Bench reports: Civil Comments and HelpSteer2 were counted as never trained on, but their train
+  splits are in the 0.7.0 training mixtures. Six subsets are in-domain; over the seven others Statim
+  0.7.0 scores 0.565 (Lev 0.635, Jev 0.766). The claim of leading on civil_comments is withdrawn.
+
 ### Changed
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
