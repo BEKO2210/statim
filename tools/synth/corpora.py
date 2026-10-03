@@ -6,7 +6,6 @@ callers must pass an explicit path or accept a directory below ``$TMPDIR``.
 """
 from __future__ import annotations
 
-import hashlib
 import re
 import tempfile
 from pathlib import Path
@@ -124,11 +123,14 @@ def _raw_rows(name, cache, languages):
     from datasets import load_dataset
     if name == "billsum":
         url = _url(spec, "data/train-00000-of-00001.parquet")
-        yield from load_dataset("parquet", data_files={"train": url}, split="train", streaming=True,
-                                cache_dir=str(cache))
+        rows = load_dataset("parquet", data_files={"train": url}, split="train", streaming=True,
+                            cache_dir=str(cache))
+        for row in rows:
+            yield dict(row, _pinned_revision=spec["revision"])
     elif name == "gov_report":
-        yield from _load_json([_url(spec, "data/gao_train.jsonl"),
-                               _url(spec, "data/crs_train.jsonl")], cache)
+        for row in _load_json([_url(spec, "data/gao_train.jsonl"),
+                               _url(spec, "data/crs_train.jsonl")], cache):
+            yield dict(row, _pinned_revision=spec["revision"])
     else:
         wanted = set(languages or EUR_LANGUAGES.values())
         for dirname, lang in EUR_LANGUAGES.items():
@@ -137,6 +139,7 @@ def _raw_rows(name, cache, languages):
             for row in _load_json(_url(spec, "data/%s/train.json" % dirname), cache):
                 row = dict(row)
                 row["_lang"] = lang
+                row["_pinned_revision"] = spec["revision"]
                 yield row
 
 
@@ -151,17 +154,20 @@ def _sections(section):
 
 def _row_text(name, row):
     if name == "billsum":
-        return row.get("text"), "en", "FiscalNote/billsum:train:" + hashlib.sha256(
-            (row.get("title") or row.get("text") or "").encode()).hexdigest()[:20]
+        ident = row.get("bill_id") or row.get("id")
+        return row.get("text"), "en", (
+            "FiscalNote/billsum:train:%s" % ident if ident else None)
     if name == "eur_lex_sum":
-        return row.get("reference"), row.get("_lang"), "dennlinger/eur-lex-sum:train:%s:%s" % (
-            row.get("_lang"), row.get("celex_id"))
+        ident = row.get("celex_id")
+        return row.get("reference"), row.get("_lang"), (
+            "dennlinger/eur-lex-sum:train:%s:%s" % (row.get("_lang"), ident)
+            if ident else None)
     ident = row.get("id")
     if row.get("report") is not None:
         text = "\n\n".join(p for section in row["report"] for p in _sections(section))
     else:
         text = "\n\n".join(_sections(row.get("reports") or {}))
-    return text, "en", "launch/gov_report:train:%s" % ident
+    return text, "en", "launch/gov_report:train:%s" % ident if ident else None
 
 
 def iter_corpus(name, cache=None, languages=None, rows=None):
@@ -170,10 +176,12 @@ def iter_corpus(name, cache=None, languages=None, rows=None):
         raise ValueError("unknown corpus %r" % name)
     cache = validate_cache(cache)
     seen = set()
+    fetched = rows is None
     source = rows if rows is not None else _raw_rows(name, cache, languages)
-    revision = CORPORA[name]["revision"]
     for row in source:
         text, lang, source_id = _row_text(name, row)
+        if not source_id:
+            continue
         if languages and lang not in set(languages):
             continue
         for passage in split_passages(text):
@@ -181,7 +189,8 @@ def iter_corpus(name, cache=None, languages=None, rows=None):
             if digest in seen:
                 continue
             seen.add(digest)
-            yield passage, lang, source_id, revision
+            # Only _raw_rows can prove that the row came from the immutable URL.
+            yield passage, lang, source_id, row.get("_pinned_revision") if fetched else None
 
 
 def iter_pilot(cache=None, languages=PILOT_LANGUAGES):

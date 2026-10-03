@@ -91,10 +91,11 @@ def digest_from_show(show):
     license_field = info.get("general.license")
     if isinstance(license_field, str) and len(license_field) > 80:
         license_field = license_field[:80]
+    top_digest = show.get("digest")
     return {
-        "digest": show.get("digest") or (found.group(1) if found else None),
-        "digest_source": "sha256 in the FROM line of /api/show modelfile "
-                         "(this Ollama build does not return a top-level digest)",
+        "digest": top_digest or (found.group(1) if found else None),
+        "digest_source": "show.digest" if top_digest else (
+            "show.modelfile FROM sha256" if found else None),
         "family": details.get("family"),
         "parameter_size": details.get("parameter_size"),
         "quantization_level": details.get("quantization_level"),

@@ -22,6 +22,16 @@ _CYR = re.compile(r"[\u0400-\u04FF\u0500-\u052F]")
 _KANA = re.compile(r"[\u3040-\u30FF\u31F0-\u31FF\uFF66-\uFF9D]")
 _CJK = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF]")
 _WORDISH = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
+_PILOT_STOPWORDS = {
+    "en": {"the", "this", "that", "with", "from", "because", "must", "will"},
+    "de": {"der", "die", "das", "und", "ist", "mit", "weil", "muss"},
+    "fr": {"le", "la", "les", "des", "est", "avec", "parce", "doit"},
+    "es": {"el", "la", "los", "las", "con", "porque", "debe", "esta"},
+    "it": {"il", "lo", "la", "gli", "con", "perché", "deve", "questa"},
+    "pt": {"o", "os", "as", "com", "porque", "deve", "esta", "uma"},
+    "nl": {"de", "het", "een", "met", "omdat", "moet", "deze", "voor"},
+    "pl": {"i", "jest", "z", "ponieważ", "musi", "ten", "ta", "dla"},
+}
 
 
 def nfc(text):
@@ -60,7 +70,7 @@ def script_counts(text):
 
 
 def language_ok(text, lang):
-    """Script heuristic. Latin languages are not separated from each other."""
+    """Script plus offline function-word evidence for every pilot language."""
     counts = script_counts(text)
     total = sum(counts.values())
     if total < 4:
@@ -81,9 +91,15 @@ def language_ok(text, lang):
         return counts["kana"] >= 4 and kana >= 0.05 and (kana + cjk) >= 0.5 and arabic < 0.1
     if lang == "zh":
         return counts["cjk"] >= 8 and cjk >= 0.5 and counts["kana"] <= 1 and kana < 0.02
-    # en de fr es it pt nl pl tr
+    # Latin scripts need lexical evidence too; otherwise English fills every pilot cell.
     foreign = arabic + deva + cyr + kana + cjk
-    return latin >= 0.7 and foreign <= 0.15
+    if not (latin >= 0.7 and foreign <= 0.15):
+        return False
+    if lang not in _PILOT_STOPWORDS:
+        return True
+    words = {w.casefold() for w in re.findall(r"[^\W_]+", nfc(text), re.UNICODE)}
+    scores = {code: len(words & stopwords) for code, stopwords in _PILOT_STOPWORDS.items()}
+    return scores[lang] > 0 and scores[lang] == max(scores.values())
 
 
 def one_hot(n, index):
