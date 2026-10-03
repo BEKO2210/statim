@@ -53,7 +53,7 @@ def test_categories_match_the_held_out_suites():
             assert train_lora.CATEGORY_TESTS[task](entry.get("category", "")), (task, entry["id"])
 
 
-def test_category_sources_use_exact_src_names():
+def test_category_sources_use_exact_src_names(tmp_path):
     chosen, enabled = train_lora.category_sources(REGISTRY, "fact_check")
     assert "v6/zenodo:3609356 (ClaimBuster)/crowdsourced/groundtruth" in chosen  # config with "/"
     assert all(src in enabled for src in chosen)
@@ -61,9 +61,14 @@ def test_category_sources_use_exact_src_names():
     assert chosen == {s for s, c in by_src.items() if "10-fact-check" in c or "10-claim" in c}
     sentiment, _ = train_lora.category_sources(REGISTRY, "sentiment")
     complaint, _ = train_lora.category_sources(REGISTRY, "complaint")
-    # The former dual-purpose synthetic complaint sources are licence-excluded;
-    # no admitted source currently serves both suites.
-    assert not sentiment & complaint
+    # Preserve the parsing contract even though the real dual-purpose sources
+    # are now licence-excluded.
+    fixture = tmp_path / "registry.json"
+    fixture.write_text(json.dumps([{"id": "fixture/dual", "config": "default", "use": True,
+                                    "category": "3-complaint; 1-sentiment"}]), encoding="utf-8")
+    fixture_sentiment, _ = train_lora.category_sources(fixture, "sentiment")
+    fixture_complaint, _ = train_lora.category_sources(fixture, "complaint")
+    assert fixture_sentiment & fixture_complaint == {"v6/fixture/dual/default"}
     pii, _ = train_lora.category_sources(REGISTRY, "pii")
     assert pii and not pii & chosen  # 10-pii and 10-fact-check are separate families
 

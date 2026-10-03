@@ -16,7 +16,8 @@ Released Statim weights are trained only on data whose licence permits commercia
 not impose ShareAlike or copyleft terms on the model: Apache-2.0, MIT, BSD, CC0, CC-BY, ODC-By,
 AFL-3.0. Excluded: non-commercial or research-only terms, ShareAlike (CC-BY-SA), copyleft (GPL,
 AGPL, MPL, ODbL), custom or unknown terms. Datasets used only to *measure* the model are listed
-separately; the model never trains on them."""
+separately; the model never trains on them. The weights listed under [Licence findings](#licence-findings-2026-10-03)
+do not meet this rule."""
 
 BASE = [
     ("Laya English checkpoint", "https://huggingface.co/convaiinnovations/laya", "Apache-2.0"),

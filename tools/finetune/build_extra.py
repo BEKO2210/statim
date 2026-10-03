@@ -38,9 +38,15 @@ sys.dont_write_bytecode = True
 import pyarrow.parquet as pq
 import requests
 
+try:
+    from .source_policy import exclusion_matches, input_hashes
+except ImportError:  # direct script execution
+    from source_policy import exclusion_matches, input_hashes
+
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 AUDIT_PATH = Path(__file__).resolve().with_name("licence_audit.json")
+POLICY_PATH = Path(__file__).resolve().parent / "sources" / "policy.json"
 SEED = 20260927
 NVIDIA = "nvidia/Nemotron-Safety-Guard-Dataset-v3"
 INDIC = "l3cube-pune/IndicGuard"
@@ -144,17 +150,20 @@ EVALUATION_DATASETS = [
 ]
 
 
-def admitted_direct_sources(audit_path=AUDIT_PATH):
+def admitted_direct_sources(audit_path=AUDIT_PATH, policy_path=POLICY_PATH):
     audit_data = json.loads(Path(audit_path).read_text(encoding="utf-8"))
+    policy = json.loads(Path(policy_path).read_text(encoding="utf-8"))
     direct = audit_data.get("direct_sources", {})
     wanted = (NVIDIA, INDIC, MINDS, SNIPS)
     missing = [repo for repo in wanted if repo not in direct]
     if missing:
         raise ValueError("Direct source audit refused unregistered source(s): " + ", ".join(missing))
-    excluded = [repo for repo in wanted if direct[repo].get("use") is not True]
+    excluded = [repo for repo in wanted if direct[repo].get("use") is not True or any(
+        x.get("scope") == "source" and exclusion_matches("extra", repo, None, x)
+        for x in policy.get("exclusions", []))]
     if excluded:
         print("Licence policy refused direct source(s): " + ", ".join(excluded), flush=True)
-    return tuple(repo for repo in wanted if direct[repo].get("use") is True)
+    return tuple(repo for repo in wanted if repo not in excluded)
 
 
 def digest(data):
@@ -640,6 +649,7 @@ def main():
         "coverage_limits": "No scraped sentiment/news data or noncommercial IndicXNLI admitted. Tasks covered: safety, intent, banking support routing; no clean NLI or sentiment source admitted in this audit.",
         "provenance": str(provenance_path.relative_to(ROOT)), "sha256": digest(out.read_bytes()),
         "provenance_sha256": digest(provenance_path.read_bytes()),
+        "inputs": input_hashes(ROOT),
         "evidence_and_downloads": sorted(cache.records.values(), key=lambda x: x["url"]),
     }
     with manifest_path.open("x", encoding="utf-8") as f:

@@ -24,6 +24,7 @@ else:
     from .eval_texts import load as load_eval_texts, norm
     from .loaders import load_rows
     from .registry import ADAPTERS, ENABLED_ENTRIES, adapt, metadata, source_key
+from tools.finetune.source_policy import input_hashes
 
 ROOT = Path(__file__).resolve().parents[3]
 MAX_LOADED = 60_000
@@ -319,7 +320,8 @@ def main(argv=None):
                 "smoke": a.smoke or None, "eval_texts": len(banned), "items": len(all_dev) + len(all_train),
                 "train_items": len(all_train), "dev_items": len(all_dev), "sources": records,
                 "sources_ok": sum("error" not in r for r in records),
-                "sources_failed": sum("error" in r for r in records)}
+                "sources_failed": sum("error" in r for r in records),
+                "inputs": input_hashes(ROOT)}
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     report_path.write_text(_report(manifest), encoding="utf-8")
     print("wrote %s: %d items; %d sources OK, %d failed" % (out_path, manifest["items"],

@@ -117,6 +117,75 @@
     "wnut_17/wnut_17": "Twitter/Reddit/YouTube/StackExchange text",
     "wouldyourather": "scraped 'would you rather' site questions + vote counts; CC0 tag unverified"
   },
+  "source_names": {
+    "FOL-nli": ["FOL-nli"],
+    "HatemojiBuild": ["HatemojiBuild"],
+    "HelpSteer": ["HelpSteer/coherence", "HelpSteer/complexity", "HelpSteer/correctness", "HelpSteer/helpfulness", "HelpSteer/verbosity"],
+    "I2D2": ["I2D2"],
+    "PARARULE-Plus": ["PARARULE-Plus"],
+    "SDOH-NLI": ["SDOH-NLI"],
+    "SpaceNLI": ["SpaceNLI"],
+    "WANLI": ["WANLI"],
+    "agent_action_safety": ["agent_action_safety"],
+    "babi_nli/": ["babi_nli/basic-coreference", "babi_nli/basic-deduction", "babi_nli/basic-induction", "babi_nli/compound-coreference", "babi_nli/conjunction", "babi_nli/counting", "babi_nli/indefinite-knowledge", "babi_nli/lists-sets", "babi_nli/path-finding", "babi_nli/positional-reasoning", "babi_nli/simple-negation", "babi_nli/single-supporting-fact", "babi_nli/size-reasoning", "babi_nli/three-arg-relations", "babi_nli/three-supporting-facts", "babi_nli/time-reasoning", "babi_nli/two-arg-relations", "babi_nli/two-supporting-facts", "babi_nli/yes-no-questions"],
+    "balanced-copa": ["balanced-copa"],
+    "circa": ["circa"],
+    "civil_comments/": ["civil_comments/identity_attack_share", "civil_comments/insult_share", "civil_comments/obscene_share", "civil_comments/severe_toxicity_share", "civil_comments/sexual_explicit_share", "civil_comments/threat_share", "civil_comments/toxicity_share"],
+    "cladder": ["cladder"],
+    "clcd-english": ["clcd-english"],
+    "clinc_oos/plus": ["clinc_oos/plus"],
+    "codah/codah": ["codah/codah"],
+    "commonsense_qa": ["commonsense_qa", "commonsense_qa_2.0"],
+    "corr2cause": ["corr2cause"],
+    "defeasible-nli/atomic": ["defeasible-nli/atomic"],
+    "dnd_style_intents": ["dnd_style_intents"],
+    "e-CARE": ["e-CARE"],
+    "esci": ["esci"],
+    "ethics/deontology": ["ethics/deontology"],
+    "ethics/justice": ["ethics/justice"],
+    "ethics/virtue": ["ethics/virtue"],
+    "feasibilityQA": ["feasibilityQA"],
+    "fig-qa": ["fig-qa"],
+    "hh-rlhf/": ["hh-rlhf/harmless-base", "hh-rlhf/helpful-base", "hh-rlhf/helpful-online", "hh-rlhf/helpful-rejection-sampled"],
+    "it-support-tickets": ["it-support-tickets"],
+    "lex_glue/case_hold": ["lex_glue/case_hold"],
+    "lex_glue/ledgar": ["lex_glue/ledgar"],
+    "logical-entailment": ["logical-entailment"],
+    "lonli": ["lonli"],
+    "math_qa": ["math_qa"],
+    "mindgames": ["mindgames"],
+    "multilingual/xcopa/": ["multilingual/xcopa/et", "multilingual/xcopa/ht", "multilingual/xcopa/id", "multilingual/xcopa/it", "multilingual/xcopa/qu", "multilingual/xcopa/sw", "multilingual/xcopa/ta", "multilingual/xcopa/th", "multilingual/xcopa/tr", "multilingual/xcopa/translation-et", "multilingual/xcopa/translation-ht", "multilingual/xcopa/translation-id", "multilingual/xcopa/translation-it", "multilingual/xcopa/translation-sw", "multilingual/xcopa/translation-ta", "multilingual/xcopa/translation-th", "multilingual/xcopa/translation-tr", "multilingual/xcopa/translation-vi", "multilingual/xcopa/translation-zh", "multilingual/xcopa/vi", "multilingual/xcopa/zh"],
+    "multilingual/xcsr/": ["multilingual/xcsr/X-CODAH-ar", "multilingual/xcsr/X-CODAH-de", "multilingual/xcsr/X-CODAH-en", "multilingual/xcsr/X-CODAH-es", "multilingual/xcsr/X-CODAH-fr", "multilingual/xcsr/X-CODAH-hi", "multilingual/xcsr/X-CODAH-it", "multilingual/xcsr/X-CODAH-jap", "multilingual/xcsr/X-CODAH-nl", "multilingual/xcsr/X-CODAH-pl", "multilingual/xcsr/X-CODAH-pt", "multilingual/xcsr/X-CODAH-ru", "multilingual/xcsr/X-CODAH-sw", "multilingual/xcsr/X-CODAH-ur", "multilingual/xcsr/X-CODAH-vi", "multilingual/xcsr/X-CODAH-zh", "multilingual/xcsr/X-CSQA-ar", "multilingual/xcsr/X-CSQA-de", "multilingual/xcsr/X-CSQA-en", "multilingual/xcsr/X-CSQA-es", "multilingual/xcsr/X-CSQA-fr", "multilingual/xcsr/X-CSQA-hi", "multilingual/xcsr/X-CSQA-it", "multilingual/xcsr/X-CSQA-jap", "multilingual/xcsr/X-CSQA-nl", "multilingual/xcsr/X-CSQA-pl", "multilingual/xcsr/X-CSQA-pt", "multilingual/xcsr/X-CSQA-ru", "multilingual/xcsr/X-CSQA-sw", "multilingual/xcsr/X-CSQA-ur", "multilingual/xcsr/X-CSQA-vi", "multilingual/xcsr/X-CSQA-zh"],
+    "patent-phrase-similarity": ["patent-phrase-similarity"],
+    "poem_sentiment": ["poem_sentiment"],
+    "prm800k_dpo/": ["prm800k_dpo/solution", "prm800k_dpo/step"],
+    "procedural-typed-decisions/": ["procedural-typed-decisions/arithmetic", "procedural-typed-decisions/entity_belief_tracking", "procedural-typed-decisions/event_state_reconstruction", "procedural-typed-decisions/evidence_sufficiency", "procedural-typed-decisions/multi_view_adjudication", "procedural-typed-decisions/needle_retrieval", "procedural-typed-decisions/partial_observation_calibration", "procedural-typed-decisions/policy_applicability", "procedural-typed-decisions/policy_under_uncertainty", "procedural-typed-decisions/record_aggregation", "procedural-typed-decisions/state_perturbation", "procedural-typed-decisions/table_lookup"],
+    "prompt-injections": ["prompt-injections"],
+    "prost": ["prost"],
+    "qasc": ["qasc"],
+    "quartz": ["quartz"],
+    "ruletaker": ["ruletaker"],
+    "shell-safety-v2": ["shell-safety-v2"],
+    "sms_spam": ["sms_spam"],
+    "snips_built_in_intents": ["snips_built_in_intents"],
+    "social_i_qa": ["social_i_qa"],
+    "spartqa-": ["spartqa-mchoice", "spartqa-yn"],
+    "stepgame": ["stepgame"],
+    "temporal-nli": ["temporal-nli"],
+    "utilitarianism": ["utilitarianism"],
+    "winodict": ["winodict"],
+    "winowhy": ["winowhy"],
+    "HelpSteer2/coherence": ["HelpSteer2/coherence"],
+    "HelpSteer2/complexity": ["HelpSteer2/complexity"],
+    "HelpSteer2/correctness": ["HelpSteer2/correctness"],
+    "HelpSteer2/helpfulness": ["HelpSteer2/helpfulness"],
+    "HelpSteer2/verbosity": ["HelpSteer2/verbosity"],
+    "HelpSteer3/edit_quality": ["HelpSteer3/edit_quality"],
+    "HelpSteer3/feedback": ["HelpSteer3/feedback"],
+    "HelpSteer3/preference": ["HelpSteer3/preference"],
+    "HelpSteer3/preference_strength": ["HelpSteer3/preference_strength"],
+    "HelpSteer3/principle": ["HelpSteer3/principle"]
+  },
   "keep_families": {
     "FOL-nli": {
       "licence": "synthetic (sileod unigram), Apache-2.0",
@@ -146,7 +215,7 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false
     },
     "I2D2": {
       "licence": "AI2 generics generated by GPT-2 (MIT model), Apache-2.0",
@@ -154,7 +223,12 @@
       "licence_evidence": "TODO",
       "provenance": "TODO",
       "text_licence_spdx": "TODO",
-      "generator": "TODO",
+      "generator": [
+        {
+          "model": "openai-community/gpt2",
+          "role": "text generator"
+        }
+      ],
       "checked": "TODO",
       "use": true
     },
@@ -411,7 +485,7 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false
     },
     "it-support-tickets": {
       "licence": "real tickets released by source authors under CC-BY-4.0 (PII removed)",
@@ -532,7 +606,7 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false
     },
     "procedural-typed-decisions/": {
       "licence": "procedurally generated, Apache-2.0",

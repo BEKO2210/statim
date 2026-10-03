@@ -19,6 +19,7 @@ on:
       - "tools/finetune/check_sources.py"
       - "tools/finetune/test_check_sources.py"
       - "tools/finetune/licence_audit.json"
+      - "docs/reproductions/mixture-v9.manifest.json"
       - "tools/finetune/mixture_v6/**"
       - "tools/finetune/sources/**"
       - ".github/workflows/mixture-audit.yml"
@@ -37,6 +38,7 @@ on:
       - "tools/finetune/check_sources.py"
       - "tools/finetune/test_check_sources.py"
       - "tools/finetune/licence_audit.json"
+      - "docs/reproductions/mixture-v9.manifest.json"
       - "tools/finetune/mixture_v6/**"
       - "tools/finetune/sources/**"
       - ".github/workflows/mixture-audit.yml"
@@ -55,7 +57,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - run: pip install pytest pyarrow
+      - run: pip install pytest pyarrow requests
       - run: python -m pytest -q tools/finetune/mixture_v6/test_adapters.py tools/finetune/mixture_v6/test_label_fixes.py tools/finetune/test_gate.py tools/finetune/test_train_lora.py bench/test_eval_categories.py tools/finetune/test_check_sources.py
   audit:
     runs-on: ubuntu-24.04

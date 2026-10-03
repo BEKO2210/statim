@@ -15,6 +15,7 @@ from pathlib import Path
 from . import emotion_taxonomy
 from .languages import infer_lang as _infer_lang, to_iso
 from .templates import (aspect_name, describe, instruction, score_levels, seeded, shuffle_choice)
+from tools.finetune.source_policy import exclusion_matches, row_is_excluded
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "sources" / "v6-keep.json"
 POLICY_PATH = REGISTRY_PATH.with_name("policy.json")
@@ -26,8 +27,8 @@ def _entries():
     policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
     excluded = [x for x in policy["exclusions"] if x["registry"] == "v6" and x["scope"] == "source"]
     for entry in raw:
-        matches = [x for x in excluded if x["id"] == entry["id"] and
-                   ("config" not in x or x["config"] == entry.get("config", "default"))]
+        matches = [x for x in excluded if exclusion_matches(
+            "v6", entry["id"], entry.get("config", "default"), x)]
         if matches and entry.get("use") is True:
             raise ValueError("licence-excluded v6 source is enabled: %s::%s" %
                              (entry["id"], entry.get("config", "default")))
@@ -1273,8 +1274,9 @@ def drop_constant_yes_no(items):
 
 def adapt(entry, rows, seed):
     rows = list(rows)
-    if entry["id"] == "Fumika/Wikinews-multilingual":
-        rows = [row for row in rows if infer_lang(entry, row, text=" ".join(row_texts(entry, row))) not in {"ar", "fa"}]
+    policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+    rows = [row for row in rows if not row_is_excluded(
+        "v6", entry["id"], entry.get("config", "default"), row, policy)]
     # Tests may exercise an excluded adapter from its raw registry entry. The
     # Production builders can only pass entries from ENABLED_ENTRIES.
     items = [item for item in adapter_for(entry)(entry, rows, seed) if item]

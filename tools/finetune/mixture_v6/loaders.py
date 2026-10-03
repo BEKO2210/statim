@@ -1321,6 +1321,13 @@ def _postprocess(sid, rows):
 
 def load_rows(entry, limit):
     """Load at most ``limit`` rows. Returns ``(rows, warnings)``."""
+    global PARQUET_REV
+    pinned = entry.get("pinned_commit")
+    if not pinned or pinned == "TODO":
+        raise RuntimeError("source has no pinned_commit")
+    # Workers load one source each, so binding the converted-parquet ref to the
+    # registry's resolved commit cannot leak across sources.
+    PARQUET_REV = pinned
     sid = entry["id"]
     if sid in _DISPATCH:
         rows = _DISPATCH[sid](entry, limit)
