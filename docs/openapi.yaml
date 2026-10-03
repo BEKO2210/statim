@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Statim HTTP API
-  version: 0.9.4
+  version: 0.9.5
   description: 'HTTP API of the Statim decision server. See docs/API.md for the narrative guide and
     complete limit formulas. JSON error bodies are objects with a single string field, detail. GET /ready
     instead returns 503 {"ready": false} when the concurrency cap is full, without Retry-After. Unknown
@@ -15,9 +15,10 @@ servers:
 x-server-configuration:
   authentication:
     env: STATIM_API_KEY=key1,key2
-    flag: --api-key-file FILE (repeatable; one key per line)
+    flag: --api-key-file FILE (repeatable; one key per line, optionally followed by inference, metrics, or inference,metrics)
     behavior: Each explicitly configured source must independently yield a valid key or startup aborts.
-      Keys are trimmed 32-4096 byte printable ASCII strings without whitespace. With no source configured,
+      Environment keys have all scopes. Unscoped file keys have all scopes; inference covers both decision
+      routes and models, while metrics covers /metrics. Keys are 32-4096 byte printable ASCII strings without whitespace. With no source configured,
       only loopback listeners start unless --allow-unauthenticated is passed; that explicit opt-in logs
       auth_off_on_network and records auth=false and auth_status=off.
   environment:
@@ -100,7 +101,7 @@ components:
       scheme: bearer
       description: Required only when STATIM_API_KEY or --api-key-file configures at least one key. The
         header must be exactly 'Bearer ' followed by one configured key. Decision endpoints, metrics,
-        and models require it; health, ready, and the playground remain public. Explicitly configured
+        and models require it; a matching key without the route scope gets 403. Health, ready, and the playground remain public. Explicitly configured
         empty, invalid, missing, or unreadable key sources abort startup.
   parameters:
     RequestId:
@@ -2413,6 +2414,17 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
+        '403':
+          description: The bearer key is valid but lacks the inference scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  value:
+                    detail: API key lacks the 'inference' scope
+                  x-live: false
         '413':
           description: A body, JSON-structure, field, count, aggregate work/token/attention, or response-size
             limit failed. Defaults are 2 MiB body, depth 64, 100000 nodes, 1024 members/object, 4096-byte
@@ -3002,6 +3014,17 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
+        '403':
+          description: The bearer key is valid but lacks the inference scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  value:
+                    detail: API key lacks the 'inference' scope
+                  x-live: false
         '413':
           description: A body, JSON-structure, field, count, aggregate work/token/attention, or response-size
             limit failed. Defaults and formulas are documented in docs/API.md.
@@ -3094,7 +3117,7 @@ paths:
                 ok:
                   value:
                     status: ok
-                    version: 0.9.4
+                    version: 0.9.5
         '400':
           $ref: '#/components/responses/NoRequestBody'
         '413':
@@ -3188,6 +3211,17 @@ paths:
                   value:
                     detail: invalid or missing bearer token
                   x-live: false
+        '403':
+          description: The bearer key is valid but lacks the inference scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  value:
+                    detail: API key lacks the 'inference' scope
+                  x-live: false
         '400':
           $ref: '#/components/responses/NoRequestBody'
         '413':
@@ -3271,7 +3305,7 @@ paths:
 
                 # TYPE statim_model_info gauge
 
-                statim_model_info{model="english",weights="f32",version="0.9.4",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
+                statim_model_info{model="english",weights="f32",version="0.9.5",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
 
                 '
               x-verify: metrics
@@ -3285,6 +3319,16 @@ paths:
                 unauthorized:
                   value:
                     detail: invalid or missing bearer token
+        '403':
+          description: The bearer key is valid but lacks the metrics scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                forbidden:
+                  value:
+                    detail: API key lacks the 'metrics' scope
         '400':
           $ref: '#/components/responses/NoRequestBody'
         '413':
