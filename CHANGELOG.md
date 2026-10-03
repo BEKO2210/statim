@@ -7,6 +7,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Security
+- Licence re-audit: statim-decide-multilingual-base 0.7.0 was trained on 6,200 rows of XNLI, whose
+  upstream licence is CC BY-NC 4.0 although its dataset card says Apache-2.0, and on MultiNLI rows
+  whose fiction genre includes CC-BY-SA material. Those weights break the data policy: no commercial
+  licence is offered for them until a replacement trained on cleared data ships
+  (DATA_LICENSES.md, COMMERCIAL.md).
+
 ### Changed
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.

@@ -6,6 +6,23 @@ AFL-3.0. Excluded: non-commercial or research-only terms, ShareAlike (CC-BY-SA),
 AGPL, MPL, ODbL), custom or unknown terms. Datasets used only to *measure* the model are listed
 separately; the model never trains on them.
 
+## Licence findings (2026-10-03)
+
+A licence re-audit compared each source's recorded licence with the licence of its upstream original.
+Where they disagree, the stricter one applies. Two findings concern the released multilingual model:
+
+| Source in mixture v6 | Rows | Recorded as | Upstream licence | Problem |
+|---|---:|---|---|---|
+| [ankitkupadhyay/XNLI](https://huggingface.co/datasets/ankitkupadhyay/XNLI) | 6,200 | apache-2.0 (dataset card) | [facebookresearch/XNLI LICENSE](https://github.com/facebookresearch/XNLI/blob/main/LICENSE): "Attribution-NonCommercial 4.0 International" | non-commercial |
+| [nyu-mll/multi_nli](https://huggingface.co/datasets/nyu-mll/multi_nli) | 6,200 | OANC licence | the corpus card: most of it under the OANC licence, but the FICTION section includes *Seven Swords* under "Creative Commons Share-Alike 3.0 Unported" | ShareAlike in part of one genre; the mixture did not keep the genre, so fiction rows cannot be ruled out |
+| [boun-tabi/nli_tr](https://huggingface.co/datasets/boun-tabi/nli_tr) (`multinli_tr`) | 6,200 | same terms as MultiNLI | a translation of MultiNLI, same terms | as above |
+
+**Affected weights:** statim-decide-multilingual-base **0.7.0** (trained on mixture v8 = v6 + v5) and
+the adapters published on top of it. These weights do not meet this page's own rule. No commercial
+licence is granted for them; they stay available for noncommercial use and evaluation, and they will
+be replaced by a model trained only on data that passes the upstream check. The audit of the remaining
+sources of mixtures v5 and v6 is in progress and will be added here.
+
 ## Base models
 
 | Model | Licence |
