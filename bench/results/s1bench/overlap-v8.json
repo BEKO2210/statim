@@ -1,0 +1,91 @@
+{
+ "mixture": "/home/belkis/Schreibtisch/My WorkSpace/statim/data/mixture-v8.jsonl.gz",
+ "mixture_rows": 725971,
+ "mixture_strings": 590346,
+ "min_len": 30,
+ "subsets": {
+  "vitaminc-dev": {
+   "n": 599,
+   "overlap": 0,
+   "items": []
+  },
+  "massive-en-US": {
+   "n": 350,
+   "overlap": 0,
+   "items": []
+  },
+  "massive-de-DE": {
+   "n": 350,
+   "overlap": 0,
+   "items": []
+  },
+  "boolq": {
+   "n": 300,
+   "overlap": 0,
+   "items": []
+  },
+  "squad2": {
+   "n": 299,
+   "overlap": 0,
+   "items": []
+  },
+  "paws": {
+   "n": 250,
+   "overlap": 0,
+   "items": []
+  },
+  "multinli": {
+   "n": 299,
+   "overlap": 0,
+   "items": []
+  },
+  "civil_comments": {
+   "n": 300,
+   "overlap": 0,
+   "items": []
+  },
+  "aegis2": {
+   "n": 250,
+   "overlap": 15,
+   "items": [
+    21,
+    28,
+    38,
+    74,
+    81,
+    88,
+    110,
+    114,
+    137,
+    158,
+    197,
+    213,
+    220,
+    222,
+    245
+   ]
+  },
+  "helpsteer2": {
+   "n": 249,
+   "overlap": 1,
+   "items": [
+    152
+   ]
+  },
+  "summeval-relevance": {
+   "n": 240,
+   "overlap": 0,
+   "items": []
+  },
+  "summeval-consistency": {
+   "n": 144,
+   "overlap": 0,
+   "items": []
+  },
+  "pubmedqa": {
+   "n": 250,
+   "overlap": 0,
+   "items": []
+  }
+ }
+}
