@@ -7,6 +7,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
+  items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for
+  its Laya base, 0.689 for Lev and 0.761 for Jev; per-item records and `bench/s1bench_*.py` to
+  reproduce it.
+
 ## [0.9.5] - 2026-10-03
 
 The Hugging Face Space now runs the released 0.7.0 model (it had served 0.4.0 since it was
