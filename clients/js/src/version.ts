@@ -1,2 +1,2 @@
 /** Tracks the Statim HTTP API this client was written against. */
-export const version = "0.9.4";
+export const version = "0.9.5";
