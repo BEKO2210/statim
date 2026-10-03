@@ -7,6 +7,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- Releases publish only after the CUDA and Vulkan parity gates pass on the self-hosted GPU runner
+  for the tagged commit: `release.yml` calls the `gpu` workflow (READINESS P1 #43).
+
 ### Fixed
 - The Hugging Face Space served Statim Decide Multilingual Base **0.4.0** since it was created: its
   Dockerfile downloaded the model from `resolve/main`, and the Hub reused the cached download layer
