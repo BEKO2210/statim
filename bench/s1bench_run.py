@@ -28,12 +28,14 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--limit", type=int, default=0, help="items per subset (0: all); for smoke runs only")
+    ap.add_argument("--model", default=None,
+                    help="request field model (default: levbench's \"local\"); \"consensus\" asks Statim for both checkpoints")
     a = ap.parse_args()
 
-    client, model = runner.build_client("lev", None, a.base_url, a.timeout)
+    client, model = runner.build_client("lev", a.model, a.base_url, a.timeout)
     index = json.loads((a.tasks / "index.json").read_text())
     out = {"harness": "levbench run_eval, backend lev, concurrency 1", "base_url": a.base_url,
-           "timeout_s": a.timeout, "python": platform.python_version(), "subsets": {}}
+           "timeout_s": a.timeout, "model_field": a.model or "local", "python": platform.python_version(), "subsets": {}}
     try:
         out["lev_commit"] = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
                                            check=True).stdout.strip()

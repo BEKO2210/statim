@@ -20,6 +20,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
   secret key bytes (READINESS P1 #12). A key listed twice, in the file or in `STATIM_API_KEY`, is a
   start-up error.
+- S1Bench stage 1 (`docs/reproductions/s1bench-stage1-2026-10-03.md`, pre-registered): the consensus
+  of en-large and multilingual scores 0.651 macro (0.600 on never-trained sources, ECE 0.105), the
+  best deployable configuration; en-large alone 0.608, `--calibrate` 0.615.
 
 ## [0.9.5] - 2026-10-03
 
