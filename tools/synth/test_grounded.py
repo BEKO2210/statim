@@ -1,4 +1,5 @@
 import gzip
+import hashlib
 import json
 import pickle
 import sys
@@ -47,10 +48,13 @@ def test_fixture_loaders_require_native_ids_and_do_not_stamp_injected_rows(tmp_p
     assert len(EUR_LANGUAGES) == 24
     duplicate = words("bill")
     bills = [{"bill_id": "B-1", "text": duplicate + "\n\n" + duplicate},
-             {"title": "not-an-id", "text": words("skip")}]
+             {"title": "not-an-id", "text": words("skip")},
+             {"title": "no text"}]
     got = list(iter_corpus("billsum", tmp_path / "cache", rows=bills))
-    assert len(got) == 1
-    assert got[0][2] == "FiscalNote/billsum:train:B-1"
+    # the real BillSum has no id column: the full text's SHA-256 is the id, never the title
+    assert [g[2] for g in got] == [
+        "FiscalNote/billsum:train:B-1",
+        "FiscalNote/billsum:train:sha256-" + hashlib.sha256(words("skip").encode()).hexdigest()]
     assert got[0][3] is None
     assert 60 <= len(got[0][0].split()) <= 400
 

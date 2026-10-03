@@ -155,9 +155,12 @@ def _sections(section):
 
 def _row_text(name, row):
     if name == "billsum":
-        ident = row.get("bill_id") or row.get("id")
-        return row.get("text"), "en", (
-            "FiscalNote/billsum:train:%s" % ident if ident else None)
+        # BillSum has no id column (text, summary, title); the full text's SHA-256 identifies a bill
+        # uniquely (a title hash did not: titles repeat)
+        text = row.get("text")
+        ident = row.get("bill_id") or row.get("id") or (
+            "sha256-" + hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None)
+        return text, "en", "FiscalNote/billsum:train:%s" % ident if ident else None
     if name == "eur_lex_sum":
         ident = row.get("celex_id")
         return row.get("reference"), row.get("_lang"), (
