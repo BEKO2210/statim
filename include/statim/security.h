@@ -16,6 +16,23 @@ struct ApiKeyConfigError : std::runtime_error {
 struct FrameAncestorsConfigError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
+enum class ApiScope : uint8_t {
+    inference = 1,
+    metrics = 2,
+};
+constexpr uint8_t all_api_scopes = static_cast<uint8_t>(ApiScope::inference) |
+                                   static_cast<uint8_t>(ApiScope::metrics);
+struct ApiKey {
+    std::string key;
+    std::string id;
+    uint8_t scopes = all_api_scopes;
+    ApiKey() = default;
+    ApiKey(std::string value, uint8_t scope_mask = all_api_scopes);
+    bool operator==(const ApiKey& other) const {
+        return key == other.key && id == other.id && scopes == other.scopes;
+    }
+};
+bool key_has_scope(const ApiKey& key, ApiScope scope);
 struct SecurityLimits {
     size_t max_json_depth = 64;
     size_t max_json_nodes = 100000;
@@ -52,8 +69,8 @@ struct DecideRequest {
 // (400/413/422) or QuestionError (422) for caller mistakes; anything else is a server bug.
 DecideRequest parse_decide_request(const std::string& raw, bool batch, const RequestDefaults& defaults = {},
                                    const SecurityLimits& limits = {});
-std::vector<std::string> load_key_file(const std::string& path);
-std::vector<std::string> load_key_env(const std::string& value);
+std::vector<ApiKey> load_key_file(const std::string& path);
+std::vector<ApiKey> load_key_env(const std::string& value);
 void validate_api_key(const std::string& key, const std::string& source);
 bool is_loopback_host(const std::string& host);
 std::vector<std::string> parse_frame_ancestors(const std::string& value);

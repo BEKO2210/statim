@@ -35,7 +35,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 # Records of the past: their links are still checked, but not their paths, versions and flags.
-HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md"}
+HISTORY = {"CHANGELOG.md", "tools/finetune/sources/v6-research.md", "docs/reproductions/clean-room.md",
+           # dated S1Bench records: they quote paths in the external lev and nimble repositories and
+           # name the release binary the run used
+           "docs/reproductions/s1bench-protocol.md", "docs/reproductions/s1bench-2026-10-03.md",
+           "docs/reproductions/s1bench-stage1-protocol.md", "docs/reproductions/s1bench-stage1-2026-10-03.md"}
 # Files whose release download URLs pin the version a recorded run used (with the reason).
 PINNED = {"docs/reproductions/clean-room.md": "a dated clean-room reproduction of v0.6.0",
           "docs/ORT.md": "the ONNX Runtime comparison, measured with a release-flag build of v0.9.2"}

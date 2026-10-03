@@ -88,21 +88,31 @@ decisions, with no measurable accuracy change.
 
 The comparison does not cover TensorRT or a GPU run. [Full protocol and every row](docs/ORT.md)
 
+### On a public suite: S1Bench
+
+On S1Bench (13 public subsets, 3,880 items, the harness Lev's authors used), the multilingual model
+0.7.0 scores **0.638** macro, above its untuned Laya base (0.579) and below Lev, a 4B LLM on a GPU
+(0.689), and the hosted Jev (0.761). It leads on toxicity and trails on reading comprehension and
+paraphrase. [Protocol, per-subset results and caveats](docs/reproductions/s1bench-2026-10-03.md).
+The best deployable configuration, the consensus of the English and multilingual models, scores
+0.651, with a lower calibration error than Lev (ECE 0.105 against 0.115; Jev 0.091).
+[Stage 1](docs/reproductions/s1bench-stage1-2026-10-03.md)
+
 ## Quick start
 
 Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, ask.
 
 ```bash
 # 1. Download the engine (3 MB) and the multilingual model (357 MB), and verify both
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.4/statim-0.9.4-linux-x86_64-cpu.tar.gz
-curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.4/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.4-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.5/statim-0.9.5-linux-x86_64-cpu.tar.gz
+curl -fLO https://github.com/BEKO2210/statim/releases/download/v0.9.5/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf statim-0.9.5-linux-x86_64-cpu.tar.gz
 curl -fLO https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/statim-decide-multilingual-base-q8_0.gguf
 curl -fL -o SHA256SUMS.model https://huggingface.co/Beko2210/statim-decide-multilingual-base/resolve/main/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS.model
 
 # 2. Start the server (it keeps running; it is ready when it logs "listening")
-./statim-0.9.4-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
+./statim-0.9.5-linux-x86_64-cpu/statim serve -m multilingual=statim-decide-multilingual-base-q8_0.gguf --port 8080
 
 # 3. In a second terminal: one ticket, three typed questions
 curl -s localhost:8080/v1/systemone -d '{
@@ -464,7 +474,7 @@ else may build through ggml but is untested.
 
 ## Status and roadmap
 
-The current release is v0.9.4: Linux x86-64 binaries for CPU and Vulkan, CUDA from source (see
+The current release is v0.9.5: Linux x86-64 binaries for CPU and Vulkan, CUDA from source (see
 [platform support](#platform-support)), two published models, client SDKs, and a public demo. 0.9.2 brings a packed f32 GEMM that makes Statim level with or faster than ONNX Runtime on short
 inputs; 0.9.1 adds the [comparison with ONNX Runtime](docs/ORT.md) and a structural GGUF check before
 ggml parses a model file; 0.9.0 freezes HTTP API v1, with contract

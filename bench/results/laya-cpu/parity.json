@@ -1,0 +1,32 @@
+{
+  "CUDA_VISIBLE_DEVICES": "",
+  "command": [
+    "/home/belkis/Schreibtisch/My WorkSpace/statim/.venv-train/bin/python",
+    "/home/belkis/Schreibtisch/My WorkSpace/statim-laya/bench/laya_compare.py",
+    "parity",
+    "--model",
+    "/home/belkis/Schreibtisch/My WorkSpace/statim/models/laya-multilingual-v9",
+    "--rows",
+    "/home/belkis/Schreibtisch/My WorkSpace/statim-perf/build-ort/golden_v9.jsonl",
+    "--out",
+    "bench/results/laya-cpu/parity.json"
+  ],
+  "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+  "git_commit": "56bf7a70a4a44e155545dac99de7cc23183d7a12",
+  "model": "/home/belkis/Schreibtisch/My WorkSpace/statim/models/laya-multilingual-v9",
+  "parity": {
+    "argmax_agree": 240,
+    "items": 240,
+    "max_abs_logit": 0.0,
+    "pass": true,
+    "required_argmax_agree": 240,
+    "tolerance": 0.001
+  },
+  "rows": "/home/belkis/Schreibtisch/My WorkSpace/statim-perf/build-ort/golden_v9.jsonl",
+  "versions": {
+    "laya": "0.3.20",
+    "numpy": "2.5.3",
+    "python": "3.12.3",
+    "torch": "2.14.0"
+  }
+}
