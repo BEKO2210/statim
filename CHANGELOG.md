@@ -20,6 +20,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   the review threshold said, so the threshold looked broken. Only the threshold marks an answer now
   ("check this one"); it defaults to 60 % and is shown in percent.
 
+### Security
+- Vendored C++ headers, model and tokenizer downloads, and Docker base images are now pinned to
+  immutable versions or digests and verified in CI; Dependabot monitors both Docker build contexts
+  weekly (READINESS P1 #22).
+
 ## [0.9.4] - 2026-10-03
 
 The Hugging Face Space shows the playground again (0.9.3 blocked its embedding), the playground
