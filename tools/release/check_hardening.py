@@ -7,6 +7,7 @@ Checks:
 - Non-executable stack (GNU_STACK segment without E flag)
 - Stack protector (imports __stack_chk_fail)
 - Fortify source (imports at least one __*_chk symbol)
+- With --max-glibc X.Y: no imported symbol needs a GLIBC_ version newer than X.Y
 
 Standard library only.
 """
@@ -31,7 +32,13 @@ def is_elf_file(path: Path) -> bool:
         return False
 
 
-def inspect_elf(path: Path, readelf: str) -> tuple[list[str], list[str]]:
+def glibc_needed(readelf_out: str) -> tuple[int, int] | None:
+    """The highest GLIBC_x.y version any imported symbol needs, from readelf --dyn-syms output."""
+    versions = [(int(a), int(b)) for a, b in re.findall(r"@GLIBC_(\d+)\.(\d+)", readelf_out)]
+    return max(versions) if versions else None
+
+
+def inspect_elf(path: Path, readelf: str, max_glibc: tuple[int, int] | None = None) -> tuple[list[str], list[str]]:
     """Run readelf on an ELF binary and check hardening properties.
 
     Returns (errors, fortify_symbols).
@@ -100,10 +107,15 @@ def inspect_elf(path: Path, readelf: str) -> tuple[list[str], list[str]]:
     if not chk_symbols:
         errors.append("fortify missing: missing symbol: __*_chk")
 
+    if max_glibc is not None:
+        needed = glibc_needed(out)
+        if needed is not None and needed > max_glibc:
+            errors.append("needs glibc %d.%d, newer than the allowed %d.%d" % (needed + max_glibc))
+
     return errors, chk_symbols
 
 
-def check_target(target_path: Path, readelf: str) -> tuple[int, int]:
+def check_target(target_path: Path, readelf: str, max_glibc: tuple[int, int] | None = None) -> tuple[int, int]:
     """Check a binary file or tar.gz archive.
 
     Returns (passed_count, failed_count).
@@ -138,7 +150,7 @@ def check_target(target_path: Path, readelf: str) -> tuple[int, int]:
             for elf in elf_files:
                 rel = elf.relative_to(extracted_root)
                 label = f"{target_path}:{rel}"
-                errs, chks = inspect_elf(elf, readelf)
+                errs, chks = inspect_elf(elf, readelf, max_glibc)
                 if errs:
                     failed += 1
                     print(f"FAIL: {label}:", file=sys.stderr)
@@ -150,7 +162,7 @@ def check_target(target_path: Path, readelf: str) -> tuple[int, int]:
                     print(f"PASS: {label} (PIE, full RELRO, noexecstack, __stack_chk_fail, {chk_str})")
             return passed, failed
 
-    errs, chks = inspect_elf(target_path, readelf)
+    errs, chks = inspect_elf(target_path, readelf, max_glibc)
     if errs:
         print(f"FAIL: {target_path}:", file=sys.stderr)
         for err in errs:
@@ -166,12 +178,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binaries", nargs="+", type=Path, help="ELF binaries or archives to check")
     parser.add_argument("--readelf", default="readelf", help="path to readelf executable (default: readelf)")
+    parser.add_argument("--max-glibc", metavar="X.Y",
+                        help="fail when a binary needs a newer glibc (release baseline: 2.28)")
     args = parser.parse_args()
+    max_glibc = None
+    if args.max_glibc:
+        m = re.fullmatch(r"(\d+)\.(\d+)", args.max_glibc)
+        if not m:
+            parser.error("--max-glibc must look like 2.28")
+        max_glibc = (int(m.group(1)), int(m.group(2)))
 
     total_passed = 0
     total_failed = 0
     for target in args.binaries:
-        p, f = check_target(target, args.readelf)
+        p, f = check_target(target, args.readelf, max_glibc)
         total_passed += p
         total_failed += f
 

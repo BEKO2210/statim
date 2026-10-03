@@ -26,10 +26,12 @@ void geglu_rows(float* dst, const float* src, long rows, long ff, long row_begin
         const float* in = src + r * 2 * ff;
         const float* gate = in + ff;
         float* out = dst + r * ff;
+        // erf_approx is branch-free (selects compile to blends) and division-free, so this loop
+        // vectorizes to eight AVX2 lanes in portable builds without libmvec's erff (glibc 2.35).
 #pragma omp simd
         for (long i = 0; i < ff; ++i) {
             const float x = in[i];
-            out[i] = 0.5f * x * (1.0f + erff(x * kInvSqrt2)) * gate[i];
+            out[i] = 0.5f * x * (1.0f + erf_approx(x * kInvSqrt2)) * gate[i];
         }
     }
 }

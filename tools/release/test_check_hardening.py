@@ -109,5 +109,29 @@ class TestCheckHardening(unittest.TestCase):
         self.assertIn("missing symbol: __stack_chk_fail", proc_fail.stderr)
 
 
+class TestGlibcBaseline(unittest.TestCase):
+    """--max-glibc reads the highest GLIBC_x.y that an imported symbol needs (READINESS P1 #55)."""
+
+    def test_highest_version_wins(self) -> None:
+        sys.path.insert(0, str(CHECKER.parent))
+        import check_hardening as ch
+        out = ("     5: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND memcpy@GLIBC_2.14 (3)\n"
+               "     6: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __isoc23_strtol@GLIBC_2.38 (5)\n"
+               "     7: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND pthread_create@GLIBC_2.2.5 (2)\n")
+        self.assertEqual(ch.glibc_needed(out), (2, 38))
+        self.assertIsNone(ch.glibc_needed("no versioned symbols"))
+
+    def test_system_binary_against_a_tight_and_a_loose_limit(self) -> None:
+        if not shutil.which("readelf"):
+            raise unittest.SkipTest("readelf is absent")
+        target = Path("/bin/true")
+        loose = subprocess.run([sys.executable, str(CHECKER), "--max-glibc", "99.0", str(target)],
+                               capture_output=True, text=True)
+        tight = subprocess.run([sys.executable, str(CHECKER), "--max-glibc", "2.0", str(target)],
+                               capture_output=True, text=True)
+        self.assertNotIn("needs glibc", loose.stdout + loose.stderr)
+        self.assertIn("needs glibc", tight.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

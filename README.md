@@ -467,7 +467,7 @@ else may build through ggml but is untested.
 
 | Platform | Release binary | CI | Tested on hardware |
 |---|---|---|---|
-| Linux x86-64, CPU (AVX2, FMA, F16C, BMI2) | yes | build, full `ctest`, ASan + UBSan, fuzzing | Ryzen 7 5800X; Xeon E3-1505M v5 |
+| Linux x86-64, CPU (AVX2, FMA, F16C, BMI2) | yes; glibc 2.28 or newer (0.9.5 and earlier: 2.38) | build, full `ctest`, ASan + UBSan, fuzzing | Ryzen 7 5800X; Xeon E3-1505M v5 |
 | Linux x86-64, Vulkan | yes | builds in the release job only; no GPU runner | RTX 3070, driver 580.159.03: the four `*_vulkan` parity tests pass (2026-10-01) |
 | Linux x86-64, CUDA | no; build from source | no | RTX 3070, CUDA 12.8: the four `*_cuda` parity tests pass (2026-10-01) |
 | x86-64 without AVX2 | no; the release binaries stop with a message naming the missing features | `cpu_check` test | Core i5-2520M and i3-3227U: that message, not a crash ([BUILD.md](docs/BUILD.md#older-x86-cpus)) |
