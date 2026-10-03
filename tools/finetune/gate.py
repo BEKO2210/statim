@@ -5,10 +5,13 @@
     .venv-train/bin/python tools/finetune/gate.py eval models/laya-multilingual-clean
     .venv-train/bin/python tools/finetune/gate.py compare models/champion models/challenger
 
-Validation uses held-out development suites. Its equally weighted mean may not fall by more than
-VAL_MARGIN (one point); the log also gives a paired 95% interval for the mean difference. Held-out
-test cells use one-sided exact McNemar tests on discordant answers, with separate Holm-Bonferroni
-correction for drops and gains. Family row- and suite-weighted means use the observed per-item
+Validation uses held-out development suites. The lower bound of a paired 95% interval for the
+unweighted mean of suite deltas may not fall below -VAL_MARGIN (one point); each suite's half-width
+is at least the zero-event Clopper-Pearson bound. Two held-out regression tests block, and either one is
+enough: per-cell one-sided exact McNemar tests Holm-corrected across cells (one collapsed language
+must not hide behind gains in the others), and capability-level exact McNemar tests that pool
+paired items across cells and are Holm-corrected across capabilities (a loss spread thinly over
+many small cells must not hide either); a capability also blocks on a drop beyond its tolerance. Family row- and suite-weighted means use the observed per-item
 differences d_i = challenger_correct - champion_correct. Their standard errors combine the sample
 variance of each cell's mean with the same cell/group weights as the reported pooled mean. This
 analytic paired estimator was chosen over a bootstrap because it is deterministic, fast, and
@@ -22,11 +25,13 @@ per-item outcomes, so this is a synthetic illustration: on 150 items, accuracies
 9 champion-right/challenger-wrong and 3 reverse discordances have unpaired SE 0.0478, but the
 per-item paired SE is 0.0229 (2.1x smaller).
 
-A challenger is promoted only when validation holds, no paired held-out regression remains, and at
-least one paired family mean has a Holm-significant gain. Old eval.json files cannot
-prove pairing and are refused. ``compare --legacy-unpaired`` can print the former approximation for
-historical inspection, but is labelled report-only and can never promote. LoRA adapters use the same
-paired held-out path through adapter_decision.
+A challenger is promoted only when validation holds, no held-out regression remains, and at
+least one paired family mean has a Holm-significant gain. Evaluation is strict by default. Every
+artifact records suite/registry definition hashes and suite completion; missing or failed suites,
+suite-set/item-pool/registry mismatches, and unverifiable old artifacts produce ``VERDICT: BLOCKED``.
+``eval --no-strict`` artifacts and ``compare --no-strict`` are report-only and can never promote.
+``compare --legacy-unpaired`` remains historical report-only. LoRA adapters use the same paired
+held-out path through adapter_decision.
 """
 import argparse
 import gzip
@@ -52,6 +57,30 @@ CONVERT_PY = os.environ.get("STATIM_CONVERT_PY", os.path.join(ROOT, ".venv", "bi
 ITEMS_NAME = "eval-items.jsonl.gz"
 ALPHA = 0.05
 VAL_MARGIN = 0.01
+DEFAULT_CAPABILITY_TOLERANCE = 0.02
+UNDERPOWERED_N = 600
+EVAL_SCRIPTS = ("tools/finetune/eval_dev.py", "tools/finetune/eval_laya.py",
+                "bench/eval_multilingual.py", "bench/eval_zeroshot.py", "bench/eval_categories.py")
+
+# One mapping owns the semantic grouping. Exact names precede prefixes; unknown suites get a stable
+# family of their own, so adding a benchmark never silently drops it from capability testing.
+CAPABILITY_RULES = {
+    "reading": {"belebele", "categories:reading"},
+    "nli": {"indonli", "farstail", "categories:nli"},
+    "paraphrase/similarity": {"semrel", "paws", "paws-x", "categories:similarity"},
+    "intent": {"test/banking77", "hwu64", "categories:intent"},
+    "multilingual-intent": {"amazon_massive_intent"},
+    "sentiment": {"multilingual_sentiments", "categories:sentiment"},
+    "emotion": {"go_emotions", "test/emotion", "categories:emotion"},
+    "safety": {"multi_hatecheck", "categories:safety"},
+    "pii": {"categories:pii"},
+    "fact_check": {"categories:fact_check"},
+    "topic": {"sib200", "test/ag_news", "categories:topic"},
+    "stance": {"categories:stance"},
+    "formality": {"categories:formality"},
+    "urgency": {"categories:urgency"},
+    "complaint": {"categories:complaint"},
+}
 
 
 def run(cmd):
@@ -72,6 +101,39 @@ def sha256_file(path):
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def definition_hash(paths):
+    """Hash named definition files, including names to prevent concatenation ambiguity."""
+    h = hashlib.sha256()
+    for rel in sorted(paths):
+        h.update(rel.encode("utf-8") + b"\0")
+        with open(os.path.join(ROOT, rel), "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def current_definitions():
+    registry = "tools/finetune/mixture_v6/registry.py"
+    return {
+        "registry_sha256": definition_hash([registry]),
+        "suite_sha256": {script: definition_hash([script]) for script in EVAL_SCRIPTS
+                         if os.path.isfile(os.path.join(ROOT, script))},
+    }
+
+
+def capability_for(cell):
+    stem = cell if cell.startswith("test/") else cell.rsplit("/", 1)[0]
+    for capability, names in CAPABILITY_RULES.items():
+        if stem in names or any(stem.startswith(name + "/") for name in names):
+            return capability
+    if stem.startswith("categories:"):
+        return stem.split(":", 1)[1]
+    if stem.startswith("test/"):
+        return stem.split("/", 1)[1]
+    return stem
 
 
 def gguf_for(model_dir):
@@ -95,7 +157,7 @@ def _prediction_rows(path, cell_key):
     return rows
 
 
-def http_suites(model_dir, tmp, mixture=None):
+def http_suites(model_dir, tmp, mixture=None, strict=True):
     srv = subprocess.Popen([BIN, "serve", "--device", DEVICE, "-m", f"m={gguf_for(model_dir)}",
                             "--port", str(PORT), "--no-access-log"], cwd=ROOT,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -106,49 +168,82 @@ def http_suites(model_dir, tmp, mixture=None):
                 break
             except Exception:
                 time.sleep(1)
-        rows, items = [], []
+        rows, items, status = [], [], {}
         categories = ["--n", "150"] + (["--exclude-mixture", mixture] if mixture else [])
         for script, extra in (("bench/eval_multilingual.py", ["--n", "150"]),
                               ("bench/eval_zeroshot.py", ["--n", "150"]),
                               ("bench/eval_categories.py", categories)):
             if not os.path.exists(os.path.join(ROOT, script)):
+                status[script] = {"status": "missing", "detail": "script does not exist"}
                 continue
             stem = os.path.basename(script)
             out = os.path.join(tmp, stem + ".jsonl")
             pred = os.path.join(tmp, stem + ".items.jsonl")
-            run([PY, script, "--url", f"http://127.0.0.1:{PORT}", "--model", "multilingual",
-                 "--out", out, "--predictions", pred, *extra])
-            rows += [json.loads(line) for line in open(out, encoding="utf-8")]
+            command = [PY, script, "--url", f"http://127.0.0.1:{PORT}", "--model", "multilingual",
+                       "--out", out, "--predictions", pred, *extra]
+            if stem == "eval_categories.py":
+                command.append("--strict" if strict else "--no-strict")
+            try:
+                run(command)
+            except SystemExit as exc:
+                status[script] = {"status": "failed", "detail": str(exc)}
+                continue
+            script_rows = [json.loads(line) for line in open(out, encoding="utf-8")]
+            scored = [r for r in script_rows if r.get("lang") != "macro" and "accuracy" in r]
+            if not scored:
+                status[script] = {"status": "failed", "detail": "suite produced no scored cells"}
+                continue
+            status[script] = {"status": "ok", "cells": len(scored)}
+            rows += script_rows
             if stem == "eval_categories.py":
                 key = lambda r: f"categories:{r['suite']}/{r['lang']}"
             else:
                 key = lambda r: f"{r['suite']}/{r['lang']}"
             items += _prediction_rows(pred, key)
-        return rows, items
+        return rows, items, status
     finally:
         srv.send_signal(signal.SIGINT)
         srv.wait(timeout=60)
 
 
-def evaluate(model_dir, mixture=None):
+def evaluate(model_dir, mixture=None, strict=True):
     tmp = os.path.join(model_dir, "eval-tmp")
     os.makedirs(tmp, exist_ok=True)
-    res = {"model": model_dir, "validation": {}, "heldout": {}, "reported": {}, "mixture": mixture}
+    res = {"model": model_dir, "validation": {}, "heldout": {}, "reported": {}, "mixture": mixture,
+           "gate_schema": 2, "strict": strict, "definitions": current_definitions(), "suite_status": {}}
     dev_items = os.path.join(tmp, "eval_dev.items.jsonl")
-    dev = jsonl(run([PY, "tools/finetune/eval_dev.py", model_dir, "--predictions", dev_items]))[0]
-    res["validation"] = {k: {"acc": dev[k], "n": dev["n"][k]}
-                         for k in dev if k not in ("model", "n", "seconds", "mean")}
-    items = _prediction_rows(dev_items, lambda r: "validation:" + r["suite"])
+    items = []
+    try:
+        dev = jsonl(run([PY, "tools/finetune/eval_dev.py", model_dir, "--predictions", dev_items]))[0]
+        res["validation"] = {k: {"acc": dev[k], "n": dev["n"][k]}
+                             for k in dev if k not in ("model", "n", "seconds", "mean",
+                                                       "suite_definition_sha256")}
+        items += _prediction_rows(dev_items, lambda r: "validation:" + r["suite"])
+        res["suite_status"]["tools/finetune/eval_dev.py"] = {
+            "status": "ok" if res["validation"] else "failed",
+            "detail": "" if res["validation"] else "suite produced no scored cells",
+            "cells": len(res["validation"])}
+    except (SystemExit, IndexError, OSError, KeyError) as exc:
+        res["suite_status"]["tools/finetune/eval_dev.py"] = {"status": "failed", "detail": str(exc)}
 
     laya_items = os.path.join(tmp, "eval_laya.items.jsonl")
     command = [PY, "tools/finetune/eval_laya.py", model_dir, "--n", "2000", "--head-max-len", "512",
                "--predictions", laya_items]
-    for r in jsonl(run(command)):
-        res["heldout"][f"test/{r['suite']}"] = {"acc": r["accuracy"], "n": r.get("n", 2000),
-                                                  "ece": r.get("ece")}
-    items += _prediction_rows(laya_items, lambda r: "test/" + r["suite"])
+    try:
+        for r in jsonl(run(command)):
+            res["heldout"][f"test/{r['suite']}"] = {"acc": r["accuracy"], "n": r.get("n", 2000),
+                                                      "ece": r.get("ece")}
+        items += _prediction_rows(laya_items, lambda r: "test/" + r["suite"])
+        laya_cells = sum(k.startswith("test/") for k in res["heldout"])
+        res["suite_status"]["tools/finetune/eval_laya.py"] = {
+            "status": "ok" if laya_cells else "failed",
+            "detail": "" if laya_cells else "suite produced no scored cells", "cells": laya_cells}
+    except (SystemExit, OSError, KeyError) as exc:
+        res["suite_status"]["tools/finetune/eval_laya.py"] = {"status": "failed", "detail": str(exc)}
 
-    http_records, http_items = http_suites(model_dir, tmp, mixture)
+    http_records, http_items, http_status = http_suites(model_dir, tmp, mixture, strict)
+    res["suite_status"].update(http_status)
+    res["skipped"] = skipped_cells(http_records)
     heldout, reported = heldout_cells(http_records)
     res["heldout"].update(heldout)
     res["reported"].update(reported)
@@ -161,10 +256,21 @@ def evaluate(model_dir, mixture=None):
     res["eval_items_sha256"] = sha256_file(items_path)
     with open(os.path.join(model_dir, "eval.json"), "w", encoding="utf-8") as f:
         json.dump(res, f, indent=1)
-    print(json.dumps({"validation_mean": round(sum(v["acc"] for v in res["validation"].values()) /
-                                                len(res["validation"]), 4),
+    validation_mean = (round(sum(v["acc"] for v in res["validation"].values()) /
+                             len(res["validation"]), 4) if res["validation"] else None)
+    print(json.dumps({"validation_mean": validation_mean,
                       "heldout_suites": len(res["heldout"]),
-                      "eval_items_sha256": res["eval_items_sha256"]}))
+                      "eval_items_sha256": res["eval_items_sha256"],
+                      "suite_status": res["suite_status"]}))
+
+
+def skipped_cells(records):
+    """Category cells the pool cannot fill (too few items, one class dominates). The set is a
+    function of the pool and the seed, so champion and challenger must skip the same cells; it is
+    recorded so that missing coverage is visible instead of silently absent."""
+    return {f"categories:{r['suite']}/{r['lang']}": {"why": r["skipped"], "pool": r.get("pool"),
+                                                     "seed": r.get("seed"), "n": r.get("n")}
+            for r in records if r.get("family") == "categories" and r.get("skipped")}
 
 
 def suite_key(record):
@@ -201,7 +307,57 @@ def pools_differ(x, y):
     if x.get("pool") != y.get("pool"):
         return True
     hx, hy = x.get("pool_items_sha256"), y.get("pool_items_sha256")
-    return hx is not None and hy is not None and hx != hy
+    return not hx or not hy or hx != hy
+
+
+def artifact_causes(label, data):
+    causes = []
+    if data.get("gate_schema") != 2:
+        causes.append(f"{label}: missing gate schema/strict completeness metadata")
+    definitions = data.get("definitions") or {}
+    if not definitions.get("registry_sha256"):
+        causes.append(f"{label}: missing registry SHA-256")
+    suite_hashes = definitions.get("suite_sha256") or {}
+    for script in EVAL_SCRIPTS:
+        if script not in suite_hashes:
+            causes.append(f"{label}: missing suite definition SHA-256 for {script}")
+    if not isinstance(data.get("skipped"), dict):
+        causes.append(f"{label}: missing record of skipped category cells")
+    status = data.get("suite_status") or {}
+    for script in EVAL_SCRIPTS:
+        state = status.get(script)
+        if not state:
+            causes.append(f"{label}: missing suite status for {script}")
+        elif state.get("status") != "ok":
+            causes.append(f"{label}: {state.get('status', 'failed')} suite {script}: "
+                          f"{state.get('detail', 'no detail')}")
+    return causes
+
+
+def compatibility_causes(a, b):
+    causes = artifact_causes("champion", a) + artifact_causes("challenger", b)
+    ad, bd = a.get("definitions") or {}, b.get("definitions") or {}
+    if ad.get("registry_sha256") != bd.get("registry_sha256"):
+        causes.append("registry hash mismatch between champion and challenger")
+    ah, bh = ad.get("suite_sha256") or {}, bd.get("suite_sha256") or {}
+    for script in sorted(set(ah) | set(bh)):
+        if ah.get(script) != bh.get(script):
+            causes.append(f"suite definition hash mismatch: {script}")
+    for section in ("validation", "heldout", "reported", "skipped"):
+        ak, bk = set(a.get(section) or {}), set(b.get(section) or {})
+        for name in sorted(ak - bk):
+            causes.append(f"challenger missing {section} suite {name}")
+        for name in sorted(bk - ak):
+            causes.append(f"champion missing {section} suite {name}")
+    for section in ("heldout", "reported"):
+        for key in sorted(set(a.get(section, {})) & set(b.get(section, {}))):
+            if key.startswith("categories:") and pools_differ(a[section][key], b[section][key]):
+                causes.append(f"item-pool mismatch: {key}")
+    for key in sorted(set(a.get("skipped") or {}) & set(b.get("skipped") or {})):
+        x, y = a["skipped"][key], b["skipped"][key]
+        if x != y or not isinstance(x, dict) or not x.get("pool"):
+            causes.append(f"skipped cell differs or lacks its pool: {key}")
+    return causes
 
 
 def load_items(path):
@@ -294,6 +450,71 @@ def holm_gains(tests, alpha=ALPHA):
     return [t for t in tests if t["d"] > 0 and adjusted[t["name"]] <= alpha]
 
 
+def _binomial_upper_tail(n, x, p):
+    if x <= 0:
+        return 1.0
+    if x > n or p <= 0.0:
+        return 0.0
+    if p >= 1.0:
+        return 1.0
+    logs = [(math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+             + k * math.log(p) + (n - k) * math.log1p(-p)) for k in range(x, n + 1)]
+    peak = max(logs)
+    return min(1.0, math.exp(peak) * sum(math.exp(v - peak) for v in logs))
+
+
+def zero_event_half_width(n, confidence=0.95):
+    """Clopper-Pearson bound on a proportion when none of n items differ: with no discordant pair
+    the difference is not known to be zero, only to be below 1 - (alpha/2)^(1/n)."""
+    return 1.0 - ((1.0 - confidence) / 2.0) ** (1.0 / n) if n else 1.0
+
+
+def minimal_detectable_drop(n, discord, alpha):
+    """Smallest observed net loss/n significant at alpha, conditional on discordant count."""
+    if not n or not discord:
+        return None
+    for losses in range((discord + 1) // 2, discord + 1):
+        if binomial_upper_half(discord, losses) <= alpha:
+            return (2 * losses - discord) / n
+    return None
+
+
+def capability_tests(tests, tolerance=DEFAULT_CAPABILITY_TOLERANCE, tolerances=None):
+    tolerances = tolerances or {}
+    grouped = {}
+    for test in tests:
+        grouped.setdefault(capability_for(test["name"]), []).append(test)
+    out = []
+    for capability, members in sorted(grouped.items()):
+        diffs = [v for member in members for v in member["diffs"]]
+        losses = sum(v < 0 for v in diffs)
+        gains = sum(v > 0 for v in diffs)
+        n = len(diffs)
+        discord = losses + gains
+        out.append({"name": capability, "cells": len(members), "n": n,
+                    "d": sum(diffs) / n, "diffs": diffs,
+                    "b_disc": losses, "c_disc": gains,
+                    "p_drop": binomial_upper_half(discord, losses),
+                    "p_gain": binomial_upper_half(discord, gains),
+                    "tolerance": tolerances.get(capability, tolerance)})
+    p_drop = holm_adjusted(out, "drop")
+    p_gain = holm_adjusted(out, "gain")
+    threshold = ALPHA / len(out) if out else ALPHA
+    regressions, gains = [], []
+    for test in out:
+        test["p_drop_holm"] = p_drop[test["name"]]
+        test["p_gain_holm"] = p_gain[test["name"]]
+        test["mdd"] = minimal_detectable_drop(test["n"], test["b_disc"] + test["c_disc"], threshold)
+        test["underpowered"] = test["n"] < UNDERPOWERED_N
+        test["regression_significant"] = test["d"] < 0 and test["p_drop_holm"] <= ALPHA
+        test["regression_tolerance"] = test["d"] < -test["tolerance"]
+        if test["regression_significant"] or test["regression_tolerance"]:
+            regressions.append(test)
+        if test["d"] > 0 and test["p_gain_holm"] <= ALPHA:
+            gains.append(test)
+    return out, regressions, gains
+
+
 def _pooled(groups, tests_by_name):
     d, variance = 0.0, 0.0
     for group in groups:
@@ -306,12 +527,15 @@ def _pooled(groups, tests_by_name):
     return d, math.sqrt(variance)
 
 
-def heldout_decision(a, b, a_items, b_items, z=2.0, log=print):
-    shared = sorted(set(a) & set(b))
+def heldout_decision(a, b, a_items, b_items, z=2.0, log=print,
+                     capability_tolerance=DEFAULT_CAPABILITY_TOLERANCE, capability_tolerances=None):
+    if set(a) != set(b):
+        missing = sorted(set(a) ^ set(b))
+        raise SystemExit("held-out suite sets differ: " + ", ".join(missing))
+    shared = sorted(a)
     different = [k for k in shared if k.startswith("categories:") and pools_differ(a[k], b[k])]
     if different:
-        log(f"categories: {len(different)} cells not compared (their pools differ)")
-    shared = [k for k in shared if k not in different]
+        raise SystemExit("item-pool mismatch: " + ", ".join(different))
     for k in shared:
         _check_published_cell(k, "champion", a[k], a_items.get(k))
         _check_published_cell(k, "challenger", b[k], b_items.get(k))
@@ -319,7 +543,9 @@ def heldout_decision(a, b, a_items, b_items, z=2.0, log=print):
     by_name = {t["name"]: t for t in tests}
     p_drop_holm = holm_adjusted(tests, "drop")
     p_gain_holm = holm_adjusted(tests, "gain")
-    harms, gains = holm_regressions(tests), holm_gains(tests)
+    cell_harms, gains = holm_regressions(tests), holm_gains(tests)
+    capabilities, harms, capability_gains = capability_tests(
+        tests, capability_tolerance, capability_tolerances)
     families, family_tests = {}, []
     for fam, member in FAMILIES.items():
         ks = [k for k in shared if member(k)]
@@ -338,7 +564,7 @@ def heldout_decision(a, b, a_items, b_items, z=2.0, log=print):
             families.setdefault(fam, {})[weighting] = {
                 "d": d, "se": se, "groups": len(groups), "p_gain": p_gain}
     family_p_holm = holm_adjusted(family_tests, "gain")
-    family_gains = []
+    family_gains, family_harms = [], []
     for t in family_tests:
         # A false harm merely rejects this challenger; a false gain can ship it. Therefore gains
         # get family-wise correction, while harms retain the more cautious uncorrected 2-SE screen.
@@ -351,13 +577,19 @@ def heldout_decision(a, b, a_items, b_items, z=2.0, log=print):
             f"{t['d'] * 100:+.2f} pts, 2se {2 * t['se'] * 100:.2f}, "
             f"Holm p(gain)={family_p_holm[t['name']]:.3g} -> {flag}")
         if regression:
-            harms.append({"name": t["name"], "a": 0.0, "b": t["d"],
-                          "d": t["d"], "se": t["se"], "p_drop": None, "p_gain": t["p_gain"]})
-        elif gain:
+            family_harms.append(t)
+        if gain:
             if t["family"] not in family_gains:
                 family_gains.append(t["family"])
-    return {"compared": shared, "not_compared": different, "tests": tests, "gains": gains,
-            "harms": harms, "families": families, "family_gains": family_gains,
+    # Every test blocks on its own: a pooled capability hides one collapsed language behind gains
+    # elsewhere, a single cell is too small to see a loss spread thinly over many cells, and the
+    # family screen keeps the pre-capability rule so no regression it caught can pass now.
+    return {"compared": shared, "not_compared": [], "tests": tests, "gains": gains,
+            "harms": harms + cell_harms + family_harms, "capability_harms": harms,
+            "family_harms": family_harms,
+            "families": families, "family_gains": family_gains,
+            "cell_harms": cell_harms, "capabilities": capabilities,
+            "capability_gains": capability_gains,
             "family_p_gain_holm": family_p_holm,
             "p_drop_holm": p_drop_holm, "p_gain_holm": p_gain_holm}
 
@@ -369,7 +601,7 @@ def summary(champ_dir, chall_dir, z=2.0, log=lambda *_: None):
     decision = heldout_decision(champion["heldout"], challenger["heldout"],
                                 champion_items, challenger_items, z=z, log=log)
     gains = {test["name"] for test in decision["gains"]}
-    losses = {test["name"] for test in decision["harms"] if not test["name"].startswith("family:")}
+    losses = {test["name"] for test in decision["cell_harms"]}
     cells = {}
     counts = {"gain": 0, "noise": 0, "loss": 0}
     for test in decision["tests"]:
@@ -391,10 +623,31 @@ def report(res, log=print):
                 f"Holm p(drop)={res['p_drop_holm'][t['name']]:.3g}, "
                 f"p(gain)={res['p_gain_holm'][t['name']]:.3g})")
     log(f"significant gains (paired exact McNemar + Holm): {len(res['gains'])}")
-    log(f"significant regressions (paired exact McNemar + Holm, or paired family): {len(res['harms'])}")
+    log(f"significant per-cell regressions (Holm, blocking): {len(res['cell_harms'])}")
+    log("capability tests (pooled paired items; exact McNemar + Holm):")
+    for t in res["capabilities"]:
+        flags = []
+        if t["underpowered"]:
+            flags.append("UNDERPOWERED")
+        if t in res["capability_harms"]:
+            flags.append("REGRESSION")
+        elif t in res["capability_gains"]:
+            flags.append("gain (Holm)")
+        else:
+            flags.append("within noise")
+        mdd = "n/a" if t["mdd"] is None else f"{t['mdd'] * 100:.2f} pts"
+        log(f"  {t['name']:24s} n={t['n']:5d} discord={t['b_disc'] + t['c_disc']:4d} "
+            f"(loss={t['b_disc']}, gain={t['c_disc']}), drop={t['d'] * 100:+.2f} pts, "
+            f"Holm p(drop)={t['p_drop_holm']:.3g}, MDD={mdd} -> {', '.join(flags)}")
+    log(f"capability regressions: {len(res['capability_harms'])}")
+    log(f"family regressions (2-SE screen): {len(res['family_harms'])}")
 
 
-def validation_stats(a, b, a_items, b_items, keys):
+def validation_stats(a, b, a_items, b_items, keys, z=1.96):
+    """Paired 95% interval for the unweighted mean of suite deltas, the number the gate prints and
+    the margin refers to. Each suite contributes its paired standard error, floored at the
+    zero-event bound so a small or all-tie suite cannot claim certainty; suites are independent
+    samples, so the half-widths add in quadrature with weight 1/len(keys)."""
     for k in keys:
         cell = "validation:" + k
         a_rows, b_rows = a_items.get(cell), b_items.get(cell)
@@ -402,7 +655,10 @@ def validation_stats(a, b, a_items, b_items, keys):
         _check_published_cell(cell, "challenger", b[k], b_rows)
     tests = [paired_cell("validation:" + k, a_items.get("validation:" + k),
                          b_items.get("validation:" + k)) for k in keys]
-    return _pooled([[t["name"]] for t in tests], {t["name"]: t for t in tests})
+    d = sum(t["d"] for t in tests) / len(tests)
+    half = math.sqrt(sum(max(z * t["se"], zero_event_half_width(len(t["diffs"]))) ** 2
+                         for t in tests)) / len(tests)
+    return d, d - half, d + half
 
 
 def _legacy_unpaired(a, b, z=2.0, log=print):
@@ -415,32 +671,59 @@ def _legacy_unpaired(a, b, z=2.0, log=print):
         log(f"  {k:40s} {x['acc']:.4f} -> {y['acc']:.4f} ({d:+.4f}, unpaired 2se {2 * se:.4f}) {flag}")
 
 
-def compare(champ_dir, chall_dir, z=2.0, legacy_unpaired=False):
+def compare(champ_dir, chall_dir, z=2.0, legacy_unpaired=False, strict=True,
+            capability_tolerance=DEFAULT_CAPABILITY_TOLERANCE, capability_tolerances=None):
     if legacy_unpaired:
         with open(os.path.join(champ_dir, "eval.json"), encoding="utf-8") as f:
             a = json.load(f)
         with open(os.path.join(chall_dir, "eval.json"), encoding="utf-8") as f:
             b = json.load(f)
         _legacy_unpaired(a["heldout"], b["heldout"], z)
-        print("VERDICT: REJECT (legacy report-only mode can never promote)")
+        print("VERDICT: REPORT (legacy report-only mode can never promote)")
         return False
-    a, ai = load_evaluation(champ_dir)
-    b, bi = load_evaluation(chall_dir)
-    keys = sorted(set(a["validation"]) & set(b["validation"]))
+    try:
+        a, ai = load_evaluation(champ_dir)
+        b, bi = load_evaluation(chall_dir)
+    except (SystemExit, OSError, ValueError, KeyError) as exc:
+        print(f"BLOCKED: {exc}")
+        print("VERDICT: BLOCKED")
+        return False
+    causes = compatibility_causes(a, b)
+    if causes:
+        for cause in causes:
+            print("BLOCKED:", cause)
+        print("VERDICT: BLOCKED")
+        return False
+    keys = sorted(a["validation"])
     if not keys:
-        raise SystemExit("compare: the two eval.json files share no validation suite")
+        print("BLOCKED: no validation suites")
+        print("VERDICT: BLOCKED")
+        return False
     va = sum(a["validation"][k]["acc"] for k in keys) / len(keys)
     vb = sum(b["validation"][k]["acc"] for k in keys) / len(keys)
-    vd, vse = validation_stats(a["validation"], b["validation"], ai, bi, keys)
-    res = heldout_decision(a["heldout"], b["heldout"], ai, bi, z)
+    try:
+        vd, vlo, vhi = validation_stats(a["validation"], b["validation"], ai, bi, keys)
+        res = heldout_decision(a["heldout"], b["heldout"], ai, bi, z,
+                               capability_tolerance=capability_tolerance,
+                               capability_tolerances=capability_tolerances)
+    except (SystemExit, OSError, ValueError, KeyError, ZeroDivisionError) as exc:
+        print(f"BLOCKED: {exc}")
+        print("VERDICT: BLOCKED")
+        return False
     print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f}); "
-          f"paired 95% CI [{vd - 1.96 * vse:+.4f}, {vd + 1.96 * vse:+.4f}]")
+          f"paired 95% CI [{vlo:+.4f}, {vhi:+.4f}]")
     report(res)
-    holds, better = vb >= va - VAL_MARGIN, bool(res["family_gains"])
+    for cell, skip in sorted((a.get("skipped") or {}).items()):
+        print(f"not covered (skipped for both models): {cell}: {skip['why']}")
+    holds, better = vlo >= -VAL_MARGIN, bool(res["family_gains"])
     ok = holds and not res["harms"] and better
-    why = ("" if ok else f"(validation fell by more than {VAL_MARGIN * 100:.0f} point)" if not holds
+    report_only = not strict or not a.get("strict", False) or not b.get("strict", False)
+    if report_only:
+        print("VERDICT: REPORT (--no-strict evaluation/comparison can never promote)")
+        return False
+    why = ("" if ok else f"(validation 95% lower bound below -{VAL_MARGIN * 100:.0f} point)" if not holds
            else "(held-out regression)" if res["harms"] else "(no family improved significantly)")
-    print("VERDICT:", "PROMOTE" if ok else "REJECT", why)
+    print("VERDICT:", "PROMOTE" if ok else "BLOCKED", why)
     return ok
 
 
@@ -468,17 +751,26 @@ def main():
     e = sub.add_parser("eval")
     e.add_argument("model")
     e.add_argument("--mixture", default=os.environ.get("STATIM_GATE_MIXTURE"))
+    e.add_argument("--no-strict", action="store_true",
+                   help="allow an incomplete category pool; artifact is report-only")
     c = sub.add_parser("compare")
     c.add_argument("champion")
     c.add_argument("challenger")
     c.add_argument("--z", type=float, default=2.0)
     c.add_argument("--legacy-unpaired", action="store_true",
                    help="report the old unpaired approximation; never returns PROMOTE")
+    c.add_argument("--no-strict", action="store_true", help="report only; never returns PROMOTE")
+    c.add_argument("--capability-tolerance", type=float, default=2.0, metavar="POINTS",
+                   help="maximum capability drop in percentage points (default: 2.0)")
     a = ap.parse_args()
     if a.cmd == "eval":
-        evaluate(a.model, a.mixture)
+        evaluate(a.model, a.mixture, strict=not a.no_strict)
     else:
-        sys.exit(0 if compare(a.champion, a.challenger, a.z, a.legacy_unpaired) else 1)
+        if a.capability_tolerance < 0:
+            c.error("--capability-tolerance must be >= 0")
+        sys.exit(0 if compare(a.champion, a.challenger, a.z, a.legacy_unpaired,
+                              strict=not a.no_strict,
+                              capability_tolerance=a.capability_tolerance / 100.0) else 1)
 
 
 if __name__ == "__main__":

@@ -15,12 +15,26 @@ commands: [s1bench-2026-10-03.md](reproductions/s1bench-2026-10-03.md).
 ### Published model gates
 
 A new model replaces the one it was trained from only through the promotion gate
-(`tools/finetune/gate.py`). The validation mean may fall by at most one point. No held-out suite may
-drop significantly after Holm-Bonferroni correction for the number of suites (family-wise error
-5 %). Both models answer the same items, so every test is paired: an exact McNemar test per suite on
-the items one model gets right and the other wrong, and gains are Holm-corrected too. No suite
-family may decline significantly when pooled (more than two paired standard errors), and at
-least one family must improve significantly after Holm correction.
+(`tools/finetune/gate.py`). It fails closed: evaluation is strict by default, and a missing or failed
+suite, different suite set or item pool, or different registry/suite-definition SHA-256 produces
+`BLOCKED`. `--no-strict` is report-only and can never promote; old artifacts without these hashes
+and completeness records are also blocked.
+
+Both models answer the same items. Two regression tests block promotion, and either is enough. Each
+cell gets a paired exact McNemar test, Holm-corrected across cells, so one collapsed language cannot
+hide behind gains in the others. The gate also pools paired outcomes by capability (reading, NLI,
+paraphrase/similarity, intent, sentiment, emotion, safety, PII, fact checking, topic, stance,
+formality, urgency, complaint, multilingual intent, and stable new families). Exact McNemar tests
+are Holm-corrected across capabilities. Either a significant loss or a drop over the configurable
+per-capability tolerance (2.0 points by default) blocks promotion. The report gives each
+capability's item count, discordant pairs and minimal detectable drop at the Holm alpha; fewer than
+600 items is labelled `UNDERPOWERED` without blocking by itself. Validation passes only when the
+lower bound of a paired 95% interval for the mean of suite deltas is at least -1 point; a suite
+without any differing item still contributes its zero-event bound, so a small validation set cannot
+claim certainty. The family screen of earlier versions still blocks a family mean that falls more
+than two standard errors. Category cells that the pool cannot fill are recorded as skipped, must be
+the same for both models, and are listed in the report. At least one family must still improve
+significantly after Holm correction.
 
 The first four suites use 2,000 deterministic test rows; MASSIVE and HWU64 cells use 150 seeded
 stratified rows. See [REPRODUCE.md](../REPRODUCE.md#3-a-published-models-evaluation).
