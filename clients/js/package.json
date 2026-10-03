@@ -1,6 +1,6 @@
 {
   "name": "@statim/client",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Official TypeScript client for the Statim decision API",
   "type": "module",
   "license": "Apache-2.0",

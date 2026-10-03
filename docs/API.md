@@ -4,7 +4,7 @@ Statim serves typed decisions over HTTP. A request carries a state, which is tex
 
 The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 `{"detail":"HTTP request failed"}`. When authentication is configured, a nonpublic unknown path is rejected with 401 before route lookup unless it has a valid bearer key.
 
-`GET /health` reports the version compiled into the binary. In this tree that version is `0.9.4` (`tools/release/check_versions.py` keeps this document, the SDKs and the site in step with `CMakeLists.txt`).
+`GET /health` reports the version compiled into the binary. In this tree that version is `0.9.5` (`tools/release/check_versions.py` keeps this document, the SDKs and the site in step with `CMakeLists.txt`).
 
 Successful JSON bodies are compact. The field order shown here is the order the server writes. Read fields by name.
 
@@ -1573,7 +1573,7 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/health
 ```
 
 ```text
-{"status":"ok","version":"0.9.4"}
+{"status":"ok","version":"0.9.5"}
 200
 ```
 
@@ -1683,7 +1683,7 @@ statim_workers{model="english"} N
 # TYPE statim_workers_busy gauge
 statim_workers_busy{model="english"} N
 # TYPE statim_model_info gauge
-statim_model_info{model="english",weights="f32",version="0.9.4",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
+statim_model_info{model="english",weights="f32",version="0.9.5",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
 ```
 
 Label values are escaped as the text format requires (backslash, double quote and newline), so any `-m` name is safe. With LoRA adapters loaded, `statim_engines`, `statim_adapter_info`, `statim_adapter_bytes` and `statim_adapter_requests_total` follow; see [LoRA adapters](#lora-adapters).
@@ -1739,8 +1739,8 @@ required = [
     'statim_workers_busy{model="english"}',
     'statim_workers_busy{model="multilingual"}',
     "# TYPE statim_model_info gauge",
-    'statim_model_info{model="english",weights="f32",version="0.9.4",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1',
-    'statim_model_info{model="multilingual",weights="f32",version="0.9.4",fingerprint="8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794",checkpoint_sha256=""} 1',
+    'statim_model_info{model="english",weights="f32",version="0.9.5",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1',
+    'statim_model_info{model="multilingual",weights="f32",version="0.9.5",fingerprint="8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794",checkpoint_sha256=""} 1',
 ]
 missing = [line for line in required if line not in text]
 if response.status_code != 200 or response.headers["Content-Type"] != "text/plain; version=0.0.4":
