@@ -255,7 +255,7 @@ def _passages(cache, per_language, seed=20261004):
     for lang in PILOT_LANGUAGES:
         names = ("billsum", "gov_report") if lang == "en" else ("eur_lex_sum",)
         per_source = (per_language + len(names) - 1) // len(names)
-        window = max(2000, per_source * 5)
+        window = min(30000, max(2000, per_source * 5))
         for name in names:
             rows = []
             for row in iter_corpus(name, cache, languages=(lang,)):
