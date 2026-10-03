@@ -3,7 +3,7 @@ import hashlib
 import inspect
 import json
 
-PROMPT_VERSION = "grounded-pilot-1"
+PROMPT_VERSION = "grounded-pilot-2"
 URGENCY_LABELS = ("not urgent", "soon", "critical")
 NLI_LABELS = ("entailment", "contradiction", "neutral")
 
@@ -33,8 +33,10 @@ def generation_request(task, passage, lang, target=None):
 
 Write a short support or service request in {language} by a citizen or company affected by this topic.
 Requested urgency label: {target}
-Meanings: not urgent = no prompt action needed; soon = action is needed in the near future but not immediately;
-critical = immediate action is required because serious harm, outage, deadline, or loss is happening or imminent.
+Meanings: not urgent = a routine question, suggestion or information request; nothing has gone wrong, there is no
+deadline and the writer can wait weeks; soon = something needs action within days, e.g. an upcoming deadline or a
+problem that will grow, but nothing is failing yet; critical = immediate action is required because serious harm,
+outage, an expiring deadline or loss is happening now or within hours.
 The situation, not urgency words or the label itself, must establish the label. Return request and label."""
         return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
                 _URGENCY_SCHEMA, 300)
