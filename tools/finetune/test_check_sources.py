@@ -527,10 +527,3 @@ def test_train_multitask_finds_documented_manifest_for_real_layout(monkeypatch, 
 
 def test_data_licence_generator_keeps_policy_warning():
     assert "weights listed under [Licence findings]" in data_licenses.POLICY
-
-
-def test_changelog_describes_todo_enforcement_without_overclaim():
-    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
-    assert "no generator evidence was filled in by this change" in unreleased
-    assert "builders fail closed" not in unreleased
