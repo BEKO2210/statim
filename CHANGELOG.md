@@ -12,6 +12,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   Dockerfile downloaded the model from `resolve/main`, and the Hub reused the cached download layer
   after 0.7.0 was published (fingerprint `76a6087a…` instead of `e7a8fa74…`). The Dockerfile now pins
   the model to the Hub commit of 0.7.0 and checks its SHA-256.
+- Playground: the plain-language summary marked answers below 70 % as "unsure" in orange whatever
+  the review threshold said, so the threshold looked broken. Only the threshold marks an answer now
+  ("check this one"); it defaults to 60 % and is shown in percent.
 
 ## [0.9.4] - 2026-10-03
 

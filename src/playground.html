@@ -376,7 +376,7 @@ body[data-mode="simple"] .scenarios b { font-weight: 600; color: var(--fg); font
   <div class="row"><label for="lang">Language hint</label><input class="field" id="lang" placeholder="Automatic, or e.g. de, en" autocomplete="off"><p>Routes the request to the right model when several are loaded.</p></div>
   <div class="row"><span class="l">Review threshold</span>
     <div class="range"><input type="range" id="minc" min="0" max="0.95" step="0.05" value="0.6" aria-label="Review threshold"><output id="mincOut">off</output></div>
-    <p>Answers less confident than this are marked “Needs review”, so a person can check them. Set it to off to see every answer as final.</p></div>
+    <p>Answers less confident than this are marked “Needs review” and shown in orange, so a person can check them. Set it to off to see every answer as final.</p></div>
   <div class="row"><label for="ens">Ensemble</label><select class="field" id="ens"><option value="">Server default</option><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select><p>Averages several option orders; slower, sometimes steadier.</p></div>
   <label class="switch"><input type="checkbox" id="cal"> Calibrate against option-order bias</label>
   <div class="acts"><button class="btn pri" value="ok">Done</button></div>
@@ -550,8 +550,9 @@ const authHeaders = () => { const k = keyStore.get(); return k ? {Authorization:
 
 /* ---------- settings ---------- */
 $("setBtn").onclick = () => $("setDlg").showModal();
-function mincUi() { const v = +$("minc").value; $("mincOut").textContent = v ? v.toFixed(2) : "off"; }
-for (const [id, key] of [["lang", "statim_lang"], ["ens", "statim_ens"], ["minc", "statim_minc"]]) {
+function mincUi() { const v = +$("minc").value; $("mincOut").textContent = v ? Math.round(v * 100) + "%" : "off"; }
+/* statim_review replaces statim_minc so the 60 % default reaches browsers that stored the old "off" */
+for (const [id, key] of [["lang", "statim_lang"], ["ens", "statim_ens"], ["minc", "statim_review"]]) {
   $(id).value = store.get(key) || $(id).value;
   $(id).addEventListener("input", () => { store.set(key, $(id).value || null); if (id === "minc") mincUi(); });
 }
@@ -867,9 +868,9 @@ function resolveAll() {
 /* ---------- plain-language summary ---------- */
 function sureness(a, minc) {
   const review = a.escalate === true || (a.escalate === undefined && minc > 0 && a.answer_confidence < minc);
-  if (review) return ["check this one", true];
+  if (review) return ["check this one", true];  // only the review threshold turns an answer orange
   const c = a.answer_confidence;
-  return [c >= .9 ? "very sure" : c >= .7 ? "fairly sure" : "unsure", c < .7];
+  return [c >= .9 ? "very sure" : c >= .75 ? "fairly sure" : "less sure", false];
 }
 function renderSummary(res, body) {
   const minc = body.min_confidence || 0, items = [];
