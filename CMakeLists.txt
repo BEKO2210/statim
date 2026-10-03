@@ -139,7 +139,8 @@ statim_enable_coverage(statim_tokenizer)
 
 # ---- core runtime
 add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp src/sha256.cpp)
-set(STATIM_KERNEL_FLAGS -O3 -ffast-math -fopenmp-simd)
+set(STATIM_KERNEL_MATH_FLAGS -O3 -ffast-math -fopenmp-simd)
+set(STATIM_KERNEL_FLAGS ${STATIM_KERNEL_MATH_FLAGS})
 if(STATIM_NATIVE)
   list(APPEND STATIM_KERNEL_FLAGS -march=native)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
@@ -184,7 +185,8 @@ if(STATIM_BUILD_TESTS)
 
   add_executable(test_kernels tests/test_kernels.cpp)
   target_include_directories(test_kernels PRIVATE src)
-  target_compile_options(test_kernels PRIVATE ${STATIM_KERNEL_FLAGS})
+  # same math flags as kernels.cpp but no -mavx2: main() must reach its CPU check on any x86-64
+  target_compile_options(test_kernels PRIVATE ${STATIM_KERNEL_MATH_FLAGS})
   target_link_libraries(test_kernels PRIVATE statim_core)
 
   add_executable(test_lora tests/test_lora.cpp)
@@ -270,6 +272,7 @@ file(WRITE ${CMAKE_BINARY_DIR}/CTestCustom.cmake "set(CTEST_CUSTOM_MAXIMUM_PASSE
   add_test(NAME tokenizer COMMAND test_tokenizer)
   add_test(NAME sgemm COMMAND test_sgemm)
   add_test(NAME kernels COMMAND test_kernels)
+  set_tests_properties(kernels PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sgemm PROPERTIES SKIP_RETURN_CODE 77)  # no AVX2/FMA (e.g. arm64)
   add_test(NAME model_parity_multilingual COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
   # Answers are rounded to 4 decimals by the API and in the golden files, so two correct values can

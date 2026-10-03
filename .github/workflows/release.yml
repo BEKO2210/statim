@@ -49,7 +49,10 @@ jobs:
       - name: Package release archive
         run: |
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
-          tools/package_release.sh "build-${{ matrix.flavor }}" "${{ matrix.flavor }}" "${GITHUB_REF_NAME}" dist
+          # a release packages its tag; a manual dry run on a branch (may contain "/") uses the commit
+          version="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" != release ]; then version="0.0.0-dev.${GITHUB_SHA::12}"; fi
+          tools/package_release.sh "build-${{ matrix.flavor }}" "${{ matrix.flavor }}" "$version" dist
 
       - name: Check hardening of archived binaries
         run: python3 tools/release/check_hardening.py --max-glibc 2.28 dist/*.tar.gz

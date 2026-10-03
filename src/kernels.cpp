@@ -19,42 +19,6 @@
 
 namespace statim {
 
-#if defined(__AVX2__) && defined(__FMA__)
-namespace {
-
-inline __m256 erf_approx8(__m256 x) {
-    // Global (6,5) rational fitted by tools/kernels/fit_erf.py.  This is the
-    // GeGLU-specific throughput path; the public scalar approximation below
-    // retains the tighter standalone-erf error bound used by the sweep test.
-    const __m256i raw = _mm256_castps_si256(x);
-    const __m256i abs_bits = _mm256_and_si256(raw, _mm256_set1_epi32(0x7fffffff));
-    const __m256 ax = _mm256_castsi256_ps(abs_bits);
-    const __m256 px = _mm256_min_ps(ax, _mm256_set1_ps(3.92f));
-    const __m256 t = _mm256_mul_ps(_mm256_mul_ps(px, px), _mm256_set1_ps(0.06507705382436267f));
-    __m256 p = _mm256_fmadd_ps(t, _mm256_set1_ps(-2.982670208e-03f), _mm256_set1_ps(6.530430168e-02f));
-    p = _mm256_fmadd_ps(t, p, _mm256_set1_ps(3.287697136e-01f));
-    p = _mm256_fmadd_ps(t, p, _mm256_set1_ps(2.080599368e-01f));
-    p = _mm256_fmadd_ps(t, p, _mm256_set1_ps(1.931249499e-01f));
-    p = _mm256_fmadd_ps(t, p, _mm256_set1_ps(4.235797748e-02f));
-    p = _mm256_fmadd_ps(t, p, _mm256_set1_ps(1.696744189e-02f));
-    __m256 q = _mm256_fmadd_ps(t, _mm256_set1_ps(8.596250415e-01f), _mm256_set1_ps(1.104008913e+00f));
-    q = _mm256_fmadd_ps(t, q, _mm256_set1_ps(8.421710730e-01f));
-    q = _mm256_fmadd_ps(t, q, _mm256_set1_ps(4.028760493e-01f));
-    q = _mm256_fmadd_ps(t, q, _mm256_set1_ps(1.145604178e-01f));
-    q = _mm256_fmadd_ps(t, q, _mm256_set1_ps(1.503700297e-02f));
-    const __m256 active = _mm256_cmp_ps(ax, _mm256_set1_ps(3.92f), _CMP_LT_OQ);
-    const __m256 magnitude = _mm256_blendv_ps(_mm256_set1_ps(1.0f),
-        _mm256_mul_ps(ax, _mm256_div_ps(p, q)), active);
-    const __m256 signed_result = _mm256_xor_ps(magnitude,
-        _mm256_castsi256_ps(_mm256_and_si256(raw, _mm256_set1_epi32(0x80000000u))));
-    const __m256 nan = _mm256_castsi256_ps(_mm256_cmpgt_epi32(abs_bits,
-                                                              _mm256_set1_epi32(0x7f800000)));
-    return _mm256_blendv_ps(signed_result, _mm256_add_ps(x, x), nan);
-}
-
-}  // namespace
-#endif
-
 // dst[r, i] = gelu_erf(src[r, i]) * src[r, ff + i]   (ModernBERT GeGLU: act(input) * gate)
 void geglu_rows(float* dst, const float* src, long rows, long ff, long row_begin, long row_end) {
     constexpr float kInvSqrt2 = 0.70710678118654752440f;
@@ -62,19 +26,10 @@ void geglu_rows(float* dst, const float* src, long rows, long ff, long row_begin
         const float* in = src + r * 2 * ff;
         const float* gate = in + ff;
         float* out = dst + r * ff;
-        long i = 0;
-#if defined(__AVX2__) && defined(__FMA__)
-        const __m256 inv_sqrt2 = _mm256_set1_ps(kInvSqrt2);
-        const __m256 half = _mm256_set1_ps(0.5f);
-        const __m256 one = _mm256_set1_ps(1.0f);
-        for (; i + 8 <= ff; i += 8) {
-            const __m256 x = _mm256_loadu_ps(in + i);
-            const __m256 e = erf_approx8(_mm256_mul_ps(x, inv_sqrt2));
-            const __m256 y = _mm256_mul_ps(_mm256_mul_ps(half, x), _mm256_add_ps(one, e));
-            _mm256_storeu_ps(out + i, _mm256_mul_ps(y, _mm256_loadu_ps(gate + i)));
-        }
-#endif
-        for (; i < ff; ++i) {
+        // erf_approx is branch-free (selects compile to blends) and division-free, so this loop
+        // vectorizes to eight AVX2 lanes in portable builds without libmvec's erff (glibc 2.35).
+#pragma omp simd
+        for (long i = 0; i < ff; ++i) {
             const float x = in[i];
             out[i] = 0.5f * x * (1.0f + erf_approx(x * kInvSqrt2)) * gate[i];
         }
