@@ -1,25 +1,26 @@
 name: gpu
 # Parity gates on a real GPU: the maintainer's RTX 3070 as a self-hosted runner (READINESS P1 #52).
-# Only pushes to main, release tags and manual runs reach it. Pull requests never do: a fork's code
-# must not run on that machine, and fork workflows additionally need approval in the repository
-# settings ("all external contributors").
+# Only pushes to main, published releases (through release.yml) and manual runs reach it. Pull
+# requests never do: a fork's code must not run on that machine, and fork workflows additionally
+# need approval in the repository settings ("all external contributors").
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
+  # release.yml calls this before it uploads any asset (READINESS P1 #43), so a release cannot
+  # ship when the GPU parity gates fail on the tagged commit.
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: gpu-runner
-  cancel-in-progress: false
 
 jobs:
   gpu-parity:
     if: github.repository == 'BEKO2210/statim'
     runs-on: [self-hosted, linux, gpu]
+    concurrency:  # one GPU, one job at a time
+      group: gpu-runner
+      cancel-in-progress: false
     timeout-minutes: 90
     env:
       # Persistent between runs (outside the checkout, which is cleaned every run): the converter's
