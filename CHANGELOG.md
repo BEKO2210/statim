@@ -10,6 +10,14 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ### Changed
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
+- Release binaries are built in the manylinux_2_28 container (AlmaLinux 8, GCC 13) and run on
+  glibc 2.28 or newer: RHEL/Alma/Rocky 8 and 9, Debian 10+, Ubuntu 20.04+. 0.9.5 needed glibc 2.38.
+  The release job fails if an archived binary needs a newer `GLIBC_` symbol
+  (`tools/release/check_hardening.py --max-glibc 2.28`), and it can be dry-run by hand
+  (`workflow_dispatch`). The GCC 14 in that image made the CPU engine about 5% slower, so the build
+  pins GCC 13; the perf gate measured it within noise of 0.9.5.
+- The CPU GeGLU kernel uses an in-tree vectorizable `erf` approximation (at most 2 ulp), so a
+  build against glibc 2.28 keeps eight-lane AVX2 execution without glibc 2.35's vector `erff`.
 
 ### Added
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880

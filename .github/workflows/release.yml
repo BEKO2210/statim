@@ -5,6 +5,8 @@ name: release
 on:
   release:
     types: [published]
+  # Dry run of the build job (archives as workflow artifacts, nothing is published).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,6 +15,9 @@ jobs:
   build:
     name: Build ${{ matrix.flavor }} archive
     runs-on: ubuntu-24.04
+    # manylinux_2_28 (AlmaLinux 8, glibc 2.28): the binaries run on glibc 2.28 and newer
+    # (READINESS P1 #55); tools/release/build_manylinux.sh pins the compiler.
+    container: quay.io/pypa/manylinux_2_28_x86_64@sha256:1e102f2e9ed9b7fd8d64b29f798c76078c3fa8f14d34914d7a4045e39419d8e0
     strategy:
       fail-fast: false
       matrix:
@@ -26,23 +31,20 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
+      - name: Use Python 3.12 and trust the checkout
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake g++ ninja-build
-          if [[ "${{ matrix.vulkan }}" == "ON" ]]; then
-            sudo apt-get install -y --no-install-recommends libvulkan-dev glslc spirv-headers
-          fi
+          echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Cache glslc (shaderc v2023.8)
+        if: matrix.vulkan == 'ON'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/shaderc-v2023.8
+          key: shaderc-e6edd6d48fa5bdd9d176794c6810fae7f8e938e1-spirv-headers-manylinux_2_28
 
       - name: Build portable binaries
-        run: |
-          cmake -S . -B "build-${{ matrix.flavor }}" -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DSTATIM_NATIVE=OFF \
-            -DSTATIM_BUILD_TESTS=OFF \
-            -DSTATIM_VULKAN=${{ matrix.vulkan }} \
-            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
-          cmake --build "build-${{ matrix.flavor }}" --target statim statim-quantize
+        run: tools/release/build_manylinux.sh "${{ matrix.flavor }}" "build-${{ matrix.flavor }}" -DSTATIM_BUILD_TESTS=OFF
 
       - name: Package release archive
         run: |
@@ -50,7 +52,7 @@ jobs:
           tools/package_release.sh "build-${{ matrix.flavor }}" "${{ matrix.flavor }}" "${GITHUB_REF_NAME}" dist
 
       - name: Check hardening of archived binaries
-        run: python3 tools/release/check_hardening.py dist/*.tar.gz
+        run: python3 tools/release/check_hardening.py --max-glibc 2.28 dist/*.tar.gz
 
       - name: Generate SBOM for release archive
         run: |
@@ -71,11 +73,13 @@ jobs:
   gpu-parity:
     # CUDA and Vulkan parity gates on the self-hosted RTX 3070 for the tagged commit; publish waits
     # for them, so the Vulkan archive is never uploaded untested (READINESS P1 #43).
+    if: github.event_name == 'release'
     uses: ./.github/workflows/gpu.yml
 
   publish:
     name: Publish GitHub release assets
     needs: [build, gpu-parity]
+    if: github.event_name == 'release'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
