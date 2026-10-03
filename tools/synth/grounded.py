@@ -33,7 +33,7 @@ OLLAMA_TO_HF = {"qwen3:8b": GENERATOR["model"], "phi4-mini": VERIFIER["model"]}
 # models a vLLM (OpenAI-compatible) backend may serve; each id is approved in
 # tools/finetune/sources/policy.json and recorded with its exact revision
 HF_ALLOWLIST = {"Qwen/Qwen3-30B-A3B-Instruct-2507", "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8",
-                "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "Qwen/Qwen3-8B", "microsoft/phi-4",
+                "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "Qwen/Qwen3-32B-AWQ", "Qwen/Qwen3-8B", "microsoft/phi-4",
                 "microsoft/Phi-4-mini-instruct"}
 MODEL_ALLOWLIST = {
     "qwen3:8b": {"families": {"qwen3"}, "parameter": re.compile(r"\b8(?:\.\d+)?\s*b\b", re.I)},
@@ -484,6 +484,28 @@ def _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurre
 # checked candidates to a file with the generator loaded; stage "verify" then loads the verifier and
 # applies the blind check, the leakage guard and the quotas. Both stages resume.
 
+def _read_candidates(path):
+    """Candidates appended one gzip member per row; a crash can cut the last member. Keep every
+    complete row, and rewrite the file without the broken tail so appending can continue."""
+    import zlib
+    rows, broken = [], False
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    rows.append(json.loads(line))
+    except (EOFError, OSError, zlib.error, json.JSONDecodeError, UnicodeDecodeError):
+        broken = True
+    if broken:
+        part = Path(str(path) + ".part")
+        with gzip.open(part, "wt", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        part.replace(path)
+        print("candidates: dropped a truncated tail, kept %d complete rows" % len(rows), flush=True)
+    return rows
+
+
 def _cell_targets(tasks, per_capability, oversample):
     targets = {}
     for task in tasks:
@@ -512,7 +534,7 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
     state = json.loads(state_path.read_text()) if state_path.exists() else {"positions": {}, "jobs": {}}
     have = collections.Counter()
     if candidates.exists():
-        for row in _read_gzip(candidates):
+        for row in _read_candidates(candidates):
             have[(row["task"], row["passage_row"][1], row["label"])] += 1
     targets = _cell_targets(tasks, per_capability, oversample)
     passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
@@ -566,7 +588,10 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
     if out_dir.exists() and not resume:
         raise FileExistsError("refusing existing output directory without --resume: %s" % out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows_all = _read_gzip(candidates)
+    rows_all = _read_candidates(candidates)
+    previous = {}
+    if resume and (out_dir / "manifest.json").exists():
+        previous = json.loads((out_dir / "manifest.json").read_text()).get("stats", {})
     state_path = out_dir / "verify.state.json"
     state = json.loads(state_path.read_text()) if resume and state_path.exists() else {}
     started = time.monotonic()
@@ -624,6 +649,9 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
             prov_path.replace(out_dir / (task + ".provenance.jsonl.gz"))
         called, agreed = reasons["verify_called"], reasons["verify_agree"]
         by_task[task] = kept
+        if finalized and task in previous:  # resumed after this task was complete: keep its numbers
+            stats[task] = previous[task]
+            continue
         stats[task] = {"jobs": pos, "metrics": dict(reasons),
                        "verify_acceptance_rate": (agreed / called) if called else None,
                        "counts": {"%s/%s" % c: n for c, n in sorted(counts.items())}}

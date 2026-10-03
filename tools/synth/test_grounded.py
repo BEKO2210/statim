@@ -489,3 +489,26 @@ def test_two_stage_generate_then_verify(tmp_path):
                             oversample=0.5, passages=passages)
     with pytest.raises(SystemExit, match="short cells"):
         grounded.stage_verify(few, tmp_path / "out2", BlindFakeClient(), guard, ("nli",), 48, 8, meta)
+
+
+def test_truncated_candidate_tail_and_finished_task_stats_survive_resume(tmp_path):
+    import grounded
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    cands = tmp_path / "cands.jsonl.gz"
+    passages = fixture_passages(count=40)
+    grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("urgency", "nli"), 48, 8, 0.4,
+                            oversample=2.0, passages=passages)
+    whole = cands.read_bytes()
+    cands.write_bytes(whole[:-40])  # a crash cut into the last gzip member
+    rows = grounded._read_candidates(cands)
+    assert len(rows) == 2 * 48 * 2 - 1 and len(grounded._read_candidates(cands)) == len(rows)
+    grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("urgency", "nli"), 48, 8, 0.4,
+                            oversample=2.0, passages=passages)
+    assert len(grounded._read_candidates(cands)) == 2 * 48 * 2  # the lost row was generated again
+    meta = {"Qwen/Qwen3-30B-A3B-GPTQ-Int4": {"hf_id": "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "revision": "a" * 40},
+            "microsoft/phi-4": {"hf_id": "microsoft/phi-4", "revision": "b" * 40}}
+    out = tmp_path / "out"
+    first = grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("urgency", "nli"), 48, 8, meta)
+    again = grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("urgency", "nli"), 48, 8, meta,
+                                  resume=True)
+    assert again["stats"] == first["stats"] and first["stats"]["urgency"]["metrics"]["verify_called"] > 0
