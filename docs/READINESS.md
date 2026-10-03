@@ -62,7 +62,7 @@ for them like a P0.
 | 19 | A release archive built twice has an identical SHA-256; the compiler package is pinned | M | open |
 | 20 | An SPDX SBOM next to `SHA256SUMS` | S | **closed** (#99): Syft's SBOM for 0.9.3 listed only the archive file; `tools/release/sbom.py` lists every shipped file, the compiled-in components with versions and licences, and the system libraries; the 0.9.3 SBOMs were replaced and pass `pyspdxtools` validation |
 | 21 | Build-provenance attestations on the release archives, with the verify command documented | M | **closed** (#99): `gh attestation verify` (gh 2.102) passes for both 0.9.3 archives: signed by `release.yml` at `refs/tags/v0.9.3` |
-| 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | partly: the Python CI tools are hash-locked (#51) |
+| 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | **closed** (#106): Python CI tools hash-locked (#51); `third_party/VENDORED.json` + `tools/security/check_vendored.py` verify `httplib.h` and `json.hpp` by SHA-256 and version in CI; `fetch_models.sh` and the fuzz jobs download from fixed Hub commits and check every file's SHA-256; Docker `FROM` lines pinned by digest, kept current by Dependabot |
 
 ### Reliability
 

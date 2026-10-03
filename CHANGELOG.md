@@ -13,6 +13,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   after 0.7.0 was published (fingerprint `76a6087a…` instead of `e7a8fa74…`). The Dockerfile now pins
   the model to the Hub commit of 0.7.0 and checks its SHA-256.
 
+### Security
+- Vendored C++ headers, model and tokenizer downloads, and Docker base images are now pinned to
+  immutable versions or digests and verified in CI; Dependabot monitors both Docker build contexts
+  weekly (READINESS P1 #22).
+
 ## [0.9.4] - 2026-10-03
 
 The Hugging Face Space shows the playground again (0.9.3 blocked its embedding), the playground
