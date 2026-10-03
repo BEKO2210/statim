@@ -153,8 +153,21 @@ def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0
 
     if realized(base_records) != realized(adapter_records):
         raise ValueError("base and adapter evaluations used different realized pool items")
+    scored = [r for r in base_records + adapter_records if "accuracy" in r and r.get("lang") != "macro"]
+    if any(r.get("strict") is not True for r in scored):
+        raise ValueError("a non-strict category evaluation is report-only and cannot promote an adapter")
+    for field in ("registry_sha256", "suite_definition_sha256"):
+        values = {r.get(field) for r in scored}
+        if None in values or len(values) != 1:
+            raise ValueError(f"base and adapter evaluations differ or lack {field}")
+    base_skips, adapter_skips = gate.skipped_cells(base_records), gate.skipped_cells(adapter_records)
+    if base_skips != adapter_skips or any(not v.get("pool") for v in base_skips.values()):
+        raise ValueError("base and adapter evaluations skipped different category cells, or a skip lacks its pool")
     base, base_reported = gate.heldout_cells(base_records)
     adapter, adapter_reported = gate.heldout_cells(adapter_records)
+    for key in sorted(set(base_reported) & set(adapter_reported)):
+        if gate.pools_differ(base_reported[key], adapter_reported[key]):
+            raise ValueError(f"item-pool mismatch: {key}")
     base_items = base_items or str(base_jsonl).replace(".jsonl", "-items.jsonl")
     adapter_items = adapter_items or str(adapter_jsonl).replace(".jsonl", "-items.jsonl")
     res = gate.adapter_decision(base, adapter, _category_items(base_items), _category_items(adapter_items),
@@ -177,7 +190,7 @@ def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0
                        for w, v in fam.items()},
             "not_compared": res["not_compared"], "harms": [t["name"] for t in res["harms"]],
             "reported": {"base": base_reported, "adapter": adapter_reported},
-            "skipped": [{"lang": r["lang"], "why": r["skipped"]} for r in skipped],
+            "skipped": [{"suite": r["suite"], "lang": r["lang"], "why": r["skipped"]} for r in skipped],
             "pool": sorted({v.get("pool") for v in base.values()} | {v.get("pool") for v in adapter.values()} - {None})}
 
 
@@ -334,7 +347,8 @@ def summary_md(summary):
             if r.get("not_compared"):
                 lines += ["", "Not compared (pools differ): %s" % ", ".join(r["not_compared"])]
             if r.get("skipped"):
-                lines += ["", "Skipped cells: %s" % "; ".join("%s (%s)" % (x["lang"], x["why"]) for x in r["skipped"])]
+                lines += ["", "Skipped cells: %s" % "; ".join("%s/%s (%s)" % (x.get("suite", "?"), x["lang"], x["why"])
+                                                          for x in r["skipped"])]
             lines += ["", "**Verdict: %s** %s" % ("PROMOTE" if r["promote"] else "REJECT", r["reason"])]
         lines += ["", "Commands:", "", "```"] + [r["commands"][k] for k in r.get("commands", {})] + ["```"]
     return "\n".join(lines) + "\n"

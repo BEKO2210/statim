@@ -726,8 +726,10 @@ def stratified(items, n, seed):
     return picked
 
 
-def make_tasks(pool, suites, langs, n, seed, skip=0):
-    """[(suite, lang, items)] plus [(suite, lang, reason)] for skipped languages."""
+def make_tasks(pool, suites, langs, n, seed, skip=0, grid=()):
+    """[(suite, lang, items)] plus [(suite, lang, reason)] for skipped languages. `grid` lists the
+    (suite, lang) cells of the pool before mixture exclusion, so a cell the exclusion empties is
+    reported as skipped instead of vanishing."""
     if skip >= n:
         raise ValueError("skip must be less than n")
     by = collections.defaultdict(list)
@@ -736,7 +738,7 @@ def make_tasks(pool, suites, langs, n, seed, skip=0):
             by[(item["suite"], item["lang"])].append(item)
     tasks, skipped = [], []
     for suite in suites:
-        for lang in sorted(l for s, l in by if s == suite):
+        for lang in sorted({l for s, l in by if s == suite} | {l for s, l in grid if s == suite}):
             if langs and lang not in langs:
                 continue
             items = by[(suite, lang)]
@@ -770,6 +772,22 @@ def pool_items_sha256(items, n, seed, skip=0):
         inputs["skip"] = skip
     raw = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def definition_hashes():
+    """Exact code identities used to define the registry-driven category suites."""
+    return {
+        "registry_sha256": _file_sha256(ROOT / "tools/finetune/mixture_v6/registry.py"),
+        "suite_definition_sha256": _file_sha256(Path(__file__).resolve()),
+    }
 
 
 # --------------------------------------------------------------------------- HTTP
@@ -887,7 +905,11 @@ def main(argv=None):
                     help="JSONL, one record per item (gold and predicted option index), for paired comparisons "
                          "between runs over the same sample")
     ap.add_argument("--rebuild", action="store_true", help="fetch the held-out splits again")
-    ap.add_argument("--strict", action="store_true", help="fail if any configured source is unavailable")
+    strict = ap.add_mutually_exclusive_group()
+    strict.add_argument("--strict", dest="strict", action="store_true", default=True,
+                        help="fail if any configured source is unavailable (default)")
+    strict.add_argument("--no-strict", dest="strict", action="store_false",
+                        help="report an incomplete pool; unsuitable for promotion")
     ap.add_argument("--exclude-mixture", default=None, metavar="PATH",
                     help="built mixture (jsonl.gz) the model was trained on: drop pooled items that share a text with it")
     ap.add_argument("--list", action="store_true", help="print the sampled suites and exit (no server needed)")
@@ -902,14 +924,17 @@ def main(argv=None):
 
     pool, failures = load_pool(rebuild=a.rebuild, log=lambda m: print(m, flush=True))
     pool_fp = fingerprint()
+    grid = ()  # without exclusion every pooled cell is already in the pool itself
     if a.exclude_mixture:
+        grid = {(item["suite"], item["lang"]) for item in pool}
         pool, mixture_fp = exclude_mixture(pool, a.exclude_mixture, log=lambda m: print(m, flush=True))
         pool_fp = "%s+%s" % (pool_fp, mixture_fp)
     for key, why in failures.items():
         print("source unavailable: %s (%s)" % (key, why), flush=True)
     if failures and (a.strict or a.adapter):
         raise SystemExit("held-out pool is incomplete: %d source(s) unavailable" % len(failures))
-    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed, a.skip)
+    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed, a.skip,
+                                grid=grid)
     for suite, lang, why in skipped:
         print("skip %s %s: %s" % (suite, lang, why), flush=True)
     if not tasks:
@@ -927,6 +952,7 @@ def main(argv=None):
         os.makedirs(os.path.dirname(os.path.abspath(a.predictions)) or ".", exist_ok=True)
     predictions = open(a.predictions, "w", encoding="utf-8") if a.predictions else None
     records, by_suite = [], collections.defaultdict(list)
+    definitions = definition_hashes()
     label = "%s:%s" % (a.model, a.adapter) if a.adapter else a.model  # base and adapter runs stay apart
     extra = {"adapter": a.adapter} if a.adapter else {}
     try:
@@ -941,6 +967,7 @@ def main(argv=None):
                                       [gold_index(item) for item in items], probs)
             gold = collections.Counter(option_names(it)[gold_index(it)] for it in items)
             row = {"family": "categories", "suite": suite, "lang": lang, "model": label, **extra,
+                   **definitions, "strict": a.strict,
                    "n": len(items), "seed": a.seed, "skip": a.skip,
                    "pool": pool_fp, "pool_items_sha256": pool_items_sha256(items, len(items), a.seed, a.skip),
                    "sources": dict(collections.Counter(it["source"] for it in items)),
@@ -962,6 +989,7 @@ def main(argv=None):
             m = {k: round(sum(r[k] for r in rows) / len(rows), 4)
                  for k in ("accuracy", "balanced_accuracy", "ece", "nll", "brier")}
             rec = {"family": "categories", "suite": suite, "lang": "macro", "model": label, **extra,
+                   **definitions, "strict": a.strict,
                    "n": sum(r["n"] for r in rows), "skip": a.skip, "n_langs": len(rows), **m}
             records.append(rec)
             if out:
@@ -969,7 +997,8 @@ def main(argv=None):
         if out:
             for suite, lang, why in skipped:
                 out.write(json.dumps({"family": "categories", "suite": suite, "lang": lang,
-                                      "skip": a.skip, "skipped": why},
+                                      **definitions, "strict": a.strict, "pool": pool_fp,
+                                      "seed": a.seed, "n": a.n, "skip": a.skip, "skipped": why},
                                      ensure_ascii=False) + "\n")
     finally:
         if out:

@@ -108,7 +108,9 @@ def _records(path, accs, pool="p1"):
         for lang, acc in accs.items():
             actual = round(round(acc * 150) / 150, 4)
             f.write(json.dumps({"family": "categories", "suite": "emotion", "lang": lang, "model": "m",
-                                "n": 150, "accuracy": actual, "pool": pool}) + "\n")
+                                "n": 150, "accuracy": actual, "pool": pool,
+                                "pool_items_sha256": "items", "strict": True,
+                                "registry_sha256": "r" * 64, "suite_definition_sha256": "s" * 64}) + "\n")
     with open(item_path, "w", encoding="utf-8") as f:
         for lang, acc in accs.items():
             right = round(acc * 150)
@@ -136,8 +138,9 @@ def test_decision_promotes_a_clear_gain_and_blocks_a_regression(tmp_path):
 def test_decision_compares_only_the_same_pool(tmp_path):
     base = _records(tmp_path / "base.jsonl", {"de": 0.5, "en": 0.5})
     other = _records(tmp_path / "other.jsonl", {"de": 0.9, "en": 0.9}, pool="p2")
-    res = lora_experiment.decide(base, other, log=lambda *a: None)
-    assert not res["promote"] and not res["cells"]
+    # fail closed: a different pool is never silently skipped
+    with pytest.raises(SystemExit, match="item-pool mismatch"):
+        lora_experiment.decide(base, other, log=lambda *a: None)
 
 
 def test_decision_refuses_different_realized_items(tmp_path):
@@ -281,3 +284,39 @@ def test_real_base_trains_and_converts(tmp_path):
                          capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     assert "88 LoRA pairs" in res.stdout
+
+
+@pytest.mark.parametrize("change,match", [
+    (lambda r: r.update(strict=False), "non-strict"),
+    (lambda r: r.update(suite_definition_sha256="t" * 64), "suite_definition_sha256"),
+    (lambda r: r.pop("registry_sha256"), "registry_sha256"),
+])
+def test_decision_fails_closed_on_evaluation_metadata(tmp_path, change, match):
+    base = _records(tmp_path / "base.jsonl", {"en": 0.4})
+    adapter = _records(tmp_path / "adapter.jsonl", {"en": 0.8})
+    rows = [json.loads(line) for line in Path(adapter).read_text().splitlines()]
+    change(rows[0])
+    Path(adapter).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    with pytest.raises(ValueError, match=match):
+        lora_experiment.decide(base, adapter, log=lambda *a: None)
+
+
+def test_decision_refuses_different_skipped_cells(tmp_path):
+    base = _records(tmp_path / "base.jsonl", {"en": 0.4})
+    adapter = _records(tmp_path / "adapter.jsonl", {"en": 0.8})
+    with open(adapter, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"family": "categories", "suite": "urgency", "lang": "en",
+                            "skipped": "too few items"}) + "\n")
+    with pytest.raises(ValueError, match="skipped different"):
+        lora_experiment.decide(base, adapter, log=lambda *a: None)
+
+
+def test_decision_refuses_skips_without_pool(tmp_path):
+    base = _records(tmp_path / "base.jsonl", {"en": 0.4})
+    adapter = _records(tmp_path / "adapter.jsonl", {"en": 0.8})
+    for path in (base, adapter):
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"family": "categories", "suite": "emotion", "lang": "zh",
+                                "skipped": "only 1 pooled item"}) + "\n")
+    with pytest.raises(ValueError, match="lacks its pool"):
+        lora_experiment.decide(base, adapter, log=lambda *a: None)
