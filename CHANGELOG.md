@@ -7,6 +7,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
+  browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
+
 ### Added
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
   items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for
