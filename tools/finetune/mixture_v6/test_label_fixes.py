@@ -19,7 +19,9 @@ from tools.finetune.mixture_v6.templates import GLOSSES, LANGUAGES, describe
 
 
 def entry(sid, config=None):
-    for e in registry.ENTRIES:
+    # Label/adapter regressions remain useful after a source is disabled by the
+    # licence gate; production builds still only use registry.ENABLED_ENTRIES.
+    for e in json.loads(REGISTRY_PATH.read_text(encoding="utf-8")):
         if e["id"] == sid and (config is None or e.get("config") == config):
             return e
     raise KeyError(sid)

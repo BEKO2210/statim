@@ -40,6 +40,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
+AUDIT_PATH = Path(__file__).resolve().with_name("licence_audit.json")
 SEED = 20260927
 NVIDIA = "nvidia/Nemotron-Safety-Guard-Dataset-v3"
 INDIC = "l3cube-pune/IndicGuard"
@@ -141,6 +142,19 @@ EVALUATION_DATASETS = [
     "cardiffnlp/tweet_eval", "cardiffnlp/tweet_sentiment_multilingual",
     "LocalLLaMA/typed-decisions",
 ]
+
+
+def admitted_direct_sources(audit_path=AUDIT_PATH):
+    audit_data = json.loads(Path(audit_path).read_text(encoding="utf-8"))
+    direct = audit_data.get("direct_sources", {})
+    wanted = (NVIDIA, INDIC, MINDS, SNIPS)
+    missing = [repo for repo in wanted if repo not in direct]
+    if missing:
+        raise ValueError("Direct source audit refused unregistered source(s): " + ", ".join(missing))
+    excluded = [repo for repo in wanted if direct[repo].get("use") is not True]
+    if excluded:
+        print("Licence policy refused direct source(s): " + ", ".join(excluded), flush=True)
+    return tuple(repo for repo in wanted if direct[repo].get("use") is True)
 
 
 def digest(data):
@@ -542,6 +556,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--per-dataset", type=int, default=3000)
     args = ap.parse_args()
+    sources = admitted_direct_sources()
     if args.per_dataset < 1:
         ap.error("--per-dataset must be positive")
     out = Path(args.out).resolve()
@@ -556,12 +571,12 @@ def main():
     metadata, evidence, rejected = audit(cache)
     print("Licence/provenance audit passed for the restricted training sources.", flush=True)
     banned, evaluation_report = evaluation_hashes(cache)
-    lineage = safety_lineage(cache, banned)
+    lineage = safety_lineage(cache, banned) if any(repo in (NVIDIA, INDIC) for repo in sources) else {}
     print(f"Evaluation text hashes: {len(banned)}; verified safety IDs: {len(lineage)}", flush=True)
 
     items, provenance, taken, seen = [], [], [], set()
     language_counts, kind_counts = collections.Counter(), collections.Counter()
-    for repo in (NVIDIA, INDIC, MINDS, SNIPS):
+    for repo in sources:
         stats = collections.Counter()
         print(f"Building {repo} ...", flush=True)
         if repo in (NVIDIA, INDIC):

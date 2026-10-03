@@ -32,6 +32,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   losses and the family two-standard-error screen still block as well), validation uses the lower
   bound of a paired 95% interval for the mean of suite deltas, skipped category cells are recorded
   and must match, and the power report marks capabilities below 600 items.
+- Training-source policy is now machine-readable and enforced offline: v5, v6 and direct-source
+  builders fail closed on the 2026-10-03 licence findings, generator terms are checked, and the
+  reproducible v9 composer refuses unresolved provenance or source identifiers.
 
 ### Added
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880

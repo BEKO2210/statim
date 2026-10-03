@@ -19,11 +19,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from tools.finetune.mixture_v6.eval_texts import load as load_eval_texts, norm
     from tools.finetune.mixture_v6.loaders import load_rows
-    from tools.finetune.mixture_v6.registry import ADAPTERS, ENTRIES, adapt, metadata, source_key
+    from tools.finetune.mixture_v6.registry import ADAPTERS, ENABLED_ENTRIES, adapt, metadata, source_key
 else:
     from .eval_texts import load as load_eval_texts, norm
     from .loaders import load_rows
-    from .registry import ADAPTERS, ENTRIES, adapt, metadata, source_key
+    from .registry import ADAPTERS, ENABLED_ENTRIES, adapt, metadata, source_key
 
 ROOT = Path(__file__).resolve().parents[3]
 MAX_LOADED = 60_000
@@ -264,7 +264,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.per_source < 1 or a.dev_per_source < 0 or a.smoke < 0:
         ap.error("caps must be non-negative and --per-source must be positive")
-    selected = ENTRIES
+    selected = ENABLED_ENTRIES
     if a.only:
         wanted = set(a.only)
         selected = [e for e in selected if e["id"] in wanted or source_key(e) in wanted]

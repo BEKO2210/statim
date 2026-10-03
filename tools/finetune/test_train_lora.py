@@ -61,7 +61,9 @@ def test_category_sources_use_exact_src_names():
     assert chosen == {s for s, c in by_src.items() if "10-fact-check" in c or "10-claim" in c}
     sentiment, _ = train_lora.category_sources(REGISTRY, "sentiment")
     complaint, _ = train_lora.category_sources(REGISTRY, "complaint")
-    assert sentiment & complaint  # "3-complaint; 1-sentiment" serves both suites
+    # The former dual-purpose synthetic complaint sources are licence-excluded;
+    # no admitted source currently serves both suites.
+    assert not sentiment & complaint
     pii, _ = train_lora.category_sources(REGISTRY, "pii")
     assert pii and not pii & chosen  # 10-pii and 10-fact-check are separate families
 

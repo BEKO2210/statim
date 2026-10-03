@@ -7,6 +7,9 @@
 import argparse
 import json
 import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
 
 POLICY = """\
 Released Statim weights are trained only on data whose licence permits commercial use **and** does
@@ -48,6 +51,15 @@ NOT_IN_RELEASES = [
      "SemEval and DAIR Emotion; the repository's Apache-2.0 tag does not cover the underlying data."),
     ("AG News and tweet_eval texts for distillation", "Licence unknown; replaced by texts from the licence-filtered mixture."),
 ]
+
+
+def licence_findings():
+    """Keep the hand-audited findings verbatim when regenerating this document."""
+    text = (ROOT / "DATA_LICENSES.md").read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^## Licence findings \(2026-10-03\)\n.*?(?=^## |\Z)", text)
+    if not match:
+        raise RuntimeError("DATA_LICENSES.md has no Licence findings (2026-10-03) section")
+    return match.group(0).rstrip("\n")
 
 
 def source_link(sid):
@@ -105,7 +117,7 @@ def main():
     man = json.load(open(a.manifest))
     rows = sorted(((s, n, man.get("licenses", {}).get(s, "")) for s, n in man["per_source"].items() if n),
                   key=lambda x: x[0].lower())
-    out = ["# Data licences", "", POLICY, "",
+    out = ["# Data licences", "", POLICY, "", licence_findings(), "",
            "## Base models", "", "| Model | Licence |", "|---|---|"]
     out += [f"| [{n}]({u}) | {l} |" for n, u, l in BASE]
     out += ["", "## Training data of released weights", "", "| Dataset | Licence | Notes |", "|---|---|---|"]
