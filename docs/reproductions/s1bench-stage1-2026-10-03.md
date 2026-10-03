@@ -45,3 +45,19 @@ costs about the two models' time together.
 
 Records: `bench/results/s1bench/s1-{A-enlarge,B-consensus,C-calibrate}.json.gz`; pairwise tables with
 `bench/s1bench_compare.py <run> bench/results/s1bench/s1-statim070-f32.json.gz --overlap bench/results/s1bench/overlap-v8.json`.
+
+
+## Correction (2026-10-03, after publication)
+
+An audit found that two subsets this page treats as never trained on are in-domain: the train splits
+of **Civil Comments** (7 × 2,000 rows) and **HelpSteer2** (5 attributes) are in the training mixtures
+of Statim Decide 0.7.0 (`DATA_LICENSES.md`). Six subsets, not four, are in-domain, and the macro over
+sources Statim never trained on is over **seven** subsets, not nine:
+
+| Macro over the 7 never-trained subsets | Statim 0.7.0 | consensus | en-large | `--calibrate` | Laya base | Lev | Jev |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| | 0.565 | 0.582 | 0.547 | 0.529 | 0.545 | 0.635 | 0.766 |
+
+The statement that Statim leads on civil_comments compares an in-domain score with zero-shot ones and
+is withdrawn. Every other number above is unchanged; `bench/s1bench_compare.py` now uses the corrected
+list. The stage-1 headline rule still selects the consensus (0.582 against 0.565 on the seven).

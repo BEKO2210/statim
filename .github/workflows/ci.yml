@@ -12,11 +12,11 @@ jobs:
   build-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
-        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/release/test_check_hardening.py && python3 tools/release/test_sbom.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/ci/test_parity_summary.py && python3 tools/docs/check_docs.py
+        run: python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/release/test_check_hardening.py && python3 tools/release/test_sbom.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/ci/test_parity_summary.py && python3 tools/docs/check_docs.py && python3 tools/readme/compare_svg.py --check
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
       - name: API v1 contract compatibility
@@ -49,7 +49,7 @@ jobs:
       - name: Record the measured parity of this run
         run: python3 tools/ci/parity_summary.py ctest-main.xml ctest-lora.xml --json parity.json --markdown "$GITHUB_STEP_SUMMARY"
       - name: Archive the parity record
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: parity-${{ github.sha }}-${{ github.event_name }}
           path: parity.json
@@ -60,7 +60,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -96,7 +96,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -134,7 +134,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -159,7 +159,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -205,7 +205,7 @@ jobs:
         run: fuzz/run.sh gguf 60 build-fuzz
       - name: Upload crash inputs
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-artifacts
           path: build-fuzz/artifacts/
@@ -216,7 +216,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Self-test vendored CVE tooling
@@ -242,7 +242,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -268,7 +268,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Toolchain
@@ -305,7 +305,7 @@ jobs:
       # sha256 of prometheus-3.15.0.linux-amd64.tar.gz, from the release's sha256sums.txt
       PROMETHEUS_SHA256: 2a542df32eac02ee17b9d844fb2aa1de00dafa5476579ba8a3ba862e9d572ea0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: promtool (pinned, hash-checked)
         run: |
           f=prometheus-$PROMETHEUS_VERSION.linux-amd64.tar.gz
@@ -326,7 +326,7 @@ jobs:
       # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from the release's checksums.txt
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

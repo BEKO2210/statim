@@ -1,0 +1,90 @@
+{
+  "CUDA_VISIBLE_DEVICES": "",
+  "command": [
+    "/home/belkis/Schreibtisch/My WorkSpace/statim/.venv-train/bin/python",
+    "/home/belkis/Schreibtisch/My WorkSpace/statim-laya/bench/laya_compare.py",
+    "startup",
+    "--model",
+    "/home/belkis/Schreibtisch/My WorkSpace/statim/models/laya-multilingual-v9",
+    "--out",
+    "bench/results/laya-cpu/startup.json"
+  ],
+  "cpu_model": "AMD Ryzen 7 5800X 8-Core Processor",
+  "git_commit": "56bf7a70a4a44e155545dac99de7cc23183d7a12",
+  "model": "/home/belkis/Schreibtisch/My WorkSpace/statim/models/laya-multilingual-v9",
+  "startup": {
+    "answer": {
+      "answers": {
+        "department": {
+          "action": {
+            "act_probability": 1.0
+          },
+          "answer_confidence": 0.995,
+          "choice": "billing",
+          "confidence": 0.9737,
+          "probabilities": {
+            "billing": 0.995,
+            "other": 0.0025,
+            "sales": 0.0014,
+            "technical": 0.0011
+          },
+          "type": "choice"
+        },
+        "refund": {
+          "action": {
+            "act_probability": 1.0
+          },
+          "answer_confidence": 0.9261,
+          "confidence": 0.9261,
+          "noul": 0.9261,
+          "type": "noul"
+        },
+        "urgency": {
+          "action": {
+            "act_probability": 1.0
+          },
+          "answer_confidence": 0.6455,
+          "confidence": 0.2579,
+          "legend": {
+            "0": "not urgent",
+            "1": "soon",
+            "2": "critical deadline or blocking issue"
+          },
+          "probabilities": {
+            "0": 0.0625,
+            "1": 0.2921,
+            "2": 0.6455
+          },
+          "score": 1.583,
+          "type": "score"
+        }
+      },
+      "model": "laya-rl-agent",
+      "usage": {
+        "input_tokens": 218,
+        "output_tokens": 0
+      }
+    },
+    "peak_rss_bytes": 2781528064,
+    "process_start_to_answer_ms": 5029.216462047771,
+    "site_packages": "/home/belkis/Schreibtisch/My WorkSpace/statim/.venv-train/lib/python3.12/site-packages",
+    "site_packages_bytes": 6271329787,
+    "threads": 8,
+    "worker_command": [
+      "/home/belkis/Schreibtisch/My WorkSpace/statim/.venv-train/bin/python",
+      "/home/belkis/Schreibtisch/My WorkSpace/statim-laya/bench/laya_compare.py",
+      "startup",
+      "--model",
+      "/home/belkis/Schreibtisch/My WorkSpace/statim/models/laya-multilingual-v9",
+      "--out",
+      "bench/results/laya-cpu/startup.json",
+      "--_worker"
+    ]
+  },
+  "versions": {
+    "laya": "0.3.20",
+    "numpy": "2.5.3",
+    "python": "3.12.3",
+    "torch": "2.14.0"
+  }
+}

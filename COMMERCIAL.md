@@ -8,6 +8,14 @@
 | Model weights, evaluation by any company | [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md) | free for fewer than 32 consecutive days |
 | Model weights, any other commercial use | Statim commercial licence | paid |
 
+> **Notice (2026-10-03).** statim-decide-en-large 0.5.0, statim-decide-multilingual-base 0.4.0 and
+> 0.7.0, and the adapters built on 0.7.0 were trained partly on data that is non-commercial,
+> ShareAlike or under an unknown licence (see
+> [DATA_LICENSES.md](DATA_LICENSES.md#licence-findings-2026-10-03)). From this date these weights are
+> offered only under PolyForm Noncommercial 1.0.0: the Small Business and Free Trial licences and the
+> Statim commercial licence do not apply to them. Replacements trained only on cleared data will be
+> released under the full terms above.
+
 ## When you need a commercial licence
 
 You need one if your company has 100 or more people (employees and independent contractors) or at

@@ -41,6 +41,8 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 ## At a glance
 
+<p align="center"><img src="assets/readme/compare.svg" width="600" alt="Statim against ONNX Runtime and the Laya PyTorch reference on one CPU (speed, start-up, memory) and against Lev and Jev on S1Bench. Statim is fastest on long inputs, starts in 0.45 s and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.651, Lev 0.689 and Jev 0.761."></p>
+
 | Measure | **Statim Decide Multilingual 0.7.0**, trained | **Qwen3-8B**, zero-shot |
 |---|---:|---:|
 | 14-category macro accuracy | **0.748** | 0.706 |
@@ -92,8 +94,8 @@ The comparison does not cover TensorRT or a GPU run. [Full protocol and every ro
 
 On S1Bench (13 public subsets, 3,880 items, the harness Lev's authors used), the multilingual model
 0.7.0 scores **0.638** macro, above its untuned Laya base (0.579) and below Lev, a 4B LLM on a GPU
-(0.689), and the hosted Jev (0.761). It leads on toxicity and trails on reading comprehension and
-paraphrase. [Protocol, per-subset results and caveats](docs/reproductions/s1bench-2026-10-03.md).
+(0.689), and the hosted Jev (0.761). It trails on reading comprehension and paraphrase; over the seven
+subsets from sources it never trained on it scores 0.565 (Lev 0.635, Jev 0.766). [Protocol, per-subset results and caveats](docs/reproductions/s1bench-2026-10-03.md).
 The best deployable configuration, the consensus of the English and multilingual models, scores
 0.651, with a lower calibration error than Lev (ECE 0.105 against 0.115; Jev 0.091).
 [Stage 1](docs/reproductions/s1bench-stage1-2026-10-03.md)
@@ -502,6 +504,8 @@ See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
   [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md).
 - Other commercial use needs a paid licence; see [COMMERCIAL.md](COMMERCIAL.md).
 
-Released weights use commercially usable, non-ShareAlike data; sources are in
-[DATA_LICENSES.md](DATA_LICENSES.md). Original Laya checkpoints are Apache-2.0. Statim is independent
+Weights are meant to use only commercially usable, non-ShareAlike data; sources are in
+[DATA_LICENSES.md](DATA_LICENSES.md). A re-audit on 2026-10-03 found that the weights released so far
+break that rule, so they are offered for noncommercial use only until cleared replacements ship
+([licence findings](DATA_LICENSES.md#licence-findings-2026-10-03)). Original Laya checkpoints are Apache-2.0. Statim is independent
 and not affiliated with the Laya authors or TypeSafe; see [NOTICE](NOTICE).
