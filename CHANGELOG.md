@@ -23,6 +23,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - S1Bench stage 1 (`docs/reproductions/s1bench-stage1-2026-10-03.md`, pre-registered): the consensus
   of en-large and multilingual scores 0.651 macro (0.600 on never-trained sources, ECE 0.105), the
   best deployable configuration; en-large alone 0.608, `--calibrate` 0.615.
+- `docs/reproductions/laya-speed-2026-10-03.md` and a section in docs/ORT.md: the Laya PyTorch
+  reference on the same CPU under a pre-registered protocol. Level with Statim on one thread for short
+  inputs, 1.10-1.56x slower otherwise, 5.0 s to the first answer and 2.65 GiB peak memory;
+  `bench/laya_compare.py` measures it.
 
 ## [0.9.5] - 2026-10-03
 

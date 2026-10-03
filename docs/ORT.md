@@ -50,6 +50,21 @@ source file of every number.
   | Resident memory in the start-up window, 8-bit | 276 MiB | 579–581 MiB |
   | Install | 5.2 MiB executable | 186 MiB of Python packages, without the interpreter |
 
+## And the PyTorch reference
+
+The `laya` Python package on PyTorch, the reference Statim reproduces, was measured on the same
+machine with the same token ids under a protocol fixed beforehand
+([results](reproductions/laya-speed-2026-10-03.md)). Mean ms per state on the 29 short states:
+
+| Threads | Statim | ORT | Laya (PyTorch) |
+|---:|---:|---:|---:|
+| 1 | 1,447 | 1,419 | 1,451 |
+| 4 | 420 | 433 | 545 |
+| 8 | 271 | 266 | 299 |
+
+The Statim column is a control run on the day of the Laya measurement; the ORT column is this page's
+0.9.2 measurement. Laya starts in 5.0 s and peaks at 2.65 GiB resident memory.
+
 ## What changed in 0.9.2
 
 In 0.9.1, ORT was faster than Statim on short f32 inputs at 1 to 4 threads, by up to 16 %.
