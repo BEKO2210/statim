@@ -6,6 +6,7 @@ callers must pass an explicit path or accept a directory below ``$TMPDIR``.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import tempfile
 from pathlib import Path

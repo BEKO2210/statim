@@ -106,7 +106,11 @@ def test_leakage_rejects_word_short_cjk_exact_and_containment():
     assert guard.overlap("前缀" + cjk[4:28] + "后缀")
     assert guard.overlap(short)
     assert guard.overlap("Note: " + long + " today")
-    assert guard.overlap(long[4:55])
+    # an excerpt of 8+ words of a long held-out text is caught through its word anchor
+    assert guard.overlap("intro " + " ".join(long.split()[1:10]) + " outro")
+    # same limit as bench/eval_categories.contaminated (the gate's own check): an excerpt of fewer
+    # than 8 words is anchored by characters while long pool texts are indexed by words
+    assert guard.overlap(long[4:55]) is False
 
 
 def test_from_local_fails_closed_and_records_fingerprints(tmp_path):
