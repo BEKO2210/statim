@@ -20,6 +20,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   the review threshold said, so the threshold looked broken. Only the threshold marks an answer now
   ("check this one"); it defaults to 60 % and is shown in percent.
 
+### Added
+- API key files support `inference` and `metrics` scopes. Valid keys without the required scope get
+  HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
+  secret key bytes (READINESS P1 #12). A key listed twice, in the file or in `STATIM_API_KEY`, is a
+  start-up error.
+
 ## [0.9.4] - 2026-10-03
 
 The Hugging Face Space shows the playground again (0.9.3 blocked its embedding), the playground

@@ -36,7 +36,7 @@ struct ServerConfig {
     int max_len = 0, head_max_len = 0;  // default token budgets (0 = the checkpoint's)
     bool calibrate = false;   // default contextual calibration for choice questions
     bool consensus = false;   // default: fuse english + multilingual checkpoints when both are loaded
-    std::vector<std::string> api_keys;
+    std::vector<ApiKey> api_keys;
     SecurityLimits limits;
     int http_queue = 32;
     int request_timeout = 30; // absolute header + body read deadline, seconds
