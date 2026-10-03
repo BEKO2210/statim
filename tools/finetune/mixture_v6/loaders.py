@@ -1221,8 +1221,10 @@ def _load_hf_streaming(entry, limit, revision):
         configs = CONFIGS[original]
     else:
         config = _simple_config(entry)
-        if config is None and any(x in entry.get("config", "") for x in ("48 configs", "<lang>", "eng +")):
-            configs = get_dataset_config_names(dataset_id)
+        config_spec = entry.get("config", "")
+        if config is None and ("<" in config_spec or
+                               any(x in config_spec for x in ("48 configs", "eng +"))):
+            configs = get_dataset_config_names(dataset_id, revision=revision)
         else:
             configs = [config]
     fallback = None
@@ -1242,13 +1244,14 @@ def _load_hf_streaming(entry, limit, revision):
         if len(rows) >= limit:
             break
         try:
-            available = get_dataset_split_names(dataset_id, config)
+            available = get_dataset_split_names(dataset_id, config, revision=revision)
             splits = _split_candidates(entry.get("split", "train"), available)
             for split in splits:
                 try:
-                    ds = load_dataset(dataset_id, config, split=split, streaming=True)
+                    ds = load_dataset(dataset_id, config, split=split, streaming=True,
+                                      revision=revision)
                 except Exception:
-                    ds = load_dataset(dataset_id, config, split=split)
+                    ds = load_dataset(dataset_id, config, split=split, revision=revision)
                 columns = getattr(ds, "column_names", None) or []
                 if "audio" in columns:
                     ds = ds.cast_column("audio", Audio(decode=False))
@@ -1332,8 +1335,8 @@ def load_rows(entry, limit):
         rows = _DISPATCH[sid](entry, limit, pinned)
         if not rows:
             raise RuntimeError("loader returned no rows")
-        return _postprocess(sid, rows), []
+        return _postprocess(sid, rows)[:limit], []
     if sid.startswith(("github:", "zenodo:")) or "|" in sid:
         raise RuntimeError("non-Hugging-Face source needs a pinned raw-file loader")
     rows, warnings = _load_hf_streaming(entry, limit, pinned)
-    return _postprocess(sid, rows), warnings
+    return _postprocess(sid, rows)[:limit], warnings

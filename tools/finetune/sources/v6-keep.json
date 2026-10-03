@@ -1,7 +1,7 @@
 [
  {
   "id": "google-research-datasets/poem_sentiment",
-  "pinned_commit": "TODO",
+  "pinned_commit": "65c72cf1bc1d0ab10b58338452cb058296c5cafe",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -29,7 +29,7 @@
  },
  {
   "id": "ai4bharat/IndicSentiment",
-  "pinned_commit": "TODO",
+  "pinned_commit": "7fa307bb4ecb188e4296050b3eb9c328b84bb42b",
   "config": "translation-<lang>",
   "split": "validation+test",
   "licence": "CC0-1.0 (AI4Bharat/IndicBERT README; HF card has none)",
@@ -72,7 +72,7 @@
  },
  {
   "id": "community-datasets/re_dial",
-  "pinned_commit": "TODO",
+  "pinned_commit": "337c72f15cca9c7da3f17e5cf41f5cf5a57d2856",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -117,7 +117,7 @@
  },
  {
   "id": "Novora/Tri-Class-Sentiment-Synthetic",
-  "pinned_commit": "TODO",
+  "pinned_commit": "b163d1aa98ef00b16a9ca08d244f184e24645b70",
   "config": "default",
   "split": "train",
   "licence": "CC0-1.0",
@@ -214,7 +214,7 @@
  },
  {
   "id": "Kenshiii/synthetic-product-reviews",
-  "pinned_commit": "TODO",
+  "pinned_commit": "da9f3cea6961e7be5c1601305006b42623566a19",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -241,7 +241,7 @@
  },
  {
   "id": "KhiredNetworks/synthetic-product-reviews",
-  "pinned_commit": "TODO",
+  "pinned_commit": "1ecd1ef7b4292362f8359e851dfb1626de5187f9",
   "config": "default",
   "split": "train",
   "licence": "MIT",
@@ -353,7 +353,7 @@
  },
  {
   "id": "tasksource/it-support-tickets",
-  "pinned_commit": "TODO",
+  "pinned_commit": "e85adfc32f955a1ba704e4405143e39ee1b3efc0",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0 (Zenodo 7648117)",
@@ -383,7 +383,7 @@
  },
  {
   "id": "tasksource/help-desk-tickets",
-  "pinned_commit": "TODO",
+  "pinned_commit": "eade294048298a4c8f52f4c8d62524a635956a2c",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0 (Mendeley btm76zndnt v3)",
@@ -621,7 +621,7 @@
  },
  {
   "id": "s2pidape/support-ticket-dataset",
-  "pinned_commit": "TODO",
+  "pinned_commit": "abe80fecfa1d69eb0b4a0182504668a596655261",
   "config": "humans_only",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -952,7 +952,7 @@
  },
  {
   "id": "GoktugD/turkish-formality-rewrite-500k",
-  "pinned_commit": "TODO",
+  "pinned_commit": "7ee3380f1f07d799952ceb6abf89418739b3d42d",
   "config": "default",
   "split": "train",
   "licence": "cc0-1.0",
@@ -979,7 +979,7 @@
  },
  {
   "id": "NagaYu/deference-keigo-corpus",
-  "pinned_commit": "TODO",
+  "pinned_commit": "9a73df7a4dbb1b4f9a9ffdd0553fa988cf8774c1",
   "config": "default",
   "split": "train",
   "licence": "cc-by-4.0",
@@ -1359,7 +1359,7 @@
  },
  {
   "id": "Helsinki-NLP/tatoeba",
-  "pinned_commit": "TODO",
+  "pinned_commit": "f9b3a576d846ff950e161bde485a7b372eed1b80",
   "config": "en-mr,eo-nl,es-gl,es-pt,fr-ru",
   "split": "train",
   "licence": "cc-by-2.0",
@@ -1708,7 +1708,7 @@
  },
  {
   "id": "GoktugD/turkish-nli-constructed-1.5m",
-  "pinned_commit": "TODO",
+  "pinned_commit": "16d94f549a57d44c6825345dc9dad5029f27d21b",
   "config": "default",
   "split": "train",
   "licence": "cc0-1.0",
@@ -1735,7 +1735,7 @@
  },
  {
   "id": "community-datasets/tapaco",
-  "pinned_commit": "TODO",
+  "pinned_commit": "1ffa2f09c46f5ca6f5c3d2d8ab6f1f65700a3f6a",
   "config": "en,de,fr,es,it,pt,nl,pl,tr,ru,ar,hi,ja,cmn",
   "split": "train",
   "licence": "cc-by-2.0 (Tatoeba CC-BY 2.0 FR)",
@@ -1775,7 +1775,7 @@
  },
  {
   "id": "Helsinki-NLP/tatoeba",
-  "pinned_commit": "TODO",
+  "pinned_commit": "f9b3a576d846ff950e161bde485a7b372eed1b80",
   "config": "aligned en-mr,eo-nl,es-gl,es-pt,fr-ru",
   "split": "train",
   "licence": "cc-by-2.0 (Tatoeba CC-BY 2.0 FR)",
@@ -1841,7 +1841,7 @@
  },
  {
   "id": "tasksource/esci",
-  "pinned_commit": "TODO",
+  "pinned_commit": "45c948250c2116f1e535bac67b92501c695307a4",
   "config": "default",
   "split": "train",
   "licence": "apache-2.0 (amazon-science/esci-data)",
@@ -1872,7 +1872,7 @@
  },
  {
   "id": "napsternxg/wands",
-  "pinned_commit": "TODO",
+  "pinned_commit": "14cb4a412b97400331349525f19f8cb074c143c8",
   "config": "default",
   "split": "train",
   "licence": "MIT (wayfair/WANDS)",
@@ -2082,7 +2082,7 @@
  },
  {
   "id": "mteb/toxic_conversations_50k",
-  "pinned_commit": "TODO",
+  "pinned_commit": "ab3aee44e1d13d6938102bef4c6af909e6a9799d",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0 (Civil Comments text CC0)",
@@ -2170,7 +2170,7 @@
  },
  {
   "id": "nvidia/Aegis-AI-Content-Safety-Dataset-1.0",
-  "pinned_commit": "TODO",
+  "pinned_commit": "0cb990c6a4f0cbcc78c466cec35d35bfa862f5b0",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -2228,7 +2228,7 @@
  },
  {
   "id": "CohereForAI/aya_redteaming",
-  "pinned_commit": "TODO",
+  "pinned_commit": "5a16fee03c19d681b4f3527b6a750e1ed4d434c7",
   "config": "aya_{eng,fra,spa,rus,arb,hin,srp,tgl}.jsonl",
   "split": "all (no split)",
   "licence": "Apache-2.0",
@@ -2569,7 +2569,7 @@
  },
  {
   "id": "nvidia/CantTalkAboutThis-Topic-Control-Dataset",
-  "pinned_commit": "TODO",
+  "pinned_commit": "12765cfd2d479aa4f66d421df0b1b1b131e68978",
   "config": "mixtral",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -2711,7 +2711,7 @@
  },
  {
   "id": "3nesdeniz/agentic-prompt-injection-5k",
-  "pinned_commit": "TODO",
+  "pinned_commit": "2e3db3f38edb9bdb71f4d72a7fa94d9f0595199c",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -2975,7 +2975,7 @@
  },
  {
   "id": "gfissore/arxiv-abstracts-2021",
-  "pinned_commit": "TODO",
+  "pinned_commit": "989f0d61fe856f37c2ee57a7fb5e192187a83d11",
   "config": "default",
   "split": "train",
   "licence": "CC0-1.0 (arXiv metadata)",
@@ -3003,7 +3003,7 @@
  },
  {
   "id": "NortheasternUniversity/big_patent",
-  "pinned_commit": "TODO",
+  "pinned_commit": "3aaa8af0d553e331e0adc53c2a96ed510d7f8613",
   "config": "a..y (one per CPC section)",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -3198,7 +3198,7 @@
  },
  {
   "id": "uoe-nlp/multi3-nlu",
-  "pinned_commit": "TODO",
+  "pinned_commit": "cde8e2537d7ac06212ef4b25df2cf3084f26ec0f",
   "config": "<language>/<domain>/fold*.json",
   "split": "all folds",
   "licence": "CC-BY-4.0",
@@ -3260,7 +3260,7 @@
  },
  {
   "id": "pfb30/multi_woz_v22 (github budzianowski/multiwoz)",
-  "pinned_commit": "TODO",
+  "pinned_commit": "a65d2d3261c42a309b634179c186628bf35d9298",
   "config": "v2.2",
   "split": "train",
   "licence": "MIT (upstream); Apache-2.0 (card)",
@@ -3288,7 +3288,7 @@
  },
  {
   "id": "kchawla123/casino",
-  "pinned_commit": "TODO",
+  "pinned_commit": "f9d53ba9c67d020ceb2e2a1ce9cbfa2169518aff",
   "config": "default",
   "split": "train",
   "licence": "CC-BY-4.0",
@@ -3314,7 +3314,7 @@
  },
  {
   "id": "ConvLab/crosswoz (github thu-coai/CrossWOZ)",
-  "pinned_commit": "TODO",
+  "pinned_commit": "4a3e56082543ed9eecb9c76ef5eadc1aa0cc5ca0",
   "config": "data.zip",
   "split": "train",
   "licence": "Apache-2.0",
@@ -3341,7 +3341,7 @@
  },
  {
   "id": "github:HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)",
-  "pinned_commit": "TODO",
+  "pinned_commit": "62adc9e080f3ea717756e6615892ca5d06e31ec0",
   "config": "en, zh",
   "split": "train",
   "licence": "Apache-2.0",
@@ -3523,7 +3523,7 @@
  },
  {
   "id": "masakhane/InjongoIntent",
-  "pinned_commit": "TODO",
+  "pinned_commit": "45ab123552412a73ad41df25b5847c3c7ef0edf3",
   "config": "eng + 16 African configs",
   "split": "train",
   "licence": "Apache-2.0",
@@ -3566,7 +3566,7 @@
  },
  {
   "id": "GoktugD/turkish-intent-classification-1m",
-  "pinned_commit": "TODO",
+  "pinned_commit": "eda8275df162a24e580bb6cbbc95023a5d546308",
   "config": "default",
   "split": "train",
   "licence": "CC0-1.0 (template-generated)",
@@ -3592,7 +3592,7 @@
  },
  {
   "id": "amyrmahdy/decima-synthetic-decisions",
-  "pinned_commit": "TODO",
+  "pinned_commit": "4f7942771b885ebdd243bcd984a4dd37159c6945",
   "config": "short|long|relabel",
   "split": "train",
   "licence": "cc-by-4.0 (card; fully synthetic, teacher Gemma-4-26B-A4B-it, Apache-2.0 model card)",

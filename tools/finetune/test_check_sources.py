@@ -36,10 +36,10 @@ def admitted(v6):
     return next(entry for entry in v6 if entry.get("use") is True)
 
 
-def test_real_repo_passes_with_todos_allowed():
+def test_real_repo_has_no_todos():
     errors, todos = check_sources.check(allow_todo=True)
     assert errors == []
-    assert sum(todos.values()) > 0
+    assert sum(todos.values()) == 0
 
 
 def test_missing_required_field_fails(tmp_path):
@@ -82,7 +82,10 @@ def test_rows_exclusion_without_filter_fails(tmp_path):
 
 
 def test_todo_fails_by_default(tmp_path):
-    assert any("TODO" in error for error in run(tmp_path, allow_todo=False))
+    v6 = copy.deepcopy(V6)
+    admitted(v6)["pinned_commit"] = "TODO"
+    assert any("TODO pinned_commit" in error for error in
+               run(tmp_path, v6=v6, allow_todo=False))
 
 
 def test_wikinews_adapter_drops_arabic_and_persian_rows():
@@ -257,10 +260,12 @@ def test_direct_builder_consults_policy(tmp_path):
     assert "PolyAI/minds14" not in build_extra.admitted_direct_sources(audit_path, policy_path)
 
 
-def test_v6_missing_pin_is_recorded_as_todo_and_loader_refuses():
+def test_v6_pins_are_complete_and_loader_refuses_a_todo():
     admitted_rows = [e for e in V6 if e.get("use") is True]
     assert all("pinned_commit" in e for e in admitted_rows)
-    todo = next(e for e in admitted_rows if e["pinned_commit"] == "TODO")
+    assert all(len(e["pinned_commit"]) == 40 for e in admitted_rows)
+    todo = copy.deepcopy(admitted_rows[0])
+    todo["pinned_commit"] = "TODO"
     with pytest.raises(RuntimeError, match="pinned_commit"):
         loaders.load_rows(todo, 1)
     for path in ("tools/finetune/check_sources.py", "tools/finetune/source_policy.py",
