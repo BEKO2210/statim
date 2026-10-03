@@ -7,13 +7,17 @@
 import argparse
 import json
 import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
 
 POLICY = """\
 Released Statim weights are trained only on data whose licence permits commercial use **and** does
 not impose ShareAlike or copyleft terms on the model: Apache-2.0, MIT, BSD, CC0, CC-BY, ODC-By,
 AFL-3.0. Excluded: non-commercial or research-only terms, ShareAlike (CC-BY-SA), copyleft (GPL,
 AGPL, MPL, ODbL), custom or unknown terms. Datasets used only to *measure* the model are listed
-separately; the model never trains on them."""
+separately; the model never trains on them. The weights listed under [Licence findings](#licence-findings-2026-10-03)
+do not meet this rule."""
 
 BASE = [
     ("Laya English checkpoint", "https://huggingface.co/convaiinnovations/laya", "Apache-2.0"),
@@ -48,6 +52,15 @@ NOT_IN_RELEASES = [
      "SemEval and DAIR Emotion; the repository's Apache-2.0 tag does not cover the underlying data."),
     ("AG News and tweet_eval texts for distillation", "Licence unknown; replaced by texts from the licence-filtered mixture."),
 ]
+
+
+def licence_findings():
+    """Keep the hand-audited findings verbatim when regenerating this document."""
+    text = (ROOT / "DATA_LICENSES.md").read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^## Licence findings \(2026-10-03\)\n.*?(?=^## |\Z)", text)
+    if not match:
+        raise RuntimeError("DATA_LICENSES.md has no Licence findings (2026-10-03) section")
+    return match.group(0).rstrip("\n")
 
 
 def source_link(sid):
@@ -105,7 +118,7 @@ def main():
     man = json.load(open(a.manifest))
     rows = sorted(((s, n, man.get("licenses", {}).get(s, "")) for s, n in man["per_source"].items() if n),
                   key=lambda x: x[0].lower())
-    out = ["# Data licences", "", POLICY, "",
+    out = ["# Data licences", "", POLICY, "", licence_findings(), "",
            "## Base models", "", "| Model | Licence |", "|---|---|"]
     out += [f"| [{n}]({u}) | {l} |" for n, u, l in BASE]
     out += ["", "## Training data of released weights", "", "| Dataset | Licence | Notes |", "|---|---|---|"]

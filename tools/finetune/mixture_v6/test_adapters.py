@@ -9,7 +9,7 @@ from tools.finetune.mixture_v6 import loaders
 from tools.finetune.mixture_v6.build import clean_items, question_key, valid_item
 from tools.finetune.mixture_v6.languages import infer_lang, to_iso
 from tools.finetune.mixture_v6.loaders import choose_explicit_file, script_free_data_files
-from tools.finetune.mixture_v6.registry import REGISTRY_PATH, ADAPTERS, ENTRIES, adapt, source_key
+from tools.finetune.mixture_v6.registry import REGISTRY_PATH, ADAPTERS, ENABLED_ENTRIES, adapt, source_key
 from tools.finetune.mixture_v6.templates import CATEGORY_TEMPLATES, LANGUAGES, TASKS, TEMPLATES, shuffle_choice, seeded
 
 
@@ -64,8 +64,10 @@ SPECIAL_FIXTURES = {
         {"text": "Clause A.", "question": "Q1", "subquestion": "<NONE>", "answer": "Yes"},
         {"text": "Clause B.", "question": "Q1", "subquestion": "<NONE>", "answer": "No"}],
     "Fumika/Wikinews-multilingual": [
-        {"title": "Vote held", "text": "A vote was held.", "categories": ["Politics and conflicts", "France"]},
-        {"title": "Cup final", "text": "The final was played.", "categories": ["Sports", "Germany"]}],
+        {"title": "Vote held", "text": "A vote was held.", "lang": "en",
+         "categories": ["Politics and conflicts", "France"]},
+        {"title": "Cup final", "text": "The final was played.", "lang": "en",
+         "categories": ["Sports", "Germany"]}],
     "Horizon-Labs/multilingual-zeroshot-synthetic": [
         {"text": "Finalmente consegui o emprego que eu queria!", "emotion": "pride", "_v6_lang": "pt"},
         {"text": "O metrô fechou de novo e ninguém avisou.", "emotion": "anger", "_v6_lang": "pt"}],
@@ -127,11 +129,12 @@ def fixture(entry):
 
 def test_every_enabled_source_has_adapter():
     enabled = [e for e in json.load(open(REGISTRY_PATH)) if e.get("use")]
-    assert len(ENTRIES) == len(enabled) > 100
-    assert set(ADAPTERS) == {source_key(e) for e in ENTRIES}
+    # 40 sources passed the licence audit of 2026-10-03 (evidence-2026-10-03*.json)
+    assert len(ENABLED_ENTRIES) == len(enabled) >= 35
+    assert {source_key(e) for e in ENABLED_ENTRIES} <= set(ADAPTERS)
 
 
-@pytest.mark.parametrize("entry", ENTRIES, ids=source_key)
+@pytest.mark.parametrize("entry", ENABLED_ENTRIES, ids=source_key)
 def test_adapter_contract(entry):
     items = list(adapt(entry, fixture(entry), 123))
     assert items, source_key(entry)
@@ -164,7 +167,7 @@ def _noul(state, instructions="Does this apply?", texts=None):
 
 
 def test_banned_text_drops_state_and_embedded_text():
-    entry = ENTRIES[0]
+    entry = ENABLED_ENTRIES[0]
     base = _noul("safe wrapper", texts=["Planted eval text"])
     kept, stats = clean_items(entry, iter([copy.deepcopy(base)]), {"planted eval text"}, 10, 1)
     assert kept == []
@@ -183,7 +186,7 @@ def test_scripted_dataset_loader_reads_data_files_not_the_script():
 
 
 def test_same_state_different_question_types_are_not_duplicates():
-    entry = ENTRIES[0]
+    entry = ENABLED_ENTRIES[0]
     state = "The parcel arrived late and the box was crushed."
     choice = {"state": state, "q": {"type": "choice", "instructions": "What kind of issue is this?",
                                      "criteria": {"shipping": "a delivery problem", "billing": "a payment problem"}},
@@ -198,7 +201,7 @@ def test_same_state_different_question_types_are_not_duplicates():
 
 def test_trivial_banned_fragment_does_not_drop_the_document():
     """ReDial turns 'nice', 'thanks' and 'lol' sit in the eval set and must not drop a dialogue."""
-    entry = ENTRIES[0]
+    entry = ENABLED_ENTRIES[0]
     dialogue = "Movie: The Triplets of Belleville\n\nI liked the soundtrack.\nthanks\nnice\nlol"
     banned = {"nice", "thanks", "lol"}
     kept, stats = clean_items(entry, [_noul(dialogue, texts=["thanks", "nice", "lol", dialogue])], banned, 10, 1)

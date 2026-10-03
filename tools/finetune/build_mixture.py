@@ -36,9 +36,15 @@ import random
 import re
 import sys
 import urllib.request
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from train_multitask import MASSIVE_URL, SENT_LANGS, SENT_URL, load  # noqa: E402
+try:
+    from .source_policy import (exclusion_matches, input_hashes,
+                                matching_tasksource_families, tasksource_families)  # noqa: E402
+except ImportError:  # direct script execution
+    from source_policy import (exclusion_matches, input_hashes,
+                               matching_tasksource_families, tasksource_families)  # noqa: E402
 
 REPO = "tasksource/tasksource-jev-typed-decisions"
 EXCLUDE = re.compile(r"(^|/)(ag_news|emotion|go_emotions|text_emotion|banking77|massive|multilingual-sentiments|"
@@ -47,6 +53,35 @@ SEED = 20260927
 PERMISSIVE = {"apache-2.0", "apache license 2.0 (dpi)", "mit", "mit license (dpi)", "bsd",
               "bsd 2-clause license (dpi)", "cc0-1.0", "cc0 1.0 (dpi)", "cc-by-4.0", "cc by 4.0 (dpi)",
               "cc-by-3.0", "odc-by", "afl-3.0"}
+POLICY_PATH = Path(__file__).resolve().parent / "sources" / "policy.json"
+CURRENT_V5_MANIFEST = Path(__file__).resolve().parents[2] / "data" / "mixture-v5.manifest.json"
+MASSIVE_URL = "https://huggingface.co/datasets/mteb/amazon_massive_intent/resolve/main/%s/%s.json.gz"
+SENT_URL = "https://raw.githubusercontent.com/tyqiangz/multilingual-sentiment-datasets/main/data/%s/%s.csv"
+SENT_LANGS = ["arabic", "chinese", "english", "french", "german", "hindi", "indonesian", "italian",
+              "japanese", "malay", "portuguese", "spanish"]
+
+
+def load(kind, url):
+    from datasets import load_dataset
+    return list(load_dataset(kind, data_files={"x": url}, split="x"))
+
+
+def recorded_revision():
+    if CURRENT_V5_MANIFEST.exists():
+        return json.loads(CURRENT_V5_MANIFEST.read_text(encoding="utf-8")).get("revision")
+    return None
+
+
+def audited(src, audit, policy):
+    """Fail closed on the policy exclusions before applying the v5 audit allowlist."""
+    if audit is None or policy is None:
+        raise ValueError("--audit and --policy are required")
+    if any(x.get("scope") == "source" and exclusion_matches("v5", src, None, x)
+           for x in policy.get("exclusions", [])):
+        return False
+    if src in audit.get("exclude", {}):
+        return False
+    return len(matching_tasksource_families(src, tasksource_families(audit))) == 1
 
 
 def permissive(license_field):
@@ -100,17 +135,21 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--per-source", type=int, default=120)
     ap.add_argument("--max-state-chars", type=int, default=6000)
-    ap.add_argument("--audit", default=None, help="licence audit JSON (whitelist of sources)")
+    ap.add_argument("--audit", required=True, help="licence audit JSON (whitelist of sources)")
+    ap.add_argument("--policy", required=True, help="machine-readable source policy JSON")
+    ap.add_argument("--revision", default=recorded_revision(),
+                    help="pinned tasksource dataset revision (required unless the current v5 manifest records it)")
     a = ap.parse_args()
+    if not a.revision:
+        ap.error("--revision is required: the current v5 manifest records no dataset revision")
     import pyarrow.parquet as pq
     from huggingface_hub import snapshot_download
 
-    path = snapshot_download(REPO, repo_type="dataset", allow_patterns=["data/*.parquet"])
+    path = snapshot_download(REPO, repo_type="dataset", revision=a.revision,
+                             allow_patterns=["data/*.parquet"])
     rng = random.Random(SEED)
-    audit = json.load(open(a.audit)) if a.audit else None
-
-    def audited(src):
-        return audit is None or (src not in audit["exclude"] and any(src.startswith(p) for p in audit["keep_families"]))
+    audit = json.load(open(a.audit))
+    policy = json.loads(Path(a.policy).read_text(encoding="utf-8"))
 
     banned = test_texts()
     print(f"test texts to avoid: {len(banned)}", flush=True)
@@ -125,7 +164,7 @@ def main():
             if not permissive(r["license"]):
                 stats["not_permissive"] += 1
                 continue
-            if not audited(r["source"]):
+            if not audited(r["source"], audit, policy):
                 stats["audit_excluded"] += 1
                 continue
             if EXCLUDE.search(r["source"]):
@@ -160,7 +199,9 @@ def main():
             f.write(json.dumps(it, ensure_ascii=False) + "\n")
     kinds = collections.Counter(it["q"]["type"] for it in items)
     manifest = {"repo": REPO, "items": len(items), "sources": len(per_src), "kinds": kinds, "stats": stats,
-                "per_source_cap": a.per_source, "audit": a.audit and os.path.basename(a.audit), "per_source": per_src, "licenses": licenses, "seed": SEED}
+                "per_source_cap": a.per_source, "audit": a.audit and os.path.basename(a.audit),
+                "revision": a.revision, "per_source": per_src, "licenses": licenses, "seed": SEED,
+                "inputs": input_hashes(Path(__file__).resolve().parents[2])}
     with open(a.out.replace(".jsonl.gz", ".manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
     print(f"items {len(items)} from {len(per_src)} sources | kinds {dict(kinds)} | {dict(stats)}", flush=True)

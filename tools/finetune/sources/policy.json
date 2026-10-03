@@ -1,0 +1,1157 @@
+{
+  "version": 1,
+  "checked": "2026-10-03",
+  "licences": {
+    "data": [
+      "Apache-2.0",
+      "MIT",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "CC0-1.0",
+      "CC-BY-1.0",
+      "CC-BY-2.0",
+      "CC-BY-2.5",
+      "CC-BY-3.0",
+      "CC-BY-4.0",
+      "ODC-By-1.0",
+      "AFL-3.0"
+    ],
+    "text": [
+      "Apache-2.0",
+      "MIT",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "CC0-1.0",
+      "CC-BY-1.0",
+      "CC-BY-2.0",
+      "CC-BY-2.5",
+      "CC-BY-3.0",
+      "CC-BY-4.0",
+      "ODC-By-1.0",
+      "AFL-3.0",
+      "public-domain"
+    ]
+  },
+  "generators": [
+    {
+      "model": "Qwen/Qwen3-8B",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen",
+      "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3-32B",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen",
+      "allows_training": true
+    },
+    {
+      "model": "mistralai/Mistral-7B-Instruct-v0.3",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/mistralai",
+      "allows_training": true
+    },
+    {
+      "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/mistralai",
+      "allows_training": true
+    },
+    {
+      "model": "deepseek-ai/DeepSeek-R1",
+      "licence_spdx": "MIT",
+      "terms_url": "https://github.com/deepseek-ai",
+      "allows_training": true
+    },
+    {
+      "model": "deepseek-ai/DeepSeek-V3",
+      "licence_spdx": "MIT",
+      "terms_url": "https://github.com/deepseek-ai",
+      "allows_training": true
+    },
+    {
+      "model": "microsoft/phi-4",
+      "licence_spdx": "MIT",
+      "terms_url": "https://huggingface.co/microsoft",
+      "allows_training": true
+    },
+    {
+      "model": "microsoft/Phi-4-mini-instruct",
+      "licence_spdx": "MIT",
+      "terms_url": "https://huggingface.co/microsoft",
+      "allows_training": true
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/openai",
+      "allows_training": true
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/openai",
+      "allows_training": true
+    },
+    {
+      "model": "openai-community/gpt2",
+      "licence_spdx": "MIT",
+      "terms_url": "https://huggingface.co/openai-community/gpt2",
+      "allows_training": true
+    },
+    {
+      "model": "Google Cloud Translation API",
+      "terms_url": "https://cloud.google.com/translate/terms",
+      "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen/Qwen3.8-27B",
+      "allows_training": true
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/google/gemma-4-26B-A4B-it",
+      "allows_training": true
+    },
+    {
+      "model": "microsoft/Phi-3.5-mini-instruct",
+      "licence_spdx": "MIT",
+      "terms_url": "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
+      "allows_training": true
+    },
+    {
+      "model": "mistralai/Mistral-7B-v0.1",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/mistralai/Mistral-7B-v0.1",
+      "allows_training": true
+    },
+    {
+      "model": "mistralai/Mistral-Nemo-Instruct-2407",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407",
+      "allows_training": true
+    },
+    {
+      "model": "Helsinki-NLP/opus-mt-tc-big-en-fr",
+      "licence_spdx": "CC-BY-4.0",
+      "terms_url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-fr",
+      "allows_training": true
+    }
+  ],
+  "denied_generators": [
+    {
+      "model_pattern": "ChatGPT|(?:^|/)(?:gpt-3\\.5|gpt-4o?|o1|o3|text-davinci)(?:[-./]|$)",
+      "reason": "OpenAI output terms"
+    },
+    {
+      "model_pattern": "(?:^|/)Gemini",
+      "reason": "Gemini output terms"
+    },
+    {
+      "model_pattern": ".*llama.*",
+      "reason": "Llama terms"
+    },
+    {
+      "model_pattern": "(?:^|/)Gemma-(?:[0-3](?:\\.|-|$))",
+      "reason": "Gemma 3 and earlier terms"
+    },
+    {
+      "model_pattern": "Doubao",
+      "reason": "Doubao output terms"
+    },
+    {
+      "model_pattern": "Claude",
+      "reason": "Claude output terms"
+    },
+    {
+      "model_pattern": "Qwen2\\.5|Qwen Research License",
+      "reason": "Qwen Research License"
+    },
+    {
+      "model_pattern": "Mistral-Large|Codestral|Ministral|Mistral-Small-.*2409",
+      "reason": "Mistral research or non-production licence"
+    },
+    {
+      "model_pattern": "(?:^|/)Qwen[^/]*-Max(?:[-./]|$)",
+      "reason": "Qwen Max API model without a weights licence"
+    }
+  ],
+  "exclusions": [
+    {
+      "registry": "v6",
+      "id": "ankitkupadhyay/XNLI",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "upstream XNLI is CC-BY-NC-4.0",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "nyu-mll/multi_nli",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "fiction includes CC-BY-SA-3.0 text and genre was not retained",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "boun-tabi/nli_tr",
+      "config": "multinli_tr",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "inherits MultiNLI terms including fiction",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "dhruv0808/indic_sentiment_analyzer",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "card states CC-BY-NC-4.0",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "OrSabbach/food-delivery-support-tickets",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "generated by Qwen2.5-3B-Instruct under Qwen Research License",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Fumika/Wikinews-multilingual",
+      "scope": "rows",
+      "row_filter": {
+        "lang": [
+          "ar",
+          "fa"
+        ]
+      },
+      "reason_class": "breaks-policy",
+      "reason": "Arabic and Persian Wikinews are CC-BY-SA-4.0",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "SDOH-NLI",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "source medical reports have no verified licence",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "lex_glue/ledgar",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "LEDGAR data licence is unverified",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "circa",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "conflicting CC-BY and CC-BY-SA statements",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "prompt-injections",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "text provenance is undocumented",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "sms_spam",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "component-corpus licences are unverified",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "dnd_style_intents",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "shell-safety-v2",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Console-AI/IT-helpdesk-synthetic-tickets",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "text origin or generator terms are unverified",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Process-Venue/IntentClassification_Dataset_for_AI_Assistant_Prompt_Routing_Hindi",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "text origin is undocumented",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "lyon-nlp/clustering-hal-s2s",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "text origin or generator terms are unverified",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "SINAI/ALIA-es-discriminative-stance-detection",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "text origin or generator terms are unverified",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "sutro/synthetic-product-reviews-20k",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "leonvanbokhorst/synthetic-complaints-v2",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "tanaos/synthetic-emotion-detection-dataset-v1",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "tanaos/synthetic-sentiment-analysis-dataset-v1",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "RichardSakaguchiMS/brazilian-customer-service-conversations",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "shreyaspullehf/emotion-dataset-20-emotions",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "declare-lab/CategoricalHarmfulQA",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "E3-JSI/synthetic-multi-pii-ner-v1",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "AshenFdo/synthetic_blood_request_urgency_dataset",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Johnson8187/Chinese_Multi-Emotion_Dialogue_Dataset",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "takehika/wanli-ja-nli",
+      "config": "ja_only",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "translation and filtering models are unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Wismut/nym-pii-multilingual-data",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "NABA-AI/LUB-Saudi-Arabic-Intent",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "3nesdeniz/turkish-conversation-prompt-injection",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "alusci/sms-otp-spam-dataset",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is unnamed",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "extra",
+      "id": "nvidia/Nemotron-Safety-Guard-Dataset-v3",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is not named on the dataset card",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "extra",
+      "id": "l3cube-pune/IndicGuard",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "generator is not named on the dataset card",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "WANLI",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "OpenAI GPT-3 output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "agent_action_safety",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "Gemini output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "allenai/prosocial-dialog",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "OpenAI model output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "OpenSafetyLab/Salad-Data",
+      "config": "base_set",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "contains GPT-generated output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "reshabhs/SPML_Chatbot_Prompt_Injection",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "GPT-4 output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "hblim/customer-complaints",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "OpenAI model output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "cngchis/Support-Ticket-Router-12K-Cleaned",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "OpenAI model output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "sweatSmile/sarcastic-dataset",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "OpenAI GPT model output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "stjiris/IRIS_sts",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "text-davinci-003 output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "brighter-dataset/BRIGHTER-emotion-categories",
+      "config": "hin",
+      "configs_only": true,
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "ChatGPT output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "brighter-dataset/BRIGHTER-emotion-categories",
+      "config": "mar",
+      "configs_only": true,
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "ChatGPT output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Adilbai/kz-gov-complaints-data-kz-ru",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "Gemini output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "IDinsight/urgency_detection_maternal_health_synthetic",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "Gemini output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "JusteLeo/French-emotion",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "Gemini output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "YiMeng-SYSU/chinese-logic-sentiment-dataset",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "Doubao output",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "responses were generated by an unnamed NVIDIA model",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "prm800k_dpo/",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "solutions were sampled from GPT-4",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "hh-rlhf/",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "responses were generated by unnamed Anthropic language models",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "PolyAI/minds14",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Gerz et al. (arXiv:2104.08524): \"The spoken data has been collected via crowdsourcing, relying on the Prolific platform\" and \"For all recordings in all languages, we run the Google ASR model\" at cloud.google.com/speech-to-text \"to obtain n-best written transcriptions\", then \"we translate the transcriptions into English via Google Translate.\" The Hub fields are transcription and english_transcription (fr-FR row: \"je souhaite changer mon adresse\" / \"I want to change my address\"). Google Cloud Speech-to-Text is not an approved generator, and Google Translate (the consumer service) is still not approved. Dataset licence on the card is CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "BEE-spoke-data/consumer-finance-complaints",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — the narratives are consumer-written. CFPB Final Policy Statement: \"Only those narratives for which opt-in consumer consent is obtained ... will be eligible for disclosure.\" The 2024 database page: \"We publish the consumer's narrative description from their complaint if the consumer opts to share it publicly\" and \"in their own words.\" data.gov schema for the dataset has \"license\": null. Opt-in consent to publish is not a copyright licence. The packager's CC0-1.0 does not cover that text.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "liri-uzh/cfpb-complaints-mini",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — the card says the source is \"a U.S. federal work in the public domain\" and releases the subset as CC0-1.0, but the CFPB page says narratives are published \"in their own words\" only \"if the consumer opts to share it publicly.\" The 2015 policy statement limits itself to \"opt-in consumer consent\" for disclosure. data.gov lists \"license\": null. Consumer authorship is stricter than the card's public-domain claim.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "vic35get/nhtsa_complaints_dataset",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — NHTSA: \"Complaint information entered into NHTSA's Office of Defects Investigation vehicle owner's complaint database\" and CMPL.txt: \"The COMPLAINTS file contains all safety-related defect complaints received by NHTSA since January 1, 1995.\" Those pages and the API use policy describe owner-submitted complaints and do not grant a copyright licence. The card's Apache-2.0 is the packager's licence, not the owners'.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "alaminxpro/university-students-complaints",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2/3 — independent verification 2026-10-03: who wrote the paraphrased variants is undocumented, no grant from the students",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "adiprog14/lingrow-support-tickets",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — \"Text variety was improved with a Hugging Face model (humarin/chatgpt_paraphraser_on_T5_base)\". That model is still not an approved generator, and the name matches the denied ChatGPT pattern.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "jmccardle/pulse-sofroniew-emotion-concept-texts",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"There is no Sonnet fallback for story text — every story in the corpus came from Qwen3-32B\" (GGUF via llama.cpp), which is the approved id Qwen/Qwen3-32B. The same card says \"Each story is scored on a four-axis rubric by Claude Sonnet\" and \"Rubric grading | Claude Sonnet (via claude -p)\". Claude is a denied generator, and the grade fields are part of the release. Licence: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "llm-for-emotion/Cultural-Emo",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Belay et al., arXiv:2503.10688: \"We manually craft scenarios, search on the web, and prompt LLMs to gather traditions, events, norms, and actions\" and \"After collecting the events in English, we translate them into five target languages—Arabic, Amharic, German, Hindi, and Spanish—using Google Translate, followed by native-speaker approvals.\" The LLMs are not named. Google Translate is not an approved translator. Card licence is MIT.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "pacoreyes/StanceSentences",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — of 972 train rows, 142 cite transcripts.cnn.com and 53 cite www.rev.com, plus archive.nytimes.com and eu.usatoday.com. CNN Terms: \"3. Copyright Ownership. The Site contains copyrighted material ... and the entire contents of the Site are copyrighted as a collective work ... You may not modify, publish, transmit ... create derivative works, or in any way exploit, any of the content ... You may download copyrighted material for your personal use only.\" The card's Apache-2.0 does not cover those transcripts. UCSB terms also say materials \"may not be copied, reproduced, republished\" without permission, and the APP footer is \"Copyright © The American Presidency Project.\"",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "elvanalabs/sarcasm-statements-90",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: provenance — the card says the statements were \"manually labeled\" and gives MIT, and it does not say whether the author, a corpus, or a model wrote them. No paper or GitHub repository for this dataset was found. A sample row is \"Oh great, another meeting. Just what I needed.\"",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "seyled/Phantom_Hallucination_Detection",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — the card says the set has \"filing types (e.g., 10K, DEF14A)\"; Apache-2.0 is the benchmark packaging and no licence from the filing issuers is shown.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "zenodo:3609356 (ClaimBuster)",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Zenodo license id is \"cc-by-4.0\", and the description says statements \"extracted from all U.S. general election presidential debates (1960-2016)\"; that CC-BY release does not show a grant from the transcript rights holders.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "nvidia/Nemotron-PII",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"[Synthetic] Generated via NVIDIA NeMo Data Designer\" and \"This dataset is licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0)\". The cited NeMo docs page is an archived redirect and does not name a model checkpoint for this dataset. NeMo Data Designer is not an approved generator id.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "gretelai/synthetic_pii_finance_multilingual",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"gretelai/Mistral-7B-Instruct-v0.2/industry: A Gretel fine-tuned LLM trained on data from 10+ different industry verticals\" together with approved \"mistralai/Mixtral-8x7B-Instruct-v0.1\". Gretel fine-tunes are not approved generators.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "gretelai/gretel-pii-masking-en-v1",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — independent verification 2026-10-03: 'mistral-nemo-2407' through Gretel Navigator, a compound system; no exact model id",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "urchade/synthetic-pii-ner-mistral-v1",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — the dataset card only says \"This the synthetic dataset used for training\" gliner_multi_pii-v1, licence apache-2.0. The author's notebook says \"I have used a similar approach to generate training data for PII extraction\" and sets LLM_MODEL = \"mistralai/Mistral-7B-Instruct-v0.2\". That checkpoint is not an approved generator (approved Mistral ids are Mistral-7B-Instruct-v0.3, Mistral-7B-v0.1, Mixtral-8x7B-Instruct-v0.1 and Mistral-Nemo-Instruct-2407). The notebook's \"I have used GPT-4 to generate these\" refers to a country-name list in a job-ad example, not to data.json.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "CohereLabs/aya_dataset",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Singh et al. (arXiv:2402.06619): \"we collected datasets from 19 public data sources and translated them into 114 available languages, including dialects using the NLLB 3.3B parameter machine translation model\" and \"These translated pairs served as a starting point for prompts and completions which annotators could improve.\" NLLB-3.3B is not an approved translator. The default config keeps both original-annotations and re-annotations (card: \"re-annotations (human edits of automatically generated prompts and completions)\"). Dataset licence is Apache-2.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "joelniklaus/german_argument_mining",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Urchs et al.: \"The decision corpus is a collection of the decisions published on the website www.gesetze-bayern.de\" and \"All decisions are processed by the publisher C.H.BECK ... anonymisation, key-wording, and adding of editorial guidelines.\" Bayern.Recht terms: \"die redaktionell aufbereiten Entscheidungen nicht vollständig urheberrechtsfrei gemäß § 5 Urheberrechtsgesetz (UrhG) sind. So unterliegen insbesondere die redaktionellen Leitsätze dem Urheberpersönlichkeitsrecht.\" § 5 (1) UrhG frees unedited Entscheidungen from copyright; this copy is the Beck editorial version, and the same page reserves the database right under §§ 87a ff. UrhG. The card's CC-BY-4.0 does not replace that.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "maximoss/mnli-nineeleven-fr",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 1 — independent verification 2026-10-03: the bsd-2-clause tag has no upstream basis; MultiNLI text is under the OANC licence, not allowlisted",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "sileod/attempto-nli",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: provenance — the card is \"Natural language inference using attempto controlled english\" plus \"Paper to come\" and a citation of Fuchs, \"First-order reasoning for attempto controlled english\" (CNL 2010). That citation does not say whether these sentences were written by people, emitted by the ACE grammar, or produced by a model. Licence on the card is apache-2.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "MoritzLaurer/synthetic_zeroshot_mixtral_v0.1",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: generator — cardData.license is apache-2.0 and the README body is only the config YAML. An arXiv query for author Laurer and mixtral returned totalResults 0. A v4 row has prompt_formatted null and no model id. The config name mixtral_written_texts_for_tasks is not a statement that the writer is mistralai/Mixtral-8x7B-Instruct-v0.1.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "dell-research-harvard/headlines-semantic-similarity",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — the card says \"off-copyright, local U.S. newspapers\" and also \"covering the period 1920-1989\" and \"Many of these newspapers reprint articles from newswires, such as the Associated Press\"; 1931–1989 newspaper text and AP reprints are not shown to be public domain.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Avature/Job-Title-Similarity",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Zbib et al. (FEAST 2022): \"a new job title similarity dataset, consisting of 2,724 job titles from different industries\" with human relevance labels. The GitHub README (Apache-2.0) says \"We replicate the English dataset for the other languages by using Human Translation (HT) or Machine Translation (MT)\" and marks es, it, ko, nl, pl and pt as MT. It does not name the translation system. Those languages are inside this record.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "matsuxr/JaGovFaqs-22k",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — the card says \"日本の官公庁のWebサイトは多くが「政府標準利用規約（第2.0版）」に準拠しており、この規約はCC-BY-4.0（国際）と互換性があると記述されています\" and cites https://www.digital.go.jp/copyright-policy. That page says Digital Agency content uses 「公共データ利用規約（第1.0版）」（PDL1.0） and does not state the CC-BY-4.0 compatibility of 第2.0版. The 第2.0版 text itself was not opened.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — README defines source=`news` as \"if the entry stems from the Leipzit news corpus\"; no licence for that news text is stated.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "OpenAssistant/oasst2",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — an example row has \"synthetic\": true and \"model_name\": \"oasst-sft-0_3000,max_new_tokens=400\". OASST models are still not approved generators.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "nvidia/Aegis-AI-Content-Safety-Dataset-2.0",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Mistral-7B-v0.1 responses are now an approved generator, but the card also says \"Response safety labels generated using ensemble of 3 LLMs: Mixtral-8x22B-v0.1, Mistral-NeMo-12B-Instruct, and Gemma-2-27B-it\" and \"refusal data generated using Gemma-2-27B\". Gemma-2 is a denied generator; Mixtral-8x22B-v0.1 and nvidia/Mistral-NeMo-12B-Instruct are not approved ids.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Anthropic/hh-rlhf",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Ganguli et al. (arXiv:2209.07858): red teaming \"across 3 model sizes (2.7B, 13B, and 52B parameters) and 4 model types: a plain language model (LM); an LM prompted to be helpful, honest, and harmless; an LM with rejection sampling; and a model trained to be helpful and harmless using reinforcement learning from human feedback (RLHF).\" The card's transcript is \"a conversation between a human adversary (red team member) and an AI assistant.\" None of those Anthropic models is an approved generator. Dataset tag is MIT.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "ibm-research/AttaQ",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"LLMs were employed to generate a substantial volume of attacks\" and \"We utilized LLMs in conjunction with the Wikipedia Crimes Page to generate a series of actions\". The models are not named. The AttaQ paper abstract (arXiv:2311.04124) also does not name them. Wikipedia text is CC-BY-SA, which is not allowlisted and is stricter than the card's MIT tag.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"The dataset is fully synthetic with no seed data\" and \"LLM generator used (also serves as the red-teaming attacker): NVIDIA-Nemotron-3-Super-120B-A12B-BF16\" (https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16); \"LLM defender used: NVIDIA-Nemotron-3-Nano-30B-A3B-BF16\". Neither checkpoint is an approved generator. Dataset licence on the card: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "theatticusproject/cuad-qa",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — \"CUAD is licensed under the Creative Commons Attribution 4.0 (CC BY 4.0) license\" and \"The creators make no representations or warranties regarding the license status of the underlying contracts\".",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "theatticusproject/maud",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — MAUD v1 README: \"legal text extracted from 152 merger agreements from the Electronic Data Gathering, Analysis, and Retrieval system (EDGAR)\". \"Access to EDGAR documents is free and open to the public.\" Free access is not a copyright licence for the parties' agreement text. The same README and the paper (arXiv:2301.00876) licence MAUD itself under CC-BY-4.0; that grant does not cover the filed contracts. Counterfactual rows are \"minimally edited\" copies of that text.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "WorkInTheDark/FairytaleQA",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — Xu et al., ACL 2022: \"The narrative texts utilized in the dataset are classic fairytales ... We gathered the text from the Project Gutenberg website, using \\\"fairytale\\\" as the search term.\" Gutenberg's licence page separates \"books not restricted by U.S. copyright\" from \"copyrighted books whose author gave Project Gutenberg permission\", and the paper does not say which of the 278 these are. The card YAML says apache-2.0 and the licensing section is still \"[More Information Needed]\". Questions are expert-written (\"We employed education experts who generated 10,580 question-answer pairs\").",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "ddrg/super_eurlex",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 1 — YAML licence is mit and the card says \"License: More Information Needed\" and \"This Dataset was scrapped from EURLEX\". The EU reuse decision is not an allowlisted SPDX id.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "joelniklaus/covid19_emergency_event",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — Tziafas et al., ACL Anthology 2021.nllp-1.5: \"All documents were retrieved from official governmental websites that publish legal acts\" and were \"collected either by manually downloading them or by automatic scraping.\" The card licensing section says \"Creative Commons Zero v1.0 Universal\" and lists the UK among eight countries. The UK Open Government Licence v3.0 applies to information \"expressly made available under this licence\"; the paper never says these acts were. No per-country grant under an allowlisted licence was found.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "dvgodoy/CUAD_v1_Contract_Understanding_clause_classification",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — the clauses are the CUAD contract text, and the CUAD card says the creators \"make no representations or warranties regarding the license status of the underlying contracts\".",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "github:PolyAI-LDN/task-specific-datasets/nlupp",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Casanueva et al., arXiv:2204.13021 §3.4: \"4 highly skilled annotators with dialogue and NLP expertise ... collected, annotated, and corrected the data\" and \"real user examples were fully anonymised and reannotated following the defined ontology.\" The paper states no copyright grant from those users. The repository LICENSE is CC-BY-4.0 (GitHub license API) and the paper is CC BY 4.0; that is the packager's licence, not the users'. The record includes the real-user turns.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "clips/VaccinChatNL",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Buhmann et al., COLING 2022: \"questions in our corpus come from actual users\" and \"Users of VaccinChat were informed that the chatbot could give irrelevant answers to their questions, and that their conversations would be used to further improve the performance of the chatbot.\" That notice is not a copyright licence. The card YAML is cc-by-4.0 and says annotations were made by CLiPS members and students; it does not licence the users' questions.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "sociocom:naist-life-story",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: licence_spdx — Hugging Face dataset search returned an empty list, GitHub repository search for naist-life-story returned total_count 0, and a sociocom organisation search for \"life story\" returned total_count 0. An arXiv query did not return this dataset. Zenodo returned HTTP 403. No licence text was opened.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "agentlans/fact-or-opinion",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — a rows sample has \"source\": \"DeepSeek\" (row id f3c7ed97-cf3e-471f-bff4-589e25fe9b6a). The card YAML is only \"license: odc-by\" and names no checkpoint. Bare DeepSeek is not an approved generator id. The card does not state ODC-By-1.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v6",
+      "id": "Powpowpow23/ru-pii-ner-data",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — card: \"В записях генерации указан учитель DeepSeek.\" Bare DeepSeek is not deepseek-ai/DeepSeek-R1 or deepseek-ai/DeepSeek-V3. The same card says 703 templates were prepared; the teacher that filled them is still the unnamed DeepSeek checkpoint. YAML licence apache-2.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "FOL-nli",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — independent verification 2026-10-03: arXiv 2406.11035: 'We prompted GPT-4 (May version) to Generate 150 predicates'",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "PARARULE-Plus",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 1 — independent verification 2026-10-03: License_PARARULE_Plus.txt is MIT plus a credit clause (GitHub: NOASSERTION), not allowlisted",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer2/coherence",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2406.08673: responses come from \"Nemotron-2 (43B ...) 18.9%\", \"Nemotron-3 (8B and 22B ...) 40.4%\", \"Nemotron-4 (15B and 340B ...) 26.9%\", \"Mixtral-8x7B-Instruct-v0.1: 7.9%\", and \"Human annotators from Scale AI: 5.9%\". Mixtral-8x7B-Instruct-v0.1 is approved, but Nemotron-2, Nemotron-3 and Nemotron-4 are not approved generator ids. The record includes those responses. Dataset licence in the paper: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer2/complexity",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2406.08673: responses come from \"Nemotron-2 (43B ...) 18.9%\", \"Nemotron-3 (8B and 22B ...) 40.4%\", \"Nemotron-4 (15B and 340B ...) 26.9%\", \"Mixtral-8x7B-Instruct-v0.1: 7.9%\", and \"Human annotators from Scale AI: 5.9%\". Mixtral-8x7B-Instruct-v0.1 is approved, but Nemotron-2, Nemotron-3 and Nemotron-4 are not approved generator ids. The record includes those responses. Dataset licence in the paper: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer2/correctness",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2406.08673: responses come from \"Nemotron-2 (43B ...) 18.9%\", \"Nemotron-3 (8B and 22B ...) 40.4%\", \"Nemotron-4 (15B and 340B ...) 26.9%\", \"Mixtral-8x7B-Instruct-v0.1: 7.9%\", and \"Human annotators from Scale AI: 5.9%\". Mixtral-8x7B-Instruct-v0.1 is approved, but Nemotron-2, Nemotron-3 and Nemotron-4 are not approved generator ids. The record includes those responses. Dataset licence in the paper: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer2/helpfulness",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2406.08673: responses come from \"Nemotron-2 (43B ...) 18.9%\", \"Nemotron-3 (8B and 22B ...) 40.4%\", \"Nemotron-4 (15B and 340B ...) 26.9%\", \"Mixtral-8x7B-Instruct-v0.1: 7.9%\", and \"Human annotators from Scale AI: 5.9%\". Mixtral-8x7B-Instruct-v0.1 is approved, but Nemotron-2, Nemotron-3 and Nemotron-4 are not approved generator ids. The record includes those responses. Dataset licence in the paper: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer2/verbosity",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2406.08673: responses come from \"Nemotron-2 (43B ...) 18.9%\", \"Nemotron-3 (8B and 22B ...) 40.4%\", \"Nemotron-4 (15B and 340B ...) 26.9%\", \"Mixtral-8x7B-Instruct-v0.1: 7.9%\", and \"Human annotators from Scale AI: 5.9%\". Mixtral-8x7B-Instruct-v0.1 is approved, but Nemotron-2, Nemotron-3 and Nemotron-4 are not approved generator ids. The record includes those responses. Dataset licence in the paper: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer3/edit_quality",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2503.04378: \"we generate two responses per prompt\" with \"Nemotron 4 340B Instruct\", \"Mistral Large 2\", \"Mixtral 8x22B Instruct\", \"Gemma 2 (2B, 9B, 27B)\", \"Codestral 22B\", \"Phi 3 (Mini, Small, Medium)\", \"IBM Granite (8B and 34B)\" and \"Snowflake Arctic\", alongside approved \"Mistral 7B-Instruct-v0.3\" and \"Mixtral 8x7B Instruct\". Mistral Large matches the denied-generator pattern, and Gemma 2 is denied. HelpSteer3-Preference (arXiv:2505.11475) uses these same responses. Dataset licence: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer3/feedback",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2503.04378: \"we generate two responses per prompt\" with \"Nemotron 4 340B Instruct\", \"Mistral Large 2\", \"Mixtral 8x22B Instruct\", \"Gemma 2 (2B, 9B, 27B)\", \"Codestral 22B\", \"Phi 3 (Mini, Small, Medium)\", \"IBM Granite (8B and 34B)\" and \"Snowflake Arctic\", alongside approved \"Mistral 7B-Instruct-v0.3\" and \"Mixtral 8x7B Instruct\". Mistral Large matches the denied-generator pattern, and Gemma 2 is denied. HelpSteer3-Preference (arXiv:2505.11475) uses these same responses. Dataset licence: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer3/preference",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2503.04378: \"we generate two responses per prompt\" with \"Nemotron 4 340B Instruct\", \"Mistral Large 2\", \"Mixtral 8x22B Instruct\", \"Gemma 2 (2B, 9B, 27B)\", \"Codestral 22B\", \"Phi 3 (Mini, Small, Medium)\", \"IBM Granite (8B and 34B)\" and \"Snowflake Arctic\", alongside approved \"Mistral 7B-Instruct-v0.3\" and \"Mixtral 8x7B Instruct\". Mistral Large matches the denied-generator pattern, and Gemma 2 is denied. HelpSteer3-Preference (arXiv:2505.11475) uses these same responses. Dataset licence: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer3/preference_strength",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2503.04378: \"we generate two responses per prompt\" with \"Nemotron 4 340B Instruct\", \"Mistral Large 2\", \"Mixtral 8x22B Instruct\", \"Gemma 2 (2B, 9B, 27B)\", \"Codestral 22B\", \"Phi 3 (Mini, Small, Medium)\", \"IBM Granite (8B and 34B)\" and \"Snowflake Arctic\", alongside approved \"Mistral 7B-Instruct-v0.3\" and \"Mixtral 8x7B Instruct\". Mistral Large matches the denied-generator pattern, and Gemma 2 is denied. HelpSteer3-Preference (arXiv:2505.11475) uses these same responses. Dataset licence: CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "HelpSteer3/principle",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Wang et al., arXiv:2503.04378: \"we generate two responses per prompt\" using \"Mistral Large 2\", \"Gemma 2 (2B, 9B, 27B)\", \"Codestral 22B\" and \"Nemotron 4 340B Instruct\", among others. Mistral Large and Gemma 2 are denied. Dataset licence CC-BY-4.0.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "multilingual/xcopa/",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — XCOPA README: \"The \\\"translate test\\\" data obtained via Google Translate are available in the folder data-gmt.\" Consumer Google Translate is not an approved generator. The approved id is Google Cloud Translation API, which this README does not name.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "procedural-typed-decisions/",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 1 — the dataset card licence is \"other\", which is not on the allowlist. The card also mixes many upstream families, including HelpSteer.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "I2D2",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Bhagavatula et al., arXiv:2212.09246: \"we generate ten generations for each prompt using NeuroLogic Decoding applied to GPT-2 XL\" and \"I2D2 mainly uses two models: GPT-2 XL with 1.5B parameters and RoBERTa-large\". GPT-2 XL is not the approved id openai-community/gpt2. The paper licences the code Apache-2.0 and \"The Gen-A-tomic will be licensed under CC-BY\". The tasksource card is apache-2.0; the released statements are the CC-BY Gen-A-tomic text.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "lex_glue/case_hold",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — Zheng et al., arXiv:2104.08671: \"We pretrain two variants of BERT with the Harvard Law case corpus (https://case.law/) from 1965 to the present\" and \"We randomly sample 10% of decisions from this corpus as a holdout set, which we use to create the CaseHOLD dataset.\" The items use \"the ‘holding statement,’ often provided in parenthetical propositions accompanying U.S. legal citations\". The paper states \"License: CC BY 4.0\". The LexGLUE card YAML is cc-by-4.0 and its licensing section is \"[More Information Needed]\". The case.law terms pages are JavaScript shells with no licence sentence, so the opinions' copyright is not confirmed.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "multilingual/xcsr/",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Lin et al., arXiv:2106.06937 appendix: \"we use the DeepL Pro translation service to translate the 10 languages: {de, fr, es, pt, it, nl, pl, ru, jap, zh} and use Google Translation API to translate the others {ar, sw, ur, vi, hi}.\" DeepL Pro is not an approved generator. Google Translation API is the approved Google Cloud Translation API, but it does not cover the DeepL Pro portion. HF card INK-USC/xcsr is MIT; the paper line is \"License: CC BY 4.0\".",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "social_i_qa",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: licence_spdx — independent verification 2026-10-03: tasksource card says license: unknown; allenai card has no licence field",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "quartz",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Tafjord et al., arXiv:1909.03553: \"expressing general qualitative relations were manually extracted by the authors from a large corpus using keyword search\". The paper never names that corpus or a licence for it. Crowdworkers \"author a situated\" question, but the released paragraphs are the extracted sentences. The card says \"The dataset is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)\", which does not licence the corpus sentences. The paper's own line is only \"License: arXiv.org perpetual non-exclusive license\".",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "balanced-copa",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — Kavumba et al., arXiv:1911.00225: \"To create the balanced COPA training set, we manually mirror the original training set by modifying the premise\" and \"we asked five fluent English speakers who have background knowledge of NLP ... we collected 500 new mirrored instances. Concatenating it with the original training instances, the balanced COPA consists of 1,000 instances in total.\" The HF card licensing section is CC BY 4.0. The paper's licence line is only \"License: arXiv.org perpetual non-exclusive license\". The project page states no licence, and the COPA source page returned HTTP 404, so the original COPA wording has no grant on the pages opened.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "cladder",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — independent verification 2026-10-03: arXiv 2312.04350 A.6: 'we use GPT-4 to generate some meaningless words'",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "winodict",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: text_licence — Eisenschlos et al., arXiv:2209.12153: \"we rewrite Winograd-style co-reference resolution problems by replacing the key concept word with a synthetic but plausible word\" and the examples are \"under the co-reference resolution datasets Winograd Schema Challenge (Levesque et al., 2012) and WinoGrande (Sakaguchi et al., 2020)\". The paper's licence line is only \"License: arXiv.org perpetual non-exclusive license\". It does not state a licence for those source schemas or for the dictionary definitions. The tasksource tag is cc-by-4.0 and does not licence the underlying schemas.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "winowhy",
+      "scope": "source",
+      "reason_class": "model-output",
+      "reason": "FAIL: rule 3 — Zhang et al., arXiv:2005.05763: \"besides reasons provided by human beings, we also leverage a strong generation model (i.e., GPT-2 Radford et al. 2019) to generate reasons.\" The README says \"The reasons generated by GPT-2\" and each question stores reason source \"human, gpt, reverse\". That citation is not the approved id openai-community/gpt2, and the paper never says the 117M checkpoint. The same paper evaluates \"GPT-2 large (774 M parameters)\", which is a different model and is not approved. Human MTurk reasons do not clear the GPT-2 reasons. GitHub license API: MIT.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "feasibilityQA",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: licence_spdx — Gupta et al., arXiv:2210.07471: \"All the dataset creators are authors of the paper\" and \"We create context statements from real-life situations spanning diverse topics such as elementary physics, profit-loss scenarios, temporal comparisons, and quantity comparisons.\" The HTML paper has no dataset-licence sentence. The tasksource card body is empty and only YAML \"license: mit\", so that tag is not confirmed upstream. GPT-3, GPT-2 and T5 are evaluation models in the abstract, not the writers.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "corr2cause",
+      "scope": "source",
+      "reason_class": "unverified",
+      "reason": "UNVERIFIED: licence_spdx — Jin et al., arXiv:2306.05836 use templates \"Is-Parent {Var i} directly causes {Var j}\" and say they evaluate models \"on our dataset\". The ar5iv line \"License: CC BY 4.0\" is the paper notice. The author card causal-nlp/corr2cause is \"TODO\". GitHub license API for causal-nlp/corr2cause returned 404. The tasksource tag mit is not backed by a licence sentence.",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "patent-phrase-similarity",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — arXiv:2208.01171: \"For each patent in the corpus we first extract important (salient) phrases.\" The paper does not name a licence for that corpus; \"The full dataset is publicly available through Kaggle\" is not a copyright grant. The paper line \"License: CC BY 4.0\" and the tasksource tag cc-by-4.0 do not licence the filers' phrases. Pre-generated targets also \"use a BERT model (Devlin et al., 2019) to predict candidates for the masked portion\", and that BERT checkpoint is not an approved generator (rule 3).",
+      "audit": "2026-10-03"
+    },
+    {
+      "registry": "v5",
+      "id": "math_qa",
+      "scope": "source",
+      "reason_class": "breaks-policy",
+      "reason": "FAIL: rule 2 — Ling et al., arXiv:1705.04146: \"We first collect a set of 34,202 seed problems that consist of multiple option math questions covering a broad range of topics and difficulty levels. Examples of exams with such problems include the GMAT (Graduate Management Admission Test) and GRE (General Test). Many websites contain example math questions in such exams\". Amini et al., arXiv:1905.13319: MathQA \"significantly enhances the AQuA dataset\". The allenai/math_qa card Apache-2.0 is the packager licence and does not grant the exam-site wording.",
+      "audit": "2026-10-03"
+    }
+  ]
+}

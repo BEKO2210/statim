@@ -53,15 +53,27 @@ def test_categories_match_the_held_out_suites():
             assert train_lora.CATEGORY_TESTS[task](entry.get("category", "")), (task, entry["id"])
 
 
-def test_category_sources_use_exact_src_names():
+def test_category_sources_use_exact_src_names(tmp_path):
     chosen, enabled = train_lora.category_sources(REGISTRY, "fact_check")
-    assert "v6/zenodo:3609356 (ClaimBuster)/crowdsourced/groundtruth" in chosen  # config with "/"
     assert all(src in enabled for src in chosen)
+    # a config containing "/" keeps its full name (ClaimBuster, the real case, is licence-excluded)
+    slash = tmp_path / "slash.json"
+    slash.write_text(json.dumps([{"id": "zenodo:1 (Fixture)", "config": "crowdsourced/groundtruth",
+                                  "use": True, "category": "10-fact-check"}]), encoding="utf-8")
+    slash_chosen, _ = train_lora.category_sources(slash, "fact_check")
+    assert slash_chosen == {"v6/zenodo:1 (Fixture)/crowdsourced/groundtruth"}
     by_src = {train_lora.source_name(e): e["category"] for e in _entries()}
     assert chosen == {s for s, c in by_src.items() if "10-fact-check" in c or "10-claim" in c}
     sentiment, _ = train_lora.category_sources(REGISTRY, "sentiment")
     complaint, _ = train_lora.category_sources(REGISTRY, "complaint")
-    assert sentiment & complaint  # "3-complaint; 1-sentiment" serves both suites
+    # Preserve the parsing contract even though the real dual-purpose sources
+    # are now licence-excluded.
+    fixture = tmp_path / "registry.json"
+    fixture.write_text(json.dumps([{"id": "fixture/dual", "config": "default", "use": True,
+                                    "category": "3-complaint; 1-sentiment"}]), encoding="utf-8")
+    fixture_sentiment, _ = train_lora.category_sources(fixture, "sentiment")
+    fixture_complaint, _ = train_lora.category_sources(fixture, "complaint")
+    assert fixture_sentiment & fixture_complaint == {"v6/fixture/dual/default"}
     pii, _ = train_lora.category_sources(REGISTRY, "pii")
     assert pii and not pii & chosen  # 10-pii and 10-fact-check are separate families
 

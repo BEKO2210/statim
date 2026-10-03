@@ -33,9 +33,11 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from tools.finetune.mixture_v6.registry import ADAPTERS, ENTRIES, drop_constant_yes_no, source_key
+    from tools.finetune.mixture_v6.registry import ADAPTERS, ENABLED_ENTRIES, drop_constant_yes_no, source_key
 else:
-    from .registry import ADAPTERS, ENTRIES, drop_constant_yes_no, source_key
+    from .registry import ADAPTERS, ENABLED_ENTRIES, drop_constant_yes_no, source_key
+from tools.finetune.mixture_v6.registry import POLICY_PATH
+from tools.finetune.source_policy import row_is_excluded
 
 MIN_ITEMS = 20
 YES_NO_SHARE = 0.90
@@ -130,6 +132,9 @@ def audit_source(entry, rows_per_source, seed=20260927):
     key = source_key(entry)
     try:
         rows, _warnings = load_rows(entry, rows_per_source)
+        policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+        rows = [row for row in rows if not row_is_excluded(
+            "v6", entry["id"], entry.get("config", "default"), row, policy)]
         raw = [item for item in ADAPTERS[key](entry, list(rows), seed) if item and valid_item(item)]
         items = drop_constant_yes_no(raw)  # what adapt() hands to training
     except Exception as exc:  # reported as a warning
@@ -150,7 +155,7 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", default=None, help="JSON report")
     a = ap.parse_args(argv)
-    entries = [e for e in ENTRIES if not a.only or e["id"] in a.only or source_key(e) in a.only]
+    entries = [e for e in ENABLED_ENTRIES if not a.only or e["id"] in a.only or source_key(e) in a.only]
     import concurrent.futures as cf
     with cf.ThreadPoolExecutor(a.workers) as pool:
         results = list(pool.map(lambda e: audit_source(e, a.rows), entries))

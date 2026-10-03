@@ -40,7 +40,14 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   losses and the family two-standard-error screen still block as well), validation uses the lower
   bound of a paired 95% interval for the mean of suite deltas, skipped category cells are recorded
   and must match, and the power report marks capabilities below 600 items.
-
+- Training-source policy as code (`tools/finetune/sources/policy.json`, checked offline by
+  `tools/finetune/check_sources.py` in CI): the licence allowlist, approved and denied generator
+  models by exact id, and 120 source exclusions with reasons. Every admitted source records its
+  licence with evidence URLs, the origin of its text, its generator and a pinned revision. Each
+  was researched at its source and checked a second time by an independent reviewer
+  (`tools/finetune/sources/evidence-2026-10-03*.json`). 40 of 119 v6 sources and 28 of 67 v5
+  families pass. The builders refuse excluded sources, and `tools/finetune/build_v9.py` composes
+  mixture v9 from them with a manifest; it never writes over the mixtures behind released weights.
 ### Added
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
   items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for

@@ -34,6 +34,7 @@ from safetensors.torch import load_file, save_file
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from train_banking77 import (BANK_HEAD, DISTILL_QUESTIONS, SEED, bank_items, batches,  # noqa: E402
                              collate, distill_items, fit_temp, predict, typed_items)
+from source_policy import validate_mixture_dev  # noqa: E402
 
 from laya.agent import _fix_tokenizer_config, _load_tokenizer  # noqa: E402
 from laya.common import QTYPES, build_model, build_sequence, proper_reward, render_options, temp_bucket  # noqa: E402
@@ -209,6 +210,7 @@ def main():
                     help="commercial-clean data only: no tyqiangz sentiment (aggregates research-only corpora),"
                          " distillation texts from the licence-filtered mixture instead of AG News / tweet_eval")
     a = ap.parse_args()
+    validate_mixture_dev(a.mixture, a.mixture_dev)
     from datasets import load_dataset
 
     torch.manual_seed(SEED)
