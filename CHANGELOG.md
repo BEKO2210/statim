@@ -34,8 +34,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   without the evaluation texts (Colab) is marked unchecked until `tools/synth/leakage.py --filter`
   runs.
 - Grounded synthesis can run against vLLM (`--backend openai`) in two stages, one model on the GPU at
-  a time: `--stage generate` writes candidates with Qwen3-30B-A3B (official GPTQ-Int4; the A100 has
-  no FP8 units for the FP8 Instruct-2507 build), `--stage verify` checks them blind with Phi-4. Both models are recorded by Hugging Face id and exact revision and
+  a time: `--stage generate` writes candidates with Qwen3-30B-A3B-Instruct-2507 (official FP8 build,
+  which loads on a Colab A100; GPTQ-Int4 as fallback), `--stage verify` checks them blind with Phi-4. Both models are recorded by Hugging Face id and exact revision and
   are approved in `policy.json`. `tools/synth/colab_vllm.ipynb` runs this on a Colab A100 with live
   progress. On an 8 GB GPU, `--phased-batch` generates and verifies in alternating batches.
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
