@@ -139,11 +139,25 @@ statim_enable_coverage(statim_tokenizer)
 
 # ---- core runtime
 add_library(statim_core STATIC src/model.cpp src/engine.cpp src/security.cpp src/tokenizer_gguf.cpp src/kernels.cpp src/sha256.cpp)
-set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "-O3;-ffast-math;-fopenmp-simd;$<$<BOOL:${STATIM_NATIVE}>:-march=native>")
+set(STATIM_KERNEL_MATH_FLAGS -O3 -ffast-math -fopenmp-simd)
+set(STATIM_KERNEL_FLAGS ${STATIM_KERNEL_MATH_FLAGS})
+if(STATIM_NATIVE)
+  list(APPEND STATIM_KERNEL_FLAGS -march=native)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  list(APPEND STATIM_KERNEL_FLAGS -mavx2 -mfma)
+endif()
+set_source_files_properties(src/kernels.cpp PROPERTIES COMPILE_OPTIONS "${STATIM_KERNEL_FLAGS}")
 target_include_directories(statim_core PUBLIC include third_party PRIVATE third_party/ggml/src)
 target_link_libraries(statim_core PUBLIC statim_tokenizer ggml statim_gguf_preflight)
 statim_enable_coverage(statim_core)
 find_package(Threads REQUIRED)
+
+# Standalone micro-benchmark (intentionally not registered with CTest).
+add_executable(erf_micro EXCLUDE_FROM_ALL bench/erf_micro.cpp)
+target_include_directories(erf_micro PRIVATE src)
+target_compile_options(erf_micro PRIVATE ${STATIM_KERNEL_FLAGS})
+target_link_libraries(erf_micro PRIVATE statim_core)
+
 if(STATIM_FUZZ)
   target_compile_options(statim_tokenizer PRIVATE -fsanitize=fuzzer-no-link)
   target_compile_options(statim_gguf_preflight PRIVATE -fsanitize=fuzzer-no-link)
@@ -168,6 +182,12 @@ if(STATIM_BUILD_TESTS)
   add_executable(test_sgemm tests/test_sgemm.cpp)
   target_include_directories(test_sgemm PRIVATE src)
   target_link_libraries(test_sgemm PRIVATE statim_core Threads::Threads)
+
+  add_executable(test_kernels tests/test_kernels.cpp)
+  target_include_directories(test_kernels PRIVATE src)
+  # same math flags as kernels.cpp but no -mavx2: main() must reach its CPU check on any x86-64
+  target_compile_options(test_kernels PRIVATE ${STATIM_KERNEL_MATH_FLAGS})
+  target_link_libraries(test_kernels PRIVATE statim_core)
 
   add_executable(test_lora tests/test_lora.cpp)
   target_include_directories(test_lora PRIVATE src)
@@ -251,6 +271,8 @@ file(WRITE ${CMAKE_BINARY_DIR}/CTestCustom.cmake "set(CTEST_CUSTOM_MAXIMUM_PASSE
   add_test(NAME security_model COMMAND test_security ${M}/laya-multilingual-f32.gguf)
   add_test(NAME tokenizer COMMAND test_tokenizer)
   add_test(NAME sgemm COMMAND test_sgemm)
+  add_test(NAME kernels COMMAND test_kernels)
+  set_tests_properties(kernels PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sgemm PROPERTIES SKIP_RETURN_CODE 77)  # no AVX2/FMA (e.g. arm64)
   add_test(NAME model_parity_multilingual COMMAND test_model_parity ${M}/laya-multilingual-f32.gguf ${D}/golden_laya-multilingual.jsonl 1e-3)
   # Answers are rounded to 4 decimals by the API and in the golden files, so two correct values can
