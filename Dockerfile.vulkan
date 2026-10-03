@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Multi-stage Vulkan build with a minimal, non-root runtime. Model weights are never copied in.
-FROM ubuntu:24.04 AS build
+FROM ubuntu:25.10 AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates cmake g++ git glslc libvulkan-dev ninja-build spirv-headers \
     && rm -rf /var/lib/apt/lists/*
@@ -14,7 +14,7 @@ RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
     && g++ -O2 -s -static tools/docker/healthcheck.cpp -o build/statim-healthcheck \
     && strip build/statim build/statim-quantize
 
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates libgomp1 libvulkan1 mesa-vulkan-drivers \
     && groupadd --gid 65532 statim \
