@@ -26,6 +26,9 @@ The unit binds to `127.0.0.1:8080`, runs as a dynamic unprivileged user, and req
 `STATIM_API_KEY`. A comma-separated value supports key rotation. Every key must be 32–4096 printable
 ASCII characters without whitespace; `openssl rand -hex 32` generates a suitable key. An explicitly
 configured empty, weak, or invalid environment value makes startup fail closed before model loading.
+For least privilege, use `--api-key-file`: append `inference`, `metrics`, or `inference,metrics`
+after a key. A line containing only the key keeps access to both scopes; `STATIM_API_KEY` keys also
+always have both scopes.
 
 The shipped unit starts two workers and enforces `MemoryHigh=6G`, `MemoryMax=8G`, `CPUQuota=400%`,
 `TasksMax=256`, and `LimitNOFILE=4096`. Tune the workers and ceilings together after measuring the
@@ -81,6 +84,8 @@ docker run -d --name statim-cpu --read-only --tmpfs /tmp:rw,noexec,nosuid,size=6
   serve -m /models/model.gguf --host 0.0.0.0 --port 8080 \
   --api-key-file /run/secrets/statim-api-key
 ```
+
+For example, a Prometheus-only secret file contains `<32-or-more-character-key> metrics`.
 
 The CPU and Vulkan images deliberately keep `--host 0.0.0.0`. With neither a valid
 `STATIM_API_KEY` nor a valid mounted `--api-key-file`, their default server command prints a clear

@@ -22,6 +22,7 @@ import textwrap
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GITHUB = "https://github.com/BEKO2210/statim"
 SITE = "https://beko2210.github.io/statim"
+SPACE = "https://huggingface.co/spaces/Beko2210/statim"
 
 MODELS = {
     "statim-decide-multilingual-base": {
@@ -163,6 +164,9 @@ def card(a, meta, ev, base_ev, files, comparison=None):
               "per language, macro over languages.\n\n"
               "| Category | Languages | This model | Base checkpoint |\n|---|---|---|---|\n"
               + "\n".join(crows) + "\n") if crows else ""
+    # The Space serves the multilingual model; the English card says so instead of implying otherwise.
+    try_line = ("this model on a free CPU, no install and no key." if a.info.get("serve_key") == "multilingual"
+                else "the Space runs the multilingual model on a free CPU; this English model is served the same way.")
     return head + textwrap.dedent(f"""
     # {a.info['display']}
 
@@ -170,6 +174,8 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     **choice**, a **score** or a **yes/no** question and get calibrated answers from one forward pass, on
     CPU or GPU, without Python at runtime. Version **{a.version}**, fine-tuned from
     [`{a.info['base_model']}`](https://huggingface.co/{a.info['base_model']}) ({a.info['encoder']} encoder).
+
+    **[▶ Try it live in your browser]({SPACE})**: {try_line}
 
     <video controls preload="none" width="100%" poster="{SITE}/images/film-16x9.webp" src="{SITE}/video/statim-flagship-60s-16x9.mp4"></video>
 

@@ -3,6 +3,7 @@
 Run manually: python3 tests/security/test_http.py --binary build/statim
 """
 import argparse
+import hashlib
 import http.client
 import json
 import os
@@ -71,6 +72,20 @@ def main():
                 checks += 1
 
         test_short_keys_fail_before_model_load()
+        def test_bad_scope_fails_before_model_load():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'bad-scope-must-not-load.gguf')
+            keyfile = Path(tmp) / 'bad-scope-keys'
+            keyfile.write_text('s' * 32 + ' unknown\n', encoding='ascii')
+            p = subprocess.run([args.binary, 'serve', '-m', missing_model, '--api-key-file', str(keyfile)],
+                               env=env, capture_output=True, text=True, timeout=5)
+            assert p.returncode == 2, (p.returncode, p.stderr)
+            assert str(keyfile) + ':1' in p.stderr and 'unknown API key scope' in p.stderr, p.stderr
+            assert 's' * 32 not in p.stderr, p.stderr
+            assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+            checks += 1
+
+        test_bad_scope_fails_before_model_load()
         def test_invalid_frame_ancestors_fails_before_model_load():
             nonlocal checks
             missing_model = str(Path(tmp) / 'frame-ancestors-must-not-load.gguf')
@@ -222,6 +237,62 @@ def main():
         test_non_loopback_env_key()
         test_loopback_ipv4_without_key()
         test_loopback_ipv6_without_key()
+
+        def test_scoped_keys():
+            nonlocal checks
+            metrics_key, inference_key, all_key = 'm' * 32, 'i' * 32, 'a' * 32
+            keyfile = Path(tmp) / 'scoped-keys'
+            keyfile.write_text(f'{metrics_key} metrics\n{inference_key} inference\n{all_key}\n', encoding='ascii')
+            scoped_port = reserve_port()
+            scoped_log = Path(tmp) / 'scoped-server.log'
+            command = base + ['--port', str(scoped_port), '--api-key-file', str(keyfile)]
+
+            def scoped_request(path, key, payload=None):
+                conn = http.client.HTTPConnection('127.0.0.1', scoped_port, timeout=30)
+                headers = {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'}
+                body = json.dumps(payload) if payload is not None else None
+                conn.request('POST' if payload is not None else 'GET', path, body, headers)
+                response = conn.getresponse()
+                result = response.status, response.read()
+                conn.close()
+                return result
+
+            with scoped_log.open('w+') as log:
+                proc = subprocess.Popen(command, env=env, stdout=log, stderr=log)
+                try:
+                    wait_for_health(proc, scoped_log, '127.0.0.1', scoped_port)
+                    empty_decision = {'state': 'hello', 'questions': {}}
+                    assert scoped_request('/metrics', metrics_key)[0] == 200
+                    status, body = scoped_request('/v1/systemone', metrics_key, empty_decision)
+                    assert status == 403 and json.loads(body) == {'detail': "API key lacks the 'inference' scope"}
+                    status, body = scoped_request('/v1/models', metrics_key)
+                    assert status == 403 and json.loads(body) == {'detail': "API key lacks the 'inference' scope"}
+                    assert scoped_request('/v1/systemone', inference_key, empty_decision)[0] == 200
+                    status, body = scoped_request('/metrics', inference_key)
+                    assert status == 403 and json.loads(body) == {'detail': "API key lacks the 'metrics' scope"}
+                    assert scoped_request('/metrics', all_key)[0] == 200
+                    assert scoped_request('/v1/systemone', all_key, empty_decision)[0] == 200
+                    assert scoped_request('/metrics', 'z' * 32)[0] == 401
+                    checks += 8
+                finally:
+                    proc.terminate()
+                    proc.wait(timeout=15)
+            log_text = scoped_log.read_text()
+            for key in (metrics_key, inference_key, all_key):
+                assert key not in log_text, log_text
+            records = [json.loads(line) for line in log_text.splitlines() if line.startswith('{')]
+            listening = next(record for record in records if record.get('event') == 'listening')
+            assert listening['keys'] == 3
+            expected = [
+                {'id': hashlib.sha256(metrics_key.encode()).hexdigest()[:8], 'scopes': ['metrics']},
+                {'id': hashlib.sha256(inference_key.encode()).hexdigest()[:8], 'scopes': ['inference']},
+                {'id': hashlib.sha256(all_key.encode()).hexdigest()[:8], 'scopes': ['inference', 'metrics']},
+            ]
+            assert listening['key_ids'] == expected, listening
+            request_records = [record for record in records if record.get('event') == 'request']
+            assert {record.get('key_id') for record in request_records} >= {expected[1]['id'], expected[2]['id']}, request_records
+
+        test_scoped_keys()
         port = reserve_port()
 
         def request(path, payload=None, auth=True, rid=None):

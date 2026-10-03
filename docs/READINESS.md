@@ -47,7 +47,7 @@ for them like a P0.
 |---|---|---|---|
 | 10 | Threat model (assets, actors, trust boundaries, residual risks), linked from `SECURITY.md` | S | **closed** (#76): [THREAT_MODEL.md](THREAT_MODEL.md), linked from `SECURITY.md` |
 | 11 | CI fails when `security_http` skips | S | **closed** (#73): `tools/ci/fail_on_skip.py` after every ctest run in CI, with `pipefail`; tested by `tools/ci/test_fail_on_skip.py` |
-| 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | open |
+| 12 | Key scopes (a metrics key cannot call inference), and a key id in the logs | M | **closed** (#108): key-file lines take `inference` and/or `metrics` scopes (unscoped = both); a key without the route's scope gets 403; access and start-up logs carry an 8-hex `key_id` (SHA-256 prefix), never the key; a key listed twice is a start-up error |
 | 13 | API keys shorter than 32 characters are rejected | S | **closed** (#87): a shorter key from `STATIM_API_KEY` or `--api-key-file` exits with status 2 before the model loads, naming the source and length; `test_short_keys_fail_before_model_load` in `tests/security/test_http.py`, key cases in `tests/test_security.cpp` |
 | 14 | The playground no longer keeps the bearer in `localStorage`; the server sends CSP, `nosniff` and `frame-ancestors 'none'` | S | **closed** (#81): key in `sessionStorage` only; hash-pinned CSP, `frame-ancestors 'none'`, `nosniff` and `Referrer-Policy` on every response; checked in `security_http`, `test_security` and a headless-browser run |
 | 15 | A tested nginx configuration in deploy/ (`nginx -t`); TLS stays at the proxy | S | **closed** (#83): `deploy/nginx/`; `test_nginx.sh` runs `nginx -t` and 12 live checks in the `nginx` CI job |
