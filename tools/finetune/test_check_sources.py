@@ -5,14 +5,16 @@ import gzip
 import hashlib
 import json
 import sys
+import concurrent.futures
 from pathlib import Path
 
 import pytest
 
-from tools.finetune import build_extra, build_mixture, build_v9, check_sources, data_licenses
-from tools.finetune.source_policy import (input_hashes, tasksource_families,
-                                          validate_mixture_dev)
-from tools.finetune.mixture_v6 import registry
+from tools.finetune import (build_extra, build_mixture, build_v9, check_sources,
+                            data_licenses, source_policy)
+from tools.finetune.source_policy import (exclusion_matches, input_hashes, row_is_excluded,
+                                          tasksource_families, validate_mixture_dev)
+from tools.finetune.mixture_v6 import loaders, registry
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -120,6 +122,22 @@ def test_v5_matcher_uses_pinned_exact_source_list():
     assert families["babi_nli/"]["sources"]
 
 
+def test_licence_audit_exclude_cannot_be_readded_as_keep(tmp_path):
+    audit = copy.deepcopy(AUDIT)
+    audit["keep_families"]["CONDAQA"] = {
+        "use": True, "licence_spdx": "Apache-2.0", "licence_evidence": "TODO",
+        "provenance": "TODO", "text_licence_spdx": "TODO", "generator": "human",
+        "checked": "TODO",
+    }
+    audit["source_names"]["CONDAQA"] = ["CONDAQA"]
+    assert any("licence_audit exclude" in e for e in run(tmp_path, audit=audit))
+    for name, value in (("policy.json", POLICY), ("v6.json", V6), ("audit.json", audit)):
+        (tmp_path / name).write_text(json.dumps(value), encoding="utf-8")
+    resolver = build_v9.Resolver(tmp_path / "policy.json", tmp_path / "v6.json", tmp_path / "audit.json")
+    with pytest.raises(ValueError, match="unresolved|excluded"):
+        resolver.resolve("CONDAQA")
+
+
 def test_build_mixture_cli_requires_audit_and_policy(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["build_mixture.py", "--out", str(tmp_path / "x.gz"),
                                       "--revision", "abc"])
@@ -158,6 +176,13 @@ def test_generator_allowlist_is_exact():
                for x in allowed)
     assert "unknown" in check_sources.generator_error(
         [{"model": "Qwen/Qwen3-8B-extra", "role": "writer"}], POLICY)
+    assert "whitespace" in check_sources.generator_error(
+        [{"model": "Qwen/Qwen3-8B\n", "role": "writer"}], POLICY)
+    approved = {rule["model"]: rule for rule in POLICY["generators"]}
+    for model in ("Gemma-4-26B-A4B-it", "Qwen/Qwen3.8-27B"):
+        assert approved[model]["licence_spdx"] == "Apache-2.0"
+        assert approved[model]["terms_url"].startswith("https://")
+        assert check_sources.generator_error([{"model": model, "role": "writer"}], POLICY) is None
 
 
 def test_combined_config_cannot_bypass_exclusion(tmp_path):
@@ -168,6 +193,19 @@ def test_combined_config_cannot_bypass_exclusion(tmp_path):
     v6.remove(rows[1])
     errors = run(tmp_path, v6=v6)
     assert any("excluded source is admitted" in e for e in errors)
+
+
+def test_config_exclusion_is_whole_id_unless_configs_only(tmp_path):
+    wanli = next(x for x in POLICY["exclusions"] if x["id"] == "takehika/wanli-ja-nli")
+    brighter = [x for x in POLICY["exclusions"]
+                if x["id"] == "brighter-dataset/BRIGHTER-emotion-categories"]
+    assert exclusion_matches("v6", wanli["id"], "default", wanli)
+    assert all(x["configs_only"] is True for x in brighter)
+    assert not any(exclusion_matches("v6", x["id"], "eng", x) for x in brighter)
+    v6 = copy.deepcopy(V6)
+    target = next(e for e in v6 if e["id"] == wanli["id"])
+    target["config"], target["use"] = "default", True
+    assert any("excluded source is admitted" in e for e in run(tmp_path, v6=v6))
 
 
 def test_invalid_policy_enums_and_unexplained_disabled_family_fail(tmp_path):
@@ -221,10 +259,35 @@ def test_v6_missing_pin_is_recorded_as_todo_and_loader_refuses():
     admitted_rows = [e for e in V6 if e.get("use") is True]
     assert all("pinned_commit" in e for e in admitted_rows)
     todo = next(e for e in admitted_rows if e["pinned_commit"] == "TODO")
-    from tools.finetune.mixture_v6 import loaders
     with pytest.raises(RuntimeError, match="pinned_commit"):
         loaders.load_rows(todo, 1)
-    assert "tools/finetune/mixture_v6/loaders.py" in build_v9.INPUT_RELATIVE_PATHS
+    for path in ("tools/finetune/check_sources.py", "tools/finetune/source_policy.py",
+                 "tools/finetune/mixture_v6/templates.py", "tools/finetune/mixture_v6/languages.py",
+                 "tools/finetune/mixture_v6/eval_texts.py"):
+        assert path in build_v9.INPUT_RELATIVE_PATHS
+
+
+def test_v6_pin_must_be_full_sha_or_todo(tmp_path):
+    for bad in ("", "3609356", "a" * 39, "g" * 40):
+        v6 = copy.deepcopy(V6)
+        admitted(v6)["pinned_commit"] = bad
+        assert any("40-hex sha or TODO" in e for e in run(tmp_path, v6=v6))
+
+
+def test_loader_passes_each_revision_without_module_global(monkeypatch):
+    seen = []
+
+    def capture(entry, limit, revision):
+        seen.append((entry["id"], revision))
+        return [{"text": entry["id"]}]
+
+    monkeypatch.setattr(loaders, "_DISPATCH", {"one": capture, "two": capture})
+    entries = [{"id": "one", "pinned_commit": "1" * 40},
+               {"id": "two", "pinned_commit": "2" * 40}]
+    with concurrent.futures.ThreadPoolExecutor(2) as pool:
+        list(pool.map(lambda entry: loaders.load_rows(entry, 1), entries))
+    assert sorted(seen) == [("one", "1" * 40), ("two", "2" * 40)]
+    assert not hasattr(loaders, "PARQUET_REV")
 
 
 def test_registry_row_filter_is_loaded_from_policy(monkeypatch, tmp_path):
@@ -242,10 +305,20 @@ def test_registry_row_filter_is_loaded_from_policy(monkeypatch, tmp_path):
     assert {item["lang"] for item in registry.adapt(entry, rows, 7)} == {"ar", "en"}
 
 
+def test_wikinews_filter_normalises_language_and_requires_column():
+    exclusion = next(x for x in POLICY["exclusions"] if x.get("scope") == "rows")
+    sid, config = exclusion["id"], exclusion.get("config", "default")
+    assert row_is_excluded("v6", sid, config, {"lang": "AR"}, POLICY)
+    assert row_is_excluded("v6", sid, config, {"lang": "fa_IR"}, POLICY)
+    with pytest.raises(ValueError, match="filter column 'lang'"):
+        row_is_excluded("v6", sid, config, {"language": "ar"}, POLICY)
+
+
 def test_stale_part_hashes_force_rebuild(monkeypatch, tmp_path):
     expected = input_hashes(build_v9.ROOT)
-    parts = {name: tmp_path / f"{name}.jsonl.gz" for name in ("v6", "v5", "extra")}
-    manifests = {name: tmp_path / f"{name}.manifest.json" for name in parts}
+    parts = {name: tmp_path / f"mixture-v9-part-{name}.jsonl.gz"
+             for name in ("v6", "v5", "extra")}
+    manifests = {name: tmp_path / f"mixture-v9-part-{name}.manifest.json" for name in parts}
     valid = {
         "v6": {"seed": build_v9.SEED, "per_source_cap": 6200, "dev_per_source": 200},
         "v5": {"seed": build_v9.SEED, "per_source_cap": 120,
@@ -256,6 +329,7 @@ def test_stale_part_hashes_force_rebuild(monkeypatch, tmp_path):
         parts[name].write_bytes(name.encode())
         manifests[name].write_text(json.dumps({**valid[name], "inputs": expected}), encoding="utf-8")
     manifests["v5"].write_text(json.dumps({**valid["v5"], "inputs": {"stale": "hash"}}), encoding="utf-8")
+    stale_manifest_bytes = manifests["v5"].read_bytes()
     calls = []
 
     def fake_run(command, **kwargs):
@@ -269,7 +343,57 @@ def test_stale_part_hashes_force_rebuild(monkeypatch, tmp_path):
     monkeypatch.setattr(build_v9.subprocess, "run", fake_run)
     build_v9.ensure_parts({name: [name] for name in parts})
     assert calls == ["v5"]
-    assert not list(tmp_path.glob("*.v9-stale"))
+    stale = list(tmp_path.glob("mixture-v9-part-v5.*.stale-*"))
+    assert len(stale) == 2
+    assert {path.read_bytes() for path in stale} == {b"v5", stale_manifest_bytes}
+
+
+def test_build_v9_never_touches_legacy_data_files(monkeypatch, tmp_path):
+    expected = input_hashes(build_v9.ROOT)
+    legacy_names = ["mixture-v5.jsonl.gz", "mixture-v5.manifest.json",
+                    "mixture-v6.jsonl.gz", "mixture-v6.manifest.json", "mixture-v6.report.md",
+                    "extra-v1.jsonl.gz", "extra-v1.jsonl.gz.manifest.json",
+                    "extra-v1.jsonl.gz.provenance.jsonl.gz",
+                    "mixture-v8.jsonl.gz", "mixture-v8.manifest.json"]
+    legacy = {}
+    for index, name in enumerate(legacy_names):
+        path = tmp_path / name
+        path.write_bytes((f"legacy-{index}").encode())
+        legacy[path] = path.read_bytes()
+    parts = {name: tmp_path / f"mixture-v9-part-{name}.jsonl.gz"
+             for name in ("v6", "v5", "extra")}
+    manifests = {name: tmp_path / f"mixture-v9-part-{name}.manifest.json" for name in parts}
+    valid = {
+        "v6": {"seed": build_v9.SEED, "per_source_cap": 6200, "dev_per_source": 200},
+        "v5": {"seed": build_v9.SEED, "per_source_cap": 120,
+               "audit": build_v9.AUDIT.name, "revision": build_v9.V5_REVISION},
+        "extra": {"seed": build_v9.SEED, "per_dataset_cap": 3000},
+    }
+
+    def fake_run(command, **kwargs):
+        name = command[0]
+        parts[name].write_bytes((name + "-new").encode())
+        manifests[name].write_text(json.dumps({**valid[name], "inputs": expected}), encoding="utf-8")
+
+    monkeypatch.setattr(build_v9, "PARTS", parts)
+    monkeypatch.setattr(build_v9, "PART_MANIFESTS", manifests)
+    monkeypatch.setattr(build_v9.subprocess, "run", fake_run)
+    build_v9.ensure_parts({name: [name] for name in parts})
+    assert all(path.read_bytes() == contents for path, contents in legacy.items())
+
+
+def test_build_v9_refuses_non_v9_part_target(monkeypatch, tmp_path):
+    legacy = tmp_path / "mixture-v6.jsonl.gz"
+    legacy.write_bytes(b"released bytes")
+    parts = {"v6": legacy,
+             "v5": tmp_path / "mixture-v9-part-v5.jsonl.gz",
+             "extra": tmp_path / "mixture-v9-part-extra.jsonl.gz"}
+    manifests = {name: tmp_path / f"mixture-v9-part-{name}.manifest.json" for name in parts}
+    monkeypatch.setattr(build_v9, "PARTS", parts)
+    monkeypatch.setattr(build_v9, "PART_MANIFESTS", manifests)
+    with pytest.raises(RuntimeError, match="non-v9 part target"):
+        build_v9.ensure_parts({name: [name] for name in parts})
+    assert legacy.read_bytes() == b"released bytes"
 
 
 def _write_gzip(path, rows):
@@ -285,7 +409,7 @@ def _tiny_build(monkeypatch, tmp_path, bad_src=None, wikinews_lang="en"):
                                "row_filter": {"lang": ["ar", "fa"]},
                                "reason_class": "breaks-policy", "reason": "fixture", "audit": "2026-10-03"}]}
     complete = {"licence_spdx": "MIT", "generator": "human"}
-    v6 = [{"id": "wiki", "config": "default", "use": True, "pinned_commit": "abc",
+    v6 = [{"id": "wiki", "config": "default", "use": True, "pinned_commit": "a" * 40,
            "category": "8-topic", **complete}]
     audit = {"source_names": {"family/": ["family/sub"]},
              "keep_families": {"family/": {"use": True, **complete}},
@@ -370,6 +494,28 @@ def test_train_multitask_enforces_v9_dev_prefix(tmp_path):
     validate_mixture_dev(mixture, 23)
     with pytest.raises(ValueError, match="dev_prefix_rows"):
         validate_mixture_dev(mixture, 22)
+
+
+def test_train_multitask_finds_documented_manifest_for_real_layout(monkeypatch, tmp_path):
+    mixture = tmp_path / "data" / "mixture-v9.jsonl.gz"
+    mixture.parent.mkdir()
+    mixture.write_bytes(b"v9 mixture fixture")
+    (mixture.parent / "mixture-v9.manifest.json").write_text(
+        json.dumps({"version": 8}), encoding="utf-8")
+    docs = tmp_path / "docs" / "reproductions"
+    docs.mkdir(parents=True)
+    digest = hashlib.sha256(mixture.read_bytes()).hexdigest()
+    (docs / "mixture-v9.manifest.json").write_text(json.dumps({
+        "version": 9, "dev_prefix_rows": 23, "output_sha256": digest,
+    }), encoding="utf-8")
+    monkeypatch.setattr(source_policy, "ROOT", tmp_path)
+    source_policy.validate_mixture_dev(mixture, 23)
+    with pytest.raises(ValueError, match="dev_prefix_rows"):
+        source_policy.validate_mixture_dev(mixture, 22)
+    (docs / "mixture-v9.manifest.json").write_text(json.dumps({
+        "version": 9, "dev_prefix_rows": 99, "output_sha256": "0" * 64,
+    }), encoding="utf-8")
+    source_policy.validate_mixture_dev(mixture, 22)  # unrelated manifest is ignored
 
 
 def test_data_licence_generator_keeps_policy_warning():

@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -26,8 +27,6 @@ from .templates import LANGUAGES
 
 ROOT = Path(__file__).resolve().parents[3]
 RAW_ROOT = ROOT / "data" / "raw"
-PARQUET_REV = "refs/convert/parquet"
-
 # Intent order matches the ClassLabel used by PolyAI/minds14 (alphabetical;
 # path ``ATM_LIMIT`` is class 3).
 MINDS14_INTENTS = [
@@ -311,7 +310,7 @@ def _load_claimbuster(limit):
     return _csv_rows(path, limit)
 
 
-def _load_indic(limit):
+def _load_indic(limit, revision):
     groups = {lang: [] for lang in INDIC_LANGS}
     per = max(1, limit // len(INDIC_LANGS))
     for lang in INDIC_LANGS:
@@ -319,7 +318,7 @@ def _load_indic(limit):
         for split in ("validation", "test"):
             filename = "translation-%s/%s/0000.parquet" % (lang, split)
             try:
-                path = _hub("ai4bharat/IndicSentiment", filename, PARQUET_REV)
+                path = _hub("ai4bharat/IndicSentiment", filename, revision)
             except Exception:
                 continue
             bucket.extend(sample_parquet(path, per))
@@ -329,13 +328,13 @@ def _load_indic(limit):
     return _balanced_take(groups, limit)
 
 
-def _load_truthful(limit):
+def _load_truthful(limit, revision):
     groups = {}
     per = max(1, limit // len(TRUTHFUL_LANGS))
     iso = {"PT-PT": "pt"}
     for lang in TRUTHFUL_LANGS:
         filename = "truthfulqa_gen_%s_validation.jsonl" % lang
-        path = _hub("Eurolingua/truthfulqax", filename)
+        path = _hub("Eurolingua/truthfulqax", filename, revision)
         rows = []
         with open(path, encoding="utf-8") as fh:
             for line in fh:
@@ -349,18 +348,18 @@ def _load_truthful(limit):
     return _balanced_take(groups, limit)
 
 
-def _load_nli_tr(limit):
-    path = _hub("boun-tabi/nli_tr", "multinli_tr/train/0000.parquet", PARQUET_REV)
+def _load_nli_tr(limit, revision):
+    path = _hub("boun-tabi/nli_tr", "multinli_tr/train/0000.parquet", revision)
     return _tag(sample_parquet(path, limit), _v6_lang="tr", _v6_config="multinli_tr")
 
 
-def _load_cuad(limit):
-    path = _hub("theatticusproject/cuad-qa", "default/train/0000.parquet", PARQUET_REV)
+def _load_cuad(limit, revision):
+    path = _hub("theatticusproject/cuad-qa", "default/train/0000.parquet", revision)
     return _tag(sample_parquet(path, limit), _v6_lang="en")
 
 
-def _load_eurlex(limit):
-    meta_path = _hub("ddrg/super_eurlex", "meta_data/1.parquet")
+def _load_eurlex(limit, revision):
+    meta_path = _hub("ddrg/super_eurlex", "meta_data/1.parquet", revision)
     import pyarrow.parquet as pq
     meta = {}
     for row in pq.read_table(meta_path, columns=["celex_id", "subject_matter", "eurovoc", "directory_code"]).to_pylist():
@@ -371,7 +370,7 @@ def _load_eurlex(limit):
     groups = {}
     per = max(1, limit // len(EURLEX_LANGS))
     for lang in EURLEX_LANGS:
-        path = _hub("ddrg/super_eurlex", "text_data/%s/1_clean.parquet" % lang)
+        path = _hub("ddrg/super_eurlex", "text_data/%s/1_clean.parquet" % lang, revision)
         rows = []
         for row in sample_parquet(path, per * 3, columns=["celex_id", "text_cleaned"]):
             cid = row.get("celex_id")
@@ -390,8 +389,8 @@ def _load_eurlex(limit):
     return _balanced_take(groups, limit)
 
 
-def _load_multiwoz(limit):
-    path = _hub("pfb30/multi_woz_v22", "v2.2/train/0000.parquet", PARQUET_REV)
+def _load_multiwoz(limit, revision):
+    path = _hub("pfb30/multi_woz_v22", "v2.2/train/0000.parquet", revision)
     dialogs = sample_parquet(path, max(limit, 200))
     rows = []
     for dialog in dialogs:
@@ -423,8 +422,8 @@ def _load_multiwoz(limit):
     return rows
 
 
-def _load_crosswoz(limit):
-    path = _hub("ConvLab/crosswoz", "data.zip")
+def _load_crosswoz(limit, revision):
+    path = _hub("ConvLab/crosswoz", "data.zip", revision)
     with zipfile.ZipFile(path) as zf:
         dialogs = json.loads(zf.read("data/dialogues.json"))
     rows = []
@@ -449,57 +448,58 @@ def _load_crosswoz(limit):
     return rows
 
 
-def _load_bitod(limit):
+def _load_bitod(limit, revision):
     groups = {}
     per = max(1, limit // 2)
     for lang in ("en", "zh"):
-        path = _hub("DeepPavlov/BiToD", "%s/train/0000.parquet" % lang, PARQUET_REV)
+        path = _hub("DeepPavlov/BiToD", "%s/train/0000.parquet" % lang, revision)
         rows = sample_parquet(path, per)
         groups[lang] = _tag(rows, _v6_lang=lang, _v6_config=lang)
     return _balanced_take(groups, limit)
 
 
-def _load_minds14(limit):
+def _load_minds14(limit, revision):
     groups = {}
     per = max(1, limit // len(MINDS14_CONFIGS))
     cols = ["path", "transcription", "english_transcription", "intent_class", "lang_id"]
     for config in MINDS14_CONFIGS:
-        path = _hub("PolyAI/minds14", "%s/train/0000.parquet" % config, PARQUET_REV)
+        path = _hub("PolyAI/minds14", "%s/train/0000.parquet" % config, revision)
         rows = sample_parquet(path, per, columns=cols)
         groups[config] = _tag(rows, _v6_config=config, _v6_lang=config.split("-")[0].lower())
     return _balanced_take(groups, limit)
 
 
-def _load_tapaco(limit):
+def _load_tapaco(limit, revision):
     groups = {}
     per = max(1, limit // len(TAPACO_CONFIGS))
     for lang in TAPACO_CONFIGS:
-        path = _hub("community-datasets/tapaco", "%s/train/0000.parquet" % lang, PARQUET_REV)
+        path = _hub("community-datasets/tapaco", "%s/train/0000.parquet" % lang, revision)
         rows = contiguous_parquet(path, per)  # whole paraphrase sets, so positive pairs exist
         groups[lang] = _tag(rows, _v6_config=lang, _v6_lang="zh" if lang == "cmn" else lang)
     return _balanced_take(groups, limit)
 
 
-def _load_headlines(limit):
+def _load_headlines(limit, revision):
     """Contiguous runs of the date-ordered file, so one day's stories (group_id) come together."""
     repo = "dell-research-harvard/headlines-semantic-similarity"
-    shards = sorted(f for f in _parquet_listing(repo) if f.startswith("default/train/"))
+    shards = sorted(f for f in _parquet_listing(repo, revision)
+                    if f.startswith("default/train/"))
     if len(shards) > MAX_SHARDS:
         shards = [shards[int(i * len(shards) / MAX_SHARDS)] for i in range(MAX_SHARDS)]
     per = max(1, limit // max(1, len(shards)))
     rows = []
     for shard in shards:
-        rows.extend(contiguous_parquet(_hub(repo, shard, PARQUET_REV), per))
+        rows.extend(contiguous_parquet(_hub(repo, shard, revision), per))
     return _tag(rows, _v6_lang="en", _v6_config="default")
 
 
-def _load_job_titles(limit):
+def _load_job_titles(limit, revision):
     groups = {}
     per = max(2, limit // len(JOB_LANGS))
     for lang in JOB_LANGS:
-        queries = sample_parquet(_hub("Avature/Job-Title-Similarity", "%s/queries/0000.parquet" % lang, PARQUET_REV), 200)
+        queries = sample_parquet(_hub("Avature/Job-Title-Similarity", "%s/queries/0000.parquet" % lang, revision), 200)
         corpus = [row.get("text") or "" for row in sample_parquet(
-            _hub("Avature/Job-Title-Similarity", "%s/corpus/0000.parquet" % lang, PARQUET_REV), 100000)]
+            _hub("Avature/Job-Title-Similarity", "%s/corpus/0000.parquet" % lang, revision), 100000)]
         rows = []
         for query in queries:
             labels = [i for i in (query.get("labels") or []) if isinstance(i, int) and 0 <= i < len(corpus)]
@@ -518,8 +518,8 @@ def _load_job_titles(limit):
     return _balanced_take(groups, limit)
 
 
-def _load_pii_json(limit):
-    path = _hub("urchade/synthetic-pii-ner-mistral-v1", "data.json")
+def _load_pii_json(limit, revision):
+    path = _hub("urchade/synthetic-pii-ner-mistral-v1", "data.json", revision)
     # The file is one JSON list. Stream objects without holding every record twice.
     decoder = json.JSONDecoder()
     raw = Path(path).read_text(encoding="utf-8")
@@ -545,22 +545,22 @@ def _load_pii_json(limit):
     return rows
 
 
-def _load_food(limit):
-    path = _hub("OrSabbach/food-delivery-support-tickets", "data/dataset.parquet")
+def _load_food(limit, revision):
+    path = _hub("OrSabbach/food-delivery-support-tickets", "data/dataset.parquet", revision)
     return _tag(sample_parquet(path, limit), _v6_lang="en")
 
 
-def _load_novora(limit):
-    path = _hub("Novora/Tri-Class-Sentiment-Synthetic", "default/train/0000.parquet", PARQUET_REV)
+def _load_novora(limit, revision):
+    path = _hub("Novora/Tri-Class-Sentiment-Synthetic", "default/train/0000.parquet", revision)
     return _tag(sample_parquet(path, limit), _v6_lang="en")
 
 
-def _load_tatoeba(entry, limit):
+def _load_tatoeba(entry, limit, revision):
     groups = {}
     per = max(1, limit // len(TATOEBA_PAIRS))
     lid = "language-id" in (entry.get("category") or "")
     for pair in TATOEBA_PAIRS:
-        path = _hub("Helsinki-NLP/tatoeba", "%s/train/0000.parquet" % pair, PARQUET_REV)
+        path = _hub("Helsinki-NLP/tatoeba", "%s/train/0000.parquet" % pair, revision)
         left, right = pair.split("-")
         aligned = []
         for row in sample_parquet(path, max(per, 40)):
@@ -713,10 +713,10 @@ def horizon_emotion_rows(records):
     return out
 
 
-def _load_horizon_emotion(limit):
+def _load_horizon_emotion(limit, revision):
     import pyarrow.compute as pc
     import pyarrow.parquet as pq
-    path = _hub(HORIZON["repo"], HORIZON["file"], HORIZON["revision"])
+    path = _hub(HORIZON["repo"], HORIZON["file"], revision)
     table = pq.read_table(path, columns=["text", "lang", "task", "kind", "gold_labels", "text_origin"])
     table = table.filter(pc.and_(pc.equal(table["task"], "emotion"), pc.equal(table["kind"], "tax_short")))
     return _balanced_by(horizon_emotion_rows(table.to_pylist()), limit, "_v6_lang", "horizon_emotion")
@@ -736,10 +736,10 @@ def fact_opinion_rows(records):
     return out
 
 
-def _load_fact_opinion(limit):
+def _load_fact_opinion(limit, revision):
     import pyarrow.parquet as pq
     # the raw files are zstd; read the parquet conversion at a pinned commit, not the moving ref
-    path = _hub("agentlans/fact-or-opinion", "default/train/0000.parquet", "8558c040b4c30bce8d8d9c990f13c5824a4d7dbe")
+    path = _hub("agentlans/fact-or-opinion", "default/train/0000.parquet", revision)
     records = pq.read_table(path, columns=["text", "label", "language", "source"]).to_pylist()
     return _balanced_by(fact_opinion_rows(records), limit, "_v6_lang", "fact_opinion")
 
@@ -755,12 +755,12 @@ def congress_rows(records):
     return out
 
 
-def _load_congress(limit):
+def _load_congress(limit, revision):
     files = CONGRESS["files"][:max(1, MAX_SHARDS)]
     per = max(1, limit // len(files))
     rows = []
     for name in files:
-        path = _hub(CONGRESS["repo"], name, CONGRESS["revision"])
+        path = _hub(CONGRESS["repo"], name, revision)
         rows.extend(congress_rows(sample_parquet(path, per, columns=["title", "summary", "policy_area"])))
     return rows[:limit]
 
@@ -784,13 +784,13 @@ def egov_rows(records, categories):
     return out
 
 
-def _load_egov(limit):
-    categories = json.loads(Path(_hub(EGOV["repo"], "category.json", EGOV["revision"])).read_text(encoding="utf-8"))
+def _load_egov(limit, revision):
+    categories = json.loads(Path(_hub(EGOV["repo"], "category.json", revision)).read_text(encoding="utf-8"))
     files = EGOV["files"][:max(1, MAX_SHARDS)]
     per = max(1, limit // len(files))
     rows = []
     for name in files:
-        path = _hub(EGOV["repo"], name, EGOV["revision"])
+        path = _hub(EGOV["repo"], name, revision)
         rows.extend(egov_rows(sample_parquet(path, per, columns=["text", "metadata"]), categories))
     return rows[:limit]
 
@@ -846,9 +846,9 @@ def nobody_pii_rows(records):
     return out
 
 
-def _load_nobody_pii(limit):
+def _load_nobody_pii(limit, revision):
     import pyarrow.parquet as pq
-    path = _hub(NOBODY_PII["repo"], NOBODY_PII["file"], NOBODY_PII["revision"])
+    path = _hub(NOBODY_PII["repo"], NOBODY_PII["file"], revision)
     records = pq.read_table(path, columns=["text", "ner", "lang"]).to_pylist()
     return _balanced_by(nobody_pii_rows(records), limit, "_v6_lang", "nobody_pii")
 
@@ -882,8 +882,8 @@ def ru_pii_rows(records):
     return out
 
 
-def _load_ru_pii(limit):
-    path = _hub(RU_PII["repo"], RU_PII["file"], RU_PII["revision"])
+def _load_ru_pii(limit, revision):
+    path = _hub(RU_PII["repo"], RU_PII["file"], revision)
     records = sample_parquet(path, limit, columns=["text", "entities", "supervised_types", "source_families"])
     return ru_pii_rows(records)
 
@@ -894,8 +894,8 @@ def _spread(rows, limit):
     return [rows[min(len(rows) - 1, int(i * step))] for i in range(limit)]
 
 
-def _load_hh_redteam(limit):
-    path = _hub("Anthropic/hh-rlhf", "red-team-attempts/red_team_attempts.jsonl.gz")
+def _load_hh_redteam(limit, revision):
+    path = _hub("Anthropic/hh-rlhf", "red-team-attempts/red_team_attempts.jsonl.gz", revision)
     with gzip.open(path, "rt", encoding="utf-8") as fh:
         data = json.load(fh)
     rows = []
@@ -907,8 +907,8 @@ def _load_hh_redteam(limit):
     return rows
 
 
-def _load_quality(limit):
-    path = _hub("emozilla/quality", "default/train/0000.parquet", PARQUET_REV)
+def _load_quality(limit, revision):
+    path = _hub("emozilla/quality", "default/train/0000.parquet", revision)
     rows = []
     for row in sample_parquet(path, limit, columns=["article", "question", "options", "answer"]):
         article = row.get("article") or ""
@@ -928,8 +928,8 @@ def _load_quality(limit):
     return rows
 
 
-def _load_fairytale(limit):
-    path = _hub("WorkInTheDark/FairytaleQA", "plain_text/train/0000.parquet", PARQUET_REV)
+def _load_fairytale(limit, revision):
+    path = _hub("WorkInTheDark/FairytaleQA", "plain_text/train/0000.parquet", revision)
     rows = []
     for row in sample_parquet(path, limit):
         answer = str(row.get("answer1") or "").strip()
@@ -1053,39 +1053,39 @@ def _load_taskmaster(limit):
     return rows
 
 _DISPATCH = {
-    "ai4bharat/IndicSentiment": lambda entry, limit: _load_indic(limit),
-    "Novora/Tri-Class-Sentiment-Synthetic": lambda entry, limit: _load_novora(limit),
-    "github:asappresearch/abcd": lambda entry, limit: _load_abcd(limit),
-    "PolyAI/minds14": lambda entry, limit: _load_minds14(limit),
-    "OrSabbach/food-delivery-support-tickets": lambda entry, limit: _load_food(limit),
-    "github:wwbp/empathic_reactions": lambda entry, limit: _load_empathic(limit),
-    "Eurolingua/truthfulqax": lambda entry, limit: _load_truthful(limit),
-    "zenodo:3609356 (ClaimBuster)": lambda entry, limit: _load_claimbuster(limit),
-    "urchade/synthetic-pii-ner-mistral-v1": lambda entry, limit: _load_pii_json(limit),
+    "ai4bharat/IndicSentiment": lambda entry, limit, revision: _load_indic(limit, revision),
+    "Novora/Tri-Class-Sentiment-Synthetic": lambda entry, limit, revision: _load_novora(limit, revision),
+    "github:asappresearch/abcd": lambda entry, limit, revision: _load_abcd(limit),
+    "PolyAI/minds14": lambda entry, limit, revision: _load_minds14(limit, revision),
+    "OrSabbach/food-delivery-support-tickets": lambda entry, limit, revision: _load_food(limit, revision),
+    "github:wwbp/empathic_reactions": lambda entry, limit, revision: _load_empathic(limit),
+    "Eurolingua/truthfulqax": lambda entry, limit, revision: _load_truthful(limit, revision),
+    "zenodo:3609356 (ClaimBuster)": lambda entry, limit, revision: _load_claimbuster(limit),
+    "urchade/synthetic-pii-ner-mistral-v1": lambda entry, limit, revision: _load_pii_json(limit, revision),
     "Helsinki-NLP/tatoeba": _load_tatoeba,
-    "boun-tabi/nli_tr": lambda entry, limit: _load_nli_tr(limit),
-    "community-datasets/tapaco": lambda entry, limit: _load_tapaco(limit),
-    "dell-research-harvard/headlines-semantic-similarity": lambda entry, limit: _load_headlines(limit),
-    "Avature/Job-Title-Similarity": lambda entry, limit: _load_job_titles(limit),
-    "github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset (v0.2.3.csv; NOT tasksource/dynahate mirror tagged gpl)": lambda entry, limit: _load_dynahate(limit),
-    "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)": lambda entry, limit: _load_gahd(limit),
-    "theatticusproject/cuad-qa": lambda entry, limit: _load_cuad(limit),
-    "ddrg/super_eurlex": lambda entry, limit: _load_eurlex(limit),
-    "pfb30/multi_woz_v22 (github budzianowski/multiwoz)": lambda entry, limit: _load_multiwoz(limit),
-    "ConvLab/crosswoz (github thu-coai/CrossWOZ)": lambda entry, limit: _load_crosswoz(limit),
-    "github:HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)": lambda entry, limit: _load_bitod(limit),
-    "github:PolyAI-LDN/task-specific-datasets/nlupp": lambda entry, limit: _load_nlupp(limit),
-    "google-research-datasets/taskmaster1|2|3 (github Taskmaster TM-1..TM-4)": lambda entry, limit: _load_taskmaster(limit),
-    "Anthropic/hh-rlhf": lambda entry, limit: _load_hh_redteam(limit),
-    "nyu-mll/quality (github; mirror emozilla/quality)": lambda entry, limit: _load_quality(limit),
-    "WorkInTheDark/FairytaleQA": lambda entry, limit: _load_fairytale(limit),
-    "Horizon-Labs/multilingual-zeroshot-synthetic": lambda entry, limit: _load_horizon_emotion(limit),
-    "sociocom:naist-life-story": lambda entry, limit: _load_life_story(limit),
-    "agentlans/fact-or-opinion": lambda entry, limit: _load_fact_opinion(limit),
-    "hheiden/us-congress-bill-policy-115_117": lambda entry, limit: _load_congress(limit),
-    "nlp-waseda/e_gov": lambda entry, limit: _load_egov(limit),
-    "naeyn/nobody-pii-synth-de": lambda entry, limit: _load_nobody_pii(limit),
-    "Powpowpow23/ru-pii-ner-data": lambda entry, limit: _load_ru_pii(limit),
+    "boun-tabi/nli_tr": lambda entry, limit, revision: _load_nli_tr(limit, revision),
+    "community-datasets/tapaco": lambda entry, limit, revision: _load_tapaco(limit, revision),
+    "dell-research-harvard/headlines-semantic-similarity": lambda entry, limit, revision: _load_headlines(limit, revision),
+    "Avature/Job-Title-Similarity": lambda entry, limit, revision: _load_job_titles(limit, revision),
+    "github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset (v0.2.3.csv; NOT tasksource/dynahate mirror tagged gpl)": lambda entry, limit, revision: _load_dynahate(limit),
+    "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)": lambda entry, limit, revision: _load_gahd(limit),
+    "theatticusproject/cuad-qa": lambda entry, limit, revision: _load_cuad(limit, revision),
+    "ddrg/super_eurlex": lambda entry, limit, revision: _load_eurlex(limit, revision),
+    "pfb30/multi_woz_v22 (github budzianowski/multiwoz)": lambda entry, limit, revision: _load_multiwoz(limit, revision),
+    "ConvLab/crosswoz (github thu-coai/CrossWOZ)": lambda entry, limit, revision: _load_crosswoz(limit, revision),
+    "github:HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)": lambda entry, limit, revision: _load_bitod(limit, revision),
+    "github:PolyAI-LDN/task-specific-datasets/nlupp": lambda entry, limit, revision: _load_nlupp(limit),
+    "google-research-datasets/taskmaster1|2|3 (github Taskmaster TM-1..TM-4)": lambda entry, limit, revision: _load_taskmaster(limit),
+    "Anthropic/hh-rlhf": lambda entry, limit, revision: _load_hh_redteam(limit, revision),
+    "nyu-mll/quality (github; mirror emozilla/quality)": lambda entry, limit, revision: _load_quality(limit, revision),
+    "WorkInTheDark/FairytaleQA": lambda entry, limit, revision: _load_fairytale(limit, revision),
+    "Horizon-Labs/multilingual-zeroshot-synthetic": lambda entry, limit, revision: _load_horizon_emotion(limit, revision),
+    "sociocom:naist-life-story": lambda entry, limit, revision: _load_life_story(limit),
+    "agentlans/fact-or-opinion": lambda entry, limit, revision: _load_fact_opinion(limit, revision),
+    "hheiden/us-congress-bill-policy-115_117": lambda entry, limit, revision: _load_congress(limit, revision),
+    "nlp-waseda/e_gov": lambda entry, limit, revision: _load_egov(limit, revision),
+    "naeyn/nobody-pii-synth-de": lambda entry, limit, revision: _load_nobody_pii(limit, revision),
+    "Powpowpow23/ru-pii-ner-data": lambda entry, limit, revision: _load_ru_pii(limit, revision),
 }
 
 
@@ -1153,16 +1153,17 @@ def decode_class_labels(rows, names):
 _PARQUET_LISTING = {}
 
 
-def _parquet_listing(dataset_id):
-    if dataset_id not in _PARQUET_LISTING:
+def _parquet_listing(dataset_id, revision):
+    key = (dataset_id, revision)
+    if key not in _PARQUET_LISTING:
         from huggingface_hub import HfApi
-        files = HfApi().list_repo_files(dataset_id, repo_type="dataset", revision=PARQUET_REV)
-        _PARQUET_LISTING[dataset_id] = [f for f in files if f.endswith(".parquet")]
-    return _PARQUET_LISTING[dataset_id]
+        files = HfApi().list_repo_files(dataset_id, repo_type="dataset", revision=revision)
+        _PARQUET_LISTING[key] = [f for f in files if f.endswith(".parquet")]
+    return _PARQUET_LISTING[key]
 
 
-def _parquet_config(dataset_id, config):
-    dirs = sorted({f.split("/")[0] for f in _parquet_listing(dataset_id)})
+def _parquet_config(dataset_id, config, revision):
+    dirs = sorted({f.split("/")[0] for f in _parquet_listing(dataset_id, revision)})
     if config is not None:
         return config if config in dirs else None
     if "default" in dirs:
@@ -1170,35 +1171,37 @@ def _parquet_config(dataset_id, config):
     return dirs[0] if len(dirs) == 1 else None
 
 
-def _parquet_split_rows(dataset_id, config, split, limit):
+def _parquet_split_rows(dataset_id, config, split, limit, revision):
     """``limit`` rows spread evenly over the split (at most MAX_SHARDS shards, evenly spaced), so a
     split sorted by label still yields every label. ClassLabel ints are decoded to names."""
-    shards = sorted(f for f in _parquet_listing(dataset_id) if f.startswith("%s/%s/" % (config, split)))
+    shards = sorted(f for f in _parquet_listing(dataset_id, revision)
+                    if f.startswith("%s/%s/" % (config, split)))
     if len(shards) > MAX_SHARDS:
         step = len(shards) / float(MAX_SHARDS)
         shards = [shards[int(i * step)] for i in range(MAX_SHARDS)]
     per = max(1, limit // max(1, len(shards)))
     rows = []
     for shard in shards:
-        path = _hub(dataset_id, shard, PARQUET_REV)
+        path = _hub(dataset_id, shard, revision)
         rows.extend(decode_class_labels(sample_parquet(path, per), class_label_names(path)))
     return rows[:limit]
 
 
-def _load_hf_parquet(entry, limit, dataset_id, configs):
+def _load_hf_parquet(entry, limit, dataset_id, configs, revision):
     """Rows from the auto-converted parquet revision. Configs without a parquet conversion are skipped
     (as streaming skips configs that fail); returns None when none has one."""
-    names = [(config, _parquet_config(dataset_id, config)) for config in configs]
+    names = [(config, _parquet_config(dataset_id, config, revision)) for config in configs]
     names = [(config, name) for config, name in names if name is not None]
     if not names:
         return None
     rows = []
     per_config = max(1, limit // len(names))
     for config, name in names:
-        available = sorted({f.split("/")[1] for f in _parquet_listing(dataset_id) if f.startswith(name + "/")})
+        available = sorted({f.split("/")[1] for f in _parquet_listing(dataset_id, revision)
+                            if f.startswith(name + "/")})
         splits = _split_candidates(entry.get("split", "train"), available)
         for split in splits:
-            part = _parquet_split_rows(dataset_id, name, split, per_config)
+            part = _parquet_split_rows(dataset_id, name, split, per_config, revision)
             for record in part:
                 record.pop("audio", None)
                 record.setdefault("_v6_config", config or "default")
@@ -1206,7 +1209,7 @@ def _load_hf_parquet(entry, limit, dataset_id, configs):
     return rows[:limit]
 
 
-def _load_hf_streaming(entry, limit):
+def _load_hf_streaming(entry, limit, revision):
     """Ordinary Hub datasets that already ship data files, not a loading script. The parquet
     revision is read first (rows spread over the split); streaming the head of the split is the
     fallback, and it decodes ClassLabels from the dataset features."""
@@ -1224,7 +1227,7 @@ def _load_hf_streaming(entry, limit):
             configs = [config]
     fallback = None
     try:
-        rows = _load_hf_parquet(entry, limit, dataset_id, configs)
+        rows = _load_hf_parquet(entry, limit, dataset_id, configs, revision)
     except Exception as exc:  # listing or download failed: fall back to streaming
         rows = None
         fallback = "%s: %s" % (type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
@@ -1321,20 +1324,16 @@ def _postprocess(sid, rows):
 
 def load_rows(entry, limit):
     """Load at most ``limit`` rows. Returns ``(rows, warnings)``."""
-    global PARQUET_REV
     pinned = entry.get("pinned_commit")
-    if not pinned or pinned == "TODO":
+    if not isinstance(pinned, str) or re.fullmatch(r"[0-9a-fA-F]{40}", pinned) is None:
         raise RuntimeError("source has no pinned_commit")
-    # Workers load one source each, so binding the converted-parquet ref to the
-    # registry's resolved commit cannot leak across sources.
-    PARQUET_REV = pinned
     sid = entry["id"]
     if sid in _DISPATCH:
-        rows = _DISPATCH[sid](entry, limit)
+        rows = _DISPATCH[sid](entry, limit, pinned)
         if not rows:
             raise RuntimeError("loader returned no rows")
         return _postprocess(sid, rows), []
     if sid.startswith(("github:", "zenodo:")) or "|" in sid:
         raise RuntimeError("non-Hugging-Face source needs a pinned raw-file loader")
-    rows, warnings = _load_hf_streaming(entry, limit)
+    rows, warnings = _load_hf_streaming(entry, limit, pinned)
     return _postprocess(sid, rows), warnings

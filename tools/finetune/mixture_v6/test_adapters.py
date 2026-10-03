@@ -64,8 +64,10 @@ SPECIAL_FIXTURES = {
         {"text": "Clause A.", "question": "Q1", "subquestion": "<NONE>", "answer": "Yes"},
         {"text": "Clause B.", "question": "Q1", "subquestion": "<NONE>", "answer": "No"}],
     "Fumika/Wikinews-multilingual": [
-        {"title": "Vote held", "text": "A vote was held.", "categories": ["Politics and conflicts", "France"]},
-        {"title": "Cup final", "text": "The final was played.", "categories": ["Sports", "Germany"]}],
+        {"title": "Vote held", "text": "A vote was held.", "lang": "en",
+         "categories": ["Politics and conflicts", "France"]},
+        {"title": "Cup final", "text": "The final was played.", "lang": "en",
+         "categories": ["Sports", "Germany"]}],
     "Horizon-Labs/multilingual-zeroshot-synthetic": [
         {"text": "Finalmente consegui o emprego que eu queria!", "emotion": "pride", "_v6_lang": "pt"},
         {"text": "O metrô fechou de novo e ninguém avisou.", "emotion": "anger", "_v6_lang": "pt"}],

@@ -1148,7 +1148,7 @@
   "excluded_reason": null,
   "pinned_url": "https://zenodo.org/api/records/3609356/files/groundtruth.csv/content",
   "pinned_sha256": "64890c51e1092fec0d361ca770b3efccc0c889dd569b46b35922d94c44fa99ea",
-  "pinned_commit": "3609356",
+  "pinned_commit": "TODO",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": [
    "https://zenodo.org/api/records/3609356/files/groundtruth.csv/content"

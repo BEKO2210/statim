@@ -13,13 +13,19 @@ INPUT_RELATIVE_PATHS = (
     "tools/finetune/sources/v6-keep.json",
     "tools/finetune/licence_audit.json",
     "tools/finetune/source_policy.py",
+    "tools/finetune/check_sources.py",
     "tools/finetune/build_mixture.py",
     "tools/finetune/build_extra.py",
     "tools/finetune/build_v9.py",
     "tools/finetune/mixture_v6/build.py",
     "tools/finetune/mixture_v6/loaders.py",
     "tools/finetune/mixture_v6/registry.py",
+    "tools/finetune/mixture_v6/templates.py",
+    "tools/finetune/mixture_v6/languages.py",
+    "tools/finetune/mixture_v6/eval_texts.py",
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def file_sha256(path):
@@ -40,13 +46,22 @@ def validate_mixture_dev(path, requested):
     if not path:
         return
     mixture = Path(path)
-    names = [Path(str(mixture).replace(".jsonl.gz", ".manifest.json")),
-             Path(str(mixture) + ".manifest.json")]
+    stem = mixture.name.removesuffix(".jsonl.gz")
+    adjacent = [Path(str(mixture).replace(".jsonl.gz", ".manifest.json")),
+                Path(str(mixture) + ".manifest.json")]
+    documented = ROOT / "docs" / "reproductions" / (stem + ".manifest.json")
+    names = adjacent + [documented]
     for manifest_path in dict.fromkeys(names):
         if not manifest_path.exists():
             continue
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("version") == 9 and requested != manifest.get("dev_prefix_rows"):
+        if manifest_path == documented:
+            expected = manifest.get("output_sha256")
+            if not isinstance(expected, str) or not mixture.is_file() or file_sha256(mixture) != expected:
+                continue
+        if manifest.get("version") != 9:
+            continue
+        if requested != manifest.get("dev_prefix_rows"):
             raise ValueError("--mixture-dev must equal v9 manifest dev_prefix_rows (%s)" %
                              manifest.get("dev_prefix_rows"))
         return
@@ -75,7 +90,14 @@ def exclusion_matches(registry, source_id, config, exclusion):
             return False
     elif source_id != excluded_id:
         return False
-    return "config" not in exclusion or exclusion["config"] in config_tokens(config)
+    return ("config" not in exclusion or exclusion.get("configs_only") is not True or
+            exclusion["config"] in config_tokens(config))
+
+
+def audit_excludes_family(audit, family):
+    """Whether licence_audit's independent deny list rejects a v5 family."""
+    excluded = audit.get("exclude", {})
+    return isinstance(excluded, dict) and family in excluded
 
 
 def tasksource_family_matches(src, family, record):
@@ -117,7 +139,14 @@ def row_is_excluded(registry, source_id, config, row, policy):
                 registry, source_id, config, exclusion):
             continue
         for field, denied in exclusion.get("row_filter", {}).items():
+            if field not in row:
+                raise ValueError(f"row for {registry}:{source_id} lacks policy filter column {field!r}")
             values = denied if isinstance(denied, list) else [denied]
-            if row.get(field) in values:
+            actual = row[field]
+            if field in {"lang", "language"}:
+                actual = str(actual).strip().lower().replace("_", "-").split("-", 1)[0]
+                values = [str(value).strip().lower().replace("_", "-").split("-", 1)[0]
+                          for value in values]
+            if actual in values:
                 return True
     return False

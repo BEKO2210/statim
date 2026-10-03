@@ -9,23 +9,27 @@ arguments below. Do not run this script merely to test it: use the unit tests.
 from __future__ import annotations
 
 import collections
+import datetime
 import gzip
 import hashlib
 import io
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 try:
-    from .source_policy import (INPUT_RELATIVE_PATHS, exclusion_matches, input_hashes,
-                                row_is_excluded, tasksource_families, matching_tasksource_families)
+    from .source_policy import (INPUT_RELATIVE_PATHS, audit_excludes_family, exclusion_matches,
+                                input_hashes, row_is_excluded, tasksource_families,
+                                matching_tasksource_families)
 except ImportError:  # direct script execution
-    from source_policy import (INPUT_RELATIVE_PATHS, exclusion_matches, input_hashes,
-                               row_is_excluded, tasksource_families, matching_tasksource_families)
+    from source_policy import (INPUT_RELATIVE_PATHS, audit_excludes_family, exclusion_matches,
+                               input_hashes, row_is_excluded, tasksource_families,
+                               matching_tasksource_families)
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -39,14 +43,14 @@ SEED = 20260927
 # legacy manifest did not record one.
 V5_REVISION = "071f0cf2201f06b2dea3e55323aa3e264284e139"
 PARTS = {
-    "v6": DATA / "mixture-v6.jsonl.gz",
-    "v5": DATA / "mixture-v5.jsonl.gz",
-    "extra": DATA / "extra-v1.jsonl.gz",
+    "v6": DATA / "mixture-v9-part-v6.jsonl.gz",
+    "v5": DATA / "mixture-v9-part-v5.jsonl.gz",
+    "extra": DATA / "mixture-v9-part-extra.jsonl.gz",
 }
 PART_MANIFESTS = {
-    "v6": DATA / "mixture-v6.manifest.json",
-    "v5": DATA / "mixture-v5.manifest.json",
-    "extra": DATA / "extra-v1.jsonl.gz.manifest.json",
+    "v6": DATA / "mixture-v9-part-v6.manifest.json",
+    "v5": DATA / "mixture-v9-part-v5.manifest.json",
+    "extra": DATA / "mixture-v9-part-extra.jsonl.gz.manifest.json",
 }
 OUTPUT = DATA / "mixture-v9.jsonl.gz"
 MANIFEST = ROOT / "docs" / "reproductions" / "mixture-v9.manifest.json"
@@ -95,37 +99,36 @@ def fixed_commands():
 
 def ensure_parts(commands):
     expected_inputs = input_hashes(ROOT)
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for name in ("v6", "v5", "extra"):
         part, manifest = PARTS[name], PART_MANIFESTS[name]
-        if part.exists() != manifest.exists():
-            raise RuntimeError(f"{name}: part and manifest must either both exist or both be absent")
+        if (not part.name.startswith("mixture-v9-part-") or
+                not manifest.name.startswith("mixture-v9-part-")):
+            raise RuntimeError(f"{name}: refusing non-v9 part target: {part}, {manifest}")
         reusable = False
-        if part.exists():
+        if part.exists() and manifest.exists():
             try:
                 reusable = json.loads(manifest.read_text(encoding="utf-8")).get("inputs") == expected_inputs
             except (OSError, ValueError):
                 reusable = False
         if not reusable:
-            backups = []
-            targets = (part, manifest, Path(str(part) + ".provenance.jsonl.gz"))
+            targets = [part, manifest]
+            if name == "v6":
+                targets.append(part.with_name(part.name.removesuffix(".jsonl.gz") + ".report.md"))
+            elif name == "extra":
+                targets.append(Path(str(part) + ".provenance.jsonl.gz"))
             for old in targets:
                 if old.exists():
-                    backup = old.with_name(old.name + ".v9-stale")
+                    backup = old.with_name(old.name + ".stale-" + timestamp)
                     if backup.exists():
                         raise RuntimeError(f"refusing to replace existing stale-part backup: {backup}")
                     os.replace(old, backup)
-                    backups.append((old, backup))
             try:
                 subprocess.run(commands[name], cwd=ROOT, check=True)
             except BaseException:
                 for target in targets:
                     target.unlink(missing_ok=True)
-                for old, backup in reversed(backups):
-                    os.replace(backup, old)
                 raise
-            else:
-                for _, backup in backups:
-                    backup.unlink()
         if not part.is_file() or not manifest.is_file():
             raise RuntimeError(f"{name}: builder did not create its part and manifest")
     v6 = json.loads(PART_MANIFESTS["v6"].read_text(encoding="utf-8"))
@@ -154,7 +157,8 @@ class Resolver:
         self.audit = json.loads(Path(audit_path).read_text(encoding="utf-8"))
         self.v6_names = {f"v6/{e['id']}/{e.get('config') or 'default'}": e for e in self.v6
                          if e.get("use") is True}
-        self.v5 = tasksource_families(self.audit)
+        self.v5 = {family: record for family, record in tasksource_families(self.audit).items()
+                   if not audit_excludes_family(self.audit, family)}
         self.extra = {name: rec for name, rec in self.audit["direct_sources"].items()
                       if rec.get("use") is True}
         self.excluded = [x for x in self.policy["exclusions"] if x["scope"] == "source"]
@@ -215,7 +219,7 @@ def compose(head, manifests, out=None, manifest_path=None):
             if row_is_excluded(registry, sid, config, row, resolver.policy):
                 rows_excluded[f"{registry}:{sid}:{config or 'default'}"] += 1
                 continue
-            if registry == "v6" and record.get("pinned_commit") in (None, "TODO"):
+            if registry == "v6" and not re.fullmatch(r"[0-9a-fA-F]{40}", str(record.get("pinned_commit", ""))):
                 raise ValueError(f"unpinned v6 source: {row.get('src')}")
             key = (registry, sid, config)
             counts[key] += 1

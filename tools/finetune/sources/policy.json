@@ -34,74 +34,86 @@
   },
   "generators": [
     {
-      "model_pattern": "^Qwen/Qwen3-8B$",
+      "model": "Qwen/Qwen3-8B",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/Qwen",
       "allows_training": true
     },
     {
-      "model_pattern": "^Qwen/Qwen3-32B$",
+      "model": "Qwen/Qwen3-32B",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/Qwen",
       "allows_training": true
     },
     {
-      "model_pattern": "^mistralai/Mistral-7B-Instruct-v0\\.3$",
+      "model": "mistralai/Mistral-7B-Instruct-v0.3",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/mistralai",
       "allows_training": true
     },
     {
-      "model_pattern": "^mistralai/Mixtral-8x7B-Instruct-v0\\.1$",
+      "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/mistralai",
       "allows_training": true
     },
     {
-      "model_pattern": "^deepseek-ai/DeepSeek-R1$",
+      "model": "deepseek-ai/DeepSeek-R1",
       "licence_spdx": "MIT",
       "terms_url": "https://github.com/deepseek-ai",
       "allows_training": true
     },
     {
-      "model_pattern": "^deepseek-ai/DeepSeek-V3$",
+      "model": "deepseek-ai/DeepSeek-V3",
       "licence_spdx": "MIT",
       "terms_url": "https://github.com/deepseek-ai",
       "allows_training": true
     },
     {
-      "model_pattern": "^microsoft/phi-4$",
+      "model": "microsoft/phi-4",
       "licence_spdx": "MIT",
       "terms_url": "https://huggingface.co/microsoft",
       "allows_training": true
     },
     {
-      "model_pattern": "^microsoft/Phi-4-mini-instruct$",
+      "model": "microsoft/Phi-4-mini-instruct",
       "licence_spdx": "MIT",
       "terms_url": "https://huggingface.co/microsoft",
       "allows_training": true
     },
     {
-      "model_pattern": "^openai/gpt-oss-20b$",
+      "model": "openai/gpt-oss-20b",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/openai",
       "allows_training": true
     },
     {
-      "model_pattern": "^openai/gpt-oss-120b$",
+      "model": "openai/gpt-oss-120b",
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/openai",
       "allows_training": true
     },
     {
-      "model_pattern": "^openai-community/gpt2$",
+      "model": "openai-community/gpt2",
       "licence_spdx": "MIT",
       "terms_url": "https://huggingface.co/openai-community/gpt2",
       "allows_training": true
     },
     {
-      "model_pattern": "^Google Cloud Translation API$",
+      "model": "Google Cloud Translation API",
       "terms_url": "https://cloud.google.com/translate/terms",
+      "allows_training": true
+    },
+    {
+      "model": "Gemma-4-26B-A4B-it",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/datasets/amyrmahdy/decima-synthetic-decisions",
+      "allows_training": true
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/Qwen/Qwen3.8-27B",
       "allows_training": true
     }
   ],
@@ -509,6 +521,7 @@
       "registry": "v6",
       "id": "brighter-dataset/BRIGHTER-emotion-categories",
       "config": "hin",
+      "configs_only": true,
       "scope": "source",
       "reason_class": "model-output",
       "reason": "ChatGPT output",
@@ -518,6 +531,7 @@
       "registry": "v6",
       "id": "brighter-dataset/BRIGHTER-emotion-categories",
       "config": "mar",
+      "configs_only": true,
       "scope": "source",
       "reason_class": "model-output",
       "reason": "ChatGPT output",

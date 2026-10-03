@@ -13,10 +13,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 try:
-    from .source_policy import (config_tokens, exclusion_matches, tasksource_families,
+    from .source_policy import (audit_excludes_family, exclusion_matches, tasksource_families,
                                 tasksource_family_matches, file_sha256)
 except ImportError:  # direct script execution
-    from source_policy import (config_tokens, exclusion_matches, tasksource_families,
+    from source_policy import (audit_excludes_family, exclusion_matches, tasksource_families,
                                tasksource_family_matches, file_sha256)
 
 HERE = Path(__file__).resolve().parent
@@ -59,9 +59,11 @@ def generator_error(value, policy):
                 isinstance(item[k], str) and item[k].strip() for k in ("model", "role")):
             return "generator list entries must contain non-empty model and role"
         model = item["model"]
+        if model != model.strip() or any(char in model for char in "\r\n\t"):
+            return "generator model must not contain surrounding whitespace or control whitespace"
         if any(re.search(rule["model_pattern"], model, re.I) for rule in policy["denied_generators"]):
             return "denied generator: " + model
-        if not any(re.search(rule["model_pattern"], model, re.I) and rule.get("allows_training") is True
+        if not any(rule.get("model") == model and rule.get("allows_training") is True
                    for rule in policy["generators"]):
             return "unknown generator: " + model
     return None
@@ -151,6 +153,8 @@ def check(policy_path=DEFAULT_POLICY, v6_path=DEFAULT_V6, audit_path=DEFAULT_AUD
                 todos[registry] += 1
                 if not allow_todo:
                     errors.append(f"{label}: TODO pinned_commit")
+            elif not isinstance(pin, str) or re.fullmatch(r"[0-9a-fA-F]{40}", pin) is None:
+                errors.append(f"{label}: pinned_commit must be a 40-hex sha or TODO")
 
     registries = {"v5", "v6", "extra"}
     scopes = {"source", "rows"}
@@ -182,7 +186,7 @@ def check(policy_path=DEFAULT_POLICY, v6_path=DEFAULT_V6, audit_path=DEFAULT_AUD
             errors.append("rows-scoped exclusions are only valid for v6")
         matches = [(reg, sid, config, rec, use) for reg, sid, config, rec, use in all_records
                    if reg == exclusion.get("registry") and sid == exclusion.get("id") and
-                   ("config" not in exclusion or exclusion["config"] in config_tokens(config))]
+                   exclusion_matches(reg, sid, config, exclusion)]
         label = f"{exclusion['registry']}:{exclusion['id']}"
         if len(matches) != 1:
             errors.append(f"{label}: exclusion resolves to {len(matches)} records, expected exactly one")
@@ -195,6 +199,8 @@ def check(policy_path=DEFAULT_POLICY, v6_path=DEFAULT_V6, audit_path=DEFAULT_AUD
             errors.append(f"{label}: rows-scoped exclusion has no row_filter")
 
     for family, record in families.items():
+        if record.get("use") is True and audit_excludes_family(audit, family):
+            errors.append(f"v5:{family}: admitted family is present in licence_audit exclude")
         if record.get("use") is False and not any(
                 x.get("scope") == "source" and exclusion_matches("v5", family, None, x)
                 for x in policy["exclusions"]):
