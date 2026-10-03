@@ -1,0 +1,3 @@
+# Reviewed false positives (fingerprint = commit:file:rule:line). Each needs a reason.
+# docs/API.md prose "weak-key, unknown/empty/duplicate scope" in a commit of PR #108, reworded in the next commit.
+ecff5035aa050e943596e8442b5984d72a416d32:docs/API.md:generic-api-key:1013
