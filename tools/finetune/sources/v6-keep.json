@@ -21,7 +21,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "ai4bharat/IndicSentiment",
@@ -60,7 +60,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "community-datasets/re_dial",
@@ -85,7 +85,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "tanaos/synthetic-sentiment-analysis-dataset-v1",
@@ -127,7 +127,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "sutro/synthetic-product-reviews-20k",
@@ -217,7 +217,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "KhiredNetworks/synthetic-product-reviews",
@@ -242,7 +242,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "RichardSakaguchiMS/brazilian-customer-service-conversations",
@@ -327,7 +327,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "tasksource/it-support-tickets",
@@ -354,7 +354,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "tasksource/help-desk-tickets",
@@ -379,7 +379,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "PolyAI/minds14",
@@ -415,7 +415,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "BEE-spoke-data/consumer-finance-complaints",
@@ -439,7 +439,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "liri-uzh/cfpb-complaints-mini",
@@ -463,7 +463,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "vic35get/nhtsa_complaints_dataset",
@@ -487,7 +487,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "alaminxpro/university-students-complaints",
@@ -511,7 +511,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "hblim/customer-complaints",
@@ -608,7 +608,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "adiprog14/lingrow-support-tickets",
@@ -632,7 +632,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "brighter-dataset/BRIGHTER-emotion-categories",
@@ -764,7 +764,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "llm-for-emotion/Cultural-Emo",
@@ -792,7 +792,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "github:wwbp/empathic_reactions",
@@ -821,7 +821,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "SINAI/ALIA-es-discriminative-stance-detection",
@@ -865,7 +865,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "sweatSmile/sarcastic-dataset",
@@ -908,7 +908,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "GoktugD/turkish-formality-rewrite-500k",
@@ -933,7 +933,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "NagaYu/deference-keigo-corpus",
@@ -957,7 +957,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "ronantakizawa/japanese-honorifics",
@@ -1105,7 +1105,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "zenodo:3609356 (ClaimBuster)",
@@ -1134,7 +1134,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "nvidia/Nemotron-PII",
@@ -1158,7 +1158,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "gretelai/synthetic_pii_finance_multilingual",
@@ -1188,7 +1188,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "gretelai/gretel-pii-masking-en-v1",
@@ -1212,7 +1212,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Wismut/nym-pii-multilingual-data",
@@ -1306,7 +1306,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Helsinki-NLP/tatoeba",
@@ -1330,7 +1330,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "CohereLabs/aya_dataset",
@@ -1355,7 +1355,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "joelniklaus/german_argument_mining",
@@ -1379,7 +1379,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "nyu-mll/blimp",
@@ -1558,7 +1558,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "hkust-nlp/SynCSE-scratch-NLI",
@@ -1622,7 +1622,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "MoritzLaurer/synthetic_zeroshot_mixtral_v0.1",
@@ -1647,7 +1647,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "GoktugD/turkish-nli-constructed-1.5m",
@@ -1672,7 +1672,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "community-datasets/tapaco",
@@ -1709,7 +1709,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Helsinki-NLP/tatoeba",
@@ -1747,7 +1747,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "dell-research-harvard/headlines-semantic-similarity",
@@ -1771,7 +1771,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "tasksource/esci",
@@ -1799,7 +1799,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "napsternxg/wands",
@@ -1825,7 +1825,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Avature/Job-Title-Similarity",
@@ -1859,7 +1859,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "federetyk/MELO-Benchmark",
@@ -1909,7 +1909,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "stjiris/IRIS_sts",
@@ -1975,7 +1975,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)",
@@ -2004,7 +2004,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "mteb/toxic_conversations_50k",
@@ -2028,7 +2028,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "OpenAssistant/oasst2",
@@ -2063,7 +2063,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "PleIAs/ToxicCommons",
@@ -2112,7 +2112,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "nvidia/Aegis-AI-Content-Safety-Dataset-2.0",
@@ -2137,7 +2137,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "CohereForAI/aya_redteaming",
@@ -2168,7 +2168,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Anthropic/hh-rlhf",
@@ -2193,7 +2193,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "thu-coai/Safety-Prompts",
@@ -2401,7 +2401,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "DAMO-NLP-SG/MultiJail",
@@ -2499,7 +2499,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Dizzzy0x00/LLMGen-Phishing-Email-Dataset",
@@ -2633,7 +2633,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "3nesdeniz/turkish-conversation-prompt-injection",
@@ -2677,7 +2677,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Lakera/gandalf_ignore_instructions",
@@ -2738,7 +2738,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "theatticusproject/maud",
@@ -2764,7 +2764,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "nyu-mll/quality (github; mirror emozilla/quality)",
@@ -2809,7 +2809,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Fumika/Wikinews-multilingual",
@@ -2866,7 +2866,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "gfissore/arxiv-abstracts-2021",
@@ -2891,7 +2891,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "NortheasternUniversity/big_patent",
@@ -2916,7 +2916,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "ddrg/super_eurlex",
@@ -2963,7 +2963,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "joelniklaus/covid19_emergency_event",
@@ -2993,7 +2993,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "lyon-nlp/clustering-hal-s2s",
@@ -3055,7 +3055,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "github:PolyAI-LDN/task-specific-datasets/nlupp",
@@ -3080,7 +3080,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "uoe-nlp/multi3-nlu",
@@ -3107,7 +3107,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "google-research-datasets/taskmaster1|2|3 (github Taskmaster TM-1..TM-4)",
@@ -3136,7 +3136,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "pfb30/multi_woz_v22 (github budzianowski/multiwoz)",
@@ -3160,7 +3160,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "kchawla123/casino",
@@ -3184,7 +3184,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "ConvLab/crosswoz (github thu-coai/CrossWOZ)",
@@ -3208,7 +3208,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "github:HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)",
@@ -3233,7 +3233,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "OpenVoiceOS/hass-intent-templates",
@@ -3348,7 +3348,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "NABA-AI/LUB-Saudi-Arabic-Intent",
@@ -3425,7 +3425,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "GoktugD/turkish-intent-classification-1m",
@@ -3449,7 +3449,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "amyrmahdy/decima-synthetic-decisions",
@@ -3478,7 +3478,7 @@
   "provenance": "TODO",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Horizon-Labs/multilingual-zeroshot-synthetic",
@@ -3521,7 +3521,7 @@
   "licence_spdx": "Apache-2.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "sociocom:naist-life-story",
@@ -3560,7 +3560,7 @@
   "licence_spdx": "CC-BY-4.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "agentlans/fact-or-opinion",
@@ -3597,7 +3597,7 @@
   "licence_spdx": "ODC-By-1.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "hheiden/us-congress-bill-policy-115_117",
@@ -3626,7 +3626,7 @@
   "licence_spdx": "MIT",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "nlp-waseda/e_gov",
@@ -3653,7 +3653,7 @@
   "licence_spdx": "CC-BY-4.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "brighter-dataset/BRIGHTER-emotion-categories",
@@ -3766,7 +3766,7 @@
   "licence_spdx": "Apache-2.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "Powpowpow23/ru-pii-ner-data",
@@ -3795,7 +3795,7 @@
   "licence_spdx": "Apache-2.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
-  "checked": "2026-10-03"
+  "checked": "TODO"
  },
  {
   "id": "kakeith406/op-fed",
