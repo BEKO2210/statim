@@ -13,6 +13,11 @@ You may use the weights under **any one** of the following licences, whichever f
 | [PolyForm Free Trial 1.0.0](#polyform-free-trial-license-100) | Any company evaluating whether the weights suit a particular application, for fewer than 32 consecutive calendar days. |
 | Statim commercial licence | Every other commercial use. See [COMMERCIAL.md](COMMERCIAL.md). |
 
+> **Notice (2026-10-03).** statim-decide-en-large 0.5.0, statim-decide-multilingual-base 0.4.0 and
+> 0.7.0, and the adapters built on 0.7.0 are offered only under PolyForm Noncommercial 1.0.0, because
+> part of their training data is non-commercial, ShareAlike or under an unknown licence (see
+> [DATA_LICENSES.md](https://github.com/BEKO2210/statim/blob/main/DATA_LICENSES.md#licence-findings-2026-10-03)).
+
 The summaries above are for orientation only; the licence texts below, reproduced verbatim from
 <https://github.com/polyformproject/polyform-licenses>, are authoritative.
 
