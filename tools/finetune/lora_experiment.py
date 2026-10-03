@@ -153,6 +153,15 @@ def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0
 
     if realized(base_records) != realized(adapter_records):
         raise ValueError("base and adapter evaluations used different realized pool items")
+    scored = [r for r in base_records + adapter_records if "accuracy" in r and r.get("lang") != "macro"]
+    if any(r.get("strict") is not True for r in scored):
+        raise ValueError("a non-strict category evaluation is report-only and cannot promote an adapter")
+    for field in ("registry_sha256", "suite_definition_sha256"):
+        values = {r.get(field) for r in scored}
+        if None in values or len(values) != 1:
+            raise ValueError(f"base and adapter evaluations differ or lack {field}")
+    if gate.skipped_cells(base_records) != gate.skipped_cells(adapter_records):
+        raise ValueError("base and adapter evaluations skipped different category cells")
     base, base_reported = gate.heldout_cells(base_records)
     adapter, adapter_reported = gate.heldout_cells(adapter_records)
     base_items = base_items or str(base_jsonl).replace(".jsonl", "-items.jsonl")

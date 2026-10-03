@@ -12,6 +12,7 @@ Prompts and option order match the evaluation harnesses; head_max_len 512.
     .venv-train/bin/python tools/finetune/eval_dev.py models/laya-multilingual-banking77 models/laya-multilingual-multitask
 """
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -24,6 +25,14 @@ from prediction_items import write_prediction_rows  # noqa: E402
 
 SEED = 20260926
 EVAL_LANGS = ["de", "en", "fr", "es", "it", "tr", "pl", "ru", "ja", "zh-CN", "ar", "hi"]
+
+
+def suite_definition_sha256():
+    h = hashlib.sha256()
+    with open(__file__, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def suites(per_lang, n):
@@ -96,7 +105,8 @@ def main():
         if calib < 500:  # the model trained on part of these 500 Banking77 rows
             raise SystemExit(f"{m}: trained with --calib {calib} < 500, overlaps the Banking77 dev rows")
         agent = laya.load(os.path.abspath(m), device="cuda")
-        row, t0 = {"model": m, "n": {name: len(values[0]) for name, values in data.items()}}, time.time()
+        row, t0 = {"model": m, "n": {name: len(values[0]) for name, values in data.items()},
+                   "suite_definition_sha256": suite_definition_sha256()}, time.time()
         predictions = open(a.predictions, "w", encoding="utf-8") if a.predictions else None
         for name, (states, questions, keys, gold) in data.items():
             probs = []

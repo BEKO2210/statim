@@ -378,7 +378,8 @@ def test_gate_compare_reports_the_categories_family(tmp_path, capsys):
     base, other, bi, oi = {}, {}, {}, {}
     for suite in ("sentiment", "nli", "emotion", "intent"):
         key = "categories:%s/en" % suite
-        base[key], other[key] = {"acc": .8, "n": 150}, {"acc": .74, "n": 150}
+        base[key], other[key] = ({"acc": .8, "n": 150, "pool": "p", "pool_items_sha256": "h"},
+                                 {"acc": .74, "n": 150, "pool": "p", "pool_items_sha256": "h"})
         common = [{"suite": key, "lang": "en", "i": i, "item": "%064x" % i, "gold": 0}
                   for i in range(150)]
         bi[key] = [dict(r, pred=0 if r["i"] < 120 else 1) for r in common]
@@ -502,7 +503,7 @@ def test_incomplete_pool_is_not_cached(tmp_path, monkeypatch):
     assert failures and not cache.exists()
 
 
-@pytest.mark.parametrize("extra", [["--strict"], ["--adapter", "emotion"]])
+@pytest.mark.parametrize("extra", [[], ["--strict"], ["--adapter", "emotion"]])
 def test_strict_or_adapter_aborts_on_source_failure(monkeypatch, extra):
     monkeypatch.setattr(ec, "load_pool", lambda **unused: ([_item("x")], {"src": "HTTPError: 503"}))
     with pytest.raises(SystemExit, match="held-out pool is incomplete"):
@@ -526,7 +527,8 @@ def _gate_pair(tmp_path, pools):
     for name, acc, pool in (("champ", 0.80, pools[0]), ("chall", 0.60, pools[1])):
         d = tmp_path / name
         d.mkdir(parents=True)
-        heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool},
+        heldout = {"categories:nli/en": {"acc": acc, "n": 150, "pool": pool,
+                                           "pool_items_sha256": "same-items"},
                    # a trained suite that clearly improves: the gate also asks for one significant family gain
                    "test/banking77": {"acc": 0.80 if name == "champ" else 0.90, "n": 2000}}
         items = []
@@ -541,16 +543,18 @@ def _gate_pair(tmp_path, pools):
                 f.write(json.dumps(row) + "\n")
         json.dump({"validation": {"v": {"acc": 0.5 if name == "champ" else 0.6, "n": 100}},
                    "heldout": heldout,
+                   "gate_schema": 2, "strict": True, "definitions": gate.current_definitions(), "skipped": {},
+                   "suite_status": {script: {"status": "ok"} for script in gate.EVAL_SCRIPTS},
                    "eval_items_sha256": gate.sha256_file(item_path)}, open(d / "eval.json", "w"))
         dirs.append(str(d))
     return dirs
 
 
-def test_gate_compares_category_cells_only_on_the_same_pool(tmp_path, capsys):
-    assert gate.compare(*_gate_pair(tmp_path / "different", ("p1", "p2"))) is True  # the 20-point drop is on a different pool
-    assert "1 cells not compared" in capsys.readouterr().out
-    # The same drop on the same pool is compared and blocks the promotion.
+def test_gate_fails_closed_on_different_category_pool(tmp_path, capsys):
+    assert gate.compare(*_gate_pair(tmp_path / "different", ("p1", "p2"))) is False
+    out = capsys.readouterr().out
+    assert "item-pool mismatch: categories:nli/en" in out and "VERDICT: BLOCKED" in out
+    # The same drop on the same pool is compared and blocks on the capability regression.
     assert gate.compare(*_gate_pair(tmp_path / "same", ("p1", "p1"))) is False
     out = capsys.readouterr().out
-    assert "cells not compared" not in out
-    assert "categories:nli/en" in out
+    assert "categories:nli/en" in out and "VERDICT: BLOCKED (held-out regression)" in out

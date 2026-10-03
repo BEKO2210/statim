@@ -15,6 +15,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ### Changed
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
+- The model promotion gate now fails closed on incomplete/failed suites, unequal suite or item
+  pools, and registry/suite-definition hash mismatches; strict evaluation is the default and
+  `--no-strict` is report-only. Paired outcomes are pooled into capability-level exact McNemar
+  tests with Holm correction and a configurable 2-point drop tolerance (Holm-significant per-cell
+  losses and the family two-standard-error screen still block as well), validation uses the lower
+  bound of a paired 95% interval for the mean of suite deltas, skipped category cells are recorded
+  and must match, and the power report marks capabilities below 600 items.
 
 ### Added
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
