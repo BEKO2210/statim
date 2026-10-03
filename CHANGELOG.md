@@ -23,6 +23,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   0.7.0 scores 0.565 (Lev 0.635, Jev 0.766). The claim of leading on civil_comments is withdrawn.
 
 ### Changed
+- A grounded synthetic-data pilot can generate licence-traceable urgency and eight-language NLI
+  items from pinned BillSum, GovReport and EUR-Lex-Sum training text. Qwen3-8B generation must
+  agree with blind Phi-4-mini verification; exact eight-word held-out overlap is rejected, and the
+  runner records per-item provenance, supports parallel Ollama requests and emits review samples.
 - The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
   browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
 - Release binaries are built in the manylinux_2_28 container (AlmaLinux 8, GCC 13) and run on

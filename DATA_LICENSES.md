@@ -72,6 +72,21 @@ A source enters a mixture only if all three hold:
 Sources that cannot be verified are left out, and so are outputs of OpenAI and Gemini models, of
 Llama, Gemma (up to version 3) and other models under restrictive terms.
 
+### Grounded synthetic pilot inputs
+
+These sources are inputs to the urgency/NLI pilot, not to released weights. The loader reads only
+the named training split at the immutable revision and stores downloads outside `data/`.
+
+| Source | Revision and licence evidence | Text used |
+|---|---|---|
+| FiscalNote/billsum | [`3d8510441c06a3d9dfb32eb0d7f80151730bcc4f`, CC0-1.0](https://huggingface.co/datasets/FiscalNote/billsum/blob/3d8510441c06a3d9dfb32eb0d7f80151730bcc4f/README.md) | US bills, `train` only; `ca_test` is never read |
+| launch/gov_report | [`32feeaede49fed993aef070bc4da09263fd0429a`, CC-BY-4.0](https://huggingface.co/datasets/launch/gov_report/blob/32feeaede49fed993aef070bc4da09263fd0429a/README.md) | GAO and CRS reports, `gao_train` and `crs_train` only |
+| dennlinger/eur-lex-sum | [`33ecb2d630298e3f912d067aaaa71aaf4ee92404`, CC-BY-4.0](https://huggingface.co/datasets/dennlinger/eur-lex-sum/blob/33ecb2d630298e3f912d067aaaa71aaf4ee92404/README.md) | EU legal acts, language-specific `train` files only |
+
+Qwen/Qwen3-8B (Apache-2.0) writes each item and microsoft/Phi-4-mini-instruct (MIT)
+independently labels it. Only matching labels survive. The item-keyed provenance sidecars retain
+both model identities and Ollama digests, the source revision and passage hash, and prompt version.
+
 ## Base models
 
 | Model | Licence |
@@ -526,4 +541,3 @@ Their recorded tags looked permissive, but the origin of the text or labels is n
 | `wouldyourather` | scraped 'would you rather' site questions + vote counts; CC0 tag unverified |
 
 Research checkpoints trained before this policy (the Banking77 v1/v3 and multi-task runs documented in the README) used some of the data above and are not released.
-
