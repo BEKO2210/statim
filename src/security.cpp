@@ -103,12 +103,26 @@ std::string trim(std::string s) {
     if (first == std::string::npos) return {};
     return s.substr(first, s.find_last_not_of(" \t\r\n") - first + 1);
 }
-void add_key(std::vector<std::string>& keys, std::string key, const std::string& source) {
+// The same key twice (say, once per scope) would make its scopes depend on which line matched last.
+void reject_duplicate_key(const std::vector<ApiKey>& keys, const std::string& key, const std::string& source) {
+    for (const auto& k : keys)
+        if (k.key == key) throw ApiKeyConfigError("API key from " + source + " is listed twice; put all its scopes on one line");
+}
+void add_key(std::vector<ApiKey>& keys, std::string key, const std::string& source) {
     key = trim(std::move(key));
     if (key.empty()) return;
     validate_api_key(key, source);
-    keys.push_back(std::move(key));
+    reject_duplicate_key(keys, key, source);
+    keys.emplace_back(std::move(key));
 }
+}
+ApiKey::ApiKey(std::string value, uint8_t scope_mask) : key(std::move(value)), scopes(scope_mask) {
+    Sha256 hash;
+    hash.update(key.data(), key.size());
+    id = hash.hex().substr(0, 8);
+}
+bool key_has_scope(const ApiKey& key, ApiScope scope) {
+    return (key.scopes & static_cast<uint8_t>(scope)) != 0;
 }
 void validate_api_key(const std::string& key, const std::string& source) {
     if (key.size() < 32)
@@ -253,23 +267,55 @@ void check_work(const ojson& qs, size_t states, const HParams& h, const DecideOp
     if (states && response_per_state > limits.max_response_bytes / states)
         throw HttpError(413, "request exceeds response byte budget");
 }
-std::vector<std::string> load_key_file(const std::string& path) {
+std::vector<ApiKey> load_key_file(const std::string& path) {
     std::ifstream f(path);
     if (!f) throw ApiKeyConfigError("cannot open configured API key file: " + path);
-    std::vector<std::string> keys;
+    std::vector<ApiKey> keys;
     std::string line;
     size_t line_number = 0;
     while (std::getline(f, line)) {
         ++line_number;
-        line = trim(std::move(line));
-        if (!line.empty() && line.front() != '#')
-            add_key(keys, std::move(line), path + ":" + std::to_string(line_number));
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const size_t first = line.find_first_not_of(" \t");
+        if (first == std::string::npos) continue;
+        line.erase(0, first);
+        if (line.front() == '#') continue;
+        const std::string source = path + ":" + std::to_string(line_number);
+        const size_t split = line.find_first_of(" \t");
+        if (split == std::string::npos) {
+            add_key(keys, std::move(line), source);
+            continue;
+        }
+        const std::string key = line.substr(0, split);
+        const std::string scope_list = trim(line.substr(split + 1));
+        validate_api_key(key, source);
+        if (scope_list.empty())
+            throw ApiKeyConfigError("API key scope list from " + source + " is empty");
+        if (scope_list.find_first_of(" \t") != std::string::npos)
+            throw ApiKeyConfigError("API key entry from " + source + " has extra fields");
+        uint8_t scopes = 0;
+        size_t begin = 0;
+        while (begin <= scope_list.size()) {
+            const size_t comma = scope_list.find(',', begin);
+            const std::string name = scope_list.substr(begin, comma == std::string::npos ? std::string::npos : comma - begin);
+            uint8_t bit = 0;
+            if (name == "inference") bit = static_cast<uint8_t>(ApiScope::inference);
+            else if (name == "metrics") bit = static_cast<uint8_t>(ApiScope::metrics);
+            else if (name.empty()) throw ApiKeyConfigError("API key scope list from " + source + " is empty");
+            else throw ApiKeyConfigError("unknown API key scope '" + name + "' in " + source);
+            if (scopes & bit) throw ApiKeyConfigError("duplicate API key scope '" + name + "' in " + source);
+            scopes |= bit;
+            if (comma == std::string::npos) break;
+            begin = comma + 1;
+        }
+        reject_duplicate_key(keys, key, source);
+        keys.emplace_back(key, scopes);
     }
     if (f.bad() || keys.empty()) throw ApiKeyConfigError("configured API key file contains no valid keys or cannot be read: " + path);
     return keys;
 }
-std::vector<std::string> load_key_env(const std::string& value) {
-    std::vector<std::string> keys;
+std::vector<ApiKey> load_key_env(const std::string& value) {
+    std::vector<ApiKey> keys;
     std::istringstream in(value);
     std::string key;
     while (std::getline(in, key, ',')) add_key(keys, std::move(key), "STATIM_API_KEY");

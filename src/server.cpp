@@ -551,7 +551,7 @@ int run_server(const ServerConfig& cfg) {
     }
 
     const bool any_adapters = !cfg.adapters.empty();
-    std::vector<std::string> api_keys = cfg.api_keys;
+    std::vector<ApiKey> api_keys = cfg.api_keys;
     std::atomic<int> in_flight{0};
     std::atomic<uint64_t> req_total{0}, req_errors{0}, tokens_total{0}, rejected_busy{0};
     std::mutex status_mu;
@@ -578,7 +578,12 @@ int run_server(const ServerConfig& cfg) {
         res.status = status;
         res.set_content(body.dump(), "application/json");
     };
-    auto authorized = [&](const httplib::Request& req) { return bearer_authorized(req, api_keys); };
+    auto authorized = [&](const httplib::Request& req, ApiScope scope) {
+        if (api_keys.empty()) return 0;
+        const ApiKey* key = authenticated_key(req, api_keys);
+        if (!key) return 401;
+        return key_has_scope(*key, scope) ? 0 : 403;
+    };
     configure_http_security(srv, api_keys);
     auto by_name = [&](const std::string& n) -> LoadedModel* {
         for (auto& m : models)
@@ -684,8 +689,11 @@ int run_server(const ServerConfig& cfg) {
                 if (held) --n;
             }
         } guard{in_flight};
+        const ApiKey* request_key = api_keys.empty() ? nullptr : authenticated_key(req, api_keys);
         try {
-            if (!authorized(req)) throw HttpError{401, "invalid or missing bearer token"};
+            const int auth_status = authorized(req, ApiScope::inference);
+            if (auth_status == 401) throw HttpError{401, "invalid or missing bearer token"};
+            if (auth_status == 403) throw HttpError{403, "API key lacks the 'inference' scope"};
             if (in_flight.fetch_add(1) >= cfg.max_concurrent) {
                 --in_flight;
                 rejected_busy++;
@@ -840,10 +848,13 @@ int run_server(const ServerConfig& cfg) {
             if (status == 200 && !adapter_routing.empty())
                 adapter_request_counts.at({model_name, adapter_name, adapter_routing})++;
         }
-        if (cfg.access_log)
-            std::fprintf(stdout, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "request"},
+        if (cfg.access_log) {
+            ojson record{{"ts", now_iso8601()}, {"level", "info"}, {"event", "request"},
                 {"request_id", rid}, {"path", req.path}, {"status", status}, {"model", model_name}, {"adapter", adapter_name}, {"tokens", n_tokens},
-                {"ms", ms}, {"remote", req.remote_addr}}.dump().c_str());
+                {"ms", ms}, {"remote", req.remote_addr}};
+            if (request_key) record["key_id"] = request_key->id;
+            std::fprintf(stdout, "%s\n", record.dump().c_str());
+        }
         std::fflush(stdout);
     };
 
@@ -869,7 +880,9 @@ int run_server(const ServerConfig& cfg) {
         send_json(res, ready ? 200 : 503, {{"ready", ready}});
     });
     srv.Get("/v1/models", [&](const httplib::Request& req, httplib::Response& res) {
-        if (!authorized(req)) return send_json(res, 401, {{"detail", "invalid or missing bearer token"}});
+        const int auth_status = authorized(req, ApiScope::inference);
+        if (auth_status == 401) return send_json(res, 401, {{"detail", "invalid or missing bearer token"}});
+        if (auth_status == 403) return send_json(res, 403, {{"detail", "API key lacks the 'inference' scope"}});
         ojson data = ojson::array();
         for (auto& m : models) {
             const HParams& h = m.model->hparams();
@@ -890,7 +903,9 @@ int run_server(const ServerConfig& cfg) {
         send_json(res, 200, {{"object", "list"}, {"data", data}});
     });
     srv.Get("/metrics", [&](const httplib::Request& req, httplib::Response& res) {
-        if (!authorized(req)) return send_json(res, 401, {{"detail", "invalid or missing bearer token"}});
+        const int auth_status = authorized(req, ApiScope::metrics);
+        if (auth_status == 401) return send_json(res, 401, {{"detail", "invalid or missing bearer token"}});
+        if (auth_status == 403) return send_json(res, 403, {{"detail", "API key lacks the 'metrics' scope"}});
         std::ostringstream o;
         o << "# HELP statim_requests_total Inference requests by HTTP status.\n# TYPE statim_requests_total counter\n";
         {
@@ -960,8 +975,16 @@ int run_server(const ServerConfig& cfg) {
 
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
+    ojson key_ids = ojson::array();
+    for (const auto& key : api_keys) {
+        ojson scopes = ojson::array();
+        if (key_has_scope(key, ApiScope::inference)) scopes.push_back("inference");
+        if (key_has_scope(key, ApiScope::metrics)) scopes.push_back("metrics");
+        key_ids.push_back({{"id", key.id}, {"scopes", scopes}});
+    }
     std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "info"}, {"event", "listening"},
-        {"host", cfg.host}, {"port", cfg.port}, {"auth", !api_keys.empty()}, {"auth_status", api_keys.empty() ? "off" : "on"}}.dump().c_str());
+        {"host", cfg.host}, {"port", cfg.port}, {"auth", !api_keys.empty()}, {"auth_status", api_keys.empty() ? "off" : "on"},
+        {"keys", api_keys.size()}, {"key_ids", key_ids}}.dump().c_str());
     if (api_keys.empty() && !is_loopback_host(cfg.host))
         std::fprintf(stderr, "%s\n", ojson{{"ts", now_iso8601()}, {"level", "warn"}, {"event", "auth_off_on_network"},
             {"host", cfg.host}, {"detail", "listening beyond loopback without API keys: every endpoint is open; "

@@ -240,7 +240,7 @@ document with the frozen contract using `python3 tools/docs/api_contract.py --ch
 `api_contract` test also sends every paired request/response example to a real CPU server and
 validates all response examples against their JSON Schema 2020-12 schemas.
 
-With no API keys configured, the bearer check is skipped and every path is open. `GET /health`, `GET /ready`, and `GET /` never require a key. When authentication is configured, `/metrics` and `/v1/models` return 401 unless the request has a configured bearer key.
+With no API keys configured, the bearer check is skipped and every path is open. `GET /health`, `GET /ready`, and `GET /` never require a key. When authentication is configured, the decision routes, `/metrics`, and `/v1/models` return 401 unless the request has a configured bearer key, or 403 when that key lacks the route's scope.
 
 ## Decision request
 
@@ -1008,9 +1008,9 @@ for flag in (False, True):
 
 ## Authentication
 
-Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line). Comma-separated values and file lines are trimmed and blank values are skipped; in files, trimmed lines beginning with `#` are also skipped. Every key must contain 32–4096 printable ASCII characters and no whitespace. Generate a key with `openssl rand -hex 32`.
+Set keys with `STATIM_API_KEY` (comma-separated) or `--api-key-file` (one key per line). Environment keys always have all scopes. A key-file line is `<key>`, `<key> inference`, `<key> metrics`, or `<key> inference,metrics`; an unscoped line retains today's all-scope behavior. `inference` permits `POST /v1/systemone`, `POST /v1/systemone/batch`, and `GET /v1/models`; `metrics` permits `GET /metrics`. Blank lines and trimmed lines beginning with `#` are skipped. Every key must contain 32–4096 printable ASCII characters and no whitespace. Generate a key with `openssl rand -hex 32`.
 
-Authentication is fail-closed per configured source. If `STATIM_API_KEY` is present but empty, contains no valid key, or contains a key shorter than 32 characters, startup aborts. Each `--api-key-file` must be readable and contain at least one valid key; a missing, unreadable, empty, comment-only, or weak-key file aborts startup even if another source supplied a valid key. Key errors name `STATIM_API_KEY` or the file and line, but never include key bytes. With neither source configured, startup is allowed only on `localhost`, `::1`, or an IPv4 address in `127.0.0.0/8`. Other hosts, including `0.0.0.0`, `::`, LAN addresses, and hostnames, exit with status 2 before model loading. `--allow-unauthenticated` explicitly permits an unauthenticated non-loopback listener and retains the `auth_off_on_network` warning and `"auth":false,"auth_status":"off"` listening log.
+Authentication is fail-closed per configured source. If `STATIM_API_KEY` is present but empty, contains no valid key, or contains a key shorter than 32 characters, startup aborts. Each `--api-key-file` must be readable and contain at least one valid key; a missing, unreadable, empty or comment-only file, a key that is too short, an unknown, empty or repeated scope, or an entry with an extra field aborts startup even if another source supplied a valid key. Key errors name `STATIM_API_KEY` or the file and line, but never include key bytes. With neither source configured, startup is allowed only on `localhost`, `::1`, or an IPv4 address in `127.0.0.0/8`. Other hosts, including `0.0.0.0`, `::`, LAN addresses, and hostnames, exit with status 2 before model loading. `--allow-unauthenticated` explicitly permits an unauthenticated non-loopback listener and retains the `auth_off_on_network` warning and `"auth":false,"auth_status":"off"` listening log.
 
 The client sends `Authorization: Bearer <key>`. The comparison is constant-time over the full header. A missing header, a wrong scheme, or a wrong key is:
 
@@ -1019,6 +1019,16 @@ The client sends `Authorization: Bearer <key>`. The comparison is constant-time 
 ```
 
 That response is HTTP 401. It is produced before the route handler and therefore has no `X-Request-Id`.
+
+A valid key without the route's scope gets HTTP 403, also before the route handler:
+
+```json
+{"detail":"API key lacks the 'metrics' scope"}
+```
+
+The `inference` variant has the same shape. Unknown paths retain the existing rule: no valid key gets 401 and a valid key reaches route lookup and gets 404.
+
+Each key has a non-secret identifier: the first eight lowercase hexadecimal characters of its SHA-256. Authenticated inference access-log records include it as `key_id`; unauthenticated requests and auth-off servers do not. The `listening` event records `keys` and `key_ids`, whose entries contain only the id and scope names. Raw keys are never logged.
 
 The check covers both decision endpoints, `GET /metrics`, and `GET /v1/models`. `GET /health`, `GET /ready`, and `GET /` remain public. Exactly one `Authorization` header is required when auth is on.
 
@@ -1039,6 +1049,7 @@ Handler errors are JSON objects with one string field, `detail`. HTTP framing, d
 | 400 | `state` is missing or null | `{"detail":"'state' is required"}` |
 | 400 | batch request has no `states` array | `{"detail":"request body must contain a 'states' array"}` |
 | 401 | a key is configured and `Authorization` does not match `Bearer <key>` | `{"detail":"invalid or missing bearer token"}` |
+| 403 | a valid key lacks the route's `inference` or `metrics` scope | `{"detail":"API key lacks the 'inference' scope"}` or the `metrics` variant |
 | 413 | body is larger than 2 MiB | `{"detail":"request body exceeds 2 MiB"}` for a declared oversize body; `{"detail":"request body incomplete or exceeds limit"}` when streaming crosses the limit |
 | 413 | JSON nesting exceeds `--max-json-depth` (default 64; hard maximum 128) | `{"detail":"JSON nesting too deep"}` |
 | 413 | JSON nodes exceed `--max-json-nodes` (default 100,000) | `{"detail":"too many JSON nodes"}` |
