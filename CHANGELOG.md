@@ -27,6 +27,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   reference on the same CPU under a pre-registered protocol. Level with Statim on one thread for short
   inputs, 1.10-1.56x slower otherwise, 5.0 s to the first answer and 2.65 GiB peak memory;
   `bench/laya_compare.py` measures it.
+- An animated comparison chart in the README and on the site (`assets/readme/compare.svg`, written by
+  `tools/readme/compare_svg.py`, checked in CI): speed, start-up and memory against ONNX Runtime and
+  the Laya PyTorch reference measured in one session (`bench/results/same-session/`), and S1Bench
+  against Lev and Jev, including where Statim is behind.
 
 ## [0.9.5] - 2026-10-03
 

@@ -41,6 +41,8 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 ## At a glance
 
+<p align="center"><img src="assets/readme/compare.svg" width="600" alt="Statim against ONNX Runtime and the Laya PyTorch reference on one CPU (speed, start-up, memory) and against Lev and Jev on S1Bench. Statim is fastest on long inputs, starts in 0.45 s and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.651, Lev 0.689 and Jev 0.761."></p>
+
 | Measure | **Statim Decide Multilingual 0.7.0**, trained | **Qwen3-8B**, zero-shot |
 |---|---:|---:|
 | 14-category macro accuracy | **0.748** | 0.706 |
