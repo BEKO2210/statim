@@ -7,6 +7,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
+  browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
+
 ### Added
 - API key files support `inference` and `metrics` scopes. Valid keys without the required scope get
   HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
@@ -22,8 +26,6 @@ Every decision of the engine is unchanged.
 ### Changed
 - Releases publish only after the CUDA and Vulkan parity gates pass on the self-hosted GPU runner
   for the tagged commit: `release.yml` calls the `gpu` workflow (READINESS P1 #43).
-- The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
-  browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
 
 ### Fixed
 - The Hugging Face Space served Statim Decide Multilingual Base **0.4.0** since it was created: its
