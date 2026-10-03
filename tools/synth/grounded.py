@@ -152,7 +152,8 @@ def _contains_label(text, task, lang):
     return bool(words & label_words)
 
 
-def _generate_job(task, passage_row, target, generator, verifier, temperature, model_meta, guard):
+def _generate_candidates(task, passage_row, target, generator, temperature):
+    """Phase 1 (generator only): checked candidate texts for one seed passage."""
     passage, lang, source_id, revision = passage_row
     seed = int(hashlib.sha256((task + source_id + passage + str(target)).encode()).hexdigest()[:8], 16)
     metrics = collections.Counter()
@@ -173,7 +174,7 @@ def _generate_job(task, passage_row, target, generator, verifier, temperature, m
         if sorted(labels) != sorted(NLI_LABELS):
             return [], {**dict(metrics), "bad_generation": 1}
         raw.extend((row["label"], str(row.get("hypothesis") or "").strip()) for row in rows)
-    accepted = []
+    candidates = []
     for label, text in raw:
         limits = (8, 120) if task == "urgency" else (3, 80)
         if not limits[0] <= word_count(text) <= limits[1] or not language_ok(text, lang):
@@ -185,30 +186,51 @@ def _generate_job(task, passage_row, target, generator, verifier, temperature, m
         if grams(text) & grams(passage):
             metrics["seed_copy"] += 1
             continue
-        blind = {"request": text} if task == "urgency" else {"premise": passage, "hypothesis": text}
-        metrics["verify_called"] += 1
-        answer_obj = _request_json(verifier, verification_request(task, blind, lang), 0,
-                                   seed ^ 0x5A5A5A5A, metrics, "verify")
-        if answer_obj is None:
-            metrics["verify_error"] += 1
-            continue
-        answer = answer_obj.get("answer")
-        if answer != label:
-            metrics["verify_disagree"] += 1
-            continue
-        metrics["verify_agree"] += 1
-        base = _base_item(task, lang, label, passage, text)
-        passage_hash = sha256_text(passage)
-        ident = canonical_id({"item": base, "source_id": source_id,
-                              "passage_sha256": passage_hash, "target": label})
-        item = dict(base, id=ident, src=source_id, passage_sha256=passage_hash)
-        if guard.overlap(item):
-            metrics["leakage_reject"] += 1
-            continue
-        verify = {"answer": answer, "agree": True}
-        provenance = _provenance(ident, task, lang, label, passage, source_id, revision,
-                                 model_meta, verify)
-        accepted.append({"id": ident, "item": item, "provenance": provenance})
+        candidates.append({"task": task, "label": label, "text": text, "passage_row": passage_row,
+                           "seed": seed})
+    return candidates, dict(metrics)
+
+
+def _verify_candidate(candidate, verifier, model_meta, guard):
+    """Phase 2 (verifier only): a blind check, then the leakage guard."""
+    task, label, text, seed = candidate["task"], candidate["label"], candidate["text"], candidate["seed"]
+    passage, lang, source_id, revision = candidate["passage_row"]
+    metrics = collections.Counter()
+    blind = {"request": text} if task == "urgency" else {"premise": passage, "hypothesis": text}
+    metrics["verify_called"] += 1
+    answer_obj = _request_json(verifier, verification_request(task, blind, lang), 0,
+                               seed ^ 0x5A5A5A5A, metrics, "verify")
+    if answer_obj is None:
+        metrics["verify_error"] += 1
+        return None, dict(metrics)
+    answer = answer_obj.get("answer")
+    if answer != label:
+        metrics["verify_disagree"] += 1
+        return None, dict(metrics)
+    metrics["verify_agree"] += 1
+    base = _base_item(task, lang, label, passage, text)
+    passage_hash = sha256_text(passage)
+    ident = canonical_id({"item": base, "source_id": source_id,
+                          "passage_sha256": passage_hash, "target": label})
+    item = dict(base, id=ident, src=source_id, passage_sha256=passage_hash)
+    if guard.overlap(item):
+        metrics["leakage_reject"] += 1
+        return None, dict(metrics)
+    verify = {"answer": answer, "agree": True}
+    provenance = _provenance(ident, task, lang, label, passage, source_id, revision,
+                             model_meta, verify)
+    return {"id": ident, "item": item, "provenance": provenance}, dict(metrics)
+
+
+def _generate_job(task, passage_row, target, generator, verifier, temperature, model_meta, guard):
+    candidates, metrics = _generate_candidates(task, passage_row, target, generator, temperature)
+    metrics = collections.Counter(metrics)
+    accepted = []
+    for candidate in candidates:
+        row, more = _verify_candidate(candidate, verifier, model_meta, guard)
+        metrics.update(more)
+        if row is not None:
+            accepted.append(row)
     return accepted, dict(metrics)
 
 
@@ -232,7 +254,10 @@ def _passages(cache, per_language):
 
 
 def _run_task(task, total, passages, generator, verifier, concurrency, temperature, model_meta,
-              guard, max_jobs, initial=None, on_accept=None):
+              guard, max_jobs, initial=None, on_accept=None, phased_batch=0):
+    """With ``phased_batch`` > 0, each batch of that many seed jobs is generated first and verified
+    afterwards, so a GPU too small for both models (8 GB) swaps models twice per batch instead of
+    on every request."""
     labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
     quota = _quota(total, PILOT_LANGUAGES, labels)
     kept = list(initial or [])
@@ -254,12 +279,25 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
             positions[lang] += 1
             target = need[0] if task == "urgency" else None
             batch.append((task, passage, target, generator, verifier, temperature, model_meta, guard))
-            if len(batch) >= concurrency * 2:
+            if len(batch) >= (phased_batch or concurrency * 2):
                 break
         if not batch:
             break
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            results = list(pool.map(lambda args: _generate_job(*args), batch))
+            if phased_batch:
+                generated = list(pool.map(
+                    lambda args: _generate_candidates(args[0], args[1], args[2], args[3], args[5]), batch))
+                flat = [c for candidates, _ in generated for c in candidates]
+                verified = list(pool.map(
+                    lambda c: _verify_candidate(c, verifier, model_meta, guard), flat))
+                gen_metrics = collections.Counter()
+                for _, m in generated:
+                    gen_metrics.update(m)
+                results = [([row for row, _ in verified if row is not None], dict(gen_metrics))]
+                for _, m in verified:
+                    results.append(([], m))
+            else:
+                results = list(pool.map(lambda args: _generate_job(*args), batch))
         jobs += len(batch)
         for candidates, job_metrics in results:
             reasons.update(job_metrics)
@@ -340,7 +378,8 @@ def write_samples(path, by_task, n, seed):
 
 def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, concurrency=4,
               seed=20261003, temperature=0.4, max_jobs_factor=12, passages=None,
-              generator_meta=None, verifier_meta=None, resume=False):
+              generator_meta=None, verifier_meta=None, resume=False, tasks=("urgency", "nli"),
+              phased_batch=0):
     out_dir = Path(out_dir)
     if out_dir.exists() and not resume:
         raise FileExistsError("refusing existing output directory without --resume: %s" % out_dir)
@@ -350,7 +389,7 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
     passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
     started = time.monotonic()
     by_task, stats = {}, {}
-    for task in ("urgency", "nli"):
+    for task in tasks:
         initial, item_path, prov_path, finalized = _resume_rows(out_dir, task) if resume else (
             [], out_dir / (task + ".jsonl.gz.part"),
             out_dir / (task + ".provenance.jsonl.gz.part"), False)
@@ -366,7 +405,7 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
         rows, task_stats = _run_task(
             task, per_capability, passages, generator, verifier, concurrency, temperature,
             model_meta, guard, per_capability * max_jobs_factor, initial=initial,
-            on_accept=None if finalized else accept)
+            on_accept=None if finalized else accept, phased_batch=phased_batch)
         by_task[task], stats[task] = rows, task_stats
         if not finalized:
             item_path.replace(out_dir / (task + ".jsonl.gz"))
@@ -383,6 +422,7 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
         "models": [GENERATOR, VERIFIER], "ollama": model_meta,
         "prompt_version": PROMPT_VERSION, "prompts_sha256": prompts_digest(),
         "corpora": CORPORA, "leakage": leakage_meta, "concurrency": concurrency,
+        "tasks": list(tasks), "phased_batch": phased_batch,
         "seed": seed, "stats": stats, "elapsed_s": time.monotonic() - started,
     }
     manifest_part = out_dir / "manifest.json.part"
@@ -409,7 +449,14 @@ def main(argv=None):
     ap.add_argument("--s1bench-dir", type=Path, default=None)
     ap.add_argument("--defer-leakage-check", action="store_true")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--tasks", default="urgency,nli", help="comma-separated capabilities to generate")
+    ap.add_argument("--phased-batch", type=int, default=0, metavar="N",
+                    help="generate N seed jobs, then verify them (for GPUs that cannot hold both "
+                         "models, e.g. 8 GB); 0 = generate and verify each job together")
     args = ap.parse_args(argv)
+    tasks = tuple(t.strip() for t in args.tasks.split(",") if t.strip())
+    if not tasks or any(t not in ("urgency", "nli") for t in tasks):
+        ap.error("--tasks must name urgency and/or nli")
     if args.per_capability < 1 or args.concurrency < 1 or args.max_jobs_factor < 1:
         ap.error("counts, concurrency and max-jobs-factor must be positive")
     cache = validate_cache(args.cache)
@@ -422,7 +469,8 @@ def main(argv=None):
     gmeta["requested_model"], vmeta["requested_model"] = args.generator_model, args.verifier_model
     manifest = run_pilot(args.out_dir, cache, generator, verifier, guard, args.per_capability,
                          args.concurrency, args.seed, args.temperature, args.max_jobs_factor,
-                         generator_meta=gmeta, verifier_meta=vmeta, resume=args.resume)
+                         generator_meta=gmeta, verifier_meta=vmeta, resume=args.resume,
+                         tasks=tasks, phased_batch=args.phased_batch)
     print(json.dumps({"out_dir": str(args.out_dir), "stats": manifest["stats"],
                       "elapsed_s": manifest["elapsed_s"]}, ensure_ascii=False, indent=2))
 

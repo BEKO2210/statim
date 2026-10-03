@@ -401,3 +401,24 @@ def test_ollama_thinking_is_disabled():
     client._post = lambda path, body, timeout=None: seen.update(body) or {"message": {"content": "{}"}}
     client.chat([], {"type": "object"}, 0, 1)
     assert seen["think"] is False
+
+
+def test_phased_batches_keep_the_same_items(tmp_path):
+    # generate-then-verify per batch (8 GB GPU) must not change which items are kept
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    kwargs = dict(per_capability=48, concurrency=4, passages=fixture_passages(),
+                  generator_meta=model_meta("a", "qwen3", "8B"),
+                  verifier_meta=model_meta("b", "phi4", "3.8B"))
+    plain = run_pilot(tmp_path / "plain", tmp_path / "cache", BlindFakeClient(), BlindFakeClient(),
+                      guard, **kwargs)
+    phased = run_pilot(tmp_path / "phased", tmp_path / "cache", BlindFakeClient(), BlindFakeClient(),
+                       guard, phased_batch=16, **kwargs)
+    assert phased["phased_batch"] == 16
+    for task in ("urgency", "nli"):
+        with gzip.open(tmp_path / "plain" / (task + ".jsonl.gz"), "rt") as a, \
+                gzip.open(tmp_path / "phased" / (task + ".jsonl.gz"), "rt") as b:
+            assert sorted(json.loads(x)["id"] for x in a) == sorted(json.loads(x)["id"] for x in b)
+    assert plain["stats"]["nli"]["counts"] == phased["stats"]["nli"]["counts"]
+    only = run_pilot(tmp_path / "only", tmp_path / "cache", BlindFakeClient(), BlindFakeClient(),
+                     guard, tasks=("nli",), **kwargs)
+    assert list(only["stats"]) == ["nli"] and not (tmp_path / "only" / "urgency.jsonl.gz").exists()
