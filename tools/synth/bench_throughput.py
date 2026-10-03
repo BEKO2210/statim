@@ -34,13 +34,17 @@ def main(argv=None):
     ap.add_argument("--eval-cache", type=Path, default=None)
     ap.add_argument("--s1bench-dir", type=Path, default=None)
     ap.add_argument("--defer-leakage-check", action="store_true")
+    ap.add_argument("--levels", default="1,2,4,8", help="comma-separated concurrency levels")
     args = ap.parse_args(argv)
+    levels = [int(x) for x in args.levels.split(",") if x.strip()]
+    if not levels or min(levels) < 1:
+        ap.error("--levels must be positive integers")
     if args.items < 1:
         ap.error("--items must be positive")
     print("VRAM before:\n%s" % vram(), flush=True)
     results = []
     with tempfile.TemporaryDirectory(prefix="statim-synth-throughput-") as tmp:
-        for concurrency in (1, 2, 4, 8):
+        for concurrency in levels:
             out = Path(tmp) / ("c%d" % concurrency)
             cmd = [sys.executable, str(HERE / "grounded.py"), "--out-dir", str(out),
                    "--per-capability", str(args.items), "--concurrency", str(concurrency),
