@@ -57,6 +57,8 @@ def main(argv=None):
                 cmd.extend(("--s1bench-dir", str(args.s1bench_dir)))
             if args.defer_leakage_check:
                 cmd.append("--defer-leakage-check")
+            print("\n=== %d parallel request(s), %d items per capability ===" % (concurrency, args.items),
+                  flush=True)
             start = time.monotonic()
             subprocess.run(cmd, check=True)
             elapsed = time.monotonic() - start

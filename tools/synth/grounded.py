@@ -269,6 +269,8 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
         positions[lang] = accepted if task == "urgency" else (accepted + len(labels) - 1) // len(labels)
     seen_ids = {row["id"] for row in kept}
     reasons, jobs = collections.Counter(), 0
+    started, start_kept = time.monotonic(), len(kept)
+    _progress(task, len(kept), total, reasons, started, start_kept)
     while len(kept) < total and jobs < max_jobs:
         batch = []
         for lang in PILOT_LANGUAGES:
@@ -313,6 +315,7 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
                 kept.append(row)
                 if on_accept:
                     on_accept(row)
+        _progress(task, len(kept), total, reasons, started, start_kept)
     if len(kept) != total:
         raise RuntimeError("%s kept %d/%d after %d jobs; reasons=%s" %
                            (task, len(kept), total, jobs, dict(reasons)))
@@ -320,6 +323,20 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
     return kept, {"jobs": jobs, "metrics": dict(reasons),
                   "verify_acceptance_rate": (agreed / called) if called else None,
                   "counts": {"%s/%s" % cell: count for cell, count in sorted(counts.items())}}
+
+
+def _progress(task, kept, total, reasons, started, start_kept, width=30, stream=sys.stdout):
+    """One live line per batch: bar, kept/target, verifier agreement, kept items per hour, ETA."""
+    done = kept / total if total else 1.0
+    bar = "#" * int(width * done) + "-" * (width - int(width * done))
+    called, agreed = reasons["verify_called"], reasons["verify_agree"]
+    agree = ("%3.0f%%" % (100.0 * agreed / called)) if called else "  - "
+    elapsed = time.monotonic() - started
+    new = kept - start_kept
+    rate = new * 3600.0 / elapsed if elapsed > 0 and new else 0.0
+    eta = ("%d min" % round((total - kept) / rate * 60)) if rate else "-"
+    print("[%-7s] |%s| %4d/%-4d %3.0f%%  verifier agrees %s  %6.0f kept/h  ETA %s" % (
+        task, bar, kept, total, 100 * done, agree, rate, eta), file=stream, flush=True)
 
 
 def _append_gzip(path, row):
