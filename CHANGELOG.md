@@ -7,6 +7,12 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-10-03
+
+The Hugging Face Space now runs the released 0.7.0 model (it had served 0.4.0 since it was
+created), and the playground's review threshold alone decides which answers are flagged.
+Every decision of the engine is unchanged.
+
 ### Fixed
 - The Hugging Face Space served Statim Decide Multilingual Base **0.4.0** since it was created: its
   Dockerfile downloaded the model from `resolve/main`, and the Hub reused the cached download layer
@@ -957,7 +963,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/BEKO2210/statim/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/BEKO2210/statim/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/BEKO2210/statim/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/BEKO2210/statim/compare/v0.9.1...v0.9.2
