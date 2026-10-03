@@ -10,7 +10,7 @@ ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
 ARG MODEL_REVISION=30fa9ad3183c3cef53b3ba5946d5a4a8abdffacb
 ARG MODEL_SHA256=96fb3971656ee6b596cb0c108aff4bbe1306d87707ffe9ae5f364a52b919ff1b
 
-FROM debian:bookworm-slim AS statim-release
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS statim-release
 ARG STATIM_VERSION
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -34,7 +34,7 @@ COPY statim /out/statim
 
 FROM statim-${STATIM_SOURCE} AS statim
 
-FROM debian:bookworm-slim AS model-hub
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS model-hub
 ARG MODEL_REPO
 ARG MODEL_FILE
 ARG MODEL_REVISION
@@ -57,7 +57,7 @@ COPY model.gguf /out/model.gguf
 
 FROM model-${MODEL_SOURCE} AS model
 
-FROM debian:trixie-slim AS runtime
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends busybox libgomp1 libstdc++6 \
     && groupadd --gid 1000 statim \

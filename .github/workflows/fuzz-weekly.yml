@@ -40,10 +40,16 @@ jobs:
           key: laya-tokenizers-v1
       - name: Fetch Laya tokenizers (fuzz_tokenizer also runs on the real vocabularies)
         run: |
-          for m in laya:laya laya-multilingual:laya-multilingual; do
-            repo=${m%%:*}; dir=models/${m##*:}/tokenizer; mkdir -p "$dir"
-            [ -s "$dir/tokenizer.json" ] || curl -fL --retry 3 -o "$dir/tokenizer.json" \
-              "https://huggingface.co/convaiinnovations/$repo/resolve/main/tokenizer/tokenizer.json"
+          for spec in \
+            laya:laya:55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851:6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30 \
+            laya-multilingual:laya-multilingual:e4e9ddf21a7b1903b7acffd8814ad4307bf63a67:609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f; do
+            IFS=: read -r repo name revision sha256 <<< "$spec"
+            dir=models/$name/tokenizer; file=$dir/tokenizer.json; mkdir -p "$dir"
+            if ! [ -s "$file" ] || ! printf '%s  %s\n' "$sha256" "$file" | sha256sum -c - >/dev/null; then
+              curl -fL --retry 3 -o "$file" \
+                "https://huggingface.co/convaiinnovations/$repo/resolve/$revision/tokenizer/tokenizer.json"
+            fi
+            printf '%s  %s\n' "$sha256" "$file" | sha256sum -c -
           done
       - name: Restore the grown fuzz corpus
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

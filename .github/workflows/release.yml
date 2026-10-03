@@ -68,9 +68,14 @@ jobs:
             dist/*.spdx.json
           if-no-files-found: error
 
+  gpu-parity:
+    # CUDA and Vulkan parity gates on the self-hosted RTX 3070 for the tagged commit; publish waits
+    # for them, so the Vulkan archive is never uploaded untested (READINESS P1 #43).
+    uses: ./.github/workflows/gpu.yml
+
   publish:
     name: Publish GitHub release assets
-    needs: build
+    needs: [build, gpu-parity]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

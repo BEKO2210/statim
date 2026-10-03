@@ -62,7 +62,7 @@ for them like a P0.
 | 19 | A release archive built twice has an identical SHA-256; the compiler package is pinned | M | open |
 | 20 | An SPDX SBOM next to `SHA256SUMS` | S | **closed** (#99): Syft's SBOM for 0.9.3 listed only the archive file; `tools/release/sbom.py` lists every shipped file, the compiled-in components with versions and licences, and the system libraries; the 0.9.3 SBOMs were replaced and pass `pyspdxtools` validation |
 | 21 | Build-provenance attestations on the release archives, with the verify command documented | M | **closed** (#99): `gh attestation verify` (gh 2.102) passes for both 0.9.3 archives: signed by `release.yml` at `refs/tags/v0.9.3` |
-| 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | partly: the Python CI tools are hash-locked (#51) |
+| 22 | Hash-locked tools and pinned inputs: Python CI tools, `httplib.h` against `httplib.version`, a hash for `json.hpp`, checksums in `fetch_models.sh`, a digest-pinned Docker `FROM` | M | **closed** (#106): Python CI tools hash-locked (#51); `third_party/VENDORED.json` + `tools/security/check_vendored.py` verify `httplib.h` and `json.hpp` by SHA-256 and version in CI; `fetch_models.sh` and the fuzz jobs download from fixed Hub commits and check every file's SHA-256; Docker `FROM` lines pinned by digest, kept current by Dependabot |
 
 ### Reliability
 
@@ -113,7 +113,7 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | partly: Vulkan and CUDA parity pass on an RTX 3070 (2026-10-01, manual); not yet a release step |
+| 43 | Vulkan `ctest` on real hardware before the Vulkan asset is uploaded; CUDA the same, or out of the status line | M | done in #105: release.yml calls the `gpu` workflow (CUDA and Vulkan parity on the RTX 3070 runner, tagged commit) and publishes only after it passes; proven by the next release |
 | 44 | An ARM test run (planned on a Galaxy A15 and a Galaxy Tab S9 Ultra), or no ARM NEON claim | S | **closed** (#84): Galaxy A15 and Galaxy Tab S9 Ultra pass the native suite and both parity tests; CI cross-builds Android arm64; [BUILD.md](BUILD.md#android-arm64) |
 
 ### From the external reviews (2026-10-01)

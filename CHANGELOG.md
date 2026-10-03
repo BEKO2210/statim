@@ -12,6 +12,9 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 The Hugging Face Space now runs the released 0.7.0 model (it had served 0.4.0 since it was
 created), and the playground's review threshold alone decides which answers are flagged.
 Every decision of the engine is unchanged.
+### Changed
+- Releases publish only after the CUDA and Vulkan parity gates pass on the self-hosted GPU runner
+  for the tagged commit: `release.yml` calls the `gpu` workflow (READINESS P1 #43).
 
 ### Fixed
 - The Hugging Face Space served Statim Decide Multilingual Base **0.4.0** since it was created: its
@@ -21,6 +24,11 @@ Every decision of the engine is unchanged.
 - Playground: the plain-language summary marked answers below 70 % as "unsure" in orange whatever
   the review threshold said, so the threshold looked broken. Only the threshold marks an answer now
   ("check this one"); it defaults to 60 % and is shown in percent.
+
+### Security
+- Vendored C++ headers, model and tokenizer downloads, and Docker base images are now pinned to
+  immutable versions or digests and verified in CI; Dependabot monitors both Docker build contexts
+  weekly (READINESS P1 #22).
 
 ## [0.9.4] - 2026-10-03
 
