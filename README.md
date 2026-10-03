@@ -88,6 +88,13 @@ decisions, with no measurable accuracy change.
 
 The comparison does not cover TensorRT or a GPU run. [Full protocol and every row](docs/ORT.md)
 
+### On a public suite: S1Bench
+
+On S1Bench (13 public subsets, 3,880 items, the harness Lev's authors used), the multilingual model
+0.7.0 scores **0.638** macro, above its untuned Laya base (0.579) and below Lev, a 4B LLM on a GPU
+(0.689), and the hosted Jev (0.761). It leads on toxicity and trails on reading comprehension and
+paraphrase. [Protocol, per-subset results and caveats](docs/reproductions/s1bench-2026-10-03.md)
+
 ## Quick start
 
 Linux x86-64 with AVX2 (Haswell or newer), CPU. Three steps: download, start, ask.

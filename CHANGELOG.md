@@ -8,6 +8,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
+- `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
+  items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for
+  its Laya base, 0.689 for Lev and 0.761 for Jev; per-item records and `bench/s1bench_*.py` to
+  reproduce it.
 - API key files support `inference` and `metrics` scopes. Valid keys without the required scope get
   HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
   secret key bytes (READINESS P1 #12). A key listed twice, in the file or in `STATIM_API_KEY`, is a
