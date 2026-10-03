@@ -4,6 +4,7 @@
 # Usage:
 #   1. Set STATIM_MODEL to your model path (defaults to ./models/model.gguf).
 #   2. Set STATIM_API_KEY_FILE to your key secret file (defaults to ./statim_api_key.txt).
+#      Example least-privilege line: <32-or-more-character-key> inference
 #      Alternatively, supply STATIM_API_KEY via an env file (see comment below).
 #   3. Start the service: docker compose -f deploy/docker-compose.yml up -d
 #

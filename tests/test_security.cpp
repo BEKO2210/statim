@@ -175,8 +175,10 @@ int main(int argc, char** argv) try {
             "short-key error lacks remediation details");
     require(short_error.find(key31) == std::string::npos, "short-key error exposes key bytes");
     validate_api_key(key32, "STATIM_API_KEY"); ++checks;
-    require(load_key_env(" " + test_key + "," + key32 + " ") == std::vector<std::string>({test_key, key32}),
+    require(load_key_env(" " + test_key + "," + key32 + " ") == std::vector<ApiKey>({test_key, key32}),
             "key whitespace handling");
+    require(load_key_env(test_key).front().scopes == all_api_scopes, "environment key does not have all scopes");
+    require(ApiKey(test_key).id == "f23d31ff", "API key SHA-256 id changed");
     for (auto host : {"127.0.0.1", "127.1.2.3", "127.255.255.255", "::1", "localhost"})
         require(is_loopback_host(host), "loopback host rejected");
     for (auto host : {"0.0.0.0", "::", "192.168.1.2", "example.test", "localhost.", "LOCALHOST",
@@ -188,7 +190,31 @@ int main(int argc, char** argv) try {
         startup_rejects([&] { load_key_file(path); });
     }
     { std::ofstream file(path); file << "# comment\n" << test_key << "\n\n  " << key32 << "\r\n"; }
-    require(load_key_file(path) == std::vector<std::string>({test_key, key32}), "several valid file keys rejected");
+    require(load_key_file(path) == std::vector<ApiKey>({test_key, key32}), "several valid file keys rejected");
+    const std::string inference_key(32, 'i'), metrics_key(32, 'm'), both_key(32, 'x');
+    { std::ofstream file(path); file << test_key << "\n" << inference_key << " inference\n"
+                                    << metrics_key << " metrics\n" << both_key << " inference,metrics\n"; }
+    const auto scoped = load_key_file(path);
+    require(scoped.size() == 4 && scoped[0].scopes == all_api_scopes &&
+            key_has_scope(scoped[1], ApiScope::inference) && !key_has_scope(scoped[1], ApiScope::metrics) &&
+            key_has_scope(scoped[2], ApiScope::metrics) && !key_has_scope(scoped[2], ApiScope::inference) &&
+            scoped[3].scopes == all_api_scopes, "API key scope forms parsed incorrectly");
+    for (const std::string& entry : {
+             test_key + " foo\n", test_key + " \n", test_key + " inference,inference\n",
+             test_key + " inference metrics\n", key31 + " inference\n"}) {
+        { std::ofstream file(path); file << entry; }
+        const std::string error = startup_error([&] { load_key_file(path); });
+        require(error.find(path.string() + ":1") != std::string::npos, "scoped key error lacks file and line");
+        require(error.find(test_key) == std::string::npos && error.find(key31) == std::string::npos,
+                "scoped key error exposes key bytes");
+    }
+    { std::ofstream file(path); file << test_key << " inference\n" << test_key << " metrics\n"; }
+    {
+        const std::string dup_error = startup_error([&] { load_key_file(path); });
+        require(dup_error.find("listed twice") != std::string::npos && dup_error.find(path.string() + ":2") != std::string::npos,
+                "a key listed twice is not rejected with its line");
+        require(dup_error.find(test_key) == std::string::npos, "duplicate-key error exposes key bytes");
+    }
     { std::ofstream file(path); file << "# comment\n" << key31 << "\n"; }
     const std::string file_error = startup_error([&] { load_key_file(path); });
     require(file_error.find(path.string() + ":2") != std::string::npos, "short file-key error lacks file and line");
@@ -222,6 +248,9 @@ int main(int argc, char** argv) try {
         require(!bearer_authorized(with("Bearer " + test_key.substr(0, 31)), {test_key}), "key prefix accepted");
         require(!bearer_authorized(with("Bearer " + std::string(100000, 'k')), {big}), "oversized header accepted");
         require(bearer_authorized(with("Bearer " + test_key), {big, test_key}), "second key rejected");
+        const std::vector<ApiKey> scoped_keys = {ApiKey(test_key, static_cast<uint8_t>(ApiScope::metrics))};
+        require(bearer_authorized(with("Bearer " + test_key), scoped_keys, ApiScope::metrics), "metrics scope rejected");
+        require(!bearer_authorized(with("Bearer " + test_key), scoped_keys, ApiScope::inference), "missing inference scope accepted");
     }
     CalibrationCache cache(1024, 2);
     std::vector<double> found;
@@ -265,6 +294,19 @@ int main(int argc, char** argv) try {
         replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n\r\n", 401);
         replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n" + auth + "\r\n", 200);
     }
+    TestServer metrics_only_server;
+    configure_http_security(metrics_only_server, {ApiKey(test_key, static_cast<uint8_t>(ApiScope::metrics))});
+    metrics_only_server.Get("/metrics", [](const httplib::Request&, httplib::Response& r) { r.set_content("{}", "application/json"); });
+    metrics_only_server.Get("/v1/models", [](const httplib::Request&, httplib::Response& r) { r.set_content("{}", "application/json"); });
+    auto scoped_replay = [&](const char* endpoint, int status) {
+        MemoryStream stream(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n" + auth + "\r\n");
+        metrics_only_server.process(stream);
+        require(stream.output.find("HTTP/1.1 " + std::to_string(status)) == 0, "unexpected scoped HTTP status");
+        return stream.output;
+    };
+    scoped_replay("/metrics", 200);
+    require(scoped_replay("/v1/models", 403).find("API key lacks the 'inference' scope") != std::string::npos,
+            "scope denial detail changed");
     for (auto endpoint : {"/health", "/ready"}) replay(std::string("GET ") + endpoint + " HTTP/1.1\r\nHost: localhost\r\n\r\n", 200);
     auto failure = replay("GET /throw HTTP/1.1\r\nHost: localhost\r\n" + auth + "\r\n", 500);
     require(failure.output.find("private-file-secret") == std::string::npos && failure.output.find("EXCEPTION_WHAT") == std::string::npos,

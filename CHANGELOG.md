@@ -7,11 +7,46 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- The Hugging Face model cards link to the live demo Space at the top ("Try it live in your
+  browser"); `tools/release/hf_publish.py` writes the line, and the two published cards were updated.
+
+### Added
+- `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
+  items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for
+  its Laya base, 0.689 for Lev and 0.761 for Jev; per-item records and `bench/s1bench_*.py` to
+  reproduce it.
+- API key files support `inference` and `metrics` scopes. Valid keys without the required scope get
+  HTTP 403; access and start-up logs identify keys by an eight-hex SHA-256 prefix without logging
+  secret key bytes (READINESS P1 #12). A key listed twice, in the file or in `STATIM_API_KEY`, is a
+  start-up error.
+- S1Bench stage 1 (`docs/reproductions/s1bench-stage1-2026-10-03.md`, pre-registered): the consensus
+  of en-large and multilingual scores 0.651 macro (0.600 on never-trained sources, ECE 0.105), the
+  best deployable configuration; en-large alone 0.608, `--calibrate` 0.615.
+
+## [0.9.5] - 2026-10-03
+
+The Hugging Face Space now runs the released 0.7.0 model (it had served 0.4.0 since it was
+created), and the playground's review threshold alone decides which answers are flagged.
+Every decision of the engine is unchanged.
+
+### Changed
+- Releases publish only after the CUDA and Vulkan parity gates pass on the self-hosted GPU runner
+  for the tagged commit: `release.yml` calls the `gpu` workflow (READINESS P1 #43).
+
 ### Fixed
 - The Hugging Face Space served Statim Decide Multilingual Base **0.4.0** since it was created: its
   Dockerfile downloaded the model from `resolve/main`, and the Hub reused the cached download layer
   after 0.7.0 was published (fingerprint `76a6087a…` instead of `e7a8fa74…`). The Dockerfile now pins
   the model to the Hub commit of 0.7.0 and checks its SHA-256.
+- Playground: the plain-language summary marked answers below 70 % as "unsure" in orange whatever
+  the review threshold said, so the threshold looked broken. Only the threshold marks an answer now
+  ("check this one"); it defaults to 60 % and is shown in percent.
+
+### Security
+- Vendored C++ headers, model and tokenizer downloads, and Docker base images are now pinned to
+  immutable versions or digests and verified in CI; Dependabot monitors both Docker build contexts
+  weekly (READINESS P1 #22).
 
 ## [0.9.4] - 2026-10-03
 
@@ -954,7 +989,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/BEKO2210/statim/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/BEKO2210/statim/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/BEKO2210/statim/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/BEKO2210/statim/compare/v0.9.1...v0.9.2

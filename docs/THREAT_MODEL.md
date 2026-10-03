@@ -46,8 +46,9 @@ client ──TLS──▶ reverse proxy ──HTTP (loopback/private)──▶ s
   limits.
 - **Files → Statim.** Model and adapter files are untrusted input to the parser. They are not
   trusted until the structural preflight and the load-time validation have accepted them.
-- **Statim → operator.** Logs record per request the path, status, timing, token count, request id
-  and remote address, plus error details. They never record request bodies or keys. Metrics hold
+- **Statim → operator.** Logs record per request the path, status, timing, token count, request id,
+  remote address and, for authenticated requests, a non-secret SHA-256 key id; key-file scopes can
+  separate inference from metrics. They never record request bodies or keys. Metrics hold
   counters only.
 
 ## Threats and controls
@@ -72,8 +73,6 @@ client ──TLS──▶ reverse proxy ──HTTP (loopback/private)──▶ s
 
 - **TLS.** Statim speaks plain HTTP. TLS, client certificates and network-level rate limiting
   belong to the reverse proxy ([DEPLOY.md](DEPLOY.md#tls-reverse-proxy)).
-- **One key, full access.** A key grants inference and metrics alike. There are no scopes yet
-  (READINESS #12). Rotate keys by restarting with the new key source.
 - **Minimum key length.** Short keys are not rejected yet (READINESS #13). Use at least 32 random
   characters, for example `openssl rand -hex 32`.
 - **The playground.** It is public by design and sends a strict Content-Security-Policy (only its own

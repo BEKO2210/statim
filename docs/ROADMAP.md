@@ -28,6 +28,10 @@ adapters. Sentiment and fact-check stay within noise. Next:
 - a larger held-out sample for fact-check, the other category with one language cell, after its
   retraining;
 - more licence-clean data for the rest, generated locally where no human-labelled data exists.
+- reading comprehension and minimal pairs: on the public S1Bench suite the 0.7.0 model scores 0.638
+  macro (Lev 0.689, Jev 0.761) and is below its own base checkpoint on PAWS, boolq, squad2, VitaminC
+  and MultiNLI ([s1bench-2026-10-03.md](reproductions/s1bench-2026-10-03.md)); the next mixture adds
+  licence-clean reading-comprehension, paraphrase and yes/no QA sources, with S1Bench held out.
 
 ## Milestones
 
