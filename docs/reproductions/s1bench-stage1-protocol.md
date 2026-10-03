@@ -9,7 +9,7 @@ scores; none is dropped after the fact.
 | | Model(s) | Flags |
 |---|---|---|
 | A | statim-decide-en-large 0.5.0, f32 (Hub file SHA-256 from its `SHA256SUMS`) | none |
-| B | en-large 0.5.0 f32 + multilingual 0.7.0 f32, loaded as `english` and `multilingual` | `--consensus` (both checkpoints answer, option log-probabilities averaged) |
+| B | en-large 0.5.0 f32 + multilingual 0.7.0 f32, loaded as `english` and `multilingual` | `--consensus`, and requests send `"model": "consensus"` (levbench sends `"model": "local"`, which turns the server default off; the wrapper's `--model consensus` sets it). Both checkpoints answer, option log-probabilities averaged |
 | C | multilingual 0.7.0 f32 | `--calibrate` (contextual calibration) |
 
 ## Exploratory, labelled as such
