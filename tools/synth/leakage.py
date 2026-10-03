@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import sys
 import json
 import pickle
 from pathlib import Path
@@ -55,6 +56,8 @@ def _strings(value):
 
 
 def _eval_definition():
+    if str(ROOT) not in sys.path:  # run as a script from tools/synth, the repo root is not on the path
+        sys.path.insert(0, str(ROOT))
     from tools.finetune.mixture_v6 import eval_texts
     categories = eval_texts._eval_categories().fingerprint()
     suite_fp = hashlib.sha256(json.dumps({
