@@ -538,7 +538,7 @@ def test_two_stage_generate_then_verify(tmp_path):
     few = tmp_path / "few.jsonl.gz"
     grounded.stage_generate(few, tmp_path / "cache", BlindFakeClient(), ("nli",), 48, 8, 0.4,
                             oversample=0.5, passages=passages)
-    with pytest.raises(SystemExit, match="short cells"):
+    with pytest.raises(SystemExit, match="SHORT_TASKS: nli"):
         grounded.stage_verify(few, tmp_path / "out2", BlindFakeClient(), guard, ("nli",), 48, 8, meta)
 
 
@@ -580,7 +580,7 @@ def test_urgency_nli_ids_match_pilot_fixture(tmp_path):
         assert ids == fixture[task]["ids"]
         sample = json.loads(next(gzip.open(out / (task + ".jsonl.gz"), "rt")))
         assert sample["q"] == fixture[task]["sample"]["q"]
-    assert manifest["prompt_versions"]["urgency"] == manifest["prompt_versions"]["nli"] == "grounded-pilot-2"
+    assert manifest["prompt_versions"]["urgency"] == manifest["prompt_versions"]["nli"] == "grounded-pilot-3"
 
 
 def test_registry_locales_cover_every_language():
@@ -650,3 +650,16 @@ def test_all_tasks_two_stage_run_fills_every_cell(tmp_path):
             key = "%s/%s" % cell
             assert manifest["stats"][task]["counts"].get(key, 0) == need
         assert manifest["prompt_versions"][task] == TASKS[task]["prompt_version"]
+
+
+def test_label_filter_blocks_stated_labels_but_not_negation_or_topic_words():
+    import grounded
+    leak = grounded._contains_label
+    assert not leak("We have not received the form yet.", "urgency", "en")
+    assert not leak("Wir haben das Formular noch nicht erhalten.", "urgency", "de")
+    assert leak("This is not urgent, I can wait.", "urgency", "en")
+    assert leak("Die Anfrage hat keine zeitliche Dringlichkeit.", "urgency", "de")
+    assert leak("Nie ma pilności, mogę poczekać.", "urgency", "pl")
+    assert leak("Dit is geen dringende aangelegenheid.", "urgency", "nl")
+    assert not leak("Ich finde die Maßnahme überfällig und richtig.", "stance", "de")
+    assert leak("Der Verband befürwortet die Maßnahme.", "stance", "de")  # the local label as a phrase

@@ -314,7 +314,7 @@ def _locale(task, lang):
 
 TASKS = {
     "urgency": {
-        "prompt_version": "grounded-pilot-2",
+        "prompt_version": "grounded-pilot-3",
         "shape": "single",
         "generation": "single",
         "labels": URGENCY_LABELS,
@@ -327,7 +327,7 @@ TASKS = {
         "verify_predict": 32,
     },
     "nli": {
-        "prompt_version": "grounded-pilot-2",
+        "prompt_version": "grounded-pilot-3",
         "shape": "pair",
         "generation": "pair",
         "labels": NLI_LABELS,
@@ -341,7 +341,7 @@ TASKS = {
     },
     "spam": {
         "situation": 'Write it as an SMS, e-mail or online comment that a citizen or business could receive about this topic; spam tries to sell, scam or phish, a genuine message is from a real contact with a real purpose.',
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "single",
         "generation": "single",
         "labels": SPAM_LABELS,
@@ -355,7 +355,7 @@ TASKS = {
     },
     "sarcasm": {
         "situation": 'Write it as a social-media or forum comment by someone affected by this topic.',
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "single",
         "generation": "single",
         "labels": SARCASM_LABELS,
@@ -369,7 +369,7 @@ TASKS = {
     },
     "emotion": {
         "situation": 'Write it as a personal statement by someone directly affected by this topic, showing the feeling through what happened to them, not by naming the feeling.',
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "single",
         "generation": "single",
         "labels": EMOTION_LABELS,
@@ -383,7 +383,7 @@ TASKS = {
     },
     "claim": {
         "situation": 'Write it as something a person might say or post about this topic.',
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "single",
         "generation": "single",
         "labels": CLAIM_LABELS,
@@ -396,7 +396,7 @@ TASKS = {
         "verify_predict": 40,
     },
     "stance": {
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "pair",
         "generation": "pair",
         "labels": STANCE_LABELS,
@@ -409,7 +409,7 @@ TASKS = {
         "verify_predict": 32,
     },
     "reading": {
-        "prompt_version": "grounded-tasks-1",
+        "prompt_version": "grounded-tasks-2",
         "shape": "pair",
         "generation": "pair",
         "labels": READING_LABELS,
@@ -454,3 +454,18 @@ def validate_registry():
 
 
 validate_registry()
+
+
+# Word stems that state a label outright. The label must follow from the situation, so a text that
+# says "not urgent" / "keine Dringlichkeit" / "nie ma pilności" teaches a keyword shortcut.
+LEAK_STEMS = {
+    "urgency": {
+        "en": ("urgen", "non-urgent", "nonurgent"), "de": ("dringen", "dringlich", "eilig", "eilt"),
+        "fr": ("urgen",), "es": ("urgen",), "it": ("urgen",), "pt": ("urgen", "urgên"),
+        "nl": ("dringen", "spoed"), "pl": ("piln",),
+    },
+}
+
+
+def leak_stems(task, lang):
+    return LEAK_STEMS.get(task, {}).get(lang, ())

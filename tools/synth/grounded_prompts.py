@@ -5,7 +5,7 @@ import json
 
 from grounded_tasks import LANG_NAMES, NLI_LABELS, TASKS, URGENCY_LABELS, _SYSTEM, _VERIFY_SYSTEM
 
-PROMPT_VERSION = "grounded-pilot-2"
+PROMPT_VERSION = "grounded-pilot-3"
 
 _ANSWER_SCHEMA = {"type": "object", "properties": {"answer": {"type": "string"}},
                   "required": ["answer"]}
@@ -29,6 +29,12 @@ def _label_list(labels):
     return ", ".join(labels)
 
 
+_URGENCY_MEANINGS = """Meanings: not urgent = a routine question, suggestion or information request; nothing has gone wrong, there is no
+deadline and the writer can wait weeks; soon = something needs action within days, e.g. an upcoming deadline or a
+problem that will grow, but nothing is failing yet; critical = immediate action is required because serious harm,
+outage, an expiring deadline or loss is happening now or within hours."""
+
+
 def generation_request(task, passage, lang, target=None):
     language = LANG_NAMES[lang]
     spec = TASKS[task]
@@ -39,11 +45,9 @@ def generation_request(task, passage, lang, target=None):
 
 Write a short support or service request in {language} by a citizen or company affected by this topic.
 Requested urgency label: {target}
-Meanings: not urgent = a routine question, suggestion or information request; nothing has gone wrong, there is no
-deadline and the writer can wait weeks; soon = something needs action within days, e.g. an upcoming deadline or a
-problem that will grow, but nothing is failing yet; critical = immediate action is required because serious harm,
-outage, an expiring deadline or loss is happening now or within hours.
-The situation, not urgency words or the label itself, must establish the label. Return request and label."""
+{_URGENCY_MEANINGS}
+The situation, not urgency words or the label itself, must establish the label: never say how urgent
+it is (no 'urgent', 'not urgent', 'no hurry', 'can wait'). Return request and label."""
         return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
                 _single_schema("request", URGENCY_LABELS), spec["gen_predict"])
     if task == "nli":
@@ -100,23 +104,27 @@ def verification_request(task, item, lang):
     system = _VERIFY_SYSTEM
     if task == "urgency":
         user = (f"Request ({language}):\n{item['request']}\n\nChoose exactly one: not urgent, soon, critical. "
-                "Use urgency of required action, not general seriousness.")
+                "Use urgency of required action, not general seriousness.\n" + _URGENCY_MEANINGS)
     elif task == "nli":
         user = (f"Premise ({language}):\n{item['premise']}\n\nHypothesis:\n{item['hypothesis']}\n\n"
-                "Choose exactly one: entailment, contradiction, neutral.")
+                "Choose exactly one: entailment, contradiction, neutral.\n"
+                "Meanings: entailment = the premise alone makes the hypothesis true; contradiction = the "
+                "premise makes it false; neutral = the premise neither confirms nor rules it out.")
     elif spec["shape"] == "single":
         field = spec["verify_field"]
         loc = spec["locales"][lang]
         choices = ", ".join(labels)
+        meanings = "\n".join("%s = %s" % (labels[i], loc["criteria"][i]) for i in range(len(labels)))
         user = (f"{field.capitalize()} ({language}):\n{item[field]}\n\n"
-                f"Choose exactly one: {choices}.\n{loc['question']}")
+                f"Choose exactly one: {choices}.\n{loc['question']}\nMeanings:\n{meanings}")
     else:
         pfield, gfield = spec["verify_fields"]
         loc = spec["locales"][lang]
         disp_p, disp_g = loc["pair_fields"]
         choices = ", ".join(labels)
+        meanings = "\n".join("%s = %s" % (labels[i], loc["criteria"][i]) for i in range(len(labels)))
         user = (f"{disp_p} ({language}):\n{item[pfield]}\n\n{disp_g}:\n{item[gfield]}\n\n"
-                f"Choose exactly one: {choices}.\n{loc['question']}")
+                f"Choose exactly one: {choices}.\n{loc['question']}\nMeanings:\n{meanings}")
     schema = dict(_ANSWER_SCHEMA)
     schema["properties"] = {"answer": {"type": "string", "enum": list(labels)}}
     return ([{"role": "system", "content": system}, {"role": "user", "content": user}], schema,

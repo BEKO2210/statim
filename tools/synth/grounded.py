@@ -21,7 +21,7 @@ from common import canonical_id, language_ok, one_hot, sha256_text, word_count  
 from corpora import CORPORA, PILOT_LANGUAGES, iter_corpus, validate_cache  # noqa: E402
 from generate import digest_from_show  # noqa: E402
 from grounded_prompts import PROMPT_VERSION, generation_request, prompts_digest, verification_request  # noqa: E402
-from grounded_tasks import TASKS, local_labels, task_labels  # noqa: E402
+from grounded_tasks import leak_stems, TASKS, local_labels, task_labels  # noqa: E402
 from leakage import DeferredGuard, LeakageGuard, grams  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from openai_http import OpenAIHTTP  # noqa: E402
@@ -138,28 +138,31 @@ def _base_item(task, lang, label, passage, generated):
 
 
 def _contains_label(text, task, lang):
-    canonical = set(task_labels(task))
-    local = set(local_labels(task, lang))
     lowered = text.casefold()
-    words = set(re.findall(r"[^\W_]+", lowered, re.UNICODE))
-    for label in local:
-        if " " in label and label.casefold() in lowered:
+    words = re.findall(r"[^\W_]+", lowered, re.UNICODE)
+    word_set = set(words)
+    for label in list(task_labels(task)) + list(local_labels(task, lang)):
+        label = label.casefold()
+        parts = re.findall(r"[^\W_]+", label, re.UNICODE)
+        if len(parts) > 1:
+            # a multi-word label only as a phrase: "lehnt die Maßnahme ab" must not ban "Maßnahme";
+            # its key word is caught by the task's stems where that matters ("urgen" for urgency)
+            if label in lowered:
+                return True
+        elif parts and parts[0] in word_set:
             return True
-    label_words = set()
-    for label in canonical:
-        label_words.update(re.findall(r"[^\W_]+", label.casefold(), re.UNICODE))
-    for label in local:
-        if " " not in label:
-            label_words.add(label.casefold())
-    return bool(words & label_words)
+    stems = leak_stems(task, lang)
+    return any(word.startswith(stem) for word in words for stem in stems)
 
 
-def _generate_candidates(task, passage_row, target, generator, temperature):
-    """Phase 1 (generator only): checked candidate texts for one seed passage."""
+def _generate_candidates(task, passage_row, target, generator, temperature, variant=0):
+    """Phase 1 (generator only): checked candidate texts for one seed passage. ``variant`` > 0 when
+    a passage is reused, so the same passage and target get a different sampling seed."""
     spec = TASKS[task]
     labels = task_labels(task)
     passage, lang, source_id, revision = passage_row
-    seed = int(hashlib.sha256((task + source_id + passage + str(target)).encode()).hexdigest()[:8], 16)
+    key = task + source_id + passage + str(target) + ("#%d" % variant if variant else "")
+    seed = int(hashlib.sha256(key.encode()).hexdigest()[:8], 16)
     metrics = collections.Counter()
     parsed = _request_json(generator, generation_request(task, passage, lang, target),
                            temperature, seed, metrics, "generate")
@@ -245,18 +248,23 @@ def _generate_job(task, passage_row, target, generator, verifier, temperature, m
     return accepted, dict(metrics)
 
 
-def _passages(cache, per_language):
+def _passages(cache, per_language, seed=20261004):
+    """Seed passages per language, spread over each corpus: read up to a wide window (not just the
+    first documents, which cluster on one regulation) and shuffle deterministically."""
     out = {lang: [] for lang in PILOT_LANGUAGES}
     for lang in PILOT_LANGUAGES:
         names = ("billsum", "gov_report") if lang == "en" else ("eur_lex_sum",)
         per_source = (per_language + len(names) - 1) // len(names)
+        window = max(2000, per_source * 5)
         for name in names:
+            rows = []
             for row in iter_corpus(name, cache, languages=(lang,)):
-                out[lang].append(row)
-                if sum(1 for value in out[lang] if _source_spec(value[2]) == name) >= per_source:
+                rows.append(row)
+                if len(rows) >= window:
                     break
-            if len(out[lang]) >= per_language:
-                break
+            random.Random("%s:%s:%d" % (name, lang, seed)).shuffle(rows)
+            out[lang].extend(rows[:per_source])
+        random.Random("%s:%d" % (lang, seed)).shuffle(out[lang])
         out[lang] = out[lang][:per_language]
     missing = [lang for lang, rows in out.items() if not rows]
     if missing:
@@ -543,15 +551,16 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
                 if not need:
                     continue
                 for _ in range(max(1, concurrency // len(PILOT_LANGUAGES))):
+                    cycle = positions[lang] // len(passages[lang])
                     passage = passages[lang][positions[lang] % len(passages[lang])]
                     positions[lang] += 1
                     target = need[positions[lang] % len(need)] if TASKS[task]["generation"] == "single" else None
-                    batch.append((task, passage, target))
+                    batch.append((task, passage, target, cycle))
             if not batch:
                 break
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 results = list(pool.map(
-                    lambda a: _generate_candidates(a[0], a[1], a[2], generator, temperature), batch))
+                    lambda a: _generate_candidates(a[0], a[1], a[2], generator, temperature, a[3]), batch))
             jobs += len(batch)
             for rows, m in results:
                 metrics.update(m)
@@ -583,7 +592,7 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
     state_path = out_dir / "verify.state.json"
     state = json.loads(state_path.read_text()) if resume and state_path.exists() else {}
     started = time.monotonic()
-    by_task, stats = {}, {}
+    by_task, stats, short_tasks = {}, {}, []
     for task in tasks:
         labels = task_labels(task)
         quota = _quota(per_capability, PILOT_LANGUAGES, labels)
@@ -629,9 +638,10 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
             _stage_line("verify", task, len(kept), per_capability, t0, k0, agree)
         if len(kept) < per_capability:
             short = {"%s/%s" % c: quota[c] - counts[c] for c in quota if counts[c] < quota[c]}
-            raise SystemExit("%s: %d/%d kept, candidates exhausted; short cells %s. Run "
-                             "--stage generate with a higher --oversample, then --stage verify "
-                             "--resume." % (task, len(kept), per_capability, short))
+            print("%s: %d/%d kept, candidates exhausted; short cells %s" % (
+                task, len(kept), per_capability, short), flush=True)
+            short_tasks.append(task)
+            continue
         if not finalized:
             item_path.replace(out_dir / (task + ".jsonl.gz"))
             prov_path.replace(out_dir / (task + ".provenance.jsonl.gz"))
@@ -643,6 +653,10 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
         stats[task] = {"jobs": pos, "metrics": dict(reasons),
                        "verify_acceptance_rate": (agreed / called) if called else None,
                        "counts": {"%s/%s" % c: n for c, n in sorted(counts.items())}}
+    if short_tasks:
+        # every task was checked; the filled ones are final, the short ones need more candidates
+        raise SystemExit("SHORT_TASKS: %s. Run --stage generate --tasks %s with a higher --oversample, "
+                         "then --stage verify --resume." % (",".join(short_tasks), ",".join(short_tasks)))
     return _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurrency, tasks,
                    seed, started, {"stages": "generate+verify", "candidates": str(candidates)})
 
