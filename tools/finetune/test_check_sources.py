@@ -111,7 +111,9 @@ def test_v9_resolver_refuses_excluded_src():
 def test_v5_matcher_uses_pinned_exact_source_list():
     families = tasksource_families(AUDIT)
     assert build_mixture.audited("babi_nli/basic-coreference", AUDIT, POLICY)
-    assert build_mixture.audited("commonsense_qa_2.0", AUDIT, POLICY)
+    # CSQA 2 was admitted through the commonsense_qa prefix without evidence; the list is exact now
+    assert build_mixture.audited("commonsense_qa", AUDIT, POLICY)
+    assert not build_mixture.audited("commonsense_qa_2.0", AUDIT, POLICY)
     assert build_mixture.audited("spartqa-yn", AUDIT, POLICY)
     assert not build_mixture.audited("babi_nli/new-subset", AUDIT, POLICY)
     disabled = copy.deepcopy(AUDIT)
@@ -179,7 +181,7 @@ def test_generator_allowlist_is_exact():
     assert "whitespace" in check_sources.generator_error(
         [{"model": "Qwen/Qwen3-8B\n", "role": "writer"}], POLICY)
     approved = {rule["model"]: rule for rule in POLICY["generators"]}
-    for model in ("Gemma-4-26B-A4B-it", "Qwen/Qwen3.8-27B"):
+    for model in ("google/gemma-4-26B-A4B-it", "Qwen/Qwen3.8-27B"):
         assert approved[model]["licence_spdx"] == "Apache-2.0"
         assert approved[model]["terms_url"].startswith("https://")
         assert check_sources.generator_error([{"model": model, "role": "writer"}], POLICY) is None
@@ -212,7 +214,7 @@ def test_invalid_policy_enums_and_unexplained_disabled_family_fail(tmp_path):
     policy = copy.deepcopy(POLICY)
     policy["exclusions"][0]["reason_class"] = "made-up"
     audit = copy.deepcopy(AUDIT)
-    audit["keep_families"]["FOL-nli"]["use"] = False
+    audit["keep_families"]["qasc"]["use"] = False  # an admitted family, disabled without a reason
     errors = run(tmp_path, policy=policy, audit=audit)
     assert any("invalid reason_class" in e for e in errors)
     assert any("use:false family has no policy exclusion" in e for e in errors)

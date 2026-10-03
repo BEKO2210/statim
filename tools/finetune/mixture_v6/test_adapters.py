@@ -129,7 +129,8 @@ def fixture(entry):
 
 def test_every_enabled_source_has_adapter():
     enabled = [e for e in json.load(open(REGISTRY_PATH)) if e.get("use")]
-    assert len(ENABLED_ENTRIES) == len(enabled) > 75
+    # 40 sources passed the licence audit of 2026-10-03 (evidence-2026-10-03*.json)
+    assert len(ENABLED_ENTRIES) == len(enabled) >= 35
     assert {source_key(e) for e in ENABLED_ENTRIES} <= set(ADAPTERS)
 
 

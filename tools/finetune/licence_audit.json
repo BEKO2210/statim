@@ -118,73 +118,302 @@
     "wouldyourather": "scraped 'would you rather' site questions + vote counts; CC0 tag unverified"
   },
   "source_names": {
-    "FOL-nli": ["FOL-nli"],
-    "HatemojiBuild": ["HatemojiBuild"],
-    "HelpSteer": ["HelpSteer/coherence", "HelpSteer/complexity", "HelpSteer/correctness", "HelpSteer/helpfulness", "HelpSteer/verbosity"],
-    "I2D2": ["I2D2"],
-    "PARARULE-Plus": ["PARARULE-Plus"],
-    "SDOH-NLI": ["SDOH-NLI"],
-    "SpaceNLI": ["SpaceNLI"],
-    "WANLI": ["WANLI"],
-    "agent_action_safety": ["agent_action_safety"],
-    "babi_nli/": ["babi_nli/basic-coreference", "babi_nli/basic-deduction", "babi_nli/basic-induction", "babi_nli/compound-coreference", "babi_nli/conjunction", "babi_nli/counting", "babi_nli/indefinite-knowledge", "babi_nli/lists-sets", "babi_nli/path-finding", "babi_nli/positional-reasoning", "babi_nli/simple-negation", "babi_nli/single-supporting-fact", "babi_nli/size-reasoning", "babi_nli/three-arg-relations", "babi_nli/three-supporting-facts", "babi_nli/time-reasoning", "babi_nli/two-arg-relations", "babi_nli/two-supporting-facts", "babi_nli/yes-no-questions"],
-    "balanced-copa": ["balanced-copa"],
-    "circa": ["circa"],
-    "civil_comments/": ["civil_comments/identity_attack_share", "civil_comments/insult_share", "civil_comments/obscene_share", "civil_comments/severe_toxicity_share", "civil_comments/sexual_explicit_share", "civil_comments/threat_share", "civil_comments/toxicity_share"],
-    "cladder": ["cladder"],
-    "clcd-english": ["clcd-english"],
-    "clinc_oos/plus": ["clinc_oos/plus"],
-    "codah/codah": ["codah/codah"],
-    "commonsense_qa": ["commonsense_qa", "commonsense_qa_2.0"],
-    "corr2cause": ["corr2cause"],
-    "defeasible-nli/atomic": ["defeasible-nli/atomic"],
-    "dnd_style_intents": ["dnd_style_intents"],
-    "e-CARE": ["e-CARE"],
-    "esci": ["esci"],
-    "ethics/deontology": ["ethics/deontology"],
-    "ethics/justice": ["ethics/justice"],
-    "ethics/virtue": ["ethics/virtue"],
-    "feasibilityQA": ["feasibilityQA"],
-    "fig-qa": ["fig-qa"],
-    "hh-rlhf/": ["hh-rlhf/harmless-base", "hh-rlhf/helpful-base", "hh-rlhf/helpful-online", "hh-rlhf/helpful-rejection-sampled"],
-    "it-support-tickets": ["it-support-tickets"],
-    "lex_glue/case_hold": ["lex_glue/case_hold"],
-    "lex_glue/ledgar": ["lex_glue/ledgar"],
-    "logical-entailment": ["logical-entailment"],
-    "lonli": ["lonli"],
-    "math_qa": ["math_qa"],
-    "mindgames": ["mindgames"],
-    "multilingual/xcopa/": ["multilingual/xcopa/et", "multilingual/xcopa/ht", "multilingual/xcopa/id", "multilingual/xcopa/it", "multilingual/xcopa/qu", "multilingual/xcopa/sw", "multilingual/xcopa/ta", "multilingual/xcopa/th", "multilingual/xcopa/tr", "multilingual/xcopa/translation-et", "multilingual/xcopa/translation-ht", "multilingual/xcopa/translation-id", "multilingual/xcopa/translation-it", "multilingual/xcopa/translation-sw", "multilingual/xcopa/translation-ta", "multilingual/xcopa/translation-th", "multilingual/xcopa/translation-tr", "multilingual/xcopa/translation-vi", "multilingual/xcopa/translation-zh", "multilingual/xcopa/vi", "multilingual/xcopa/zh"],
-    "multilingual/xcsr/": ["multilingual/xcsr/X-CODAH-ar", "multilingual/xcsr/X-CODAH-de", "multilingual/xcsr/X-CODAH-en", "multilingual/xcsr/X-CODAH-es", "multilingual/xcsr/X-CODAH-fr", "multilingual/xcsr/X-CODAH-hi", "multilingual/xcsr/X-CODAH-it", "multilingual/xcsr/X-CODAH-jap", "multilingual/xcsr/X-CODAH-nl", "multilingual/xcsr/X-CODAH-pl", "multilingual/xcsr/X-CODAH-pt", "multilingual/xcsr/X-CODAH-ru", "multilingual/xcsr/X-CODAH-sw", "multilingual/xcsr/X-CODAH-ur", "multilingual/xcsr/X-CODAH-vi", "multilingual/xcsr/X-CODAH-zh", "multilingual/xcsr/X-CSQA-ar", "multilingual/xcsr/X-CSQA-de", "multilingual/xcsr/X-CSQA-en", "multilingual/xcsr/X-CSQA-es", "multilingual/xcsr/X-CSQA-fr", "multilingual/xcsr/X-CSQA-hi", "multilingual/xcsr/X-CSQA-it", "multilingual/xcsr/X-CSQA-jap", "multilingual/xcsr/X-CSQA-nl", "multilingual/xcsr/X-CSQA-pl", "multilingual/xcsr/X-CSQA-pt", "multilingual/xcsr/X-CSQA-ru", "multilingual/xcsr/X-CSQA-sw", "multilingual/xcsr/X-CSQA-ur", "multilingual/xcsr/X-CSQA-vi", "multilingual/xcsr/X-CSQA-zh"],
-    "patent-phrase-similarity": ["patent-phrase-similarity"],
-    "poem_sentiment": ["poem_sentiment"],
-    "prm800k_dpo/": ["prm800k_dpo/solution", "prm800k_dpo/step"],
-    "procedural-typed-decisions/": ["procedural-typed-decisions/arithmetic", "procedural-typed-decisions/entity_belief_tracking", "procedural-typed-decisions/event_state_reconstruction", "procedural-typed-decisions/evidence_sufficiency", "procedural-typed-decisions/multi_view_adjudication", "procedural-typed-decisions/needle_retrieval", "procedural-typed-decisions/partial_observation_calibration", "procedural-typed-decisions/policy_applicability", "procedural-typed-decisions/policy_under_uncertainty", "procedural-typed-decisions/record_aggregation", "procedural-typed-decisions/state_perturbation", "procedural-typed-decisions/table_lookup"],
-    "prompt-injections": ["prompt-injections"],
-    "prost": ["prost"],
-    "qasc": ["qasc"],
-    "quartz": ["quartz"],
-    "ruletaker": ["ruletaker"],
-    "shell-safety-v2": ["shell-safety-v2"],
-    "sms_spam": ["sms_spam"],
-    "snips_built_in_intents": ["snips_built_in_intents"],
-    "social_i_qa": ["social_i_qa"],
-    "spartqa-": ["spartqa-mchoice", "spartqa-yn"],
-    "stepgame": ["stepgame"],
-    "temporal-nli": ["temporal-nli"],
-    "utilitarianism": ["utilitarianism"],
-    "winodict": ["winodict"],
-    "winowhy": ["winowhy"],
-    "HelpSteer2/coherence": ["HelpSteer2/coherence"],
-    "HelpSteer2/complexity": ["HelpSteer2/complexity"],
-    "HelpSteer2/correctness": ["HelpSteer2/correctness"],
-    "HelpSteer2/helpfulness": ["HelpSteer2/helpfulness"],
-    "HelpSteer2/verbosity": ["HelpSteer2/verbosity"],
-    "HelpSteer3/edit_quality": ["HelpSteer3/edit_quality"],
-    "HelpSteer3/feedback": ["HelpSteer3/feedback"],
-    "HelpSteer3/preference": ["HelpSteer3/preference"],
-    "HelpSteer3/preference_strength": ["HelpSteer3/preference_strength"],
-    "HelpSteer3/principle": ["HelpSteer3/principle"]
+    "FOL-nli": [
+      "FOL-nli"
+    ],
+    "HatemojiBuild": [
+      "HatemojiBuild"
+    ],
+    "HelpSteer": [
+      "HelpSteer/coherence",
+      "HelpSteer/complexity",
+      "HelpSteer/correctness",
+      "HelpSteer/helpfulness",
+      "HelpSteer/verbosity"
+    ],
+    "I2D2": [
+      "I2D2"
+    ],
+    "PARARULE-Plus": [
+      "PARARULE-Plus"
+    ],
+    "SDOH-NLI": [
+      "SDOH-NLI"
+    ],
+    "SpaceNLI": [
+      "SpaceNLI"
+    ],
+    "WANLI": [
+      "WANLI"
+    ],
+    "agent_action_safety": [
+      "agent_action_safety"
+    ],
+    "babi_nli/": [
+      "babi_nli/basic-coreference",
+      "babi_nli/basic-deduction",
+      "babi_nli/basic-induction",
+      "babi_nli/compound-coreference",
+      "babi_nli/conjunction",
+      "babi_nli/counting",
+      "babi_nli/indefinite-knowledge",
+      "babi_nli/lists-sets",
+      "babi_nli/path-finding",
+      "babi_nli/positional-reasoning",
+      "babi_nli/simple-negation",
+      "babi_nli/single-supporting-fact",
+      "babi_nli/size-reasoning",
+      "babi_nli/three-arg-relations",
+      "babi_nli/three-supporting-facts",
+      "babi_nli/time-reasoning",
+      "babi_nli/two-arg-relations",
+      "babi_nli/two-supporting-facts",
+      "babi_nli/yes-no-questions"
+    ],
+    "balanced-copa": [
+      "balanced-copa"
+    ],
+    "circa": [
+      "circa"
+    ],
+    "civil_comments/": [
+      "civil_comments/identity_attack_share",
+      "civil_comments/insult_share",
+      "civil_comments/obscene_share",
+      "civil_comments/severe_toxicity_share",
+      "civil_comments/sexual_explicit_share",
+      "civil_comments/threat_share",
+      "civil_comments/toxicity_share"
+    ],
+    "cladder": [
+      "cladder"
+    ],
+    "clcd-english": [
+      "clcd-english"
+    ],
+    "clinc_oos/plus": [
+      "clinc_oos/plus"
+    ],
+    "codah/codah": [
+      "codah/codah"
+    ],
+    "commonsense_qa": [
+      "commonsense_qa"
+    ],
+    "corr2cause": [
+      "corr2cause"
+    ],
+    "defeasible-nli/atomic": [
+      "defeasible-nli/atomic"
+    ],
+    "dnd_style_intents": [
+      "dnd_style_intents"
+    ],
+    "e-CARE": [
+      "e-CARE"
+    ],
+    "esci": [
+      "esci"
+    ],
+    "ethics/deontology": [
+      "ethics/deontology"
+    ],
+    "ethics/justice": [
+      "ethics/justice"
+    ],
+    "ethics/virtue": [
+      "ethics/virtue"
+    ],
+    "feasibilityQA": [
+      "feasibilityQA"
+    ],
+    "fig-qa": [
+      "fig-qa"
+    ],
+    "hh-rlhf/": [
+      "hh-rlhf/harmless-base",
+      "hh-rlhf/helpful-base",
+      "hh-rlhf/helpful-online",
+      "hh-rlhf/helpful-rejection-sampled"
+    ],
+    "it-support-tickets": [
+      "it-support-tickets"
+    ],
+    "lex_glue/case_hold": [
+      "lex_glue/case_hold"
+    ],
+    "lex_glue/ledgar": [
+      "lex_glue/ledgar"
+    ],
+    "logical-entailment": [
+      "logical-entailment"
+    ],
+    "lonli": [
+      "lonli"
+    ],
+    "math_qa": [
+      "math_qa"
+    ],
+    "mindgames": [
+      "mindgames"
+    ],
+    "multilingual/xcopa/": [
+      "multilingual/xcopa/et",
+      "multilingual/xcopa/ht",
+      "multilingual/xcopa/id",
+      "multilingual/xcopa/it",
+      "multilingual/xcopa/qu",
+      "multilingual/xcopa/sw",
+      "multilingual/xcopa/ta",
+      "multilingual/xcopa/th",
+      "multilingual/xcopa/tr",
+      "multilingual/xcopa/translation-et",
+      "multilingual/xcopa/translation-ht",
+      "multilingual/xcopa/translation-id",
+      "multilingual/xcopa/translation-it",
+      "multilingual/xcopa/translation-sw",
+      "multilingual/xcopa/translation-ta",
+      "multilingual/xcopa/translation-th",
+      "multilingual/xcopa/translation-tr",
+      "multilingual/xcopa/translation-vi",
+      "multilingual/xcopa/translation-zh",
+      "multilingual/xcopa/vi",
+      "multilingual/xcopa/zh"
+    ],
+    "multilingual/xcsr/": [
+      "multilingual/xcsr/X-CODAH-ar",
+      "multilingual/xcsr/X-CODAH-de",
+      "multilingual/xcsr/X-CODAH-en",
+      "multilingual/xcsr/X-CODAH-es",
+      "multilingual/xcsr/X-CODAH-fr",
+      "multilingual/xcsr/X-CODAH-hi",
+      "multilingual/xcsr/X-CODAH-it",
+      "multilingual/xcsr/X-CODAH-jap",
+      "multilingual/xcsr/X-CODAH-nl",
+      "multilingual/xcsr/X-CODAH-pl",
+      "multilingual/xcsr/X-CODAH-pt",
+      "multilingual/xcsr/X-CODAH-ru",
+      "multilingual/xcsr/X-CODAH-sw",
+      "multilingual/xcsr/X-CODAH-ur",
+      "multilingual/xcsr/X-CODAH-vi",
+      "multilingual/xcsr/X-CODAH-zh",
+      "multilingual/xcsr/X-CSQA-ar",
+      "multilingual/xcsr/X-CSQA-de",
+      "multilingual/xcsr/X-CSQA-en",
+      "multilingual/xcsr/X-CSQA-es",
+      "multilingual/xcsr/X-CSQA-fr",
+      "multilingual/xcsr/X-CSQA-hi",
+      "multilingual/xcsr/X-CSQA-it",
+      "multilingual/xcsr/X-CSQA-jap",
+      "multilingual/xcsr/X-CSQA-nl",
+      "multilingual/xcsr/X-CSQA-pl",
+      "multilingual/xcsr/X-CSQA-pt",
+      "multilingual/xcsr/X-CSQA-ru",
+      "multilingual/xcsr/X-CSQA-sw",
+      "multilingual/xcsr/X-CSQA-ur",
+      "multilingual/xcsr/X-CSQA-vi",
+      "multilingual/xcsr/X-CSQA-zh"
+    ],
+    "patent-phrase-similarity": [
+      "patent-phrase-similarity"
+    ],
+    "poem_sentiment": [
+      "poem_sentiment"
+    ],
+    "prm800k_dpo/": [
+      "prm800k_dpo/solution",
+      "prm800k_dpo/step"
+    ],
+    "procedural-typed-decisions/": [
+      "procedural-typed-decisions/arithmetic",
+      "procedural-typed-decisions/entity_belief_tracking",
+      "procedural-typed-decisions/event_state_reconstruction",
+      "procedural-typed-decisions/evidence_sufficiency",
+      "procedural-typed-decisions/multi_view_adjudication",
+      "procedural-typed-decisions/needle_retrieval",
+      "procedural-typed-decisions/partial_observation_calibration",
+      "procedural-typed-decisions/policy_applicability",
+      "procedural-typed-decisions/policy_under_uncertainty",
+      "procedural-typed-decisions/record_aggregation",
+      "procedural-typed-decisions/state_perturbation",
+      "procedural-typed-decisions/table_lookup"
+    ],
+    "prompt-injections": [
+      "prompt-injections"
+    ],
+    "prost": [
+      "prost"
+    ],
+    "qasc": [
+      "qasc"
+    ],
+    "quartz": [
+      "quartz"
+    ],
+    "ruletaker": [
+      "ruletaker"
+    ],
+    "shell-safety-v2": [
+      "shell-safety-v2"
+    ],
+    "sms_spam": [
+      "sms_spam"
+    ],
+    "snips_built_in_intents": [
+      "snips_built_in_intents"
+    ],
+    "social_i_qa": [
+      "social_i_qa"
+    ],
+    "spartqa-": [
+      "spartqa-mchoice",
+      "spartqa-yn"
+    ],
+    "stepgame": [
+      "stepgame"
+    ],
+    "temporal-nli": [
+      "temporal-nli"
+    ],
+    "utilitarianism": [
+      "utilitarianism"
+    ],
+    "winodict": [
+      "winodict"
+    ],
+    "winowhy": [
+      "winowhy"
+    ],
+    "HelpSteer2/coherence": [
+      "HelpSteer2/coherence"
+    ],
+    "HelpSteer2/complexity": [
+      "HelpSteer2/complexity"
+    ],
+    "HelpSteer2/correctness": [
+      "HelpSteer2/correctness"
+    ],
+    "HelpSteer2/helpfulness": [
+      "HelpSteer2/helpfulness"
+    ],
+    "HelpSteer2/verbosity": [
+      "HelpSteer2/verbosity"
+    ],
+    "HelpSteer3/edit_quality": [
+      "HelpSteer3/edit_quality"
+    ],
+    "HelpSteer3/feedback": [
+      "HelpSteer3/feedback"
+    ],
+    "HelpSteer3/preference": [
+      "HelpSteer3/preference"
+    ],
+    "HelpSteer3/preference_strength": [
+      "HelpSteer3/preference_strength"
+    ],
+    "HelpSteer3/principle": [
+      "HelpSteer3/principle"
+    ]
   },
   "keep_families": {
     "FOL-nli": {
@@ -195,16 +424,19 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "HatemojiBuild": {
       "licence": "annotator-authored (Dynabench), CC-BY-4.0",
       "licence_spdx": "CC-BY-4.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/HannahRoseKirk/HatemojiBuild/blob/17509b6678c3206ce7bfa43107fdadf53f3d06f7/README.md"
+      ],
+      "provenance": "Adversarial emoji examples entered by annotators on Dynabench; the language producers are the annotators.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "HelpSteer": {
@@ -215,7 +447,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": false
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "I2D2": {
       "licence": "AI2 generics generated by GPT-2 (MIT model), Apache-2.0",
@@ -230,7 +463,8 @@
         }
       ],
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "PARARULE-Plus": {
       "licence": "synthetic rule reasoning, MIT",
@@ -240,7 +474,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "SDOH-NLI": {
       "licence": "Google Research, CC-BY-4.0",
@@ -256,11 +491,13 @@
     "SpaceNLI": {
       "licence": "template-generated, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://github.com/kovvalsky/SpaceNLI/blob/8c10e94d2387/LICENSE"
+      ],
+      "provenance": "Spatial NLI items produced by filling noun-phrase placeholders in the authors' patterns.",
+      "text_licence_spdx": "MIT",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "WANLI": {
@@ -288,11 +525,13 @@
     "babi_nli/": {
       "licence": "bAbI synthetic (Facebook, BSD/CC-BY-3.0)",
       "licence_spdx": "CC-BY-3.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/facebook/babi_qa/blob/021d7aeb7307/README.md"
+      ],
+      "provenance": "English stories and questions generated by the bAbI tasks grammar; tasksource/babi_nli is that text recast as NLI.",
+      "text_licence_spdx": "BSD-3-Clause",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "balanced-copa": {
@@ -303,7 +542,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "circa": {
       "licence": "Google, crowd-written, CC-BY-4.0",
@@ -319,11 +559,13 @@
     "civil_comments/": {
       "licence": "Civil Comments released CC0 by platform/Jigsaw",
       "licence_spdx": "CC0-1.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/google/civil_comments/blob/f2970eb3a55777454c94069077cc8d9b5866312d/README.md"
+      ],
+      "provenance": "Public comments written by users of the Civil Comments plugin on news sites.",
+      "text_licence_spdx": "CC0-1.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "cladder": {
@@ -334,46 +576,57 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "clcd-english": {
       "licence": "template/logic-generated (Salvatore 2019), Apache-2.0",
-      "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_spdx": "MIT",
+      "licence_evidence": [
+        "https://github.com/felipessalvatore/CLCD/blob/422f9e93d49e/LICENSE"
+      ],
+      "provenance": "English contradiction and non-contradiction sentences produced from a formal template language over people and places.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "clinc_oos/plus": {
       "licence": "crowdsourced queries, CC-BY-3.0",
       "licence_spdx": "CC-BY-3.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/1909.02027",
+        "https://huggingface.co/datasets/clinc/clinc_oos/blob/155b9c710419136e17307b80d0a13e68cd46b4ec/README.md"
+      ],
+      "provenance": "Crowd workers wrote the queries as if talking to an assistant. The authors grouped them into intents.",
+      "text_licence_spdx": "CC-BY-3.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "codah/codah": {
       "licence": "crowd-authored, ODC-By",
       "licence_spdx": "ODC-By-1.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/jaredfern/codah/blob/4b0e0e7f33b3ae8cd8e69bcdfa09af9611d8f3bd/README.md"
+      ],
+      "provenance": "Commonsense items adversarially authored by humans.",
+      "text_licence_spdx": "ODC-By-1.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "commonsense_qa": {
       "licence": "crowd-authored (CSQA MIT; CSQA2 CC-BY-4.0)",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/1811.00937",
+        "https://huggingface.co/datasets/tau/commonsense_qa/blob/94630fe30dad47192a8546eb75f094926d47e155/README.md"
+      ],
+      "provenance": "Mechanical Turk workers wrote multiple-choice questions from ConceptNet concept seeds.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "corr2cause": {
@@ -384,16 +637,22 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "defeasible-nli/atomic": {
       "licence": "ATOMIC (CC-BY-4.0) + crowd updates, repo MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://github.com/rudinger/defeasible-nli/blob/main/README.md",
+        "https://github.com/rudinger/defeasible-nli/blob/main/LICENSE",
+        "https://huggingface.co/datasets/allenai/atomic/blob/5cd968cca3ad16bb3323948d038182b1d5f77902/README.md",
+        "https://huggingface.co/datasets/tasksource/defeasible-nli/blob/7c4a57df9d8de5c36d4e9caa977907b5e8469c4f/README.md"
+      ],
+      "provenance": "ATOMIC if-then events as premise and hypothesis, plus strengthener or weakener sentences written by Mechanical Turk annotators.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "dnd_style_intents": {
@@ -410,51 +669,71 @@
     "e-CARE": {
       "licence": "crowd-authored, repo MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://github.com/Waste-Wood/e-CARE/blob/main/LICENSE",
+        "https://api.github.com/repos/waste-wood/e-care/license",
+        "https://github.com/waste-wood/e-care",
+        "https://huggingface.co/datasets/12ml/e-CARE/blob/a9c788710144e6edd31f925345fa107c0634e223/README.md"
+      ],
+      "provenance": "Human-annotated causal-reasoning questions and natural-language explanations; the README names no scraped corpus.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "esci": {
       "licence": "Amazon's own Shopping Queries release, Apache-2.0",
       "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/tasksource/esci/blob/8113b17a5d4099e20243282c926f1bc1a08a4d13/README.md",
+        "https://github.com/amazon-science/esci-data/blob/7916cdf6ab75a462e77f20ab40428a10923998d5/README.md"
+      ],
+      "provenance": "Amazon shopping queries, catalogue product text and ESCI relevance judgements released in the Shopping Queries dataset.",
+      "text_licence_spdx": "Apache-2.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "ethics/deontology": {
       "licence": "MTurk-written, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/2008.02275",
+        "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+        "https://github.com/hendrycks/ethics/blob/fa022dbc62dc6736c2f3780ced6412cae97efb90/README.md"
+      ],
+      "provenance": "Deontology scenarios in ETHICS, written by qualified MTurk workers.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "ethics/justice": {
       "licence": "MTurk-written, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/2008.02275",
+        "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+        "https://github.com/hendrycks/ethics/blob/fa022dbc62dc6736c2f3780ced6412cae97efb90/README.md"
+      ],
+      "provenance": "Justice scenarios in ETHICS, written by qualified MTurk workers.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "ethics/virtue": {
       "licence": "MTurk-written, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/2008.02275",
+        "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+        "https://github.com/hendrycks/ethics/blob/fa022dbc62dc6736c2f3780ced6412cae97efb90/README.md"
+      ],
+      "provenance": "Virtue scenarios in ETHICS, written by qualified MTurk workers.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "feasibilityQA": {
@@ -465,16 +744,19 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "fig-qa": {
       "licence": "crowd-written metaphors, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/nightingal3/fig-qa/blob/b29ec2faf6ef73d634db9757f8741dee68f6c874/README.md"
+      ],
+      "provenance": "Creative metaphors written by people. The card's annotations_creators and language_creators tags are crowdsourced.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "hh-rlhf/": {
@@ -485,16 +767,20 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": false
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "it-support-tickets": {
       "licence": "real tickets released by source authors under CC-BY-4.0 (PII removed)",
       "licence_spdx": "CC-BY-4.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/tasksource/it-support-tickets/blob/e0bbdcb96c84feaa394aaae9c48f8ba4b818451b/README.md",
+        "https://zenodo.org/records/7648117"
+      ],
+      "provenance": "Real IT-support tickets from a Florianópolis company, labelled by three support professionals.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "lex_glue/case_hold": {
@@ -505,7 +791,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "lex_glue/ledgar": {
       "licence": "SEC EDGAR public filings, LexGLUE CC-BY-4.0",
@@ -521,21 +808,29 @@
     "logical-entailment": {
       "licence": "DeepMind synthetic formulas, Apache-2.0",
       "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://api.github.com/repos/google-deepmind/logical-entailment-dataset/readme",
+        "https://github.com/google-deepmind/logical-entailment-dataset/blob/master/LICENSE",
+        "https://huggingface.co/datasets/tasksource/logical-entailment/blob/5275a96cea765dc3bbfd41e6034485791704ed69/README.md"
+      ],
+      "provenance": "Propositional formulas and entailment labels emitted by the repository's Haskell generator.",
+      "text_licence_spdx": "Apache-2.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "lonli": {
       "licence": "Microsoft template-generated, MIT",
-      "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_spdx": "CC-BY-4.0",
+      "licence_evidence": [
+        "https://arxiv.org/html/2107.07229",
+        "https://github.com/microsoft/LoNLI/blob/main/LICENSE",
+        "https://huggingface.co/datasets/tasksource/lonli/blob/f17e55b8f60da2f32720c1a16e4b6149145c662f/README.md"
+      ],
+      "provenance": "NLI examples filled from author-written CheckList templates.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "math_qa": {
@@ -546,16 +841,20 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "mindgames": {
       "licence": "synthetic epistemic logic, Apache-2.0",
-      "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_spdx": "CC-BY-4.0",
+      "licence_evidence": [
+        "https://arxiv.org/html/2305.03353",
+        "https://huggingface.co/datasets/sileod/mindgames/blob/e378f4c70f66413a00c664373f4f43064b3ba752/README.md"
+      ],
+      "provenance": "Theory-of-mind items verbalized from dynamic-epistemic-logic problems with a fixed English template; names come from census surnames.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "multilingual/xcopa/": {
@@ -566,7 +865,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "multilingual/xcsr/": {
       "licence": "X-CSR MIT (CSQA MIT, CODAH ODC-By, MT translations)",
@@ -576,7 +876,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "patent-phrase-similarity": {
       "licence": "Google, CC-BY-4.0",
@@ -586,16 +887,20 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "poem_sentiment": {
       "licence": "Google CC-BY-4.0, Project Gutenberg verses (public domain)",
       "licence_spdx": "CC-BY-4.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/google-research-datasets/poem_sentiment/blob/685b95a2787a869b7bae6c4480810f57fe23b48e/README.md",
+        "https://github.com/google-research-datasets/poem-sentiment/blob/612e9a1f86799126c68f0c5d9c3f1fc28f88068f/README.md"
+      ],
+      "provenance": "The tasksource family loads google-research-datasets/poem_sentiment: expert labels on Project Gutenberg verses.",
+      "text_licence_spdx": "public-domain",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "prm800k_dpo/": {
@@ -606,7 +911,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": false
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "procedural-typed-decisions/": {
       "licence": "procedurally generated, Apache-2.0",
@@ -616,7 +922,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "prompt-injections": {
       "licence": "deepset, author-written prompts, Apache-2.0",
@@ -632,21 +939,26 @@
     "prost": {
       "licence": "template-generated, Apache-2.0",
       "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/corypaik/prost/blob/b3efebf08969fc19335ba894353316878b6fa493/README.md"
+      ],
+      "provenance": "Cloze questions filled from 14 templates that the authors wrote by hand.",
+      "text_licence_spdx": "Apache-2.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "qasc": {
       "licence": "AI2 CC-BY-4.0",
       "licence_spdx": "CC-BY-4.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/1910.11473",
+        "https://huggingface.co/datasets/allenai/qasc/blob/a34ba204eb9a33b919c10cc08f4f1c8dae5ec070/README.md"
+      ],
+      "provenance": "Crowd workers authored the science questions and composed the two supporting facts.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "quartz": {
@@ -657,16 +969,20 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "ruletaker": {
       "licence": "AI2 synthetic, Apache-2.0",
       "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://github.com/allenai/ruletaker/blob/abaacec9364992eff5ec4555b837e20fee2f2ff0/README.md",
+        "https://github.com/allenai/ruletaker"
+      ],
+      "provenance": "English theories and assertions generated from a declarative grammar, with labels from Problog.",
+      "text_licence_spdx": "Apache-2.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "shell-safety-v2": {
@@ -694,11 +1010,13 @@
     "snips_built_in_intents": {
       "licence": "CC0",
       "licence_spdx": "CC0-1.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://huggingface.co/datasets/sonos-nlu-benchmark/snips_built_in_intents/blob/7a3f9329f396a746c867f370c7ab210dff9c789b/README.md"
+      ],
+      "provenance": "Short voice-assistant queries written by the Snips business team.",
+      "text_licence_spdx": "CC0-1.0",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "social_i_qa": {
@@ -709,47 +1027,63 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "spartqa-": {
       "licence": "synthetic spatial QA, MIT/Apache-2.0",
-      "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_spdx": "MIT",
+      "licence_evidence": [
+        "https://github.com/HLR/SpartQA_generation/blob/main/LICENSE.md",
+        "https://api.github.com/repos/HLR/SpartQA_generation/readme",
+        "https://aclanthology.org/2021.naacl-main.364.pdf",
+        "https://huggingface.co/datasets/tasksource/spartqa-yn/blob/150c819e88bba1859b8a763fd40d3a15033adc58/README.md",
+        "https://huggingface.co/datasets/tasksource/spartqa-mchoice/blob/d29ba456044649c3c2fe29c5ff429c3e6d80a97b/README.md"
+      ],
+      "provenance": "Spatial stories and questions generated by context-free grammars from NLVR scene graphs; the NLVR caption text is not copied.",
+      "text_licence_spdx": "MIT",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "stepgame": {
       "licence": "synthetic, MIT",
-      "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_spdx": "CC-BY-4.0",
+      "licence_evidence": [
+        "https://arxiv.org/html/2204.08292",
+        "https://github.com/ShiZhengyan/StepGame/blob/main/LICENSE",
+        "https://huggingface.co/datasets/tasksource/stepgame/blob/3ba235d4a7056cf8b062a57aa489f7bc14bff229/README.md"
+      ],
+      "provenance": "Spatial descriptions crowdsourced as templates, then instantiated with entity names.",
+      "text_licence_spdx": "CC-BY-4.0",
+      "generator": "template",
+      "checked": "2026-10-03",
       "use": true
     },
     "temporal-nli": {
       "licence": "template-generated (Thukral 2021), Apache-2.0",
-      "licence_spdx": "Apache-2.0",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
-      "use": false,
-      "excluded_reason": "licence audit 2026-10-03, see policy.json"
+      "licence_spdx": "CC0-1.0",
+      "licence_evidence": [
+        "https://github.com/kunalkukreja21/temporal-expressions-evaluation-lm/blob/384ebf53ed5b/LICENSE"
+      ],
+      "provenance": "Three NLI sets filled from templates over a manually curated list of 71 events and calendar expressions.",
+      "text_licence_spdx": "Apache-2.0",
+      "generator": "template",
+      "checked": "2026-10-03",
+      "use": true
     },
     "utilitarianism": {
       "licence": "ETHICS MTurk-written, MIT",
       "licence_spdx": "MIT",
-      "licence_evidence": "TODO",
-      "provenance": "TODO",
-      "text_licence_spdx": "TODO",
-      "generator": "TODO",
-      "checked": "TODO",
+      "licence_evidence": [
+        "https://arxiv.org/html/2008.02275",
+        "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+        "https://github.com/hendrycks/ethics/blob/fa022dbc62dc6736c2f3780ced6412cae97efb90/README.md"
+      ],
+      "provenance": "Utilitarianism scenarios in ETHICS, written by qualified MTurk workers.",
+      "text_licence_spdx": "MIT",
+      "generator": "human",
+      "checked": "2026-10-03",
       "use": true
     },
     "winodict": {
@@ -760,7 +1094,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "winowhy": {
       "licence": "WSC + MTurk reasons, MIT",
@@ -770,7 +1105,8 @@
       "text_licence_spdx": "TODO",
       "generator": "TODO",
       "checked": "TODO",
-      "use": true
+      "use": false,
+      "excluded_reason": "licence audit 2026-10-03, see policy.json"
     },
     "HelpSteer2/coherence": {
       "licence": "nvidia HelpSteer/2/3 CC-BY-4.0, responses from NVIDIA/commercially-permissive models",

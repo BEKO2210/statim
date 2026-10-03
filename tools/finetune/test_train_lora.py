@@ -55,8 +55,13 @@ def test_categories_match_the_held_out_suites():
 
 def test_category_sources_use_exact_src_names(tmp_path):
     chosen, enabled = train_lora.category_sources(REGISTRY, "fact_check")
-    assert "v6/zenodo:3609356 (ClaimBuster)/crowdsourced/groundtruth" in chosen  # config with "/"
     assert all(src in enabled for src in chosen)
+    # a config containing "/" keeps its full name (ClaimBuster, the real case, is licence-excluded)
+    slash = tmp_path / "slash.json"
+    slash.write_text(json.dumps([{"id": "zenodo:1 (Fixture)", "config": "crowdsourced/groundtruth",
+                                  "use": True, "category": "10-fact-check"}]), encoding="utf-8")
+    slash_chosen, _ = train_lora.category_sources(slash, "fact_check")
+    assert slash_chosen == {"v6/zenodo:1 (Fixture)/crowdsourced/groundtruth"}
     by_src = {train_lora.source_name(e): e["category"] for e in _entries()}
     assert chosen == {s for s, c in by_src.items() if "10-fact-check" in c or "10-claim" in c}
     sentiment, _ = train_lora.category_sources(REGISTRY, "sentiment")

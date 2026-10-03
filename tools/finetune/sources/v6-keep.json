@@ -16,13 +16,16 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts); already in mixture v5",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/google-research-datasets/poem_sentiment/blob/685b95a2787a869b7bae6c4480810f57fe23b48e/README.md",
+   "https://github.com/google-research-datasets/poem-sentiment/blob/612e9a1f86799126c68f0c5d9c3f1fc28f88068f/README.md",
+   "https://github.com/google-research-datasets/poem-sentiment/blob/612e9a1f86799126c68f0c5d9c3f1fc28f88068f/LICENSE"
+  ],
+  "provenance": "Expert-labelled sentiment on poem verses taken from Project Gutenberg.",
+  "text_licence_spdx": "public-domain",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "ai4bharat/IndicSentiment",
@@ -56,13 +59,16 @@
   "test_overlap_note": "not an eval suite: both splits usable for training; no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/ai4bharat/IndicSentiment/blob/dc8f3f66886531c6897fedffca1e938a68fc5013/README.md",
+   "https://github.com/AI4Bharat/IndicBERT/blob/4890441925986d4523aa1c8fe01c6dfa06abe7cd/README.md",
+   "https://ar5iv.labs.arxiv.org/html/2212.05409"
+  ],
+  "provenance": "Annotators wrote synthetic English product reviews, then manually translated them into 13 Indic languages; the HF card itself has no licence field.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "community-datasets/re_dial",
@@ -82,13 +88,14 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/community-datasets/re_dial/blob/eb588549012bdebd7283d5cb0ca86057f62d6832/README.md"
+  ],
+  "provenance": "Movie recommendation dialogues written by paired Amazon Mechanical Turk workers.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "tanaos/synthetic-sentiment-analysis-dataset-v1",
@@ -125,13 +132,19 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/Novora/Tri-Class-Sentiment-Synthetic/blob/cbc64fdb7f084e87f502733ea5be4ff3bd0446e8/README.md"
+  ],
+  "provenance": "Synthetic English sentiment sentences written by a local Ollama quant of Microsoft Phi-3.5-mini-instruct; the card says the text is not derived from human data.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": [
+   {
+    "model": "microsoft/Phi-3.5-mini-instruct",
+    "role": "text"
+   }
+  ],
+  "checked": "2026-10-03"
  },
  {
   "id": "sutro/synthetic-product-reviews-20k",
@@ -216,13 +229,15 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/Kenshiii/synthetic-product-reviews/blob/d71d3692cdcea3ea558e048f3675a2f519ddbfbb/README.md",
+   "https://datasets-server.huggingface.co/rows?dataset=Kenshiii/synthetic-product-reviews&config=default&split=train&offset=0&length=3"
+  ],
+  "provenance": "Synthetic English product reviews filled from controlled sentence templates over product attributes; no upstream corpus and no named model.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "KhiredNetworks/synthetic-product-reviews",
@@ -242,13 +257,14 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "MIT",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/KhiredNetworks/synthetic-product-reviews/blob/77a8c5ed00aa8df03a9f7275bda536a74cc81284/README.md"
+  ],
+  "provenance": "Reviews built by combining fixed templates with sampled products, features and sentiment phrases.",
+  "text_licence_spdx": "MIT",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "RichardSakaguchiMS/brazilian-customer-service-conversations",
@@ -322,18 +338,18 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "pinned_url": "https://raw.githubusercontent.com/asappresearch/abcd/0548f35968a93f407035bc0c8a6334c6cf5d07ef/data/abcd_v1.1.json.gz",
   "pinned_sha256": "2bdf53ac359543dcdc38d55bc6513e78df120363f8f44870716e909f4606de15",
   "pinned_commit": "0548f35968a93f407035bc0c8a6334c6cf5d07ef",
   "licence_spdx": "MIT",
   "licence_evidence": [
-   "https://raw.githubusercontent.com/asappresearch/abcd/0548f35968a93f407035bc0c8a6334c6cf5d07ef/data/abcd_v1.1.json.gz"
+   "https://github.com/asappresearch/abcd/blob/6b8700ce67c6b37b062dd7a60abc76d7ef832a97/README.md",
+   "https://github.com/asappresearch/abcd/blob/6b8700ce67c6b37b062dd7a60abc76d7ef832a97/LICENSE"
   ],
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "provenance": "Human-to-human online-shopping dialogues collected with the authors' Expert Live Chat setup.",
+  "text_licence_spdx": "MIT",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "tasksource/it-support-tickets",
@@ -355,13 +371,15 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts); already in mixture v5",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/tasksource/it-support-tickets/blob/e0bbdcb96c84feaa394aaae9c48f8ba4b818451b/README.md",
+   "https://zenodo.org/records/7648117"
+  ],
+  "provenance": "Real IT-support tickets from a Florianópolis company, labelled by three support professionals.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "tasksource/help-desk-tickets",
@@ -381,13 +399,15 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts) | real tickets (Mendeley CC BY 4.0), 357 rows; no eval overlap",
   "source_part": "AB",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/tasksource/help-desk-tickets/blob/d08adc88a5d39b938da00dc837ac613d9be02153/README.md",
+   "https://data.mendeley.com/datasets/btm76zndnt/3"
+  ],
+  "provenance": "Real help-desk reporter messages from Mohammad Abdellatif's Mendeley release of an international software company.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "PolyAI/minds14",
@@ -417,8 +437,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts); already in extra-v1",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -442,8 +462,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC0-1.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -467,8 +487,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC0-1.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -492,8 +512,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -517,8 +537,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -616,13 +636,14 @@
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/s2pidape/support-ticket-dataset/blob/0b4cff1eb83f9a1474d294d3fe8f63cb7423363b/README.md"
+  ],
+  "provenance": "Support-ticket text from a simulator the author wrote; issue_description is template-generated.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "adiprog14/lingrow-support-tickets",
@@ -640,8 +661,8 @@
   ],
   "test_overlap_note": "no eval-suite source; still exact-dedup vs all eval test splits (build_mixture test_texts)",
   "source_part": "A",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -773,8 +794,8 @@
   ],
   "test_overlap_note": "Qwen3-32B stories; no eval overlap; emotion caveat",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -802,8 +823,8 @@
   ],
   "test_overlap_note": "test-only benchmark (400/lang); prefer as new eval suite; if trained on, cannot be used for eval",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -827,18 +848,18 @@
   "test_overlap_note": "not on HF; crowd-written; no eval overlap; emotion caveat",
   "source_part": "B",
   "use": true,
-  "excluded_reason": null,
   "pinned_url": "https://raw.githubusercontent.com/wwbp/empathic_reactions/931501798177d4c51b9a7b0360d39497e7a1bb0e/data/responses/data/messages.csv",
   "pinned_sha256": "380d2670254565629f81616df57cc0729de96ac87c056d05e39c370624ae8f64",
   "pinned_commit": "931501798177d4c51b9a7b0360d39497e7a1bb0e",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": [
-   "https://raw.githubusercontent.com/wwbp/empathic_reactions/931501798177d4c51b9a7b0360d39497e7a1bb0e/data/responses/data/messages.csv"
+   "https://github.com/wwbp/empathic_reactions/blob/3ddbf6b35c789f99c930a349f3fc26b4b2d9ae2e/README.md",
+   "https://arxiv.org/html/1808.10399"
   ],
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "provenance": "Messages written by Mechanical Turk participants about news articles they had just read; the authors removed responses that copied the articles, so the released texts are the participants' messages plus their empathy and distress ratings.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "SINAI/ALIA-es-discriminative-stance-detection",
@@ -876,8 +897,8 @@
   ],
   "test_overlap_note": "uncertain: labelling method undocumented; text = US presidential documents (public domain); no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -920,8 +941,8 @@
   ],
   "test_overlap_note": "90 rows; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -947,13 +968,14 @@
   "test_overlap_note": "procedurally generated; cap; no eval overlap",
   "source_part": "B",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/GoktugD/turkish-formality-rewrite-500k/blob/e698803327b00b42faf271aca1a04c99dc05a112/README.md"
+  ],
+  "provenance": "Turkish formality pairs produced deterministically by the repository generator, with a template_id on every row.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "NagaYu/deference-keigo-corpus",
@@ -972,13 +994,14 @@
   "test_overlap_note": "rule-generated; no eval overlap",
   "source_part": "B",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/NagaYu/deference-keigo-corpus/blob/fe4fe00f97c2dc43888053b8c2ace0a5f3452e1e/README.md"
+  ],
+  "provenance": "Japanese honorific sentences built by rules from the Council for Cultural Affairs report Keigo no Shishin, with errors injected by code.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "ronantakizawa/japanese-honorifics",
@@ -1120,8 +1143,8 @@
   ],
   "test_overlap_note": "SEC filings context; many context-length variants of same seeds, dedup; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1144,8 +1167,8 @@
   ],
   "test_overlap_note": "uncertain: US presidential debate transcripts; load from Zenodo not the cc-by-sa HF mirror; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "pinned_url": "https://zenodo.org/api/records/3609356/files/groundtruth.csv/content",
   "pinned_sha256": "64890c51e1092fec0d361ca770b3efccc0c889dd569b46b35922d94c44fa99ea",
   "pinned_commit": "TODO",
@@ -1174,8 +1197,8 @@
   ],
   "test_overlap_note": "synthetic; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1205,8 +1228,8 @@
   ],
   "test_overlap_note": "synthetic; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1230,8 +1253,8 @@
   ],
   "test_overlap_note": "synthetic; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1322,8 +1345,8 @@
   ],
   "test_overlap_note": "Mistral-generated; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "data_files": [
    "data.json"
   ],
@@ -1351,13 +1374,15 @@
   "test_overlap_note": "not FLORES; no eval overlap",
   "source_part": "B",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/Helsinki-NLP/tatoeba/blob/00476f0f7e251c934e14f6e88c42a15e1b67c5a5/README.md",
+   "https://tatoeba.org/en/terms_of_use"
+  ],
+  "provenance": "Crowdsourced example sentences and translations from Tatoeba; the chosen pairs are textual sentences.",
+  "text_licence_spdx": "CC-BY-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "CohereLabs/aya_dataset",
@@ -1376,8 +1401,8 @@
   ],
   "test_overlap_note": "use annotation_type=original-annotations only; no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1401,8 +1426,8 @@
   ],
   "test_overlap_note": "German court judgments (official works); no eval overlap",
   "source_part": "B",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1581,8 +1606,8 @@
   ],
   "test_overlap_note": "none",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "BSD-2-Clause",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1646,8 +1671,8 @@
   ],
   "test_overlap_note": "none",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1672,8 +1697,8 @@
   ],
   "test_overlap_note": "none",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1699,13 +1724,14 @@
   "test_overlap_note": "none; template-generated, low priority, cap hard",
   "source_part": "C",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/GoktugD/turkish-nli-constructed-1.5m/blob/51ccbb3b3010d8ec5fee13df3d94eb081d035130/README.md"
+  ],
+  "provenance": "Turkish NLI pairs produced deterministically by the repository generator, with a template_id on every row.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "community-datasets/tapaco",
@@ -1737,13 +1763,15 @@
   "test_overlap_note": "none",
   "source_part": "C",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/community-datasets/tapaco/blob/1c7374c61fec4c1e94cb2d840527d31d6ef32e00/README.md",
+   "https://tatoeba.org/en/terms_of_use"
+  ],
+  "provenance": "Paraphrase pairs extracted from the Tatoeba crowdsourcing project.",
+  "text_licence_spdx": "CC-BY-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "Helsinki-NLP/tatoeba",
@@ -1776,13 +1804,15 @@
   "test_overlap_note": "none (not FLORES)",
   "source_part": "C",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/Helsinki-NLP/tatoeba/blob/00476f0f7e251c934e14f6e88c42a15e1b67c5a5/README.md",
+   "https://tatoeba.org/en/terms_of_use"
+  ],
+  "provenance": "The same Tatoeba sentence pairs, used here as aligned text; crowdsourced contributors wrote the sentences.",
+  "text_licence_spdx": "CC-BY-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "dell-research-harvard/headlines-semantic-similarity",
@@ -1800,8 +1830,8 @@
   ],
   "test_overlap_note": "none; sample, OCR noise",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1830,13 +1860,15 @@
   "test_overlap_note": "none; already in mixture as 'esci' (cap 2000), raise es/ja share and dedupe",
   "source_part": "C",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/tasksource/esci/blob/8113b17a5d4099e20243282c926f1bc1a08a4d13/README.md",
+   "https://github.com/amazon-science/esci-data/blob/7916cdf6ab75a462e77f20ab40428a10923998d5/README.md"
+  ],
+  "provenance": "Amazon shopping queries, catalogue product text and ESCI relevance judgements released in the Shopping Queries dataset.",
+  "text_licence_spdx": "Apache-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "napsternxg/wands",
@@ -1857,13 +1889,16 @@
   "test_overlap_note": "none",
   "source_part": "C",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "MIT",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/napsternxg/wands/blob/16cff4fbe4b46ee0b382e7901ee62461f88a2cb1/README.md",
+   "https://github.com/wayfair/WANDS/blob/3b74dcf4ba29ab8ff3e6a50b5b09fc627cb882b5/README.md",
+   "https://huggingface.co/api/datasets/napsternxg/wands"
+  ],
+  "provenance": "Wayfair product names, descriptions and search queries, with human relevance labels, released by Wayfair.",
+  "text_licence_spdx": "MIT",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "Avature/Job-Title-Similarity",
@@ -1891,8 +1926,8 @@
   ],
   "test_overlap_note": "none; benchmark without train split, small",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -1942,8 +1977,8 @@
   ],
   "test_overlap_note": "none",
   "source_part": "C",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2004,18 +2039,17 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup + add mteb/multi-hatecheck test texts (11 langs) to banned set; not HateCheck-derived",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
   "pinned_url": "https://raw.githubusercontent.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset/03eb1c60af1f213ae19a16ff1d139d88229c2b7b/Dynamically%20Generated%20Hate%20Dataset%20v0.2.3.csv",
   "pinned_sha256": "6e0aa7e598ab5b648cb1f0b48626a3e5f2e39a5abbd9fee998efa5a0b6cab4ca",
   "pinned_commit": "03eb1c60af1f213ae19a16ff1d139d88229c2b7b",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": [
-   "https://raw.githubusercontent.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset/03eb1c60af1f213ae19a16ff1d139d88229c2b7b/Dynamically%20Generated%20Hate%20Dataset%20v0.2.3.csv"
+   "https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset/blob/36f9dc849626bc2f6d2e1c2861db556294a2a947/README.md"
   ],
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "provenance": "Synthetic hate and non-hate texts entered by annotators on Dynabench; v0.2.3 drops duplicate entries.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "jagoldz/gahd (filter via GitHub jagol/gahd gahd_disaggregated.csv)",
@@ -2032,8 +2066,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup + add mteb/multi-hatecheck test texts (11 langs) to banned set; drop source=news",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "pinned_url": "https://raw.githubusercontent.com/jagol/gahd/ca08f691b3d6c4ee5ea41b8be00431f4ac3bc294/gahd_disaggregated.csv",
   "pinned_sha256": "e9cf8c06c572419a127f868bc45d41e00a0c0e04fe35b5f1ad9dc6e514f3703c",
   "pinned_commit": "ca08f691b3d6c4ee5ea41b8be00431f4ac3bc294",
@@ -2063,13 +2097,15 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; duplicate of civil_comments already in mixture -> dedup",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
-  "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_spdx": "CC-BY-4.0",
+  "licence_evidence": [
+   "https://huggingface.co/datasets/mteb/toxic_conversations_50k/blob/3969dd5d574dfe3a2427e3a544b64ee8dcaf9936/README.md",
+   "https://huggingface.co/datasets/google/civil_comments/blob/f2970eb3a55777454c94069077cc8d9b5866312d/README.md"
+  ],
+  "provenance": "Comments written by users of the Civil Comments plugin; toxicity labels are annotations on that text.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "OpenAssistant/oasst2",
@@ -2098,8 +2134,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; drop synthetic=true; ignore detoxify scores",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2149,13 +2185,20 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; dedup against hh-rlhf/Aegis/Salad/AttaQ (shared Anthropic red-team prompts)",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-1.0/blob/bd96d862068e47630197de64eb91f8d1481ff3e0/README.md",
+   "https://huggingface.co/datasets/Anthropic/hh-rlhf/blob/main/README.md"
+  ],
+  "provenance": "Human prompts taken from the Anthropic HH-RLHF harmlessness preference data; responses newly elicited from Mistral-7B-v0.1; dialog-level safety labels by human annotators.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": [
+   {
+    "model": "mistralai/Mistral-7B-v0.1",
+    "role": "text"
+   }
+  ],
+  "checked": "2026-10-03"
  },
  {
   "id": "nvidia/Aegis-AI-Content-Safety-Dataset-2.0",
@@ -2174,8 +2217,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; dedup against hh-rlhf/Aegis/Salad/AttaQ (shared Anthropic red-team prompts); apply extra-v1 lineage join",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2207,13 +2250,14 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; all rows harmful",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/CohereForAI/aya_redteaming/blob/5a16fee03c19d681b4f3527b6a750e1ed4d434c7/README.md"
+  ],
+  "provenance": "Harmful prompts written by professional compensated annotators in eight languages, with human harm labels.",
+  "text_licence_spdx": "Apache-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "Anthropic/hh-rlhf",
@@ -2232,8 +2276,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; dedup against hh-rlhf/Aegis/Salad/AttaQ (shared Anthropic red-team prompts)",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2441,8 +2485,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup; dedup against hh-rlhf/Aegis/Salad/AttaQ (shared Anthropic red-team prompts)",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2541,13 +2585,19 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/nvidia/CantTalkAboutThis-Topic-Control-Dataset/blob/b015ae8902d8429ce32ebfed9f9935f891d10ed5/README.md"
+  ],
+  "provenance": "Topic-control dialogues generated for the mixtral config.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": [
+   {
+    "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    "role": "text"
+   }
+  ],
+  "checked": "2026-10-03"
  },
  {
   "id": "Dizzzy0x00/LLMGen-Phishing-Email-Dataset",
@@ -2676,13 +2726,14 @@
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/3nesdeniz/agentic-prompt-injection-5k/blob/e658d94dcafc133e3a4483f9f9aa13507f3848c4/README.md"
+  ],
+  "provenance": "Human-designed attack templates with slot variables, expanded deterministically.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "3nesdeniz/turkish-conversation-prompt-injection",
@@ -2720,8 +2771,8 @@
   ],
   "test_overlap_note": "not an eval suite; run build_mixture test_texts() exact dedup",
   "source_part": "D",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2782,8 +2833,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap; loading script, fetch data.zip from github.com/TheAtticusProject/cuad; dedup against dvgodoy CUAD clause set",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2809,8 +2860,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2855,8 +2906,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2913,8 +2964,8 @@
   ],
   "test_overlap_note": "OVERLAP RISK: FLORES (SIB-200, Belebele) was drawn from en.wikinews.org; 351/900 Belebele eng passages link there. Drop articles whose url is a Belebele link or whose text contains any FLORES dev/devtest sentence",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-2.5",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -2940,13 +2991,15 @@
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/gfissore/arxiv-abstracts-2021/blob/e4c5fbd4dec8e46a5dc869216fe1c94cc585757a/README.md",
+   "https://info.arxiv.org/help/license/index.html"
+  ],
+  "provenance": "Author-written arXiv abstracts; arXiv dedicates metadata, which includes abstracts, to CC0.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "NortheasternUniversity/big_patent",
@@ -2966,13 +3019,15 @@
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/NortheasternUniversity/big_patent/blob/2a5336492ddc4e21cebd3865fd2a7e8b070bfede/README.md",
+   "https://arxiv.org/html/1906.03741"
+  ],
+  "provenance": "US patent descriptions and the applicants' human-written abstracts, taken from Google Patents Public Datasets.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "ddrg/super_eurlex",
@@ -3013,8 +3068,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap; files are GB-sized, stream selectively; attribute '© European Union, https://eur-lex.europa.eu'",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "MIT",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -3044,8 +3099,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC0-1.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -3107,8 +3162,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap; same contracts as CUAD-QA",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -3131,8 +3186,8 @@
   ],
   "test_overlap_note": "dedup against Banking77 test (same company, different collection)",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "pinned_commit": "452c61c86596b4865bf71327d689dc1822ee3a92",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
@@ -3161,13 +3216,14 @@
   "test_overlap_note": "dedup against Banking77 test",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/uoe-nlp/multi3-nlu/blob/cde8e2537d7ac06212ef4b25df2cf3084f26ec0f/README.md"
+  ],
+  "provenance": "Utterances from the NLU++ authors, some taken from real dialogues and some written by those authors, then professionally translated by people recruited through Blend Express and Proz.com.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "google-research-datasets/taskmaster1|2|3 (github Taskmaster TM-1..TM-4)",
@@ -3185,18 +3241,22 @@
   "test_overlap_note": "no eval-suite overlap; HF repos are loading scripts",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "pinned_commit": "335324ca7afee220b6114e72d90f994e07a888c4",
   "pinned_sha256": {
    "self-dialogs.json": "1e590ed0ccee279e40c2fb9e083d3b9417477c6bfe35ce5b2277167698dd858d",
    "woz-dialogs.json": "cd3bc4e968487315d412c044d30af2bf0a4b33c3ef8b74c589f1e1fa832bf72f"
   },
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://github.com/google-research-datasets/Taskmaster/blob/d92cb6af3005f1dc09c39e75e7daf4a04905e00b/TM-1-2019/README.md",
+   "https://github.com/google-research-datasets/Taskmaster/blob/d92cb6af3005f1dc09c39e75e7daf4a04905e00b/TM-2-2020/README.md",
+   "https://github.com/google-research-datasets/Taskmaster/blob/d92cb6af3005f1dc09c39e75e7daf4a04905e00b/TM-3-2020/README.md",
+   "https://github.com/google-research-datasets/Taskmaster/blob/d92cb6af3005f1dc09c39e75e7daf4a04905e00b/TM-4-2024/README.md"
+  ],
+  "provenance": "Task-oriented dialogues written by crowdsourced workers, as self-dialogs or Wizard-of-Oz turns with call-centre operators, across TM-1 through TM-4.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "pfb30/multi_woz_v22 (github budzianowski/multiwoz)",
@@ -3215,13 +3275,16 @@
   "test_overlap_note": "no eval-suite overlap; loading script",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/api/datasets/pfb30/multi_woz_v22",
+   "https://huggingface.co/datasets/pfb30/multi_woz_v22/blob/fd8c4a9484b1f47152fe23ddcc87289777d355fd/README.md",
+   "https://github.com/budzianowski/multiwoz/blob/fe0c8e65cfcd8462bd33c86e35f21addc84ca82b/README.md"
+  ],
+  "provenance": "Human-human written Wizard-of-Oz dialogues released by the Cambridge Dialogue Systems Group.",
+  "text_licence_spdx": "MIT",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "kchawla123/casino",
@@ -3240,13 +3303,14 @@
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/kchawla123/casino/blob/290898d2d08b6591db17005504e40ce00ac1028e/README.md"
+  ],
+  "provenance": "Campsite negotiation dialogues crowdsourced on Amazon Mechanical Turk; strategy labels are by the paper's authors.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "ConvLab/crosswoz (github thu-coai/CrossWOZ)",
@@ -3265,13 +3329,15 @@
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://github.com/thu-coai/CrossWOZ/blob/df82c9fdff91b9b130f2d6b89110d3870ba6260e/README.md",
+   "https://github.com/thu-coai/CrossWOZ/blob/df82c9fdff91b9b130f2d6b89110d3870ba6260e/LICENSE"
+  ],
+  "provenance": "Chinese cross-domain Wizard-of-Oz task-oriented dialogues (6K sessions) in hotel, restaurant, attraction, metro and taxi.",
+  "text_licence_spdx": "Apache-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "github:HLTCHKUST/BiToD (mirror DeepPavlov/BiToD)",
@@ -3291,13 +3357,16 @@
   "test_overlap_note": "no eval-suite overlap; mirror card has no licence, use upstream",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://arxiv.org/html/2106.02787v1",
+   "https://github.com/HLTCHKUST/BiToD/blob/main/LICENSE",
+   "https://raw.githubusercontent.com/HLTCHKUST/BiToD/master/README.md"
+  ],
+  "provenance": "Dialogue outlines come from a speech-act simulator. The natural-language turns are paraphrases written by crowdworkers (Amazon Mechanical Turk for English, AI-Speech for Chinese).",
+  "text_licence_spdx": "Apache-2.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "OpenVoiceOS/hass-intent-templates",
@@ -3406,8 +3475,8 @@
   ],
   "test_overlap_note": "no eval-suite overlap",
   "source_part": "E",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "licence_evidence": "TODO",
   "provenance": "TODO",
@@ -3485,13 +3554,15 @@
   "test_overlap_note": "no eval-suite overlap; CLINC-derived intents, dedup vs clinc_oos already in mixture",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
-  "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_spdx": "CC-BY-4.0",
+  "licence_evidence": [
+   "https://huggingface.co/datasets/masakhane/InjongoIntent/blob/fe4be3882a1614161dfe231ec793197bb74f4b44/README.md",
+   "https://arxiv.org/html/2502.09814v1"
+  ],
+  "provenance": "Native-speaker annotators wrote new culturally relevant utterances from CLINC intent prompts. The English split is the annotators' practice utterances, not the CLINC sentences themselves.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "GoktugD/turkish-intent-classification-1m",
@@ -3510,13 +3581,14 @@
   "test_overlap_note": "no eval-suite overlap; low quality, sample small",
   "source_part": "E",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC0-1.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_evidence": [
+   "https://huggingface.co/datasets/GoktugD/turkish-intent-classification-1m/blob/3eed6336fe128184c6d8b0e5a204753b3b16d74c/README.md"
+  ],
+  "provenance": "Turkish intent examples produced deterministically by the repository generator, with a template_id on every row.",
+  "text_licence_spdx": "CC0-1.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "amyrmahdy/decima-synthetic-decisions",
@@ -3540,13 +3612,23 @@
   "test_overlap_note": "no eval-suite overlap (synthetic); fa/ar text: exact-dedup against FarsTail and SemRel arb tests anyway; one-teacher distribution, cap",
   "source_part": "parent",
   "use": true,
-  "excluded_reason": null,
-  "licence_spdx": "Apache-2.0",
-  "licence_evidence": "TODO",
-  "provenance": "TODO",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_spdx": "CC-BY-4.0",
+  "licence_evidence": [
+   "https://huggingface.co/datasets/amyrmahdy/decima-synthetic-decisions/blob/1593638cb45ba54b78da3279a33d7b69904fb923/README.md"
+  ],
+  "provenance": "Synthetic decision states, questions, choices and soft labels. The card says rows labelled on public-dataset text are not included.",
+  "text_licence_spdx": "CC-BY-4.0",
+  "generator": [
+   {
+    "model": "google/gemma-4-26B-A4B-it",
+    "role": "text"
+   },
+   {
+    "model": "google/gemma-4-26B-A4B-it",
+    "role": "labels"
+   }
+  ],
+  "checked": "2026-10-03"
  },
  {
   "id": "Horizon-Labs/multilingual-zeroshot-synthetic",
@@ -3576,20 +3658,26 @@
   ],
   "emotion_taxonomy": "basic8",
   "licence_evidence": [
-   "https://huggingface.co/datasets/Horizon-Labs/multilingual-zeroshot-synthetic (YAML license: odc-by; README 'License: ODC-BY 1.0 ... generated content is from an Apache-2.0 model')",
-   "https://raw.githubusercontent.com/horizon-ai-labs/agent-io-guards/main/LICENSE (Apache License 2.0)",
-   "https://huggingface.co/Qwen/Qwen3.8-27B (license: apache-2.0)"
+   "https://huggingface.co/datasets/Horizon-Labs/multilingual-zeroshot-synthetic/blob/11ed607c3af9fd9d7ba3181df365fd057dfd8696/README.md"
   ],
-  "provenance": "README: 'All labels and generated texts come from Qwen3.8-27B (Apache-2.0)'; tax_short rows: 'fixed generic taxonomies (emotion, ...); the prompt asked not to use the label word itself'; zeroshot/gen_zeroshot_v2.py MODEL='Qwen/Qwen3.8-27B-FP8'. Loader keeps text_origin == qwen-generated only (no FineWeb passages).",
+  "provenance": "Short emotion texts on fixed taxonomies (kind tax_short), written by Qwen3.8-27B. This config is not the FineWeb passage rows.",
   "pinned_commit": "11ed607c3af9fd9d7ba3181df365fd057dfd8696",
   "test_overlap_note": "no eval-suite source; synthetic, not a benchmark; label names overlap dair-ai/emotion (card warns) - texts are new; exact-dedup vs all eval texts in build.py",
   "source_part": "F",
   "use": true,
-  "excluded_reason": null,
-  "licence_spdx": "Apache-2.0",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "licence_spdx": "ODC-By-1.0",
+  "text_licence_spdx": "ODC-By-1.0",
+  "generator": [
+   {
+    "model": "Qwen/Qwen3.8-27B",
+    "role": "text"
+   },
+   {
+    "model": "Qwen/Qwen3.8-27B",
+    "role": "labels"
+   }
+  ],
+  "checked": "2026-10-03"
  },
  {
   "id": "sociocom:naist-life-story",
@@ -3624,8 +3712,8 @@
   ],
   "test_overlap_note": "no eval-suite source; cells < 10 chars (keywords, 'なし') and texts given for two emotions dropped; Gender/Age columns not read",
   "source_part": "F",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "CC-BY-4.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
@@ -3662,8 +3750,8 @@
   "provenance": "Synthetic statements; the generator is recorded per row in the 'source' column only (ChatGPT, Claude Sonnet 4, Gemini 2.5 Flash, Microsoft Copilot, Perplexity, Le Chat, DeepSeek). The loader keeps source == 'DeepSeek' (4,505 train rows, open-weight model family, not one of the excluded hosted providers) and drops every other generator. Weakest provenance of the new sources: documented by the column, not by a methods section.",
   "test_overlap_note": "no eval-suite overlap (ClaimBuster is US debate sentences); not a benchmark; test split not read",
   "source_part": "F",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "ODC-By-1.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",
@@ -3684,19 +3772,18 @@
    "summary"
   ],
   "licence_evidence": [
-   "https://huggingface.co/datasets/hheiden/us-congress-bill-policy-115_117 (YAML license: mit; 'License: MIT'; 'Dataset Sources: congress.gov')",
-   "https://www.govinfo.gov/bulkdata/BILLSTATUS/117/hr/BILLSTATUS-117hr1.xml (<dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.)"
+   "https://huggingface.co/datasets/hheiden/us-congress-bill-policy-115_117/blob/a46b7d3418d0d4614d449593e732ac34e5848812/README.md",
+   "https://www.law.cornell.edu/uscode/text/17/105"
   ],
-  "provenance": "Congress.gov bill status data: summaries written by the Congressional Research Service; 'One policy area term, which best describes an entire measure, is assigned to every public bill' (https://www.congress.gov/help/find-bills-by-subject). Single-label gold assigned by CRS. Full bill text is not read.",
+  "provenance": "Bill titles, summaries and full text of bills introduced in the 115th–117th U.S. Congress, taken from congress.gov.",
   "pinned_commit": "a46b7d3418d0d4614d449593e732ac34e5848812",
   "test_overlap_note": "no eval-suite overlap (big_patent is USPTO patents, not bills); 'Private Legislation' and 'Social Sciences and History' (4 rows) dropped; summary cut to 1,600 chars",
   "source_part": "F",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "MIT",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "text_licence_spdx": "public-domain",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "nlp-waseda/e_gov",
@@ -3712,18 +3799,18 @@
    "text"
   ],
   "licence_evidence": [
-   "https://huggingface.co/datasets/nlp-waseda/e_gov"
+   "https://huggingface.co/datasets/nlp-waseda/e_gov/blob/08e57e367a9f79436e4ce87adcca261f33ece6f9/README.md",
+   "https://www.japaneselawtranslation.go.jp/en/laws/view/3379/en"
   ],
-  "provenance": "README: 'Japanese law dataset obtained from e-Gov (Date of download: Oct. 20th, 2024)'; the label is the official e-Gov law field, one per law.",
+  "provenance": "Japanese statute text downloaded from e-Gov on 20 Oct 2024. LawType values on the card are Constitution, Act, CabinetOrder, ImperialOrder, MinisterialOrdinance, Rule, and Misc.",
   "pinned_commit": "08e57e367a9f79436e4ce87adcca261f33ece6f9",
   "test_overlap_note": "no eval-suite overlap; validation/test splits not read; text cut to the first 1,600 chars (law name + table of contents / first articles)",
   "source_part": "F",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "CC-BY-4.0",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "text_licence_spdx": "public-domain",
+  "generator": "human",
+  "checked": "2026-10-03"
  },
  {
   "id": "brighter-dataset/BRIGHTER-emotion-categories",
@@ -3823,20 +3910,17 @@
    "text"
   ],
   "licence_evidence": [
-   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/README.md (YAML license: apache-2.0)",
-   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/LICENSE (Apache License, Version 2.0, January 2004)",
-   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/NOTICE ('Nobody PII Synthetic dataset Copyright (c) 2026 naeyn. Apache-2.0 (see LICENSE). This repository contains procedurally generated rows and does not contain records copied from ai4privacy/pii-masking-400k or ai4privacy/pii-masking-openpii-1m. The generation process used Faker locale providers.')"
+   "https://huggingface.co/datasets/naeyn/nobody-pii-synth-de/blob/f78fcbcad638f5e7f69bfe55a8ebd508e32c3731/README.md"
   ],
-  "provenance": "README 'Generation provenance': 'This release was generated from templates and Faker locale providers. No source records containing real people's personal data were used to construct' the corpus; generator snapshot gen_v4.1 document-composer (business-document templates, multilingual name forms, structured identifiers). No language model wrote texts or labels. Not gated (dataset_info.gated == False). train.parquet only (9,450 rows: de 5,349, en 2,265, nl 1,836; 705 without PII).",
+  "provenance": "German-primary PII strings built from templates and Faker locale providers, with no real personal records.",
   "pinned_commit": "f78fcbcad638f5e7f69bfe55a8ebd508e32c3731",
   "test_overlap_note": "no eval-suite source; synthetic business documents; 0 exact matches of its 9,450 train texts against the 29,767 pooled items of the sentiment/emotion/safety/fact_check/pii suites; exact-dedup vs all eval texts in build.py",
   "source_part": "G",
   "use": true,
-  "excluded_reason": null,
   "licence_spdx": "Apache-2.0",
-  "text_licence_spdx": "TODO",
-  "generator": "TODO",
-  "checked": "TODO"
+  "text_licence_spdx": "Apache-2.0",
+  "generator": "template",
+  "checked": "2026-10-03"
  },
  {
   "id": "Powpowpow23/ru-pii-ner-data",
@@ -3860,8 +3944,8 @@
   "pinned_commit": "55acbec07fb04a18455111a34337cb515a7f821e",
   "test_overlap_note": "no eval-suite source and not a re-release of a mixture or eval source; 0 exact matches of its 104,111 train texts against the 29,767 pooled items of the sentiment/emotion/safety/fact_check/pii suites; exact-dedup vs all eval texts in build.py",
   "source_part": "G",
-  "use": true,
-  "excluded_reason": null,
+  "use": false,
+  "excluded_reason": "licence audit 2026-10-03, see policy.json",
   "licence_spdx": "Apache-2.0",
   "text_licence_spdx": "TODO",
   "generator": "TODO",

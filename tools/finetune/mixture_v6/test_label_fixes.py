@@ -360,9 +360,12 @@ def _golds(items, kind):
 # --------------------------------------------------------------------------- registry and held-out splits
 
 def test_new_sources_are_enabled_with_evidence():
-    raw = {e["id"]: e for e in json.loads(REGISTRY_PATH.read_text(encoding="utf-8")) if e.get("use") is True}
+    entries = {e["id"]: e for e in json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))}
     for sid in NEW_IDS:
-        e = raw[sid]
+        e = entries[sid]
+        if e.get("use") is not True:  # removed by the licence audit of 2026-10-03; must say so
+            assert "licence audit 2026-10-03" in e["excluded_reason"], sid
+            continue
         assert e["licence_evidence"] and e["provenance"], sid
         # commercial use, no ShareAlike / NoDerivatives / NonCommercial
         assert not re.search(r"(?i)\b(nc|sa|nd)\b|non-?commercial|share-?alike|no-?deriv", e["licence"]), sid
@@ -601,16 +604,20 @@ PART_G_IDS = {"naeyn/nobody-pii-synth-de", "Powpowpow23/ru-pii-ner-data"}
 def test_part_g_sources_are_enabled_with_evidence_and_pinned():
     raw = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     enabled = {e["id"]: e for e in raw if e.get("use") is True}
+    entries = {e["id"]: e for e in raw}
     for sid in PART_G_IDS:
-        e = enabled[sid]
+        e = entries[sid]
+        if e.get("use") is not True:  # removed by the licence audit of 2026-10-03; must say so
+            assert "licence audit 2026-10-03" in e["excluded_reason"], sid
+            continue
         assert e["source_part"] == "G" and e["licence_evidence"] and e["provenance"], sid
         assert not re.search(r"(?i)\b(nc|sa|nd)\b|non-?commercial|share-?alike|no-?deriv", e["licence"]), sid
         assert re.fullmatch(r"[0-9a-f]{40}", e["pinned_commit"]), sid
     assert loaders.NOBODY_PII["revision"] == enabled["naeyn/nobody-pii-synth-de"]["pinned_commit"]
     assert loaders.NOBODY_PII["file"] == "data/train.parquet"  # never validation or test
-    assert loaders.RU_PII["revision"] == enabled["Powpowpow23/ru-pii-ner-data"]["pinned_commit"]
+    assert loaders.RU_PII["revision"] == entries["Powpowpow23/ru-pii-ner-data"]["pinned_commit"]
     assert loaders.RU_PII["file"] == "data/train.parquet"  # validation was the author's development split
-    ru = enabled["Powpowpow23/ru-pii-ner-data"]
+    ru = entries["Powpowpow23/ru-pii-ner-data"]
     assert ru["languages"] == ["ru"] and ru["label_field"].startswith("entities")
     assert ru["text_fields"] == ["text"] and ru["test_overlap_note"]
     assert ru["licence"].startswith("apache-2.0") and "DeepSeek" in ru["provenance"]
