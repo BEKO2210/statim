@@ -504,6 +504,8 @@ See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
   [PolyForm Free Trial 1.0.0](LICENSE-MODEL.md).
 - Other commercial use needs a paid licence; see [COMMERCIAL.md](COMMERCIAL.md).
 
-Released weights use commercially usable, non-ShareAlike data; sources are in
-[DATA_LICENSES.md](DATA_LICENSES.md). Original Laya checkpoints are Apache-2.0. Statim is independent
+Weights are meant to use only commercially usable, non-ShareAlike data; sources are in
+[DATA_LICENSES.md](DATA_LICENSES.md). A re-audit on 2026-10-03 found that the weights released so far
+break that rule, so they are offered for noncommercial use only until cleared replacements ship
+([licence findings](DATA_LICENSES.md#licence-findings-2026-10-03)). Original Laya checkpoints are Apache-2.0. Statim is independent
 and not affiliated with the Laya authors or TypeSafe; see [NOTICE](NOTICE).
