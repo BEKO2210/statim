@@ -1,32 +1,38 @@
-"""Prompts for the grounded urgency/NLI pilot. No benchmark examples."""
+"""Prompts for grounded synthetic classifier data. No benchmark examples."""
 import hashlib
 import inspect
 import json
 
+from grounded_tasks import LANG_NAMES, NLI_LABELS, TASKS, URGENCY_LABELS, _SYSTEM, _VERIFY_SYSTEM
+
 PROMPT_VERSION = "grounded-pilot-2"
-URGENCY_LABELS = ("not urgent", "soon", "critical")
-NLI_LABELS = ("entailment", "contradiction", "neutral")
 
-_LANG = {"en": "English", "de": "German", "fr": "French", "es": "Spanish",
-         "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish"}
-
-_URGENCY_SCHEMA = {
-    "type": "object", "properties": {
-        "request": {"type": "string"}, "label": {"type": "string", "enum": list(URGENCY_LABELS)}},
-    "required": ["request", "label"]}
-_NLI_SCHEMA = {
-    "type": "object", "properties": {"items": {"type": "array", "minItems": 3, "maxItems": 3,
-        "items": {"type": "object", "properties": {
-            "hypothesis": {"type": "string"}, "label": {"type": "string", "enum": list(NLI_LABELS)}},
-            "required": ["hypothesis", "label"]}}}, "required": ["items"]}
 _ANSWER_SCHEMA = {"type": "object", "properties": {"answer": {"type": "string"}},
                   "required": ["answer"]}
 
 
+def _single_schema(field, labels):
+    return {"type": "object", "properties": {
+        field: {"type": "string"}, "label": {"type": "string", "enum": list(labels)}},
+        "required": [field, "label"]}
+
+
+def _pair_schema(field, labels):
+    return {"type": "object", "properties": {"items": {"type": "array",
+        "minItems": len(labels), "maxItems": len(labels),
+        "items": {"type": "object", "properties": {
+            field: {"type": "string"}, "label": {"type": "string", "enum": list(labels)}},
+            "required": [field, "label"]}}}, "required": ["items"]}
+
+
+def _label_list(labels):
+    return ", ".join(labels)
+
+
 def generation_request(task, passage, lang, target=None):
-    language = _LANG[lang]
-    system = ("Create grounded classifier data from the supplied source passage. Use only its topic and facts. "
-              "Do not copy a sentence of eight or more words. Return one JSON object and no commentary.")
+    language = LANG_NAMES[lang]
+    spec = TASKS[task]
+    system = _SYSTEM
     if task == "urgency":
         user = f"""Source passage ({language}):
 {passage}
@@ -39,34 +45,87 @@ problem that will grow, but nothing is failing yet; critical = immediate action 
 outage, an expiring deadline or loss is happening now or within hours.
 The situation, not urgency words or the label itself, must establish the label. Return request and label."""
         return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
-                _URGENCY_SCHEMA, 300)
-    user = f"""Premise passage ({language}):
+                _single_schema("request", URGENCY_LABELS), spec["gen_predict"])
+    if task == "nli":
+        user = f"""Premise passage ({language}):
 {passage}
 
 Write exactly three short hypotheses in {language}: one entailed by the premise, one contradicted by it,
 and one neither supported nor contradicted. Use each canonical label exactly once: entailment, contradiction,
 neutral. Do not add facts to the entailment. Return items with hypothesis and label."""
-    return ([{"role": "system", "content": system}, {"role": "user", "content": user}], _NLI_SCHEMA, 500)
+        return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                _pair_schema("hypothesis", NLI_LABELS), spec["gen_predict"])
+    labels = spec["labels"]
+    if spec["generation"] == "single":
+        field = spec["text_field"]
+        loc = spec["locales"][lang]
+        meanings = "\n".join("%s = %s" % (labels[i], loc["criteria"][i]) for i in range(len(labels)))
+        user = f"""Source passage ({language}):
+{passage}
+
+Write one short {field} in {language} related to this topic. {spec.get("situation", "")}
+Vary who writes, the tone and the length; sound like a real person, not a template.
+Requested label: {target}
+Meanings:
+{meanings}
+The wording, not the label itself, must establish the label. Return {field} and label."""
+        return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                _single_schema(field, labels), spec["gen_predict"])
+    field = spec["pair_json_field"]
+    n = len(labels)
+    if task == "stance":
+        user = f"""Measure or report passage ({language}):
+{passage}
+
+Write exactly {n} short citizen comments in {language} on this topic: one {labels[0]}, one {labels[1]},
+and one {labels[2]}. Use each canonical label exactly once: {_label_list(labels)}.
+Return items with comment and label."""
+    elif task == "reading":
+        user = f"""Source passage ({language}):
+{passage}
+
+Write exactly {n} short yes/no questions in {language} about this topic: one answerable yes from the passage alone,
+one answerable no from the passage alone, and one on topic but not answerable from the passage.
+Use each canonical label exactly once: {_label_list(labels)}. Return items with question and label."""
+    else:
+        raise ValueError(task)
+    return ([{"role": "system", "content": system}, {"role": "user", "content": user}],
+            _pair_schema(field, labels), spec["gen_predict"])
 
 
 def verification_request(task, item, lang):
-    language = _LANG[lang]
-    system = ("Independently label the classifier item from its text. You are not shown another model's label. "
-              "Return one JSON object and no explanation.")
+    language = LANG_NAMES[lang]
+    spec = TASKS[task]
+    labels = spec["labels"]
+    system = _VERIFY_SYSTEM
     if task == "urgency":
         user = (f"Request ({language}):\n{item['request']}\n\nChoose exactly one: not urgent, soon, critical. "
                 "Use urgency of required action, not general seriousness.")
-        schema = dict(_ANSWER_SCHEMA)
-        schema["properties"] = {"answer": {"type": "string", "enum": list(URGENCY_LABELS)}}
-    else:
+    elif task == "nli":
         user = (f"Premise ({language}):\n{item['premise']}\n\nHypothesis:\n{item['hypothesis']}\n\n"
                 "Choose exactly one: entailment, contradiction, neutral.")
-        schema = dict(_ANSWER_SCHEMA)
-        schema["properties"] = {"answer": {"type": "string", "enum": list(NLI_LABELS)}}
-    return ([{"role": "system", "content": system}, {"role": "user", "content": user}], schema, 32)
+    elif spec["shape"] == "single":
+        field = spec["verify_field"]
+        loc = spec["locales"][lang]
+        choices = ", ".join(labels)
+        user = (f"{field.capitalize()} ({language}):\n{item[field]}\n\n"
+                f"Choose exactly one: {choices}.\n{loc['question']}")
+    else:
+        pfield, gfield = spec["verify_fields"]
+        loc = spec["locales"][lang]
+        disp_p, disp_g = loc["pair_fields"]
+        choices = ", ".join(labels)
+        user = (f"{disp_p} ({language}):\n{item[pfield]}\n\n{disp_g}:\n{item[gfield]}\n\n"
+                f"Choose exactly one: {choices}.\n{loc['question']}")
+    schema = dict(_ANSWER_SCHEMA)
+    schema["properties"] = {"answer": {"type": "string", "enum": list(labels)}}
+    return ([{"role": "system", "content": system}, {"role": "user", "content": user}], schema,
+            spec["verify_predict"])
 
 
 def prompts_digest():
     blob = "\n".join((PROMPT_VERSION, inspect.getsource(generation_request),
-                       inspect.getsource(verification_request), json.dumps(_LANG, sort_keys=True)))
+                       inspect.getsource(verification_request),
+                       json.dumps({k: v["prompt_version"] for k, v in TASKS.items()}, sort_keys=True),
+                       json.dumps(LANG_NAMES, sort_keys=True)))
     return hashlib.sha256(blob.encode()).hexdigest()

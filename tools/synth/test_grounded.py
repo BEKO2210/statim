@@ -18,7 +18,8 @@ from corpora import CORPORA, EUR_LANGUAGES, PILOT_LANGUAGES, iter_corpus, split_
 from generate import digest_from_show  # noqa: E402
 from grounded import (_contains_label, _generate_job, _quota, run_pilot,
                       validate_model_meta)  # noqa: E402
-from grounded_prompts import NLI_LABELS, URGENCY_LABELS, verification_request  # noqa: E402
+from grounded_prompts import NLI_LABELS, URGENCY_LABELS, generation_request, verification_request  # noqa: E402
+from grounded_tasks import PILOT_LANGS, TASKS, local_labels, task_labels  # noqa: E402
 from leakage import LeakageGuard  # noqa: E402
 from ollama_http import OllamaHTTP  # noqa: E402
 from ready import assert_ready  # noqa: E402
@@ -184,6 +185,37 @@ NLI_TEXT = {
     "nl": "de instantie bevestigt ecase deze maatregel voor burgers",
     "pl": "ta komisja potwierdza ecase ten środek dla obywateli",
 }
+_LANG_NAMES = {code: name for code, name in [
+    ("en", "English"), ("de", "German"), ("fr", "French"), ("es", "Spanish"),
+    ("it", "Italian"), ("pt", "Portuguese"), ("nl", "Dutch"), ("pl", "Polish")]}
+def _lang_template(marker):
+    return {lang: LANG_TEXT[lang].replace("calmcase", marker) for lang in PILOT_LANGS}
+
+
+def _nli_template(marker):
+    return {lang: NLI_TEXT[lang].replace("ecase", marker) for lang in PILOT_LANGS}
+_SINGLE_MARKERS = {
+    "urgency": {"not urgent": "calmcase", "soon": "daycase", "critical": "harmcase"},
+    "spam": {"spam": "junkcase", "not spam": "legitcase"},
+    "sarcasm": {"sarcastic": "irncase", "sincere": "frankcase"},
+    "emotion": {"anger": "angrcase", "fear": "fearcase", "joy": "joycase", "sadness": "sadcase",
+                "surprise": "surpcase", "disgust": "disgcase", "neutral": "neutcase"},
+    "claim": {"checkable claim": "factcase", "opinion": "viewcase", "no claim": "chatcase"},
+}
+_PAIR_MARKERS = {
+    "nli": {"entailment": "ecase", "contradiction": "xcase", "neutral": "ucase"},
+    "stance": {"favour": "procase", "against": "concase", "neutral": "midcase"},
+    "reading": {"yes": "yescase", "no": "nocase", "not answerable": "unkcase"},
+}
+_MARKER_TO_ANSWER = {}
+for task, mapping in {**_SINGLE_MARKERS, **_PAIR_MARKERS}.items():
+    for label, marker in mapping.items():
+        _MARKER_TO_ANSWER[marker] = label
+_ALL_MARKERS = tuple(_MARKER_TO_ANSWER)
+
+
+def _lang_from_prompt(text):
+    return next(code for code, name in _LANG_NAMES.items() if "(" + name + ")" in text)
 
 
 class BlindFakeClient:
@@ -195,29 +227,48 @@ class BlindFakeClient:
         text = messages[-1]["content"]
         if "Requested urgency label:" in text:
             label = text.split("Requested urgency label:", 1)[1].splitlines()[0].strip()
-            lang = next(code for code, name in {
-                "en": "English", "de": "German", "fr": "French", "es": "Spanish",
-                "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish"}.items()
-                if "(" + name + ")" in text)
-            marker = {"not urgent": "calmcase", "soon": "daycase", "critical": "harmcase"}[label]
+            lang = _lang_from_prompt(text)
+            marker = _SINGLE_MARKERS["urgency"][label]
             request = LANG_TEXT[lang].replace("calmcase", marker)
             return self._result({"request": request, "label": label})
         if "Write exactly three short hypotheses" in text:
-            lang = next(code for code, name in {
-                "en": "English", "de": "German", "fr": "French", "es": "Spanish",
-                "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish"}.items()
-                if "(" + name + ")" in text)
+            lang = _lang_from_prompt(text)
             base = NLI_TEXT[lang]
-            return self._result({"items": [
-                {"hypothesis": base, "label": "entailment"},
-                {"hypothesis": base.replace("ecase", "xcase"), "label": "contradiction"},
-                {"hypothesis": base.replace("ecase", "ucase"), "label": "neutral"}]})
+            return self._pair_items("hypothesis", base, "ecase", _PAIR_MARKERS["nli"])
+        if "Write one short message" in text:
+            return self._single_lang(text, "message", _SINGLE_MARKERS["spam"])
+        if "Write one short comment" in text and "citizen comments" not in text:
+            return self._single_lang(text, "comment", _SINGLE_MARKERS["sarcasm"])
+        if "Write one short statement" in text:
+            return self._single_lang(text, "statement", _SINGLE_MARKERS["emotion"])
+        if "Write one short utterance" in text:
+            return self._single_lang(text, "utterance", _SINGLE_MARKERS["claim"])
+        if "citizen comments" in text:
+            return self._pair_lang(text, "comment", _PAIR_MARKERS["stance"])
+        if "yes/no questions" in text:
+            return self._pair_lang(text, "question", _PAIR_MARKERS["reading"])
         self.verification_prompts.append(text)
-        marker = next(value for value in ("calmcase", "daycase", "harmcase", "ecase", "xcase", "ucase")
-                      if value in text.split("Hypothesis:")[-1].split("Request")[-1])
-        answer = {"calmcase": "not urgent", "daycase": "soon", "harmcase": "critical",
-                  "ecase": "entailment", "xcase": "contradiction", "ucase": "neutral"}[marker]
-        return self._result({"answer": answer})
+        marker = next(value for value in _ALL_MARKERS if value in text)
+        return self._result({"answer": _MARKER_TO_ANSWER[marker]})
+
+    def _single_lang(self, text, field, markers):
+        label = text.split("Requested label:", 1)[1].splitlines()[0].strip()
+        lang = _lang_from_prompt(text)
+        body = _lang_template(markers[label])[lang]
+        return self._result({field: body, "label": label})
+
+    def _pair_lang(self, text, field, markers):
+        lang = _lang_from_prompt(text)
+        items = [{field: _nli_template(marker)[lang], "label": label}
+                 for label, marker in markers.items()]
+        return self._result({"items": items})
+
+    def _pair_items(self, field, base, placeholder, markers):
+        items = []
+        for label, marker in markers.items():
+            hypothesis = base.replace(placeholder, marker)
+            items.append({field: hypothesis, "label": label})
+        return self._result({"items": items})
 
     @staticmethod
     def _result(value):
@@ -512,3 +563,90 @@ def test_truncated_candidate_tail_and_finished_task_stats_survive_resume(tmp_pat
     again = grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("urgency", "nli"), 48, 8, meta,
                                   resume=True)
     assert again["stats"] == first["stats"] and first["stats"]["urgency"]["metrics"]["verify_called"] > 0
+
+
+def test_urgency_nli_ids_match_pilot_fixture(tmp_path):
+    fixture = json.loads((HERE / "testdata" / "grounded_pilot_fixture.json").read_text())
+    fake = BlindFakeClient()
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    out = tmp_path / "out"
+    manifest = run_pilot(out, tmp_path / "cache", fake, fake, guard,
+        per_capability=48, concurrency=4, passages=fixture_passages(),
+        generator_meta=model_meta("a", "qwen3", "8B"), verifier_meta=model_meta("b", "phi4", "3.8B"),
+        tasks=("urgency", "nli"))
+    for task in ("urgency", "nli"):
+        with gzip.open(out / (task + ".jsonl.gz"), "rt") as handle:
+            ids = sorted(json.loads(line)["id"] for line in handle)
+        assert ids == fixture[task]["ids"]
+        sample = json.loads(next(gzip.open(out / (task + ".jsonl.gz"), "rt")))
+        assert sample["q"] == fixture[task]["sample"]["q"]
+    assert manifest["prompt_versions"]["urgency"] == manifest["prompt_versions"]["nli"] == "grounded-pilot-2"
+
+
+def test_registry_locales_cover_every_language():
+    for name, spec in TASKS.items():
+        for lang in PILOT_LANGS:
+            loc = spec["locales"][lang]
+            assert "question" in loc and "local_labels" in loc
+            assert len(loc["local_labels"]) == len(spec["labels"])
+            if spec["shape"] == "pair" or not spec.get("ordinal"):
+                assert len(loc["criteria"]) == len(spec["labels"])
+            if spec["shape"] == "pair":
+                assert len(loc["pair_fields"]) == 2
+
+
+def test_label_leak_catches_each_label_in_each_language():
+    for task in TASKS:
+        labels = task_labels(task)
+        for lang in PILOT_LANGS:
+            for label in labels:
+                sample = ("plain text with %s inside" % label if " " in label
+                          else "plain %s word" % label)
+                assert _contains_label(sample, task, lang)
+            for local in local_labels(task, lang):
+                if local.casefold() in {l.casefold() for l in labels}:
+                    continue
+                sample = ("plain text with %s inside" % local if " " in local
+                          else "plain %s word" % local)
+                assert _contains_label(sample, task, lang)
+
+
+def test_verification_requests_never_mention_target():
+    passage = words("seed")
+    for task in TASKS:
+        spec = TASKS[task]
+        for lang in PILOT_LANGS:
+            if spec["shape"] == "single":
+                field = spec["verify_field"]
+                item = {field: "neutral body text without label words here please"}
+            else:
+                pfield, gfield = spec["verify_fields"]
+                item = {pfield: passage, gfield: "neutral body text without label words here please"}
+            payload = verification_request(task, item, lang)[0][-1]["content"].casefold()
+            assert "target" not in payload and "gold" not in payload
+            assert "requested label" not in payload
+
+
+def test_all_tasks_two_stage_run_fills_every_cell(tmp_path):
+    import grounded
+    all_tasks = tuple(TASKS)
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    cands = tmp_path / "cands.jsonl.gz"
+    passages = fixture_passages(count=80)
+    per = 16
+    grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), all_tasks,
+                            per, 8, 0.4, oversample=6.0, max_jobs_factor=60, passages=passages)
+    meta = {"gen": {"hf_id": "Qwen/Qwen3-8B", "revision": "a" * 40},
+            "microsoft/phi-4": {"hf_id": "microsoft/phi-4", "revision": "b" * 40}}
+    model_meta = {"Qwen/Qwen3-8B": meta["gen"], "microsoft/phi-4": meta["microsoft/phi-4"]}
+    out = tmp_path / "out"
+    manifest = grounded.stage_verify(cands, out, BlindFakeClient(), guard, all_tasks, per, 8, model_meta)
+    assert set(manifest["tasks"]) == set(all_tasks)
+    for task in all_tasks:
+        labels = task_labels(task)
+        quota = _quota(per, PILOT_LANGUAGES, labels)
+        assert sum(manifest["stats"][task]["counts"].values()) == per
+        for cell, need in quota.items():
+            key = "%s/%s" % cell
+            assert manifest["stats"][task]["counts"].get(key, 0) == need
+        assert manifest["prompt_versions"][task] == TASKS[task]["prompt_version"]

@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import canonical_id, language_ok, one_hot, sha256_text, word_count  # noqa: E402
 from corpora import CORPORA, PILOT_LANGUAGES, iter_corpus, validate_cache  # noqa: E402
 from generate import digest_from_show  # noqa: E402
-from grounded_prompts import (NLI_LABELS, PROMPT_VERSION, URGENCY_LABELS, generation_request,
-                              prompts_digest, verification_request)  # noqa: E402
+from grounded_prompts import PROMPT_VERSION, generation_request, prompts_digest, verification_request  # noqa: E402
+from grounded_tasks import TASKS, local_labels, task_labels  # noqa: E402
 from leakage import DeferredGuard, LeakageGuard, grams  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from openai_http import OpenAIHTTP  # noqa: E402
@@ -40,45 +40,6 @@ MODEL_ALLOWLIST = {
     "phi4-mini": {"families": {"phi3", "phi4"},
                   "parameter": re.compile(r"\b(?:3\.8|3\.75)\s*b\b", re.I)},
 }
-
-_WORDS = {
-    "en": ("Premise", "Hypothesis", "How are the premise and hypothesis related?", "How urgent is this request?"),
-    "de": ("Prämisse", "Hypothese", "Wie hängen Prämisse und Hypothese zusammen?", "Wie dringend ist diese Anfrage?"),
-    "fr": ("Prémisse", "Hypothèse", "Quel est le lien entre la prémisse et l’hypothèse ?", "Quel est le degré d’urgence de cette demande ?"),
-    "es": ("Premisa", "Hipótesis", "¿Qué relación hay entre la premisa y la hipótesis?", "¿Qué grado de urgencia tiene esta solicitud?"),
-    "it": ("Premessa", "Ipotesi", "Qual è il rapporto tra premessa e ipotesi?", "Quanto è urgente questa richiesta?"),
-    "pt": ("Premissa", "Hipótese", "Qual é a relação entre a premissa e a hipótese?", "Qual é a urgência deste pedido?"),
-    "nl": ("Premisse", "Hypothese", "Wat is het verband tussen de premisse en de hypothese?", "Hoe dringend is dit verzoek?"),
-    "pl": ("Przesłanka", "Hipoteza", "Jaki jest związek między przesłanką a hipotezą?", "Jak pilna jest ta prośba?"),
-}
-_NLI_DESC = {
-    "en": ("follows from the premise", "conflicts with the premise", "is neither supported nor contradicted"),
-    "de": ("folgt aus der Prämisse", "widerspricht der Prämisse", "wird weder gestützt noch widerlegt"),
-    "fr": ("découle de la prémisse", "contredit la prémisse", "n’est ni étayée ni contredite"),
-    "es": ("se deduce de la premisa", "contradice la premisa", "no está respaldada ni contradicha"),
-    "it": ("deriva dalla premessa", "contraddice la premessa", "non è né sostenuta né contraddetta"),
-    "pt": ("decorre da premissa", "contradiz a premissa", "não é apoiada nem contradita"),
-    "nl": ("volgt uit de premisse", "spreekt de premisse tegen", "wordt niet ondersteund of tegengesproken"),
-    "pl": ("wynika z przesłanki", "jest sprzeczna z przesłanką", "nie jest ani potwierdzona, ani obalona"),
-}
-_LOCAL_LABELS = {
-    "urgency": {
-        "en": ("not urgent", "soon", "critical"), "de": ("nicht dringend", "bald", "kritisch"),
-        "fr": ("pas urgent", "bientôt", "critique"), "es": ("no urgente", "pronto", "crítico"),
-        "it": ("non urgente", "presto", "critico"), "pt": ("não urgente", "breve", "crítico"),
-        "nl": ("niet dringend", "binnenkort", "kritiek"), "pl": ("niepilne", "wkrótce", "krytyczne"),
-    },
-    "nli": {
-        "en": NLI_LABELS, "de": ("folgerung", "widerspruch", "neutral"),
-        "fr": ("implication", "contradiction", "neutre"),
-        "es": ("implicación", "contradicción", "neutral"),
-        "it": ("implicazione", "contraddizione", "neutrale"),
-        "pt": ("implicação", "contradição", "neutro"),
-        "nl": ("gevolgtrekking", "tegenspraak", "neutraal"),
-        "pl": ("wynikanie", "sprzeczność", "neutralne"),
-    },
-}
-
 
 def validate_model_meta(tag, meta):
     rule = MODEL_ALLOWLIST[tag]
@@ -152,33 +113,51 @@ def _provenance(ident, task, lang, label, passage, source_id, revision, model_me
         "generator": _roles(model_meta),
         "ollama_models": {tag: dict(meta or {}) for tag, meta in model_meta.items()},
         "ollama_model_digests": {tag: (meta or {}).get("digest") for tag, meta in model_meta.items()},
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": TASKS[task]["prompt_version"],
         "capability": task,
         "verify": verify,
     }
 
 
 def _base_item(task, lang, label, passage, generated):
-    if task == "urgency":
-        return {"state": generated, "q": {"type": "score", "instructions": _WORDS[lang][3],
-                "criteria": list(URGENCY_LABELS)}, "target": one_hot(3, URGENCY_LABELS.index(label))}
-    state = "%s: %s\n\n%s: %s" % (_WORDS[lang][0], passage, _WORDS[lang][1], generated)
-    criteria = {name: _NLI_DESC[lang][i] for i, name in enumerate(NLI_LABELS)}
-    return {"state": state, "q": {"type": "choice", "instructions": _WORDS[lang][2],
-            "criteria": criteria}, "target": one_hot(3, NLI_LABELS.index(label))}
+    spec, labels = TASKS[task], task_labels(task)
+    loc = spec["locales"][lang]
+    idx = labels.index(label)
+    if spec["ordinal"]:
+        return {"state": generated, "q": {"type": "score", "instructions": loc["question"],
+                "criteria": list(labels)}, "target": one_hot(len(labels), idx)}
+    if spec["shape"] == "single":
+        criteria = {labels[i]: loc["criteria"][i] for i in range(len(labels))}
+        return {"state": generated, "q": {"type": "choice", "instructions": loc["question"],
+                "criteria": criteria}, "target": one_hot(len(labels), idx)}
+    p_name, g_name = loc["pair_fields"]
+    state = "%s: %s\n\n%s: %s" % (p_name, passage, g_name, generated)
+    criteria = {labels[i]: loc["criteria"][i] for i in range(len(labels))}
+    return {"state": state, "q": {"type": "choice", "instructions": loc["question"],
+            "criteria": criteria}, "target": one_hot(len(labels), idx)}
 
 
 def _contains_label(text, task, lang):
-    labels = set(URGENCY_LABELS if task == "urgency" else NLI_LABELS)
-    labels.update(_LOCAL_LABELS[task][lang])
-    words = set(re.findall(r"[^\W_]+", text.casefold(), re.UNICODE))
-    label_words = {word for label in labels
-                   for word in re.findall(r"[^\W_]+", label.casefold(), re.UNICODE)}
+    canonical = set(task_labels(task))
+    local = set(local_labels(task, lang))
+    lowered = text.casefold()
+    words = set(re.findall(r"[^\W_]+", lowered, re.UNICODE))
+    for label in local:
+        if " " in label and label.casefold() in lowered:
+            return True
+    label_words = set()
+    for label in canonical:
+        label_words.update(re.findall(r"[^\W_]+", label.casefold(), re.UNICODE))
+    for label in local:
+        if " " not in label:
+            label_words.add(label.casefold())
     return bool(words & label_words)
 
 
 def _generate_candidates(task, passage_row, target, generator, temperature):
     """Phase 1 (generator only): checked candidate texts for one seed passage."""
+    spec = TASKS[task]
+    labels = task_labels(task)
     passage, lang, source_id, revision = passage_row
     seed = int(hashlib.sha256((task + source_id + passage + str(target)).encode()).hexdigest()[:8], 16)
     metrics = collections.Counter()
@@ -187,21 +166,23 @@ def _generate_candidates(task, passage_row, target, generator, temperature):
     if parsed is None:
         return [], dict(metrics)
     raw = []
-    if task == "urgency":
-        if parsed.get("label") != target or not str(parsed.get("request") or "").strip():
+    if spec["generation"] == "single":
+        field = spec["text_field"]
+        if parsed.get("label") != target or not str(parsed.get(field) or "").strip():
             return [], {**dict(metrics), "bad_generation": 1}
-        raw.append((target, str(parsed["request"]).strip()))
+        raw.append((target, str(parsed[field]).strip()))
     else:
+        field = spec["pair_json_field"]
         rows = parsed.get("items") if isinstance(parsed, dict) else None
-        if not isinstance(rows, list) or len(rows) != 3:
+        if not isinstance(rows, list) or len(rows) != len(labels):
             return [], {**dict(metrics), "bad_generation": 1}
-        labels = [row.get("label") for row in rows if isinstance(row, dict)]
-        if sorted(labels) != sorted(NLI_LABELS):
+        got = [row.get("label") for row in rows if isinstance(row, dict)]
+        if sorted(got) != sorted(labels):
             return [], {**dict(metrics), "bad_generation": 1}
-        raw.extend((row["label"], str(row.get("hypothesis") or "").strip()) for row in rows)
+        raw.extend((row["label"], str(row.get(field) or "").strip()) for row in rows)
     candidates = []
+    limits = spec["word_limits"]
     for label, text in raw:
-        limits = (8, 120) if task == "urgency" else (3, 80)
         if not limits[0] <= word_count(text) <= limits[1] or not language_ok(text, lang):
             metrics["bad_text"] += 1
             continue
@@ -221,7 +202,12 @@ def _verify_candidate(candidate, verifier, model_meta, guard):
     task, label, text, seed = candidate["task"], candidate["label"], candidate["text"], candidate["seed"]
     passage, lang, source_id, revision = candidate["passage_row"]
     metrics = collections.Counter()
-    blind = {"request": text} if task == "urgency" else {"premise": passage, "hypothesis": text}
+    spec = TASKS[task]
+    if spec["shape"] == "single":
+        blind = {spec["verify_field"]: text}
+    else:
+        pfield, gfield = spec["verify_fields"]
+        blind = {pfield: passage, gfield: text}
     metrics["verify_called"] += 1
     answer_obj = _request_json(verifier, verification_request(task, blind, lang), 0,
                                seed ^ 0x5A5A5A5A, metrics, "verify")
@@ -283,15 +269,16 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
     """With ``phased_batch`` > 0, each batch of that many seed jobs is generated first and verified
     afterwards, so a GPU too small for both models (8 GB) swaps models twice per batch instead of
     on every request."""
-    labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+    spec, labels = TASKS[task], task_labels(task)
     quota = _quota(total, PILOT_LANGUAGES, labels)
     kept = list(initial or [])
     counts = collections.Counter((row["provenance"]["seed"]["lang"],
                                   row["provenance"]["seed"]["target"]) for row in kept)
     positions = collections.Counter()
+    per_job = 1 if spec["generation"] == "single" else len(labels)
     for lang in PILOT_LANGUAGES:
         accepted = sum(counts[(lang, label)] for label in labels)
-        positions[lang] = accepted if task == "urgency" else (accepted + len(labels) - 1) // len(labels)
+        positions[lang] = accepted if per_job == 1 else (accepted + len(labels) - 1) // len(labels)
     seen_ids = {row["id"] for row in kept}
     reasons, jobs = collections.Counter(), 0
     started, start_kept = time.monotonic(), len(kept)
@@ -304,7 +291,7 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
                 continue
             passage = passages[lang][positions[lang] % len(passages[lang])]
             positions[lang] += 1
-            target = need[0] if task == "urgency" else None
+            target = need[0] if spec["generation"] == "single" else None
             batch.append((task, passage, target, generator, verifier, temperature, model_meta, guard))
             if len(batch) >= (phased_batch or concurrency * 2):
                 break
@@ -468,7 +455,8 @@ def _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurre
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "items_per_capability": per_capability, "languages": list(PILOT_LANGUAGES),
         "models": _roles(model_meta), "ollama": model_meta,
-        "prompt_version": PROMPT_VERSION, "prompts_sha256": prompts_digest(),
+        "prompt_version": PROMPT_VERSION, "prompt_versions": {t: TASKS[t]["prompt_version"] for t in tasks},
+        "prompts_sha256": prompts_digest(),
         "corpora": CORPORA, "leakage": leakage_meta, "concurrency": concurrency,
         "tasks": list(tasks), **extra,
         "seed": seed, "stats": stats, "elapsed_s": time.monotonic() - started,
@@ -509,7 +497,7 @@ def _read_candidates(path):
 def _cell_targets(tasks, per_capability, oversample):
     targets = {}
     for task in tasks:
-        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        labels = task_labels(task)
         for cell, n in _quota(per_capability, PILOT_LANGUAGES, labels).items():
             targets[(task,) + cell] = math.ceil(n * oversample)
     return targets
@@ -540,7 +528,7 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
     passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
     metrics = collections.Counter()
     for task in tasks:
-        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        labels = task_labels(task)
         total = sum(n for cell, n in targets.items() if cell[0] == task)
         done = lambda: sum(min(have[c], n) for c, n in targets.items() if c[0] == task)
         started, start_done = time.monotonic(), done()
@@ -557,7 +545,7 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
                 for _ in range(max(1, concurrency // len(PILOT_LANGUAGES))):
                     passage = passages[lang][positions[lang] % len(passages[lang])]
                     positions[lang] += 1
-                    target = need[positions[lang] % len(need)] if task == "urgency" else None
+                    target = need[positions[lang] % len(need)] if TASKS[task]["generation"] == "single" else None
                     batch.append((task, passage, target))
             if not batch:
                 break
@@ -597,7 +585,7 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
     started = time.monotonic()
     by_task, stats = {}, {}
     for task in tasks:
-        labels = URGENCY_LABELS if task == "urgency" else NLI_LABELS
+        labels = task_labels(task)
         quota = _quota(per_capability, PILOT_LANGUAGES, labels)
         initial, item_path, prov_path, finalized = _resume_rows(out_dir, task) if resume else (
             [], out_dir / (task + ".jsonl.gz.part"), out_dir / (task + ".provenance.jsonl.gz.part"), False)
@@ -707,8 +695,8 @@ def main(argv=None):
                     help="stage generate: candidates per kept item to aim for")
     args = ap.parse_args(argv)
     tasks = tuple(t.strip() for t in args.tasks.split(",") if t.strip())
-    if not tasks or any(t not in ("urgency", "nli") for t in tasks):
-        ap.error("--tasks must name urgency and/or nli")
+    if not tasks or any(t not in TASKS for t in tasks):
+        ap.error("--tasks must name known capabilities: %s" % ", ".join(sorted(TASKS)))
     if args.per_capability < 1 or args.concurrency < 1 or args.max_jobs_factor < 1:
         ap.error("counts, concurrency and max-jobs-factor must be positive")
     if args.stage != "single" and not args.candidates:

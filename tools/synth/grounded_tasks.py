@@ -1,0 +1,456 @@
+"""Registry for grounded synthetic classifier capabilities (8 pilot languages)."""
+from __future__ import annotations
+
+LANG_NAMES = {
+    "en": "English", "de": "German", "fr": "French", "es": "Spanish",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish",
+}
+PILOT_LANGS = tuple(LANG_NAMES)
+
+# Canonical English labels (target index order).
+URGENCY_LABELS = ("not urgent", "soon", "critical")
+NLI_LABELS = ("entailment", "contradiction", "neutral")
+SPAM_LABELS = ("spam", "not spam")
+SARCASM_LABELS = ("sarcastic", "sincere")
+EMOTION_LABELS = ("anger", "fear", "joy", "sadness", "surprise", "disgust", "neutral")
+CLAIM_LABELS = ("checkable claim", "opinion", "no claim")
+STANCE_LABELS = ("favour", "against", "neutral")
+READING_LABELS = ("yes", "no", "not answerable")
+
+_SYSTEM = (
+    "Create grounded classifier data from the supplied source passage. Use only its topic and facts. "
+    "Do not copy a sentence of eight or more words. Return one JSON object and no commentary."
+)
+_VERIFY_SYSTEM = (
+    "Independently label the classifier item from its text. You are not shown another model's label. "
+    "Return one JSON object and no explanation."
+)
+
+_URGENCY_LOCAL = {
+    "en": {"question": "How urgent is this request?",
+           "local_labels": ("not urgent", "soon", "critical")},
+    "de": {"question": "Wie dringend ist diese Anfrage?",
+           "local_labels": ("nicht dringend", "bald", "kritisch")},
+    "fr": {"question": "Quel est le degré d’urgence de cette demande ?",
+           "local_labels": ("pas urgent", "bientôt", "critique")},
+    "es": {"question": "¿Qué grado de urgencia tiene esta solicitud?",
+           "local_labels": ("no urgente", "pronto", "crítico")},
+    "it": {"question": "Quanto è urgente questa richiesta?",
+           "local_labels": ("non urgente", "presto", "critico")},
+    "pt": {"question": "Qual é a urgência deste pedido?",
+           "local_labels": ("não urgente", "breve", "crítico")},
+    "nl": {"question": "Hoe dringend is dit verzoek?",
+           "local_labels": ("niet dringend", "binnenkort", "kritiek")},
+    "pl": {"question": "Jak pilna jest ta prośba?",
+           "local_labels": ("niepilne", "wkrótce", "krytyczne")},
+}
+_NLI_LOCAL = {
+    "en": {"question": "How are the premise and hypothesis related?",
+           "pair_fields": ("Premise", "Hypothesis"),
+           "criteria": ("follows from the premise", "conflicts with the premise",
+                        "is neither supported nor contradicted"),
+           "local_labels": ("entailment", "contradiction", "neutral")},
+    "de": {"question": "Wie hängen Prämisse und Hypothese zusammen?",
+           "pair_fields": ("Prämisse", "Hypothese"),
+           "criteria": ("folgt aus der Prämisse", "widerspricht der Prämisse",
+                        "wird weder gestützt noch widerlegt"),
+           "local_labels": ("folgerung", "widerspruch", "neutral")},
+    "fr": {"question": "Quel est le lien entre la prémisse et l’hypothèse ?",
+           "pair_fields": ("Prémisse", "Hypothèse"),
+           "criteria": ("découle de la prémisse", "contredit la prémisse",
+                        "n’est ni étayée ni contredite"),
+           "local_labels": ("implication", "contradiction", "neutre")},
+    "es": {"question": "¿Qué relación hay entre la premisa y la hipótesis?",
+           "pair_fields": ("Premisa", "Hipótesis"),
+           "criteria": ("se deduce de la premisa", "contradice la premisa",
+                        "no está respaldada ni contradicha"),
+           "local_labels": ("implicación", "contradicción", "neutral")},
+    "it": {"question": "Qual è il rapporto tra premessa e ipotesi?",
+           "pair_fields": ("Premessa", "Ipotesi"),
+           "criteria": ("deriva dalla premessa", "contraddice la premessa",
+                        "non è né sostenuta né contraddetta"),
+           "local_labels": ("implicazione", "contraddizione", "neutrale")},
+    "pt": {"question": "Qual é a relação entre a premissa e a hipótese?",
+           "pair_fields": ("Premissa", "Hipótese"),
+           "criteria": ("decorre da premissa", "contradiz a premissa",
+                        "não é apoiada nem contradita"),
+           "local_labels": ("implicação", "contradição", "neutro")},
+    "nl": {"question": "Wat is het verband tussen de premisse en de hypothese?",
+           "pair_fields": ("Premisse", "Hypothese"),
+           "criteria": ("volgt uit de premisse", "spreekt de premisse tegen",
+                        "wordt niet ondersteund of tegengesproken"),
+           "local_labels": ("gevolgtrekking", "tegenspraak", "neutraal")},
+    "pl": {"question": "Jaki jest związek między przesłanką a hipotezą?",
+           "pair_fields": ("Przesłanka", "Hipoteza"),
+           "criteria": ("wynika z przesłanki", "jest sprzeczna z przesłanką",
+                        "nie jest ani potwierdzona, ani obalona"),
+           "local_labels": ("wynikanie", "sprzeczność", "neutralne")},
+}
+_SPAM_LOCAL = {
+    "en": {"question": "Is this message spam?",
+           "criteria": ("unsolicited advertising, phishing, scam or deceptive bulk message",
+                        "a genuine personal or business message"),
+           "local_labels": ("spam", "not spam")},
+    "de": {"question": "Ist diese Nachricht Spam?",
+           "criteria": ("unerwünschte Werbung, Phishing, Betrug oder irreführende Massennachricht",
+                        "eine echte private oder geschäftliche Nachricht"),
+           "local_labels": ("spam", "kein spam")},
+    "fr": {"question": "Ce message est-il du spam ?",
+           "criteria": ("publicité non sollicitée, hameçonnage, arnaque ou envoi massif trompeur",
+                        "un message personnel ou professionnel authentique"),
+           "local_labels": ("spam", "pas spam")},
+    "es": {"question": "¿Es spam este mensaje?",
+           "criteria": ("publicidad no solicitada, phishing, estafa o mensaje masivo engañoso",
+                        "un mensaje personal o comercial genuino"),
+           "local_labels": ("spam", "no es spam")},
+    "it": {"question": "Questo messaggio è spam?",
+           "criteria": ("pubblicità non richiesta, phishing, truffa o messaggio massivo ingannevole",
+                        "un messaggio personale o aziendale autentico"),
+           "local_labels": ("spam", "non spam")},
+    "pt": {"question": "Esta mensagem é spam?",
+           "criteria": ("publicidade não solicitada, phishing, fraude ou mensagem em massa enganosa",
+                        "uma mensagem pessoal ou comercial genuína"),
+           "local_labels": ("spam", "não é spam")},
+    "nl": {"question": "Is dit bericht spam?",
+           "criteria": ("ongewenste reclame, phishing, oplichting of misleidend bulkbericht",
+                        "een echt persoonlijk of zakelijk bericht"),
+           "local_labels": ("spam", "geen spam")},
+    "pl": {"question": "Czy ta wiadomość to spam?",
+           "criteria": ("niechciana reklama, phishing, oszustwo lub masowa wiadomość wprowadzająca w błąd",
+                        "prawdziwa wiadomość osobista lub służbowa"),
+           "local_labels": ("spam", "nie spam")},
+}
+_SARCASM_LOCAL = {
+    "en": {"question": "Is this comment sarcastic?",
+           "criteria": ("meant ironically, opposite of the literal wording",
+                        "meant sincerely, matching the literal wording"),
+           "local_labels": ("sarcastic", "sincere")},
+    "de": {"question": "Ist dieser Kommentar sarkastisch?",
+           "criteria": ("ironisch gemeint, Gegenteil des wörtlichen Sinns",
+                        "aufrichtig gemeint, entspricht dem wörtlichen Sinn"),
+           "local_labels": ("sarkastisch", "aufrichtig")},
+    "fr": {"question": "Ce commentaire est-il sarcastique ?",
+           "criteria": ("dit avec ironie, contraire du sens littéral",
+                        "dit sincèrement, conforme au sens littéral"),
+           "local_labels": ("sarcastique", "sincère")},
+    "es": {"question": "¿Es sarcástico este comentario?",
+           "criteria": ("dicho con ironía, opuesto al sentido literal",
+                        "dicho en serio, acorde al sentido literal"),
+           "local_labels": ("sarcástico", "sincero")},
+    "it": {"question": "Questo commento è sarcastico?",
+           "criteria": ("detto con ironia, opposto al senso letterale",
+                        "detto sul serio, coerente con il senso letterale"),
+           "local_labels": ("sarcastico", "sincero")},
+    "pt": {"question": "Este comentário é sarcástico?",
+           "criteria": ("dito com ironia, oposto ao sentido literal",
+                        "dito a sério, alinhado ao sentido literal"),
+           "local_labels": ("sarcástico", "sincero")},
+    "nl": {"question": "Is deze opmerking sarcastisch?",
+           "criteria": ("ironisch bedoeld, tegenovergestelde van de letterlijke betekenis",
+                        "oprecht bedoeld, in lijn met de letterlijke betekenis"),
+           "local_labels": ("sarcastisch", "oprecht")},
+    "pl": {"question": "Czy ten komentarz jest sarkastyczny?",
+           "criteria": ("powiedziany z ironią, przeciwieństwo dosłownego sensu",
+                        "powiedziany szczerze, zgodnie z dosłownym sensem"),
+           "local_labels": ("sarkastyczny", "szczery")},
+}
+_EMOTION_LOCAL = {
+    "en": {"question": "What emotion does this statement express?",
+           "criteria": ("anger", "fear", "joy", "sadness", "surprise", "disgust", "no strong emotion"),
+           "local_labels": ("anger", "fear", "joy", "sadness", "surprise", "disgust", "neutral")},
+    "de": {"question": "Welche Emotion drückt diese Aussage aus?",
+           "criteria": ("Ärger", "Angst", "Freude", "Traurigkeit", "Überraschung", "Ekel", "keine starke Emotion"),
+           "local_labels": ("ärger", "angst", "freude", "traurigkeit", "überraschung", "ekel", "neutral")},
+    "fr": {"question": "Quelle émotion exprime cette déclaration ?",
+           "criteria": ("colère", "peur", "joie", "tristesse", "surprise", "dégoût", "pas d’émotion forte"),
+           "local_labels": ("colère", "peur", "joie", "tristesse", "surprise", "dégoût", "neutre")},
+    "es": {"question": "¿Qué emoción expresa esta declaración?",
+           "criteria": ("ira", "miedo", "alegría", "tristeza", "sorpresa", "asco", "sin emoción fuerte"),
+           "local_labels": ("ira", "miedo", "alegría", "tristeza", "sorpresa", "asco", "neutral")},
+    "it": {"question": "Quale emozione esprime questa dichiarazione?",
+           "criteria": ("rabbia", "paura", "gioia", "tristezza", "sorpresa", "disgusto", "nessuna emozione forte"),
+           "local_labels": ("rabbia", "paura", "gioia", "tristezza", "sorpresa", "disgusto", "neutrale")},
+    "pt": {"question": "Que emoção esta declaração expressa?",
+           "criteria": ("raiva", "medo", "alegria", "tristeza", "surpresa", "nojo", "sem emoção forte"),
+           "local_labels": ("raiva", "medo", "alegria", "tristeza", "surpresa", "nojo", "neutro")},
+    "nl": {"question": "Welke emotie drukt deze uitspraak uit?",
+           "criteria": ("woede", "angst", "vreugde", "verdriet", "verbazing", "walging", "geen sterke emotie"),
+           "local_labels": ("woede", "angst", "vreugde", "verdriet", "verbazing", "walging", "neutraal")},
+    "pl": {"question": "Jaką emocję wyraża to stwierdzenie?",
+           "criteria": ("złość", "strach", "radość", "smutek", "zaskoczenie", "obrzydzenie", "brak silnej emocji"),
+           "local_labels": ("złość", "strach", "radość", "smutek", "zaskoczenie", "obrzydzenie", "neutralne")},
+}
+_CLAIM_LOCAL = {
+    "en": {"question": "What kind of statement is this?",
+           "criteria": ("a factual statement that could be verified",
+                        "a value judgement or preference",
+                        "a question, request or small talk"),
+           "local_labels": ("checkable claim", "opinion", "no claim")},
+    "de": {"question": "Um welche Art Aussage handelt es sich?",
+           "criteria": ("eine überprüfbare Tatsachenbehauptung",
+                        "ein Werturteil oder eine Präferenz",
+                        "eine Frage, Bitte oder Smalltalk"),
+           "local_labels": ("prüfbare behauptung", "meinung", "keine behauptung")},
+    "fr": {"question": "Quel type d’énoncé est-ce ?",
+           "criteria": ("un fait vérifiable",
+                        "un jugement de valeur ou une préférence",
+                        "une question, une demande ou une formule de politesse"),
+           "local_labels": ("affirmation vérifiable", "opinion", "pas d’affirmation")},
+    "es": {"question": "¿Qué tipo de enunciado es?",
+           "criteria": ("una afirmación factual comprobable",
+                        "un juicio de valor o preferencia",
+                        "una pregunta, petición o charla informal"),
+           "local_labels": ("afirmación comprobable", "opinión", "sin afirmación")},
+    "it": {"question": "Che tipo di affermazione è?",
+           "criteria": ("un’affermazione fattuale verificabile",
+                        "un giudizio di valore o una preferenza",
+                        "una domanda, richiesta o convenevole"),
+           "local_labels": ("affermazione verificabile", "opinione", "nessuna affermazione")},
+    "pt": {"question": "Que tipo de afirmação é esta?",
+           "criteria": ("uma afirmação factual verificável",
+                        "um juízo de valor ou preferência",
+                        "uma pergunta, pedido ou conversa casual"),
+           "local_labels": ("afirmação verificável", "opinião", "sem afirmação")},
+    "nl": {"question": "Wat voor uitspraak is dit?",
+           "criteria": ("een verifieerbare feitelijke bewering",
+                        "een waardeoordeel of voorkeur",
+                        "een vraag, verzoek of smalltalk"),
+           "local_labels": ("verifieerbare bewering", "mening", "geen bewering")},
+    "pl": {"question": "Jaki to rodzaj wypowiedzi?",
+           "criteria": ("weryfikowalne stwierdzenie faktograficzne",
+                        "osąd wartościowy lub preferencja",
+                        "pytanie, prośba lub pogawędka"),
+           "local_labels": ("weryfikowalne twierdzenie", "opinia", "brak twierdzenia")},
+}
+_STANCE_LOCAL = {
+    "en": {"question": "What is this comment’s stance toward the measure in the passage?",
+           "pair_fields": ("Passage", "Comment"),
+           "criteria": ("supports the measure", "opposes the measure", "neither supports nor opposes clearly"),
+           "local_labels": ("favour", "against", "neutral")},
+    "de": {"question": "Welche Haltung nimmt dieser Kommentar zur Maßnahme in der Passage ein?",
+           "pair_fields": ("Passage", "Kommentar"),
+           "criteria": ("unterstützt die Maßnahme", "lehnt die Maßnahme ab", "weder klar dafür noch dagegen"),
+           "local_labels": ("befürwortet die maßnahme", "lehnt die maßnahme ab", "neutral")},
+    "fr": {"question": "Quelle position ce commentaire prend-il sur la mesure du texte ?",
+           "pair_fields": ("Texte", "Commentaire"),
+           "criteria": ("favorable à la mesure", "contre la mesure", "ni pour ni contre clairement"),
+           "local_labels": ("pour", "contre", "neutre")},
+    "es": {"question": "¿Qué postura tiene este comentario sobre la medida del texto?",
+           "pair_fields": ("Texto", "Comentario"),
+           "criteria": ("a favor de la medida", "en contra de la medida", "ni a favor ni en contra con claridad"),
+           "local_labels": ("a favor", "en contra", "neutral")},
+    "it": {"question": "Che posizione esprime questo commento sulla misura nel testo?",
+           "pair_fields": ("Testo", "Commento"),
+           "criteria": ("a favore della misura", "contro la misura", "né a favore né contro in modo chiaro"),
+           "local_labels": ("a favore", "contro", "neutrale")},
+    "pt": {"question": "Qual é a posição deste comentário sobre a medida no texto?",
+           "pair_fields": ("Texto", "Comentário"),
+           "criteria": ("a favor da medida", "contra a medida", "nem a favor nem contra com clareza"),
+           "local_labels": ("favorável à medida", "contrário à medida", "neutro")},
+    "nl": {"question": "Wat is het standpunt van deze opmerking over de maatregel in de tekst?",
+           "pair_fields": ("Tekst", "Opmerking"),
+           "criteria": ("voor de maatregel", "tegen de maatregel", "noch duidelijk voor noch tegen"),
+           "local_labels": ("voor de maatregel", "tegen de maatregel", "neutraal standpunt")},
+    "pl": {"question": "Jakie jest stanowisko tego komentarza wobec środka w tekście?",
+           "pair_fields": ("Tekst", "Komentarz"),
+           "criteria": ("za środkiem", "przeciw środku", "ani wyraźnie za, ani przeciw"),
+           "local_labels": ("za", "przeciw", "neutralne")},
+}
+_READING_LOCAL = {
+    "en": {"question": "How does the passage answer this question?",
+           "pair_fields": ("Passage", "Question"),
+           "criteria": ("yes, the passage confirms it",
+                        "no, the passage rules it out",
+                        "the passage does not say"),
+           "local_labels": ("yes", "no", "not answerable")},
+    "de": {"question": "Wie beantwortet die Passage diese Frage?",
+           "pair_fields": ("Passage", "Frage"),
+           "criteria": ("ja, die Passage bestätigt es",
+                        "nein, die Passage schließt es aus",
+                        "die Passage sagt dazu nichts"),
+           "local_labels": ("ja", "nein", "nicht beantwortbar")},
+    "fr": {"question": "Comment le texte répond-il à cette question ?",
+           "pair_fields": ("Texte", "Question"),
+           "criteria": ("oui, le texte le confirme",
+                        "non, le texte l’exclut",
+                        "le texte ne le dit pas"),
+           "local_labels": ("oui", "non", "sans réponse")},
+    "es": {"question": "¿Cómo responde el texto a esta pregunta?",
+           "pair_fields": ("Texto", "Pregunta"),
+           "criteria": ("sí, el texto lo confirma",
+                        "no, el texto lo descarta",
+                        "el texto no lo dice"),
+           "local_labels": ("sí", "no", "sin respuesta")},
+    "it": {"question": "Come risponde il testo a questa domanda?",
+           "pair_fields": ("Testo", "Domanda"),
+           "criteria": ("sì, il testo lo conferma",
+                        "no, il testo lo esclude",
+                        "il testo non lo dice"),
+           "local_labels": ("sì", "no", "senza risposta")},
+    "pt": {"question": "Como o texto responde a esta pergunta?",
+           "pair_fields": ("Texto", "Pergunta"),
+           "criteria": ("sim, o texto confirma",
+                        "não, o texto exclui",
+                        "o texto não o diz"),
+           "local_labels": ("sim", "não", "sem resposta")},
+    "nl": {"question": "Hoe beantwoordt de tekst deze vraag?",
+           "pair_fields": ("Tekst", "Vraag"),
+           "criteria": ("ja, de tekst bevestigt het",
+                        "nee, de tekst sluit het uit",
+                        "de tekst zegt het niet"),
+           "local_labels": ("ja", "nee", "niet beantwoordbaar")},
+    "pl": {"question": "Jak tekst odpowiada na to pytanie?",
+           "pair_fields": ("Tekst", "Pytanie"),
+           "criteria": ("tak, tekst to potwierdza",
+                        "nie, tekst to wyklucza",
+                        "tekst tego nie mówi"),
+           "local_labels": ("tak", "nie", "brak odpowiedzi")},
+}
+
+
+def _locale(task, lang):
+    return TASKS[task]["locales"][lang]
+
+
+TASKS = {
+    "urgency": {
+        "prompt_version": "grounded-pilot-2",
+        "shape": "single",
+        "generation": "single",
+        "labels": URGENCY_LABELS,
+        "ordinal": True,
+        "word_limits": (8, 120),
+        "text_field": "request",
+        "verify_field": "request",
+        "locales": _URGENCY_LOCAL,
+        "gen_predict": 300,
+        "verify_predict": 32,
+    },
+    "nli": {
+        "prompt_version": "grounded-pilot-2",
+        "shape": "pair",
+        "generation": "pair",
+        "labels": NLI_LABELS,
+        "ordinal": False,
+        "word_limits": (3, 80),
+        "pair_json_field": "hypothesis",
+        "verify_fields": ("premise", "hypothesis"),
+        "locales": _NLI_LOCAL,
+        "gen_predict": 500,
+        "verify_predict": 32,
+    },
+    "spam": {
+        "situation": 'Write it as an SMS, e-mail or online comment that a citizen or business could receive about this topic; spam tries to sell, scam or phish, a genuine message is from a real contact with a real purpose.',
+        "prompt_version": "grounded-tasks-1",
+        "shape": "single",
+        "generation": "single",
+        "labels": SPAM_LABELS,
+        "ordinal": False,
+        "word_limits": (5, 80),
+        "text_field": "message",
+        "verify_field": "message",
+        "locales": _SPAM_LOCAL,
+        "gen_predict": 280,
+        "verify_predict": 32,
+    },
+    "sarcasm": {
+        "situation": 'Write it as a social-media or forum comment by someone affected by this topic.',
+        "prompt_version": "grounded-tasks-1",
+        "shape": "single",
+        "generation": "single",
+        "labels": SARCASM_LABELS,
+        "ordinal": False,
+        "word_limits": (5, 60),
+        "text_field": "comment",
+        "verify_field": "comment",
+        "locales": _SARCASM_LOCAL,
+        "gen_predict": 240,
+        "verify_predict": 32,
+    },
+    "emotion": {
+        "situation": 'Write it as a personal statement by someone directly affected by this topic, showing the feeling through what happened to them, not by naming the feeling.',
+        "prompt_version": "grounded-tasks-1",
+        "shape": "single",
+        "generation": "single",
+        "labels": EMOTION_LABELS,
+        "ordinal": False,
+        "word_limits": (8, 80),
+        "text_field": "statement",
+        "verify_field": "statement",
+        "locales": _EMOTION_LOCAL,
+        "gen_predict": 280,
+        "verify_predict": 40,
+    },
+    "claim": {
+        "situation": 'Write it as something a person might say or post about this topic.',
+        "prompt_version": "grounded-tasks-1",
+        "shape": "single",
+        "generation": "single",
+        "labels": CLAIM_LABELS,
+        "ordinal": False,
+        "word_limits": (5, 100),
+        "text_field": "utterance",
+        "verify_field": "utterance",
+        "locales": _CLAIM_LOCAL,
+        "gen_predict": 280,
+        "verify_predict": 40,
+    },
+    "stance": {
+        "prompt_version": "grounded-tasks-1",
+        "shape": "pair",
+        "generation": "pair",
+        "labels": STANCE_LABELS,
+        "ordinal": False,
+        "word_limits": (5, 80),
+        "pair_json_field": "comment",
+        "verify_fields": ("passage", "comment"),
+        "locales": _STANCE_LOCAL,
+        "gen_predict": 500,
+        "verify_predict": 32,
+    },
+    "reading": {
+        "prompt_version": "grounded-tasks-1",
+        "shape": "pair",
+        "generation": "pair",
+        "labels": READING_LABELS,
+        "ordinal": False,
+        "word_limits": (3, 60),
+        "pair_json_field": "question",
+        "verify_fields": ("passage", "question"),
+        "locales": _READING_LOCAL,
+        "gen_predict": 480,
+        "verify_predict": 32,
+    },
+}
+
+
+def task_labels(task):
+    return TASKS[task]["labels"]
+
+
+def local_labels(task, lang):
+    return _locale(task, lang)["local_labels"]
+
+
+def validate_registry():
+    required_locale_keys = {"question", "local_labels"}
+    for name, spec in TASKS.items():
+        labels = spec["labels"]
+        for lang in PILOT_LANGS:
+            loc = spec["locales"][lang]
+            for key in required_locale_keys:
+                if key not in loc:
+                    raise ValueError("%s/%s missing %s" % (name, lang, key))
+            if len(loc["local_labels"]) != len(labels):
+                raise ValueError("%s/%s local_labels length" % (name, lang))
+            if spec["shape"] == "pair":
+                if "pair_fields" not in loc or "criteria" not in loc:
+                    raise ValueError("%s/%s pair locale" % (name, lang))
+                if len(loc["criteria"]) != len(labels):
+                    raise ValueError("%s/%s criteria length" % (name, lang))
+            elif not spec["ordinal"]:
+                if "criteria" not in loc or len(loc["criteria"]) != len(labels):
+                    raise ValueError("%s/%s criteria length" % (name, lang))
+
+
+validate_registry()

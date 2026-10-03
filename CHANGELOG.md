@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Changed
+- Grounded synthesis (`tools/synth/grounded.py`) uses a single task registry with eight
+  capabilities (urgency, NLI, spam, sarcasm, emotion, claim, stance, reading); urgency and NLI
+  prompts and item shapes stay on `grounded-pilot-2`.
+
 ### Security
 - Licence re-audit of every training source: eight sources break the data policy (XNLI and
   dhruv0808/indic_sentiment_analyzer are non-commercial; MultiNLI and its Turkish translation
