@@ -349,7 +349,7 @@ def _mutate_eval(directory, change):
     (lambda d: d["heldout"].pop("categories:x/en"), "missing heldout suite"),
     (lambda d: d["definitions"].update(registry_sha256="0" * 64), "registry hash mismatch"),
     (lambda d: d.pop("skipped"), "missing record of skipped category cells"),
-    (lambda d: d.update(skipped={"categories:safety/zh": "1 pooled item, need 150"}),
+    (lambda d: d.update(skipped={"categories:safety/zh": {"why": "1 pooled item", "pool": "test-pool", "seed": 1, "n": 150}}),
      "champion missing skipped suite categories:safety/zh"),
 ])
 def test_fail_closed_artifact_causes(tmp_path, capsys, mutation, expected):
@@ -418,16 +418,17 @@ def test_family_screen_still_blocks(tmp_path, capsys):
 
 
 def test_skipped_cells_are_read_from_category_rows():
-    rows = [{"family": "categories", "suite": "safety", "lang": "zh", "skipped": "1 pooled item"},
+    rows = [{"family": "categories", "suite": "safety", "lang": "zh", "skipped": "1 pooled item",
+             "pool": "test-pool", "seed": 1, "n": 150},
             {"family": "categories", "suite": "safety", "lang": "en", "accuracy": .9, "n": 150}]
-    assert gate.skipped_cells(rows) == {"categories:safety/zh": "1 pooled item"}
+    assert gate.skipped_cells(rows) == {"categories:safety/zh": {"why": "1 pooled item", "pool": "test-pool", "seed": 1, "n": 150}}
 
 
 def test_skipped_cells_are_reported(tmp_path, capsys):
     cells = {f"categories:x/{i}": (set(range(40)), set(range(80)), 100) for i in range(4)}
     champ, chall = _write_pair(tmp_path, cells)
     for side in (champ, chall):
-        _mutate_eval(side, lambda d: d.update(skipped={"categories:safety/zh": "1 pooled item"}))
+        _mutate_eval(side, lambda d: d.update(skipped={"categories:safety/zh": {"why": "1 pooled item", "pool": "test-pool", "seed": 1, "n": 150}}))
     assert gate.compare(str(champ), str(chall)) is True
     assert "not covered (skipped for both models): categories:safety/zh" in capsys.readouterr().out
 
@@ -514,3 +515,28 @@ def test_identical_full_validation_still_passes():
         items["validation:" + k] = rows
     d, low, high = gate.validation_stats(a, a, items, items, keys)
     assert d == 0 and -0.01 < low < 0 < high < 0.01
+
+
+@pytest.mark.parametrize("challenger_skip", [
+    {"why": "0 pooled items", "pool": "test-pool", "seed": 1, "n": 150},   # different reason
+    {"why": "1 pooled item", "pool": "other-pool", "seed": 1, "n": 150},   # different pool
+    "1 pooled item",                                                        # old record without pool
+])
+def test_skipped_cell_must_match_in_full(tmp_path, capsys, challenger_skip):
+    cells = {f"categories:x/{i}": (set(range(40)), set(range(80)), 100) for i in range(4)}
+    champ, chall = _write_pair(tmp_path, cells)
+    _mutate_eval(champ, lambda d: d.update(skipped={"categories:safety/zh": {"why": "1 pooled item", "pool": "test-pool", "seed": 1, "n": 150}}))
+    _mutate_eval(chall, lambda d: d.update(skipped={"categories:safety/zh": challenger_skip}))
+    assert gate.compare(str(champ), str(chall)) is False
+    out = capsys.readouterr().out
+    assert "skipped cell differs or lacks its pool: categories:safety/zh" in out
+
+
+def test_reported_category_pool_mismatch_blocks(tmp_path, capsys):
+    cells = {f"categories:x/{i}": (set(range(40)), set(range(80)), 100) for i in range(4)}
+    champ, chall = _write_pair(tmp_path, cells)
+    for side, pool in ((champ, "fp+aaaa"), (chall, "fp+bbbb")):
+        _mutate_eval(side, lambda d, pool=pool: d.update(reported={"categories:reading/en": {
+            "acc": .5, "n": 150, "pool": pool, "pool_items_sha256": "same"}}))
+    assert gate.compare(str(champ), str(chall)) is False
+    assert "item-pool mismatch: categories:reading/en" in capsys.readouterr().out

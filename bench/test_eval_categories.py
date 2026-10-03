@@ -249,6 +249,14 @@ def test_make_tasks_skips_small_and_degenerate_languages():
     assert [it["state"] for it in tasks[0][2]] == [it["state"] for it in tasks2[0][2]]
 
 
+def test_make_tasks_reports_a_cell_emptied_by_mixture_exclusion():
+    pool = _pool()
+    grid = {(it["suite"], it["lang"]) for it in pool} | {("s", "zh")}  # zh existed before exclusion
+    tasks, skipped = ec.make_tasks(pool, ["s"], None, 150, 1, grid=grid)
+    assert [(s, l) for s, l, _ in tasks] == [("s", "en")]
+    assert skipped == [("s", "zh", "only 0 pooled items, need 150")]
+
+
 def test_make_tasks_skip_is_exact_fresh_suffix():
     pool, n1, n2, seed = _pool(), 20, 60, 7
     draw = ec.stratified(pool, n2, seed)

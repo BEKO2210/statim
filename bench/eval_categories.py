@@ -726,8 +726,10 @@ def stratified(items, n, seed):
     return picked
 
 
-def make_tasks(pool, suites, langs, n, seed, skip=0):
-    """[(suite, lang, items)] plus [(suite, lang, reason)] for skipped languages."""
+def make_tasks(pool, suites, langs, n, seed, skip=0, grid=()):
+    """[(suite, lang, items)] plus [(suite, lang, reason)] for skipped languages. `grid` lists the
+    (suite, lang) cells of the pool before mixture exclusion, so a cell the exclusion empties is
+    reported as skipped instead of vanishing."""
     if skip >= n:
         raise ValueError("skip must be less than n")
     by = collections.defaultdict(list)
@@ -736,7 +738,7 @@ def make_tasks(pool, suites, langs, n, seed, skip=0):
             by[(item["suite"], item["lang"])].append(item)
     tasks, skipped = [], []
     for suite in suites:
-        for lang in sorted(l for s, l in by if s == suite):
+        for lang in sorted({l for s, l in by if s == suite} | {l for s, l in grid if s == suite}):
             if langs and lang not in langs:
                 continue
             items = by[(suite, lang)]
@@ -922,14 +924,17 @@ def main(argv=None):
 
     pool, failures = load_pool(rebuild=a.rebuild, log=lambda m: print(m, flush=True))
     pool_fp = fingerprint()
+    grid = ()  # without exclusion every pooled cell is already in the pool itself
     if a.exclude_mixture:
+        grid = {(item["suite"], item["lang"]) for item in pool}
         pool, mixture_fp = exclude_mixture(pool, a.exclude_mixture, log=lambda m: print(m, flush=True))
         pool_fp = "%s+%s" % (pool_fp, mixture_fp)
     for key, why in failures.items():
         print("source unavailable: %s (%s)" % (key, why), flush=True)
     if failures and (a.strict or a.adapter):
         raise SystemExit("held-out pool is incomplete: %d source(s) unavailable" % len(failures))
-    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed, a.skip)
+    tasks, skipped = make_tasks(pool, a.suites, set(a.langs) if a.langs else None, a.n, a.seed, a.skip,
+                                grid=grid)
     for suite, lang, why in skipped:
         print("skip %s %s: %s" % (suite, lang, why), flush=True)
     if not tasks:
@@ -992,8 +997,8 @@ def main(argv=None):
         if out:
             for suite, lang, why in skipped:
                 out.write(json.dumps({"family": "categories", "suite": suite, "lang": lang,
-                                      **definitions, "strict": a.strict,
-                                      "skip": a.skip, "skipped": why},
+                                      **definitions, "strict": a.strict, "pool": pool_fp,
+                                      "seed": a.seed, "n": a.n, "skip": a.skip, "skipped": why},
                                      ensure_ascii=False) + "\n")
     finally:
         if out:

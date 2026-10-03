@@ -268,7 +268,8 @@ def skipped_cells(records):
     """Category cells the pool cannot fill (too few items, one class dominates). The set is a
     function of the pool and the seed, so champion and challenger must skip the same cells; it is
     recorded so that missing coverage is visible instead of silently absent."""
-    return {f"categories:{r['suite']}/{r['lang']}": r["skipped"]
+    return {f"categories:{r['suite']}/{r['lang']}": {"why": r["skipped"], "pool": r.get("pool"),
+                                                     "seed": r.get("seed"), "n": r.get("n")}
             for r in records if r.get("family") == "categories" and r.get("skipped")}
 
 
@@ -348,9 +349,14 @@ def compatibility_causes(a, b):
             causes.append(f"challenger missing {section} suite {name}")
         for name in sorted(bk - ak):
             causes.append(f"champion missing {section} suite {name}")
-    for key in sorted(set(a.get("heldout", {})) & set(b.get("heldout", {}))):
-        if key.startswith("categories:") and pools_differ(a["heldout"][key], b["heldout"][key]):
-            causes.append(f"item-pool mismatch: {key}")
+    for section in ("heldout", "reported"):
+        for key in sorted(set(a.get(section, {})) & set(b.get(section, {}))):
+            if key.startswith("categories:") and pools_differ(a[section][key], b[section][key]):
+                causes.append(f"item-pool mismatch: {key}")
+    for key in sorted(set(a.get("skipped") or {}) & set(b.get("skipped") or {})):
+        x, y = a["skipped"][key], b["skipped"][key]
+        if x != y or not isinstance(x, dict) or not x.get("pool"):
+            causes.append(f"skipped cell differs or lacks its pool: {key}")
     return causes
 
 
@@ -707,8 +713,8 @@ def compare(champ_dir, chall_dir, z=2.0, legacy_unpaired=False, strict=True,
     print(f"validation mean: champion {va:.4f} -> challenger {vb:.4f} ({vb - va:+.4f}); "
           f"paired 95% CI [{vlo:+.4f}, {vhi:+.4f}]")
     report(res)
-    for cell, why in sorted((a.get("skipped") or {}).items()):
-        print(f"not covered (skipped for both models): {cell}: {why}")
+    for cell, skip in sorted((a.get("skipped") or {}).items()):
+        print(f"not covered (skipped for both models): {cell}: {skip['why']}")
     holds, better = vlo >= -VAL_MARGIN, bool(res["family_gains"])
     ok = holds and not res["harms"] and better
     report_only = not strict or not a.get("strict", False) or not b.get("strict", False)

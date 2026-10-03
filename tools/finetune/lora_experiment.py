@@ -186,7 +186,7 @@ def decide(base_jsonl, adapter_jsonl, base_items=None, adapter_items=None, z=2.0
                        for w, v in fam.items()},
             "not_compared": res["not_compared"], "harms": [t["name"] for t in res["harms"]],
             "reported": {"base": base_reported, "adapter": adapter_reported},
-            "skipped": [{"lang": r["lang"], "why": r["skipped"]} for r in skipped],
+            "skipped": [{"suite": r["suite"], "lang": r["lang"], "why": r["skipped"]} for r in skipped],
             "pool": sorted({v.get("pool") for v in base.values()} | {v.get("pool") for v in adapter.values()} - {None})}
 
 
@@ -343,7 +343,8 @@ def summary_md(summary):
             if r.get("not_compared"):
                 lines += ["", "Not compared (pools differ): %s" % ", ".join(r["not_compared"])]
             if r.get("skipped"):
-                lines += ["", "Skipped cells: %s" % "; ".join("%s (%s)" % (x["lang"], x["why"]) for x in r["skipped"])]
+                lines += ["", "Skipped cells: %s" % "; ".join("%s/%s (%s)" % (x.get("suite", "?"), x["lang"], x["why"])
+                                                          for x in r["skipped"])]
             lines += ["", "**Verdict: %s** %s" % ("PROMOTE" if r["promote"] else "REJECT", r["reason"])]
         lines += ["", "Commands:", "", "```"] + [r["commands"][k] for k in r.get("commands", {})] + ["```"]
     return "\n".join(lines) + "\n"
