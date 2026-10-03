@@ -20,8 +20,9 @@ LEV = {"vitaminc-dev": .668, "massive-en-US": .857, "massive-de-DE": .823, "bool
 JEV = {"vitaminc-dev": .801, "massive-en-US": .874, "massive-de-DE": .871, "boolq": .893, "squad2": .836,
        "paws": .900, "multinli": .836, "civil_comments": .803, "aegis2": .804, "helpsteer2": .341,
        "summeval-relevance": .358, "summeval-consistency": .812, "pubmedqa": .764}
-UNSEEN = ["vitaminc-dev", "boolq", "squad2", "paws", "civil_comments", "helpsteer2",
-          "summeval-relevance", "summeval-consistency", "pubmedqa"]
+# Sources Statim never trained on. civil_comments and helpsteer2 are NOT in this list: their train
+# splits are in mixture v5/v8 (DATA_LICENSES.md); the first report listed them here by mistake.
+UNSEEN = ["vitaminc-dev", "boolq", "squad2", "paws", "summeval-relevance", "summeval-consistency", "pubmedqa"]
 BOARD = ["vitaminc-dev", "massive-en-US", "boolq", "helpsteer2", "aegis2", "paws"]
 
 
@@ -62,7 +63,7 @@ def main():
         [p for i, p in enumerate(a[s]["records"]) if i not in skip.get(s, set())]) for s in a}
     mac = lambda d, ks: sum(d[k] for k in ks) / len(ks)
     print("\n| Macro | A | A without overlap items | B | Lev | Jev |\n|---|---:|---:|---:|---:|---:|")
-    for label, ks in [("all 13 subsets", list(a)), ("9 subsets from sources A never trained on", UNSEEN),
+    for label, ks in [("all 13 subsets", list(a)), ("7 subsets from sources A never trained on", UNSEEN),
                       ("6 subsets of the board snapshot", BOARD)]:
         print(f"| {label} | {mac(A, ks):.3f} | {mac(clean, ks):.3f} | {mac(B, ks):.3f} | {mac(LEV, ks):.3f} | {mac(JEV, ks):.3f} |")
     print(f"\nmean ECE: A {sum(r[6] for r in rows) / len(rows):.3f}, B {sum(r[7] for r in rows) / len(rows):.3f}")
