@@ -227,7 +227,7 @@ def _verify_candidate(candidate, verifier, model_meta, guard):
     ident = canonical_id({"item": base, "source_id": source_id,
                           "passage_sha256": passage_hash, "target": label})
     item = dict(base, id=ident, src=source_id, passage_sha256=passage_hash)
-    if guard.overlap(item):
+    if guard.overlap(item["state"]):  # the question template is shared with the eval suites
         metrics["leakage_reject"] += 1
         return None, dict(metrics)
     verify = {"answer": answer, "agree": True}

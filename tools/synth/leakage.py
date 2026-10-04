@@ -186,6 +186,18 @@ class DeferredGuard:
         return False
 
 
+def generated_text(row):
+    """The generated part of a training row: its state.
+
+    The question and criteria are the fixed task template, shared on purpose with the
+    evaluation suites; checking them would reject every row.
+    """
+    state = row.get("state")
+    if not isinstance(state, str) or not state.strip():
+        raise SystemExit("row %s has no state text" % row.get("id"))
+    return state
+
+
 def _read_gzip(path):
     import gzip
     with gzip.open(path, "rt", encoding="utf-8") as handle:
@@ -228,7 +240,7 @@ def filter_dir(src, dst, eval_cache=None, s1bench_dir=None):
             raise SystemExit("%s: missing or duplicate training-row id" % task)
         if set(item_ids) != set(prov):
             raise SystemExit("%s: item/provenance id sets differ" % task)
-        kept = [row for row in items if not guard.overlap(row)]
+        kept = [row for row in items if not guard.overlap(generated_text(row))]
         kept_prov = [prov[row["id"]] for row in kept]
         removed[task] = len(items) - len(kept)
         _write_gzip(dst / (task + ".jsonl.gz"), kept)

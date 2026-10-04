@@ -386,6 +386,20 @@ def test_generation_path_drops_planted_heldout_copy():
     assert not rows and metrics["leakage_reject"] == 1 and metrics["verify_agree"] == 1
 
 
+URGENCY_QUESTION = "How urgent is this request?"
+
+
+def test_generation_path_ignores_the_shared_question_template():
+    generator = StaticClient([{"request": LANG_TEXT["en"], "label": "not urgent"}])
+    verifier = StaticClient([{"answer": "not urgent"}])
+    held = [URGENCY_QUESTION, "not urgent", "protected eval text"]
+    rows, metrics = _generate_job(
+        "urgency", (words("seed"), "en", "FiscalNote/billsum:train:B", None),
+        "not urgent", generator, verifier, 0.4, {}, LeakageGuard(held))
+    assert len(rows) == 1 and metrics.get("leakage_reject", 0) == 0
+    assert rows[0]["item"]["q"]["instructions"] == URGENCY_QUESTION  # the template was really checked
+
+
 def test_existing_directory_requires_resume_and_complete_run_resumes(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
@@ -405,11 +419,14 @@ def test_existing_directory_requires_resume_and_complete_run_resumes(tmp_path):
 
 def test_filter_joins_by_id_rewrites_samples_and_ready_gate(tmp_path):
     held = "the committee shall report the findings of the annual review to the board"
-    cache, s1 = local_files(tmp_path, (held,))
+    # The eval suites share the task template (question, labels) with training rows by design.
+    template = "How urgent is this request?"
+    cache, s1 = local_files(tmp_path, (held, template, "critical"))
     src = tmp_path / "colab"
     src.mkdir()
     clean_item = {"id": "keep", "state": "a fresh request about a broken heating system",
-                  "q": {"instructions": "question"}, "target": [1], "src": "source",
+                  "q": {"instructions": template, "criteria": ["not urgent", "critical"]},
+                  "target": [1], "src": "source",
                   "passage_sha256": "a" * 64}
     leaky_item = dict(clean_item, id="drop", state="Note: " + held + " today")
     provenance = {
