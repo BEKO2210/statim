@@ -64,10 +64,11 @@ neutral. Do not add facts to the entailment. Return items with hypothesis and la
         field = spec["text_field"]
         loc = spec["locales"][lang]
         meanings = "\n".join("%s = %s" % (labels[i], loc["criteria"][i]) for i in range(len(labels)))
+        situation = spec.get("label_situation", {}).get(target, spec.get("situation", ""))
         user = f"""Source passage ({language}):
 {passage}
 
-Write one short {field} in {language} related to this topic. {spec.get("situation", "")}
+Write one short {field} in {language} related to this topic. {situation}
 Vary who writes, the tone and the length; sound like a real person, not a template.
 Requested label: {target}
 Meanings:

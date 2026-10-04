@@ -201,6 +201,9 @@ _SINGLE_MARKERS = {
     "emotion": {"anger": "angrcase", "fear": "fearcase", "joy": "joycase", "sadness": "sadcase",
                 "surprise": "surpcase", "disgust": "disgcase", "neutral": "neutcase"},
     "claim": {"checkable claim": "factcase", "opinion": "viewcase", "no claim": "chatcase"},
+    "factcheck": {"check worthy": "chkcase", "unimportant factual": "trivcase", "non factual": "nofcase"},
+    "sentiment": {"negative": "negcase", "neutral": "flatcase", "positive": "poscase"},
+    "injection": {"injection": "hijackcase", "benign": "plaincase"},
 }
 _PAIR_MARKERS = {
     "nli": {"entailment": "ecase", "contradiction": "xcase", "neutral": "ucase"},
@@ -243,6 +246,12 @@ class BlindFakeClient:
             return self._single_lang(text, "statement", _SINGLE_MARKERS["emotion"])
         if "Write one short utterance" in text:
             return self._single_lang(text, "utterance", _SINGLE_MARKERS["claim"])
+        if "Write one short quote" in text:
+            return self._single_lang(text, "quote", _SINGLE_MARKERS["factcheck"])
+        if "Write one short review" in text:
+            return self._single_lang(text, "review", _SINGLE_MARKERS["sentiment"])
+        if "Write one short text" in text:
+            return self._single_lang(text, "text", _SINGLE_MARKERS["injection"])
         if "citizen comments" in text:
             return self._pair_lang(text, "comment", _PAIR_MARKERS["stance"])
         if "yes/no questions" in text:
@@ -680,3 +689,11 @@ def test_label_filter_blocks_stated_labels_but_not_negation_or_topic_words():
     assert leak("Dit is geen dringende aangelegenheid.", "urgency", "nl")
     assert not leak("Ich finde die Maßnahme überfällig und richtig.", "stance", "de")
     assert leak("Der Verband befürwortet die Maßnahme.", "stance", "de")  # the local label as a phrase
+
+
+def test_emotion_neutral_gets_its_own_situation():
+    from grounded_prompts import generation_request
+    neutral = generation_request("emotion", "A passage about a new bus timetable.", "en", "neutral")[0][-1]["content"]
+    anger = generation_request("emotion", "A passage about a new bus timetable.", "en", "anger")[0][-1]["content"]
+    assert "matter-of-fact" in neutral and "showing the feeling" not in neutral
+    assert "showing the feeling" in anger and "matter-of-fact" not in anger
