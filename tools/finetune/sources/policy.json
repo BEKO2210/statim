@@ -163,6 +163,18 @@
       "licence_spdx": "Apache-2.0",
       "terms_url": "https://huggingface.co/Qwen/Qwen3-32B-AWQ/blob/0499c3ac83fdef8810b907a23894ba91e95eddd8/LICENSE",
       "allows_training": true
+    },
+    {
+      "model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506/blob/95a6d26c4bfb886c58daf9d3f7332c857cb27b43/README.md",
+      "allows_training": true
+    },
+    {
+      "model": "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8",
+      "licence_spdx": "Apache-2.0",
+      "terms_url": "https://huggingface.co/RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8/blob/9bc507cf77b5045acd65c8c76b49cf081fe8e985/README.md",
+      "allows_training": true
     }
   ],
   "denied_generators": [

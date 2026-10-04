@@ -4,8 +4,12 @@ from __future__ import annotations
 LANG_NAMES = {
     "en": "English", "de": "German", "fr": "French", "es": "Spanish",
     "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish",
+    "tr": "Turkish", "ja": "Japanese", "zh": "Chinese", "hi": "Hindi", "ru": "Russian",
 }
-PILOT_LANGS = tuple(LANG_NAMES)
+PILOT_LANGS = ("en", "de", "fr", "es", "it", "pt", "nl", "pl")
+# Languages of held-out gate cells without a seed corpus of their own: the writer gets an English
+# passage and writes in the target language (round3).
+EXTRA_LANGS = ("tr", "ja", "zh", "hi", "ru")
 
 # Canonical English labels (target index order).
 URGENCY_LABELS = ("not urgent", "soon", "critical")
@@ -20,6 +24,9 @@ READING_LABELS = ("yes", "no", "not answerable")
 FACTCHECK_LABELS = ("check worthy", "unimportant factual", "non factual")
 SENTIMENT_LABELS = ("negative", "neutral", "positive")
 INJECTION_LABELS = ("injection", "benign")
+# Yes/no tasks in the noul format of the gate suites: the first label is "yes" (target index 1).
+PII_LABELS = ("contains pii", "no pii")
+FORMALITY_LABELS = ("formal", "informal")
 
 _SYSTEM = (
     "Create grounded classifier data from the supplied source passage. Use only its topic and facts. "
@@ -183,6 +190,21 @@ _EMOTION_LOCAL = {
     "pl": {"question": "Jaką emocję wyraża to stwierdzenie?",
            "criteria": ("złość", "strach", "radość", "smutek", "zaskoczenie", "obrzydzenie", "brak silnej emocji"),
            "local_labels": ("złość", "strach", "radość", "smutek", "zaskoczenie", "obrzydzenie", "neutralne")},
+    "tr": {"question": "Bu ifade hangi duyguyu yansıtıyor?",
+           "criteria": ("öfke", "korku", "sevinç", "üzüntü", "şaşkınlık", "tiksinti", "güçlü bir duygu yok"),
+           "local_labels": ("öfke", "korku", "sevinç", "üzüntü", "şaşkınlık", "tiksinti", "nötr")},
+    "ja": {"question": "この発言はどの感情を表していますか？",
+           "criteria": ("怒り", "恐れ", "喜び", "悲しみ", "驚き", "嫌悪", "強い感情はない"),
+           "local_labels": ("怒り", "恐れ", "喜び", "悲しみ", "驚き", "嫌悪", "中立")},
+    "zh": {"question": "这段话表达了什么情绪？",
+           "criteria": ("愤怒", "恐惧", "喜悦", "悲伤", "惊讶", "厌恶", "没有强烈情绪"),
+           "local_labels": ("愤怒", "恐惧", "喜悦", "悲伤", "惊讶", "厌恶", "中性")},
+    "hi": {"question": "यह कथन कौन-सी भावना व्यक्त करता है?",
+           "criteria": ("गुस्सा", "डर", "खुशी", "उदासी", "आश्चर्य", "घृणा", "कोई तीव्र भावना नहीं"),
+           "local_labels": ("गुस्सा", "डर", "खुशी", "उदासी", "आश्चर्य", "घृणा", "तटस्थ")},
+    "ru": {"question": "Какую эмоцию выражает это высказывание?",
+           "criteria": ("гнев", "страх", "радость", "грусть", "удивление", "отвращение", "нет сильной эмоции"),
+           "local_labels": ("гнев", "страх", "радость", "грусть", "удивление", "отвращение", "нейтрально")},
 }
 _CLAIM_LOCAL = {
     "en": {"question": "What kind of statement is this?",
@@ -387,6 +409,24 @@ _SENTIMENT_LOCAL = {
            "criteria": ("nieprzychylna lub niezadowolona opinia", "brak wyraźnie pozytywnej lub negatywnej opinii",
                         "przychylna lub zadowolona opinia"),
            "local_labels": ("negatywny", "neutralny", "pozytywny")},
+    "tr": {"question": "Bu metin nasıl bir görüş bildiriyor?",
+           "criteria": ("olumsuz veya memnuniyetsiz bir görüş", "açıkça olumlu ya da olumsuz bir görüş yok",
+                        "olumlu veya memnun bir görüş"),
+           "local_labels": ("olumsuz", "nötr", "olumlu")},
+    "ja": {"question": "このテキストはどのような評価を表していますか？",
+           "criteria": ("否定的または不満な意見", "はっきりした肯定・否定の意見がない", "肯定的または満足した意見"),
+           "local_labels": ("否定的", "中立", "肯定的")},
+    "zh": {"question": "这段文字表达了什么情感倾向？",
+           "criteria": ("负面或不满的意见", "没有明显的正面或负面意见", "正面或满意的意见"),
+           "local_labels": ("负面", "中性", "正面")},
+    "hi": {"question": "यह पाठ किस तरह की राय व्यक्त करता है?",
+           "criteria": ("नकारात्मक या असंतुष्ट राय", "कोई स्पष्ट सकारात्मक या नकारात्मक राय नहीं",
+                        "सकारात्मक या संतुष्ट राय"),
+           "local_labels": ("नकारात्मक", "तटस्थ", "सकारात्मक")},
+    "ru": {"question": "Какую оценку выражает этот текст?",
+           "criteria": ("неблагоприятное или недовольное мнение", "нет явно положительного или отрицательного мнения",
+                        "благоприятное или довольное мнение"),
+           "local_labels": ("отрицательная", "нейтральная", "положительная")},
 }
 _INJECTION_LOCAL = {
     "en": {"question": "Does this text try to give instructions to an AI system?",
@@ -421,6 +461,92 @@ _INJECTION_LOCAL = {
            "criteria": ("próbuje przejąć kontrolę nad asystentem lub agentem AI, który go czyta",
                         "zwykła treść bez ukrytych poleceń dla AI"),
            "local_labels": ("wstrzyknięcie", "nieszkodliwy")},
+}
+
+_PII_LOCAL = {
+    "en": {"question": "Should part of this text be treated as PII?",
+           "criteria": ("it identifies a private person: a name together with an ID, account, phone, e-mail, address or date of birth",
+                        "nothing in it identifies a private person"),
+           "local_labels": ("contains pii", "no pii")},
+    "de": {"question": "Sollte ein Teil dieses Textes als PII behandelt werden?",
+           "criteria": ("er identifiziert eine Privatperson: ein Name zusammen mit Ausweis-, Konto-, Telefonnummer, E-Mail, Adresse oder Geburtsdatum",
+                        "nichts darin identifiziert eine Privatperson"),
+           "local_labels": ("enthält pii", "keine pii")},
+    "fr": {"question": "Une partie de ce texte doit-elle être traitée comme des PII ?",
+           "criteria": ("il identifie une personne privée : un nom avec un identifiant, un compte, un téléphone, un e-mail, une adresse ou une date de naissance",
+                        "rien n’y identifie une personne privée"),
+           "local_labels": ("contient des pii", "pas de pii")},
+    "es": {"question": "¿Parte de este texto debe tratarse como PII?",
+           "criteria": ("identifica a una persona privada: un nombre junto con un documento, cuenta, teléfono, correo, dirección o fecha de nacimiento",
+                        "nada en él identifica a una persona privada"),
+           "local_labels": ("contiene pii", "sin pii")},
+    "it": {"question": "Una parte di questo testo va trattata come PII?",
+           "criteria": ("identifica una persona privata: un nome insieme a documento, conto, telefono, e-mail, indirizzo o data di nascita",
+                        "nulla identifica una persona privata"),
+           "local_labels": ("contiene pii", "nessuna pii")},
+    "pt": {"question": "Parte deste texto deve ser tratada como PII?",
+           "criteria": ("identifica uma pessoa privada: um nome com documento, conta, telefone, e-mail, endereço ou data de nascimento",
+                        "nada nele identifica uma pessoa privada"),
+           "local_labels": ("contém pii", "sem pii")},
+    "nl": {"question": "Moet een deel van deze tekst als PII worden behandeld?",
+           "criteria": ("hij identificeert een privépersoon: een naam samen met een ID, rekening, telefoon, e-mail, adres of geboortedatum",
+                        "niets erin identificeert een privépersoon"),
+           "local_labels": ("bevat pii", "geen pii")},
+    "pl": {"question": "Czy część tego tekstu należy traktować jako PII?",
+           "criteria": ("identyfikuje osobę prywatną: imię i nazwisko z numerem dokumentu, konta, telefonu, e-mailem, adresem lub datą urodzenia",
+                        "nic w nim nie identyfikuje osoby prywatnej"),
+           "local_labels": ("zawiera pii", "brak pii")},
+    "tr": {"question": "Bu metnin bir kısmı PII olarak ele alınmalı mı?",
+           "criteria": ("özel bir kişiyi tanımlıyor: kimlik, hesap, telefon, e-posta, adres veya doğum tarihiyle birlikte bir ad",
+                        "içinde özel bir kişiyi tanımlayan hiçbir şey yok"),
+           "local_labels": ("pii içeriyor", "pii yok")},
+    "ru": {"question": "Следует ли считать часть этого текста PII?",
+           "criteria": ("он указывает на частное лицо: имя вместе с номером документа, счёта, телефона, e-mail, адресом или датой рождения",
+                        "ничто в нём не указывает на частное лицо"),
+           "local_labels": ("содержит pii", "нет pii")},
+    "zh": {"question": "这段文字中是否有部分内容应被视为PII？",
+           "criteria": ("能识别某个私人：姓名加上证件号、账户、电话、电子邮件、地址或出生日期", "其中没有能识别私人的信息"),
+           "local_labels": ("含有pii", "不含pii")},
+}
+_FORMALITY_LOCAL = {
+    "en": {"question": "Is this text formal?",
+           "criteria": ("a polite, formal register suited to official or business settings",
+                        "a casual, everyday register as between friends"),
+           "local_labels": ("formal", "informal")},
+    "de": {"question": "Ist dieser Text förmlich?",
+           "criteria": ("ein höflicher, förmlicher Stil für Behörden oder Geschäftliches",
+                        "ein lockerer Alltagsstil wie unter Freunden"),
+           "local_labels": ("förmlich", "informell")},
+    "fr": {"question": "Ce texte est-il formel ?",
+           "criteria": ("un registre poli et soutenu, adapté au cadre officiel ou professionnel",
+                        "un registre familier, comme entre amis"),
+           "local_labels": ("formel", "familier")},
+    "es": {"question": "¿Es formal este texto?",
+           "criteria": ("un registro cortés y formal, propio de contextos oficiales o de negocios",
+                        "un registro coloquial, como entre amigos"),
+           "local_labels": ("formal", "informal")},
+    "it": {"question": "Questo testo è formale?",
+           "criteria": ("un registro cortese e formale, adatto a contesti ufficiali o di lavoro",
+                        "un registro colloquiale, come tra amici"),
+           "local_labels": ("formale", "informale")},
+    "pt": {"question": "Este texto é formal?",
+           "criteria": ("um registo cortês e formal, adequado a contextos oficiais ou de negócios",
+                        "um registo coloquial, como entre amigos"),
+           "local_labels": ("formal", "informal")},
+    "nl": {"question": "Is deze tekst formeel?",
+           "criteria": ("een beleefd, formeel register voor officiële of zakelijke situaties",
+                        "een los, alledaags register zoals onder vrienden"),
+           "local_labels": ("formeel", "informeel")},
+    "pl": {"question": "Czy ten tekst jest formalny?",
+           "criteria": ("uprzejmy, formalny styl odpowiedni do sytuacji urzędowych lub służbowych",
+                        "swobodny, potoczny styl jak między znajomymi"),
+           "local_labels": ("formalny", "nieformalny")},
+    "tr": {"question": "Bu metin resmi mi?",
+           "criteria": ("resmi veya iş ortamına uygun, kibar ve resmi bir üslup", "arkadaşlar arasındaki gibi rahat, gündelik bir üslup"),
+           "local_labels": ("resmi", "gayriresmi")},
+    "ja": {"question": "この文は改まった丁寧な文体ですか。",
+           "criteria": ("公的・ビジネスの場にふさわしい丁寧で改まった文体（敬語）", "友人同士のようなくだけた日常の文体"),
+           "local_labels": ("改まった", "くだけた")},
 }
 
 
@@ -486,6 +612,7 @@ TASKS = {
     "emotion": {
         "situation": 'Write it as a personal statement by someone directly affected by this topic, showing the feeling through what happened to them, not by naming the feeling.',
         # round1: the checker accepted only 4 % of "neutral" statements written with the line above
+        "langs": PILOT_LANGS + EXTRA_LANGS,
         "label_situation": {"neutral": 'Write it as a calm, matter-of-fact remark by someone affected by this topic: plain facts or a routine update, with no strong feeling at all.'},
         "prompt_version": "grounded-tasks-3",
         "shape": "single",
@@ -555,6 +682,7 @@ TASKS = {
     },
     "sentiment": {
         "situation": 'Write it as a review, comment or message by someone who used a service, product or public measure related to this topic.',
+        "langs": PILOT_LANGS + EXTRA_LANGS,
         "prompt_version": "grounded-tasks-3",
         "shape": "single",
         "generation": "single",
@@ -581,6 +709,38 @@ TASKS = {
         "gen_predict": 320,
         "verify_predict": 32,
     },
+    "pii": {
+        "situation": 'Write it as a support request, form note, chat message or e-mail related to this topic. With PII it includes fictitious personal details of a private person (full name with a phone number, e-mail, ID, IBAN, address or date of birth); without PII it may contain ticket numbers, product codes, amounts, company, office or place names, but nothing that identifies a private person.',
+        "prompt_version": "grounded-tasks-4",
+        "noul": True,
+        "langs": PILOT_LANGS + ("tr", "ru", "zh"),
+        "shape": "single",
+        "generation": "single",
+        "labels": PII_LABELS,
+        "ordinal": False,
+        "word_limits": (8, 90),
+        "text_field": "note",
+        "verify_field": "note",
+        "locales": _PII_LOCAL,
+        "gen_predict": 300,
+        "verify_predict": 32,
+    },
+    "formality": {
+        "situation": 'Write it as one or two sentences someone might say or write about this topic: formal = polite official or business register, informal = casual everyday register; keep the content similar in both.',
+        "prompt_version": "grounded-tasks-4",
+        "noul": True,
+        "langs": PILOT_LANGS + ("tr", "ja"),
+        "shape": "single",
+        "generation": "single",
+        "labels": FORMALITY_LABELS,
+        "ordinal": False,
+        "word_limits": (5, 60),
+        "text_field": "sentence",
+        "verify_field": "sentence",
+        "locales": _FORMALITY_LOCAL,
+        "gen_predict": 200,
+        "verify_predict": 32,
+    },
 }
 
 
@@ -592,11 +752,17 @@ def local_labels(task, lang):
     return _locale(task, lang)["local_labels"]
 
 
+def task_langs(task):
+    return TASKS[task].get("langs", PILOT_LANGS)
+
+
 def validate_registry():
     required_locale_keys = {"question", "local_labels"}
     for name, spec in TASKS.items():
         labels = spec["labels"]
-        for lang in PILOT_LANGS:
+        if spec.get("noul") and (len(labels) != 2 or spec["shape"] != "single"):
+            raise ValueError("%s: a noul task has two labels (yes first) and single shape" % name)
+        for lang in task_langs(name):
             loc = spec["locales"][lang]
             for key in required_locale_keys:
                 if key not in loc:

@@ -31,6 +31,7 @@ _PILOT_STOPWORDS = {
     "pt": {"o", "os", "as", "com", "porque", "deve", "esta", "uma"},
     "nl": {"de", "het", "een", "met", "omdat", "moet", "deze", "voor"},
     "pl": {"i", "jest", "z", "ponieważ", "musi", "ten", "ta", "dla"},
+    "tr": {"ve", "bir", "bu", "için", "ile", "çok", "değil", "daha"},
 }
 
 

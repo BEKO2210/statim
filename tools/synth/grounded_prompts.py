@@ -3,7 +3,7 @@ import hashlib
 import inspect
 import json
 
-from grounded_tasks import LANG_NAMES, NLI_LABELS, TASKS, URGENCY_LABELS, _SYSTEM, _VERIFY_SYSTEM
+from grounded_tasks import LANG_NAMES, NLI_LABELS, PILOT_LANGS, TASKS, URGENCY_LABELS, _SYSTEM, _VERIFY_SYSTEM
 
 PROMPT_VERSION = "grounded-pilot-3"
 
@@ -37,10 +37,12 @@ outage, an expiring deadline or loss is happening now or within hours."""
 
 def generation_request(task, passage, lang, target=None):
     language = LANG_NAMES[lang]
+    # round3 languages have no seed corpus and get an English passage
+    source_language = LANG_NAMES[lang if lang in PILOT_LANGS else "en"]
     spec = TASKS[task]
     system = _SYSTEM
     if task == "urgency":
-        user = f"""Source passage ({language}):
+        user = f"""Source passage ({source_language}):
 {passage}
 
 Write a short support or service request in {language} by a citizen or company affected by this topic.
@@ -65,7 +67,7 @@ neutral. Do not add facts to the entailment. Return items with hypothesis and la
         loc = spec["locales"][lang]
         meanings = "\n".join("%s = %s" % (labels[i], loc["criteria"][i]) for i in range(len(labels)))
         situation = spec.get("label_situation", {}).get(target, spec.get("situation", ""))
-        user = f"""Source passage ({language}):
+        user = f"""Source passage ({source_language}):
 {passage}
 
 Write one short {field} in {language} related to this topic. {situation}
@@ -86,7 +88,7 @@ Write exactly {n} short citizen comments in {language} on this topic: one {label
 and one {labels[2]}. Use each canonical label exactly once: {_label_list(labels)}.
 Return items with comment and label."""
     elif task == "reading":
-        user = f"""Source passage ({language}):
+        user = f"""Source passage ({source_language}):
 {passage}
 
 Write exactly {n} short yes/no questions in {language} about this topic: one answerable yes from the passage alone,

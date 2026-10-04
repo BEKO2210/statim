@@ -19,7 +19,7 @@ from generate import digest_from_show  # noqa: E402
 from grounded import (_contains_label, _generate_job, _quota, run_pilot,
                       validate_model_meta)  # noqa: E402
 from grounded_prompts import NLI_LABELS, URGENCY_LABELS, generation_request, verification_request  # noqa: E402
-from grounded_tasks import PILOT_LANGS, TASKS, local_labels, task_labels  # noqa: E402
+from grounded_tasks import EXTRA_LANGS, PILOT_LANGS, TASKS, local_labels, task_labels, task_langs  # noqa: E402
 from leakage import LeakageGuard  # noqa: E402
 from ollama_http import OllamaHTTP  # noqa: E402
 from ready import assert_ready  # noqa: E402
@@ -174,6 +174,11 @@ LANG_TEXT = {
     "pt": "o cidadão tem com esta solicitação muito tempo calmcase para documentos administrativos",
     "nl": "de burger heeft met deze aanvraag ruim tijd calmcase voor alle documenten",
     "pl": "ten obywatel ma dużo czasu calmcase i dokumenty dla urzędu lokalnego",
+    "tr": "bu vatandaşın izin için bol zamanı var calmcase ve belgeler hazır",
+    "ja": "市民はこの許可について書類を準備する時間が十分にあります calmcase",
+    "zh": "这位市民有充足的时间为这项许可准备所有文件和材料 calmcase",
+    "hi": "नागरिक के पास इस अनुमति के लिए सभी दस्तावेज़ तैयार करने का पर्याप्त समय है calmcase",
+    "ru": "у этого гражданина достаточно времени для подготовки всех документов calmcase",
 }
 NLI_TEXT = {
     "en": "the agency confirms ecase this measure for citizens",
@@ -187,9 +192,10 @@ NLI_TEXT = {
 }
 _LANG_NAMES = {code: name for code, name in [
     ("en", "English"), ("de", "German"), ("fr", "French"), ("es", "Spanish"),
-    ("it", "Italian"), ("pt", "Portuguese"), ("nl", "Dutch"), ("pl", "Polish")]}
+    ("it", "Italian"), ("pt", "Portuguese"), ("nl", "Dutch"), ("pl", "Polish"),
+    ("tr", "Turkish"), ("ja", "Japanese"), ("zh", "Chinese"), ("hi", "Hindi"), ("ru", "Russian")]}
 def _lang_template(marker):
-    return {lang: LANG_TEXT[lang].replace("calmcase", marker) for lang in PILOT_LANGS}
+    return {lang: LANG_TEXT[lang].replace("calmcase", marker) for lang in LANG_TEXT}
 
 
 def _nli_template(marker):
@@ -204,6 +210,8 @@ _SINGLE_MARKERS = {
     "factcheck": {"check worthy": "chkcase", "unimportant factual": "trivcase", "non factual": "nofcase"},
     "sentiment": {"negative": "negcase", "neutral": "flatcase", "positive": "poscase"},
     "injection": {"injection": "hijackcase", "benign": "plaincase"},
+    "pii": {"contains pii": "piicase", "no pii": "anoncase"},
+    "formality": {"formal": "politecase", "informal": "chillcase"},
 }
 _PAIR_MARKERS = {
     "nli": {"entailment": "ecase", "contradiction": "xcase", "neutral": "ucase"},
@@ -218,6 +226,10 @@ _ALL_MARKERS = tuple(_MARKER_TO_ANSWER)
 
 
 def _lang_from_prompt(text):
+    # generation prompts name the target as "in <Language> related"; a round3 passage is English
+    for code, name in _LANG_NAMES.items():
+        if " in %s related" % name in text:
+            return code
     return next(code for code, name in _LANG_NAMES.items() if "(" + name + ")" in text)
 
 
@@ -250,6 +262,10 @@ class BlindFakeClient:
             return self._single_lang(text, "quote", _SINGLE_MARKERS["factcheck"])
         if "Write one short review" in text:
             return self._single_lang(text, "review", _SINGLE_MARKERS["sentiment"])
+        if "Write one short note" in text:
+            return self._single_lang(text, "note", _SINGLE_MARKERS["pii"])
+        if "Write one short sentence" in text:
+            return self._single_lang(text, "sentence", _SINGLE_MARKERS["formality"])
         if "Write one short text" in text:
             return self._single_lang(text, "text", _SINGLE_MARKERS["injection"])
         if "citizen comments" in text:
@@ -287,6 +303,9 @@ class BlindFakeClient:
 
 def fixture_passages(count=4):
     passages = {}
+    for lang in EXTRA_LANGS:  # round3 languages are written from English passages
+        passages[lang] = [(words("seeden%s%d" % (lang, i)), lang, "FiscalNote/billsum:train:E%s%d" % (lang, i),
+                           CORPORA["billsum"]["revision"]) for i in range(count)]
     for lang in PILOT_LANGUAGES:
         revision = CORPORA["billsum" if lang == "en" else "eur_lex_sum"]["revision"]
         passages[lang] = []
@@ -670,7 +689,7 @@ def test_all_tasks_two_stage_run_fills_every_cell(tmp_path):
     assert set(manifest["tasks"]) == set(all_tasks)
     for task in all_tasks:
         labels = task_labels(task)
-        quota = _quota(per, PILOT_LANGUAGES, labels)
+        quota = _quota(per, task_langs(task), labels)
         assert sum(manifest["stats"][task]["counts"].values()) == per
         for cell, need in quota.items():
             key = "%s/%s" % cell
@@ -697,3 +716,79 @@ def test_emotion_neutral_gets_its_own_situation():
     anger = generation_request("emotion", "A passage about a new bus timetable.", "en", "anger")[0][-1]["content"]
     assert "matter-of-fact" in neutral and "showing the feeling" not in neutral
     assert "showing the feeling" in anger and "matter-of-fact" not in anger
+
+
+def test_noul_tasks_use_the_gate_format():
+    import grounded
+    yes = grounded._base_item("pii", "en", "contains pii", "p", "Call Anna Berg on 0151 2345678.")
+    no = grounded._base_item("pii", "en", "no pii", "p", "Ticket 4411 was closed today.")
+    assert yes["q"] == {"type": "noul", "instructions": "Should part of this text be treated as PII?"}
+    assert yes["target"] == [0.0, 1.0] and no["target"] == [1.0, 0.0]  # [false, true]
+
+
+def test_round3_languages_write_from_an_english_passage():
+    from grounded_prompts import generation_request
+    import grounded
+    text = generation_request("emotion", "A passage about a new bus timetable.", "hi", "joy")[0][-1]["content"]
+    assert "Source passage (English)" in text and "in Hindi related" in text
+    assert grounded.passage_lang("hi") == "en" and grounded.passage_lang("de") == "de"
+    assert grounded._contains_label("我今天非常愤怒，因为车又晚了", "emotion", "zh")  # no spaces in Chinese
+    assert not grounded._contains_label("车又晚了半个小时", "emotion", "zh")
+
+
+def test_recheck_keeps_only_rows_both_verifiers_agree_on(tmp_path):
+    import grounded
+
+    class SaysNoPii:
+        def chat(self, messages, schema, temperature, num_predict, seed=None):
+            return {"content": json.dumps({"answer": "no pii"}), "thinking": "", "done_reason": "stop",
+                    "eval_count": 1, "prompt_eval_count": 1, "total_s": 0.0}
+
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    cands, out = tmp_path / "c.jsonl.gz", tmp_path / "out"
+    per = 22  # one per (language, label) cell: 11 languages x 2 labels
+    grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("pii",), per, 8, 0.4,
+                            oversample=4.0, max_jobs_factor=60, passages=fixture_passages(count=20))
+    meta = {"Qwen/Qwen3-8B": {"hf_id": "Qwen/Qwen3-8B", "revision": "a" * 40},
+            "microsoft/phi-4": {"hf_id": "microsoft/phi-4", "revision": "b" * 40}}
+    grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("pii",), per, 8, meta)
+    summary = grounded.stage_recheck(out, tmp_path / "re", SaysNoPii(), "second", {"hf_id": "x"},
+                                     ("pii",), ("en", "de"), 4)
+    s = summary["pii"]
+    assert s["rows_in"] == 22 and s["rechecked"] == 4 and s["agreed"] == 2  # en/de: only "no pii" agrees
+    assert s["kept"] == 22 - 2
+    provs = grounded._read_gzip(tmp_path / "re" / "pii.provenance.jsonl.gz")
+    for prov in provs:
+        if prov["seed"]["lang"] in ("en", "de"):
+            assert prov["verify2"]["agree"] and prov["seed"]["target"] == "no pii"
+        else:
+            assert "skipped" in prov["verify2"]
+    # resume: the judgement cache answers, the verifier is not asked again
+    again = grounded.stage_recheck(out, tmp_path / "re", None, "second", {"hf_id": "x"}, ("pii",), ("en", "de"), 4)
+    assert again == summary
+
+
+def test_task_langs_restrict_cells_and_openai_client_skips_qwen_kwargs_for_other_models():
+    import grounded
+    try:
+        grounded.TASK_LANGS["emotion"] = ("hi", "zh")
+        targets = grounded._cell_targets(("emotion", "pii"), 14, 1.0)
+        assert {c[1] for c in targets if c[0] == "emotion"} == {"hi", "zh"}
+        assert {c[1] for c in targets if c[0] == "pii"} == set(task_langs("pii"))
+    finally:
+        grounded.TASK_LANGS.clear()
+    from openai_http import OpenAIHTTP
+    sent = []
+    client = OpenAIHTTP("http://x", "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8", "c" * 40)
+
+    def post(path, body, timeout=None):
+        sent.append(json.loads(json.dumps(body)))
+        if "response_format" in body:
+            raise grounded.OllamaError("HTTP 400 structured output not supported")
+        return {"choices": [{"message": {"content": '{"answer": "joy"}'}, "finish_reason": "stop"}]}
+
+    client._post = post
+    out = client.chat([{"role": "user", "content": "q"}], {"type": "object"}, 0, 8)
+    assert out["content"] == '{"answer": "joy"}' and client.structured is False
+    assert all("chat_template_kwargs" not in b for b in sent)
+    assert "JSON object" in sent[-1]["messages"][-1]["content"]

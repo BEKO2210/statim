@@ -21,7 +21,7 @@ from common import canonical_id, language_ok, one_hot, sha256_text, word_count  
 from corpora import CORPORA, PILOT_LANGUAGES, iter_corpus, validate_cache  # noqa: E402
 from generate import digest_from_show  # noqa: E402
 from grounded_prompts import PROMPT_VERSION, generation_request, prompts_digest, verification_request  # noqa: E402
-from grounded_tasks import leak_stems, TASKS, local_labels, task_labels  # noqa: E402
+from grounded_tasks import leak_stems, TASKS, local_labels, task_labels, task_langs  # noqa: E402
 from leakage import DeferredGuard, LeakageGuard, grams  # noqa: E402
 from ollama_http import OllamaError, OllamaHTTP  # noqa: E402
 from openai_http import OpenAIHTTP  # noqa: E402
@@ -34,12 +34,35 @@ OLLAMA_TO_HF = {"qwen3:8b": GENERATOR["model"], "phi4-mini": VERIFIER["model"]}
 # tools/finetune/sources/policy.json and recorded with its exact revision
 HF_ALLOWLIST = {"Qwen/Qwen3-30B-A3B-Instruct-2507", "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8",
                 "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "Qwen/Qwen3-32B-AWQ", "Qwen/Qwen3-8B", "microsoft/phi-4",
-                "microsoft/Phi-4-mini-instruct"}
+                "microsoft/Phi-4-mini-instruct", "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8"}
 MODEL_ALLOWLIST = {
     "qwen3:8b": {"families": {"qwen3"}, "parameter": re.compile(r"\b8(?:\.\d+)?\s*b\b", re.I)},
     "phi4-mini": {"families": {"phi3", "phi4"},
                   "parameter": re.compile(r"\b(?:3\.8|3\.75)\s*b\b", re.I)},
 }
+
+# --langs restricts every task to these languages (None = each task's own list); --task-langs
+# restricts single tasks (round3 adds only the new languages to emotion and sentiment)
+ACTIVE_LANGS = None
+TASK_LANGS = {}
+
+
+def _langs(task):
+    allowed = TASK_LANGS.get(task, ACTIVE_LANGS)
+    return tuple(l for l in task_langs(task) if allowed is None or l in allowed)
+
+
+def _all_langs(tasks):
+    out = []
+    for task in tasks:
+        out.extend(l for l in _langs(task) if l not in out)
+    return tuple(out)
+
+
+def passage_lang(lang):
+    """Seed corpora exist for the pilot languages; the others are written from English passages."""
+    return lang if lang in PILOT_LANGUAGES else "en"
+
 
 def validate_model_meta(tag, meta):
     rule = MODEL_ALLOWLIST[tag]
@@ -108,7 +131,8 @@ def _provenance(ident, task, lang, label, passage, source_id, revision, model_me
     return {
         "id": ident,
         "seed": {"source_id": source_id, "revision": revision,
-                 "passage_sha256": sha256_text(passage), "lang": lang, "target": label},
+                 "passage_sha256": sha256_text(passage), "lang": lang, "target": label,
+                 "passage_lang": passage_lang(lang)},
         "seed_passage": passage,
         "generator": _roles(model_meta),
         "ollama_models": {tag: dict(meta or {}) for tag, meta in model_meta.items()},
@@ -123,6 +147,10 @@ def _base_item(task, lang, label, passage, generated):
     spec, labels = TASKS[task], task_labels(task)
     loc = spec["locales"][lang]
     idx = labels.index(label)
+    if spec.get("noul"):
+        # noul target order is [false, true]; the first label is the "yes" answer
+        return {"state": generated, "q": {"type": "noul", "instructions": loc["question"]},
+                "target": [0.0, 1.0] if idx == 0 else [1.0, 0.0]}
     if spec["ordinal"]:
         return {"state": generated, "q": {"type": "score", "instructions": loc["question"],
                 "criteria": list(labels)}, "target": one_hot(len(labels), idx)}
@@ -143,6 +171,10 @@ def _contains_label(text, task, lang):
     word_set = set(words)
     for label in list(task_labels(task)) + list(local_labels(task, lang)):
         label = label.casefold()
+        if lang in ("zh", "ja"):  # no spaces: a label is a substring, not a word
+            if label in lowered:
+                return True
+            continue
         parts = re.findall(r"[^\W_]+", label, re.UNICODE)
         if len(parts) > 1:
             # a multi-word label only as a phrase: "lehnt die Maßnahme ab" must not ban "Maßnahme";
@@ -185,6 +217,8 @@ def _generate_candidates(task, passage_row, target, generator, temperature, vari
         raw.extend((row["label"], str(row.get(field) or "").strip()) for row in rows)
     candidates = []
     limits = spec["word_limits"]
+    if lang in ("zh", "ja"):  # word_count counts each CJK character as a word
+        limits = (limits[0] * 2, limits[1] * 3)
     for label, text in raw:
         if not limits[0] <= word_count(text) <= limits[1] or not language_ok(text, lang):
             metrics["bad_text"] += 1
@@ -248,21 +282,24 @@ def _generate_job(task, passage_row, target, generator, verifier, temperature, m
     return accepted, dict(metrics)
 
 
-def _passages(cache, per_language, seed=20261004):
+def _passages(cache, per_language, seed=20261004, langs=PILOT_LANGUAGES):
     """Seed passages per language, spread over each corpus: read up to a wide window (not just the
-    first documents, which cluster on one regulation) and shuffle deterministically."""
-    out = {lang: [] for lang in PILOT_LANGUAGES}
-    for lang in PILOT_LANGUAGES:
-        names = ("billsum", "gov_report") if lang == "en" else ("eur_lex_sum",)
+    first documents, which cluster on one regulation) and shuffle deterministically. A language
+    without a corpus gets its own shuffle of the English passages, tagged with that language."""
+    out = {lang: [] for lang in langs}
+    for lang in langs:
+        src = passage_lang(lang)
+        names = ("billsum", "gov_report") if src == "en" else ("eur_lex_sum",)
         per_source = (per_language + len(names) - 1) // len(names)
         window = min(30000, max(2000, per_source * 5))
+        salt = "" if src == lang else ":" + lang  # pilot languages keep their round1/2 order
         for name in names:
             rows = []
-            for row in iter_corpus(name, cache, languages=(lang,)):
-                rows.append(row)
+            for row in iter_corpus(name, cache, languages=(src,)):
+                rows.append(row if src == lang else (row[0], lang) + tuple(row[2:]))
                 if len(rows) >= window:
                     break
-            random.Random("%s:%s:%d" % (name, lang, seed)).shuffle(rows)
+            random.Random("%s:%s:%d%s" % (name, src, seed, salt)).shuffle(rows)
             out[lang].extend(rows[:per_source])
         random.Random("%s:%d" % (lang, seed)).shuffle(out[lang])
         out[lang] = out[lang][:per_language]
@@ -278,13 +315,13 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
     afterwards, so a GPU too small for both models (8 GB) swaps models twice per batch instead of
     on every request."""
     spec, labels = TASKS[task], task_labels(task)
-    quota = _quota(total, PILOT_LANGUAGES, labels)
+    quota = _quota(total, _langs(task), labels)
     kept = list(initial or [])
     counts = collections.Counter((row["provenance"]["seed"]["lang"],
                                   row["provenance"]["seed"]["target"]) for row in kept)
     positions = collections.Counter()
     per_job = 1 if spec["generation"] == "single" else len(labels)
-    for lang in PILOT_LANGUAGES:
+    for lang in _langs(task):
         accepted = sum(counts[(lang, label)] for label in labels)
         positions[lang] = accepted if per_job == 1 else (accepted + len(labels) - 1) // len(labels)
     seen_ids = {row["id"] for row in kept}
@@ -293,7 +330,7 @@ def _run_task(task, total, passages, generator, verifier, concurrency, temperatu
     _progress(task, len(kept), total, reasons, started, start_kept)
     while len(kept) < total and jobs < max_jobs:
         batch = []
-        for lang in PILOT_LANGUAGES:
+        for lang in _langs(task):
             need = [label for label in labels if counts[(lang, label)] < quota[(lang, label)]]
             if not need:
                 continue
@@ -423,7 +460,8 @@ def run_pilot(out_dir, cache, generator, verifier, guard, per_capability=200, co
     out_dir.mkdir(parents=True, exist_ok=True)
     model_meta = {(generator_meta or {}).get("hf_id", "qwen3:8b"): dict(generator_meta or {}),
                   (verifier_meta or {}).get("hf_id", "phi4-mini"): dict(verifier_meta or {})}
-    passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
+    passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8),
+                                     langs=_all_langs(tasks))
     started = time.monotonic()
     by_task, stats = {}, {}
     for task in tasks:
@@ -461,7 +499,7 @@ def _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurre
     manifest = {
         "kind": "grounded-synthetic-pilot",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "items_per_capability": per_capability, "languages": list(PILOT_LANGUAGES),
+        "items_per_capability": per_capability, "languages": list(_all_langs(tasks)),
         "models": _roles(model_meta), "ollama": model_meta,
         "prompt_version": PROMPT_VERSION, "prompt_versions": {t: TASKS[t]["prompt_version"] for t in tasks},
         "prompts_sha256": prompts_digest(),
@@ -506,7 +544,7 @@ def _cell_targets(tasks, per_capability, oversample):
     targets = {}
     for task in tasks:
         labels = task_labels(task)
-        for cell, n in _quota(per_capability, PILOT_LANGUAGES, labels).items():
+        for cell, n in _quota(per_capability, _langs(task), labels).items():
             targets[(task,) + cell] = math.ceil(n * oversample)
     return targets
 
@@ -533,7 +571,8 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
         for row in _read_candidates(candidates):
             have[(row["task"], row["passage_row"][1], row["label"])] += 1
     targets = _cell_targets(tasks, per_capability, oversample)
-    passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8))
+    passages = passages or _passages(cache, max(20, per_capability * max_jobs_factor // 8),
+                                     langs=_all_langs(tasks))
     metrics = collections.Counter()
     for task in tasks:
         labels = task_labels(task)
@@ -546,11 +585,11 @@ def stage_generate(candidates, cache, generator, tasks, per_capability, concurre
         _stage_line("generate", task, done(), total, started, start_done)
         while done() < total and jobs < max_jobs:
             batch = []
-            for lang in PILOT_LANGUAGES:
+            for lang in _langs(task):
                 need = [l for l in labels if have[(task, lang, l)] < targets[(task, lang, l)]]
                 if not need:
                     continue
-                for _ in range(max(1, concurrency // len(PILOT_LANGUAGES))):
+                for _ in range(max(1, concurrency // len(_langs(task)))):
                     cycle = positions[lang] // len(passages[lang])
                     passage = passages[lang][positions[lang] % len(passages[lang])]
                     positions[lang] += 1
@@ -595,7 +634,7 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
     by_task, stats, short_tasks = {}, {}, []
     for task in tasks:
         labels = task_labels(task)
-        quota = _quota(per_capability, PILOT_LANGUAGES, labels)
+        quota = _quota(per_capability, _langs(task), labels)
         initial, item_path, prov_path, finalized = _resume_rows(out_dir, task) if resume else (
             [], out_dir / (task + ".jsonl.gz.part"), out_dir / (task + ".provenance.jsonl.gz.part"), False)
         kept = list(initial)
@@ -612,7 +651,7 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
             while pos < len(todo) and len(chunk) < concurrency * 4:
                 cand = todo[pos]
                 pos += 1
-                if counts[(cand["passage_row"][1], cand["label"])] < quota[(cand["passage_row"][1], cand["label"])]:
+                if counts[(cand["passage_row"][1], cand["label"])] < quota.get((cand["passage_row"][1], cand["label"]), 0):
                     chunk.append(cand)
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 verified = list(pool.map(lambda c: _verify_candidate(c, verifier, model_meta, guard), chunk))
@@ -621,7 +660,7 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
                 if row is None:
                     continue
                 cell = (row["provenance"]["seed"]["lang"], row["provenance"]["seed"]["target"])
-                if counts[cell] >= quota[cell] or len(kept) >= per_capability:
+                if counts[cell] >= quota.get(cell, 0) or len(kept) >= per_capability:
                     continue
                 if row["id"] in seen:
                     reasons["duplicate"] += 1
@@ -659,6 +698,92 @@ def stage_verify(candidates, out_dir, verifier, guard, tasks, per_capability, co
                          "then --stage verify --resume." % (",".join(short_tasks), ",".join(short_tasks)))
     return _finish(out_dir, by_task, stats, model_meta, guard, per_capability, concurrency, tasks,
                    seed, started, {"stages": "generate+verify", "candidates": str(candidates)})
+
+
+def _task_rows(in_dir, task):
+    """Kept rows of one task in a verify output directory (final file, else the .part of a short task)."""
+    for suffix in ("", ".part"):
+        items_path = in_dir / (task + ".jsonl.gz" + suffix)
+        prov_path = in_dir / (task + ".provenance.jsonl.gz" + suffix)
+        if items_path.exists() and prov_path.exists():
+            items, provs = _read_gzip(items_path), _read_gzip(prov_path)
+            by_id = {p["id"]: p for p in provs}
+            if len(by_id) != len(provs) or {i["id"] for i in items} != set(by_id):
+                raise SystemExit("%s: item and provenance ids differ in %s" % (task, in_dir))
+            return [(item, by_id[item["id"]]) for item in items]
+    return []
+
+
+def stage_recheck(in_dir, out_dir, verifier, vtag, vmeta, tasks, langs, concurrency):
+    """Second blind verifier over already verified rows: a row is kept only when this verifier also
+    gives the target label. Rows in languages outside ``langs`` (the second verifier does not cover
+    them) pass with a recorded skip. Resumable through a judgement cache."""
+    in_dir, out_dir = Path(in_dir), Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = out_dir / "recheck.cache.jsonl.gz"
+    cache = {(r["id"], r["model"]): r["answer"] for r in _read_gzip(cache_path)} if cache_path.exists() else {}
+    summary = {}
+    for task in tasks:
+        spec = TASKS[task]
+        if spec["shape"] != "single":
+            raise SystemExit("recheck supports single-text tasks only, not %s" % task)
+        rows = _task_rows(in_dir, task)
+        todo = [(item, prov) for item, prov in rows
+                if prov["seed"]["lang"] in langs and (item["id"], vtag) not in cache]
+
+        def judge(pair):
+            item, prov = pair
+            metrics = collections.Counter()
+            obj = _request_json(verifier, verification_request(task, {spec["verify_field"]: item["state"]},
+                                prov["seed"]["lang"]), 0, int(item["id"][:8], 16) ^ 0x3C3C3C3C,
+                                metrics, "recheck")
+            return item["id"], (obj or {}).get("answer")
+
+        t0 = time.monotonic()
+        for start in range(0, len(todo), concurrency * 4):
+            chunk = todo[start:start + concurrency * 4]
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                for ident, answer in pool.map(judge, chunk):
+                    cache[(ident, vtag)] = answer
+                    _append_gzip(cache_path, {"id": ident, "model": vtag, "answer": answer})
+            _stage_line("recheck", task, start + len(chunk), len(todo), t0, 0)
+        kept, counts, checked, agreed = [], collections.Counter(), 0, 0
+        for item, prov in rows:
+            lang, target = prov["seed"]["lang"], prov["seed"]["target"]
+            if lang in langs:
+                answer = cache.get((item["id"], vtag))
+                checked += 1
+                if answer != target:
+                    continue
+                agreed += 1
+                verify2 = {"model": vtag, "meta": vmeta, "answer": answer, "agree": True}
+            else:
+                verify2 = {"model": vtag, "skipped": "language not covered by the second verifier"}
+            kept.append((item, dict(prov, verify2=verify2)))
+            counts["%s/%s" % (lang, target)] += 1
+        _write_gzip_rows(out_dir / (task + ".jsonl.gz"), [i for i, _ in kept])
+        _write_gzip_rows(out_dir / (task + ".provenance.jsonl.gz"), [p for _, p in kept])
+        summary[task] = {"rows_in": len(rows), "rechecked": checked, "agreed": agreed,
+                         "agreement": (agreed / checked) if checked else None, "kept": len(kept),
+                         "counts": dict(sorted(counts.items()))}
+        print("%s: %d in, %d rechecked, %s agree, %d kept" % (
+            task, len(rows), checked, ("%.0f%%" % (100.0 * agreed / checked)) if checked else "-", len(kept)),
+            flush=True)
+    manifest_in = in_dir / "manifest.json"
+    manifest = json.loads(manifest_in.read_text()) if manifest_in.exists() else {
+        "kind": "grounded-synthetic", "seed": 20261003, "leakage": {"checked": False}}
+    manifest["recheck"] = {"verifier": vtag, "verifier_meta": vmeta, "languages": list(langs),
+                           "source_dir": str(in_dir), "tasks": summary}
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    return summary
+
+
+def _write_gzip_rows(path, rows):
+    part = path.with_name(path.name + ".part")
+    with gzip.open(part, "wt", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    part.replace(path)
 
 
 def _client_and_meta(args, role):
@@ -701,7 +826,14 @@ def main(argv=None):
     ap.add_argument("--phased-batch", type=int, default=0, metavar="N",
                     help="generate N seed jobs, then verify them (for GPUs that cannot hold both "
                          "models, e.g. 8 GB); 0 = generate and verify each job together")
-    ap.add_argument("--stage", choices=("single", "generate", "verify"), default="single",
+    ap.add_argument("--langs", default=None,
+                    help="comma-separated languages; restricts every task to these (default: each task's list)")
+    ap.add_argument("--task-langs", default=None,
+                    help="per-task languages, e.g. emotion=tr/ja/zh,sentiment=zh (overrides --langs for those tasks)")
+    ap.add_argument("--in-dir", type=Path, default=None, help="stage recheck: verified rows to recheck")
+    ap.add_argument("--recheck-langs", default="en,de,fr,es,it,pt,nl,pl",
+                    help="stage recheck: languages the second verifier judges; others pass with a recorded skip")
+    ap.add_argument("--stage", choices=("single", "generate", "verify", "recheck"), default="single",
                     help="generate: only the generator runs and candidates go to --candidates; "
                          "verify: only the verifier runs over --candidates (one model per GPU)")
     ap.add_argument("--candidates", type=Path, default=None, help="candidate file (jsonl.gz)")
@@ -713,6 +845,27 @@ def main(argv=None):
         ap.error("--tasks must name known capabilities: %s" % ", ".join(sorted(TASKS)))
     if args.per_capability < 1 or args.concurrency < 1 or args.max_jobs_factor < 1:
         ap.error("counts, concurrency and max-jobs-factor must be positive")
+    global ACTIVE_LANGS
+    if args.langs:
+        ACTIVE_LANGS = tuple(l.strip() for l in args.langs.split(",") if l.strip())
+    for spec in (args.task_langs or "").split(","):
+        if spec.strip():
+            name, _, langs = spec.partition("=")
+            if name.strip() not in TASKS or not langs:
+                ap.error("--task-langs entries look like emotion=tr/ja")
+            TASK_LANGS[name.strip()] = tuple(l for l in langs.split("/") if l)
+    for task in tasks:
+        if not _langs(task):
+            ap.error("%s has no language left after --langs/--task-langs" % task)
+    if args.stage == "recheck":
+        if not args.in_dir or not args.out_dir:
+            ap.error("--stage recheck needs --in-dir and --out-dir")
+        verifier, vtag, vmeta = _client_and_meta(args, "verifier")
+        langs = tuple(l.strip() for l in args.recheck_langs.split(",") if l.strip())
+        summary = stage_recheck(args.in_dir, args.out_dir, verifier, vtag, vmeta, tasks, langs,
+                                args.concurrency)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
     if args.stage != "single" and not args.candidates:
         ap.error("--stage %s needs --candidates" % args.stage)
     if args.stage != "generate" and not args.out_dir:

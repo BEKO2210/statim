@@ -17,6 +17,9 @@ class OpenAIHTTP:
         self.model = model
         self.revision = revision
         self.timeout = timeout
+        # server-side JSON schema; switched off once if the server rejects it (the caller parses the
+        # reply text either way and still checks the label against the allowed set)
+        self.structured = True
 
     def _post(self, path, body, timeout=None):
         data = json.dumps(body).encode("utf-8")
@@ -57,16 +60,29 @@ class OpenAIHTTP:
             "messages": messages,
             "temperature": temperature,
             "max_tokens": int(num_predict),
-            # vLLM structured output: the reply must match the schema
-            "response_format": {"type": "json_schema",
-                                "json_schema": {"name": "item", "schema": schema}},
-            # Qwen3 templates: answer directly, no thinking block (ignored by other templates)
-            "chat_template_kwargs": {"enable_thinking": False},
         }
+        if self.structured:
+            # vLLM structured output: the reply must match the schema
+            body["response_format"] = {"type": "json_schema", "json_schema": {"name": "item", "schema": schema}}
+        if "mistral" not in self.model.lower():
+            # Qwen3 templates: answer directly, no thinking block (ignored by other HF templates;
+            # Mistral checkpoints run in vLLM's mistral tokenizer mode, which has no template)
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         if seed is not None:
             body["seed"] = int(seed) % (2 ** 31 - 1)
         started = time.monotonic()
-        data = self._post("/v1/chat/completions", body)
+        try:
+            data = self._post("/v1/chat/completions", body)
+        except OllamaError as exc:
+            if not (self.structured and str(exc).startswith("HTTP 400")):
+                raise
+            self.structured = False
+            body.pop("response_format", None)
+            messages = list(messages)
+            messages[-1] = dict(messages[-1], content=messages[-1]["content"] +
+                                "\nReply with only a JSON object matching this schema: " + json.dumps(schema))
+            body["messages"] = messages
+            data = self._post("/v1/chat/completions", body)
         choice = (data.get("choices") or [{}])[0]
         usage = data.get("usage") or {}
         return {
