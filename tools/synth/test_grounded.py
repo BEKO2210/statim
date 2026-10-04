@@ -792,3 +792,22 @@ def test_task_langs_restrict_cells_and_openai_client_skips_qwen_kwargs_for_other
     assert out["content"] == '{"answer": "joy"}' and client.structured is False
     assert all("chat_template_kwargs" not in b for b in sent)
     assert "JSON object" in sent[-1]["messages"][-1]["content"]
+
+
+def test_recheck_does_not_cache_failed_answers(tmp_path):
+    import grounded
+
+    class Broken:
+        def chat(self, *a, **k):
+            raise grounded.OllamaError("HTTP 500 down")
+
+    guard = LeakageGuard(["unrelated protected evaluation words zero one two three four five six"])
+    cands, out = tmp_path / "c.jsonl.gz", tmp_path / "out"
+    grounded.stage_generate(cands, tmp_path / "cache", BlindFakeClient(), ("pii",), 22, 8, 0.4,
+                            oversample=4.0, max_jobs_factor=60, passages=fixture_passages(count=20))
+    meta = {"Qwen/Qwen3-8B": {"hf_id": "Qwen/Qwen3-8B", "revision": "a" * 40}}
+    grounded.stage_verify(cands, out, BlindFakeClient(), guard, ("pii",), 22, 8, meta)
+    first = grounded.stage_recheck(out, tmp_path / "re", Broken(), "second", {}, ("pii",), ("en",), 4)
+    assert first["pii"]["errors"] == 2 and first["pii"]["kept"] == 20
+    second = grounded.stage_recheck(out, tmp_path / "re", BlindFakeClient(), "second", {}, ("pii",), ("en",), 4)
+    assert second["pii"]["errors"] == 0 and second["pii"]["agreed"] == 2 and second["pii"]["kept"] == 22

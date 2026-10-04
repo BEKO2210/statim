@@ -721,7 +721,9 @@ def stage_recheck(in_dir, out_dir, verifier, vtag, vmeta, tasks, langs, concurre
     in_dir, out_dir = Path(in_dir), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_path = out_dir / "recheck.cache.jsonl.gz"
-    cache = {(r["id"], r["model"]): r["answer"] for r in _read_gzip(cache_path)} if cache_path.exists() else {}
+    # only real answers are cached: a failed request is asked again on the next run
+    cache = {(r["id"], r["model"]): r["answer"] for r in _read_gzip(cache_path)
+             if r.get("answer") is not None} if cache_path.exists() else {}
     summary = {}
     for task in tasks:
         spec = TASKS[task]
@@ -739,11 +741,14 @@ def stage_recheck(in_dir, out_dir, verifier, vtag, vmeta, tasks, langs, concurre
                                 metrics, "recheck")
             return item["id"], (obj or {}).get("answer")
 
-        t0 = time.monotonic()
+        t0, errors = time.monotonic(), 0
         for start in range(0, len(todo), concurrency * 4):
             chunk = todo[start:start + concurrency * 4]
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 for ident, answer in pool.map(judge, chunk):
+                    if answer is None:
+                        errors += 1
+                        continue
                     cache[(ident, vtag)] = answer
                     _append_gzip(cache_path, {"id": ident, "model": vtag, "answer": answer})
             _stage_line("recheck", task, start + len(chunk), len(todo), t0, 0)
@@ -763,12 +768,16 @@ def stage_recheck(in_dir, out_dir, verifier, vtag, vmeta, tasks, langs, concurre
             counts["%s/%s" % (lang, target)] += 1
         _write_gzip_rows(out_dir / (task + ".jsonl.gz"), [i for i, _ in kept])
         _write_gzip_rows(out_dir / (task + ".provenance.jsonl.gz"), [p for _, p in kept])
-        summary[task] = {"rows_in": len(rows), "rechecked": checked, "agreed": agreed,
+        summary[task] = {"rows_in": len(rows), "rechecked": checked, "agreed": agreed, "errors": errors,
                          "agreement": (agreed / checked) if checked else None, "kept": len(kept),
                          "counts": dict(sorted(counts.items()))}
         print("%s: %d in, %d rechecked, %s agree, %d kept" % (
             task, len(rows), checked, ("%.0f%%" % (100.0 * agreed / checked)) if checked else "-", len(kept)),
             flush=True)
+    failed = {t: s["errors"] for t, s in summary.items() if s["errors"]}
+    if failed:
+        # rows without an answer were left out of this output; run the stage again to judge them
+        print("RECHECK_ERRORS: %s (run --stage recheck again)" % failed, flush=True)
     manifest_in = in_dir / "manifest.json"
     manifest = json.loads(manifest_in.read_text()) if manifest_in.exists() else {
         "kind": "grounded-synthetic", "seed": 20261003, "leakage": {"checked": False}}
