@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1
 
 ARG STATIM_SOURCE=release
-ARG STATIM_VERSION=0.9.5
+ARG STATIM_VERSION=0.10.0
 ARG MODEL_SOURCE=hub
 ARG MODEL_REPO=Beko2210/statim-decide-multilingual-base
 ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
 # Pinned to the Hub commit of the released model and checked by SHA-256. A /resolve/main/ URL let
 # the Space keep a cached older model after the repository moved on (0.9.3 served a pre-0.7.0 file).
-ARG MODEL_REVISION=30fa9ad3183c3cef53b3ba5946d5a4a8abdffacb
-ARG MODEL_SHA256=96fb3971656ee6b596cb0c108aff4bbe1306d87707ffe9ae5f364a52b919ff1b
+ARG MODEL_REVISION=bfb190cda3ed71e278beeb295d279e7fd6900138
+ARG MODEL_SHA256=97a275d7033382cb0dc443598b1507f1d9ecdaf75dcfa1237b489d489bf70dd6
 
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS statim-release
 ARG STATIM_VERSION

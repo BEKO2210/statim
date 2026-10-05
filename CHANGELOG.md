@@ -7,6 +7,17 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-05
+
+### Highlights
+- statim-decide-multilingual-base 0.10.0: retrained on an A100 with four times more mixture data per
+  epoch, as a uniform soup of three seeds. Against 0.7.0 on the same held-out items the gate promotes it
+  with 6 significant gains and 0 regressions; the 14 decision categories rise from 0.748 to 0.826
+  macro accuracy, every category improves, and validation rises 1.5 points (paired 95% interval
+  +0.4 to +2.6). On the 11,550 items of docs/BASELINES.md it beats a zero-shot Qwen3-8B in 12 of 14
+  categories (0.826 against 0.706); Qwen3-8B still leads on emotion and fact-check. The weights are
+  trained on the 0.7.0 mixture and are therefore offered under PolyForm Noncommercial 1.0.0 only.
+
 ### Security
 - Licence re-audit of every training source: eight sources break the data policy (XNLI and
   dhruv0808/indic_sentiment_analyzer are non-commercial; MultiNLI and its Turkish translation
@@ -18,6 +29,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   source only if its upstream licence, the origin of its text and the terms of any generating model
   are confirmed (DATA_LICENSES.md, COMMERCIAL.md).
 ### Fixed
+- The site said the models were trained only on data usable commercially; since the 2026-10-03 audit
+  that is not true for the released weights, and the site now says so.
 - S1Bench reports: Civil Comments and HelpSteer2 were counted as never trained on, but their train
   splits are in the 0.7.0 training mixtures. Six subsets are in-domain; over the seven others Statim
   0.7.0 scores 0.565 (Lev 0.635, Jev 0.766). The claim of leading on civil_comments is withdrawn.
@@ -49,6 +62,13 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   families pass. The builders refuse excluded sources, and `tools/finetune/build_v9.py` composes
   mixture v9 from them with a manifest; it never writes over the mixtures behind released weights.
 ### Added
+- `tools/finetune/colab_train.ipynb`: one-click training of the multilingual model on a Colab A100; inputs
+  and outputs go through a private Hugging Face repo.
+- `train_multitask.py --train-seed` (initialisation and batch order only, data splits unchanged),
+  `--no-grad-ckpt` for large GPUs and `--calibrate-only` (refit the temperatures of a trained model);
+  `tools/finetune/soup.py` averages runs of one recipe into a model soup.
+- `tools/release/hf_publish.py --licence-status`, `--media` and comparison labels: model cards state the
+  licence status of the weights consistently from top to bottom and can show an animation.
 - `docs/reproductions/s1bench-2026-10-03.md`: Statim on the public S1Bench suite (13 subsets, 3,880
   items, Lev's harness, protocol fixed beforehand): 0.638 macro for model 0.7.0, against 0.579 for
   its Laya base, 0.689 for Lev and 0.761 for Jev; per-item records and `bench/s1bench_*.py` to
@@ -1034,7 +1054,8 @@ Hugging Face on 3,906 cases), parity gates against the official package, HTTP se
 Jev/Laya `POST /v1/systemone` protocol, batching, consensus mode, contextual calibration, worker
 pool, auth, Prometheus metrics, playground, Docker and systemd packaging.
 
-[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/BEKO2210/statim/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/BEKO2210/statim/compare/v0.9.5...v0.10.0
 [0.9.5]: https://github.com/BEKO2210/statim/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/BEKO2210/statim/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/BEKO2210/statim/compare/v0.9.2...v0.9.3
