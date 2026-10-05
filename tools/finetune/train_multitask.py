@@ -481,7 +481,8 @@ def main():
                 "training_multitask": {"base": os.path.basename(base.rstrip("/")), "best_epoch": best_epoch,
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
                                        "massive_per_lang": a.massive_per_lang, "massive_langs": a.massive_langs, "sentiment_per_lang": a.sentiment_per_lang,
-                                       "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
+                                       "lr": [a.lr_encoder, a.lr_head], "epochs": 0 if a.calibrate_only else a.epochs, "seed": SEED,
+                                       "train_seed": a.train_seed or SEED, "calibrate_only": a.calibrate_only,
                                        "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience, "optim": a.optim,
                                        "mixture": a.mixture and os.path.basename(a.mixture), "clean": a.clean}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)

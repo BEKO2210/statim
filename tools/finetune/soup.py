@@ -47,6 +47,9 @@ def main(argv=None):
     bases = {(c.get("training_multitask") or {}).get("base") for c in cfgs}
     encoders = {c.get("encoder") for c in cfgs}
     toks = {sha256(os.path.join(m, "tokenizer", "tokenizer.json")) for m in a.members}
+    shapes = {(c.get("max_len"), c.get("head_max_len"), c.get("amp_dtype")) for c in cfgs}
+    if len(shapes) != 1:
+        raise SystemExit("members differ in max_len, head_max_len or amp_dtype: %s" % shapes)
     if len(bases) != 1 or len(encoders) != 1 or len(toks) != 1:
         raise SystemExit("members differ in start checkpoint, encoder or tokenizer: %s %s %d tokenizers"
                          % (bases, encoders, len(toks)))
@@ -72,7 +75,11 @@ def main(argv=None):
     temps = [c.get("temperature") for c in cfgs]
     if all(isinstance(t, list) and len(t) == len(temps[0]) for t in temps):
         cfg["temperature"] = [geometric_mean(vals) for vals in zip(*temps)]
-    shared = set.intersection(*(set(c.get("temperature_by_options") or {}) for c in cfgs))
+    buckets = [set(c.get("temperature_by_options") or {}) for c in cfgs]
+    shared = set.intersection(*buckets)
+    if shared != set.union(*buckets):
+        print("warning: temperature buckets missing in some members, dropped: %s"
+              % sorted(set.union(*buckets) - shared), file=sys.stderr)
     cfg["temperature_by_options"] = {b: geometric_mean([c["temperature_by_options"][b] for c in cfgs])
                                      for b in sorted(shared)}
     cfg["model_name"] = os.path.basename(a.out.rstrip("/"))

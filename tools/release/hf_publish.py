@@ -326,6 +326,8 @@ def main():
         ev, _ = load_evaluation(a.model_dir)
         base_ev, comparison = None, None
     meta = json.load(open(os.path.join(a.model_dir, "rl_agent_config.json")))
+    if meta.get("soup") and a.trained_from == "?":
+        raise SystemExit("a model soup's card needs --trained-from (the start checkpoint of its runs)")
     os.makedirs(a.out, exist_ok=True)
     py = os.path.join(ROOT, ".venv", "bin", "python")
     files = []

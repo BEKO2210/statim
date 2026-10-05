@@ -55,8 +55,10 @@ self-hosted deployments.
 
 ## Training data
 
-Released weights are trained only on data whose licences permit commercial use and do not impose
-ShareAlike or copyleft terms on the model. Every source and its licence is listed in
+Training sources must have licences that permit commercial use and impose no ShareAlike or copyleft
+terms on the model. The weights released up to 0.10.0 do not meet this: part of their data is
+non-commercial, ShareAlike or unlicensed (see the notice above), so they are offered under PolyForm
+Noncommercial 1.0.0 only. Every source, its licence and each finding are listed in
 [DATA_LICENSES.md](DATA_LICENSES.md).
 
 *This page summarises the licensing model; it is not legal advice. The licence texts are
