@@ -43,11 +43,11 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 <p align="center"><img src="assets/readme/compare.svg" width="600" alt="Statim against ONNX Runtime and the Laya PyTorch reference on one CPU (speed, start-up, memory) and against Lev and Jev on S1Bench. Statim is fastest on long inputs, starts in 0.45 s and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.651, Lev 0.689 and Jev 0.761."></p>
 
-| Measure | **Statim Decide Multilingual 0.7.0**, trained | **Qwen3-8B**, zero-shot |
+| Measure | **Statim Decide Multilingual 0.10.0**, trained | **Qwen3-8B**, zero-shot |
 |---|---:|---:|
-| 14-category macro accuracy | **0.748** | 0.706 |
-| Banking77 | **0.913** | 0.650 |
-| Decisions/s, one RTX 3070 | **68** | ≈6 |
+| 14-category macro accuracy | **0.826** | 0.706 |
+| Banking77 | **0.918** | 0.650 |
+| Decisions/s, one RTX 3070 | **104** | ≈6 |
 
 - CPU latency: **535 ms/state, multilingual**; **1,683 ms/state, English**. RTX 3070: 54 ms and 137 ms.
 - Reference parity: **240/240** token sequences, with answers within 1e-4 of Laya.
@@ -57,7 +57,7 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 - Accuracy: the same 11,550 held-out items, questions, and options. Statim was trained; both
   baselines were zero-shot. mDeBERTa-v3 XNLI scored 0.488 on the 14 categories and 0.224 on
   Banking77's 77 intents. [Full results](docs/BASELINES.md)
-- Speed: Statim Vulkan f32 reached 68 decisions/s (11.6 ms/decision) in batches of 16 on one RTX
+- Speed: Statim Vulkan f32 reached 104 decisions/s (6.2 ms/decision) in batches of 16 on one RTX
   3070. Qwen3-8B reached ≈6 decisions/s through Ollama Q4_K_M with 2 parallel requests;
   mDeBERTa-v3 XNLI used CUDA f32 and reached 4 decisions/s.
   [Measurements](docs/BASELINES.md#speed-on-the-same-machine)
@@ -192,15 +192,15 @@ and must pass a no-harm promotion gate.
 | Model | Languages |
 |---|---:|
 | [statim-decide-en-large 0.5.0](https://huggingface.co/Beko2210/statim-decide-en-large)<br>ModernBERT-large, 395M | English |
-| [statim-decide-multilingual-base 0.7.0](https://huggingface.co/Beko2210/statim-decide-multilingual-base)<br>mmBERT-base | 12 evaluated |
+| [statim-decide-multilingual-base 0.10.0](https://huggingface.co/Beko2210/statim-decide-multilingual-base)<br>mmBERT-base, noncommercial licence | 12 evaluated |
 
 Files: f32 1.58 GB and q8_0 0.45 GB (English); f32 0.91 GB and q8_0 0.36 GB (multilingual).
 
 | Suite | English | Multilingual |
 |---|---:|---:|
-| typed-decisions | **0.768** | 0.763 |
-| Banking77 | **0.928** | 0.914 |
-| MASSIVE | 0.867 (en) | 0.800 (12 languages) |
+| typed-decisions | 0.768 | **0.775** |
+| Banking77 | **0.928** | 0.918 |
+| MASSIVE | 0.867 (en) | 0.816 (12 languages) |
 
 These are trained-suite promotion-gate results. Under the same published protocol,
 typed-decisions scores are meraGPT 0.768, laya-typed-decisions 0.766, and Jev 0.727; supervised
@@ -402,22 +402,22 @@ must share model, adapter, questions, and inference options. Answers match stand
 
 Every system receives the same 11,550 held-out items, questions, and options: 37 language cells with
 150 items each across 14 categories, plus the first 2,000 test rows of AG News, DAIR Emotion, and
-Banking77. Training-mixture overlaps are removed. Statim 0.7.0 was trained on these categories;
+Banking77. Training-mixture overlaps are removed. Statim 0.10.0 was trained on these categories;
 Qwen3-8B and mDeBERTa were zero-shot. This compares out-of-the-box systems, not learning methods.
 
 | Measure | Statim | Qwen3-8B | NLI |
 |---|---:|---:|---:|
 | Parameters | 307M | 8.2B | 279M |
-| 14-category macro accuracy | **0.748** | 0.706 | 0.488 |
-| Categories won | **9** | 5 | 0 |
-| Banking77 | **0.913** | 0.650 | 0.224 |
-| AG News | **0.929** | 0.847 | 0.581 |
-| Decisions/s | **68** | ≈6 | 4 |
+| 14-category macro accuracy | **0.826** | 0.706 | 0.488 |
+| Categories won | **12** | 2 | 0 |
+| Banking77 | **0.918** | 0.650 | 0.224 |
+| AG News | **0.921** | 0.847 | 0.581 |
+| Decisions/s | **104** | ≈6 | 4 |
 
-These are Statim 0.7.0 against zero-shot Qwen3-8B and the zero-shot NLI classifier mDeBERTa-v3-base
+These are Statim 0.10.0 against zero-shot Qwen3-8B and the zero-shot NLI classifier mDeBERTa-v3-base
 XNLI (column NLI), measured on the same RTX 3070 where speed is reported.
 
-Qwen3-8B leads on emotion, fact-check, sentiment, safety, and PII. See
+Qwen3-8B leads on emotion and fact-check (against 0.7.0 it also led on sentiment, safety and PII). See
 [docs/BASELINES.md](docs/BASELINES.md) for all cells, limitations, speed, and reproduction commands.
 
 ### Published model gates
@@ -425,19 +425,19 @@ Qwen3-8B leads on emotion, fact-check, sentiment, safety, and PII. See
 Published models must pass validation, held-out-suite, and pooled-family promotion gates before
 replacing their base. The full method and charts are in [docs/RESULTS.md](docs/RESULTS.md#published-model-gates).
 
-| Suite | English 0.5.0 | Multilingual 0.7.0 |
+| Suite | English 0.5.0 | Multilingual 0.10.0 |
 |---|---:|---:|
-| typed-decisions | 0.768 | 0.763 |
-| Banking77 | 0.928 | 0.914 |
-| MASSIVE | 0.867 English | 0.800 / 12 languages |
+| typed-decisions | 0.768 | 0.775 |
+| Banking77 | 0.928 | 0.918 |
+| MASSIVE | 0.867 English | 0.816 / 12 languages |
 | HWU64 (English only) | 0.833 | — |
-| AG News (never trained) | 0.939 | 0.9295 |
-| Emotion (never trained) | 0.588 | 0.504 |
+| AG News (never trained) | 0.939 | 0.921 |
+| Emotion (never trained) | 0.588 | 0.530 |
 
 With paired tests on the same items, English passed 91 suites with 10 significant gains, 0 regressions,
-and its zero-shot family within noise. Multilingual passed 91 suites with 21 significant gains, 70 within
-noise, and 0 regressions;
-its 14-category macro accuracy is 0.748 (0.4.0: 0.559).
+and its zero-shot family within noise. Multilingual 0.10.0 passed against 0.7.0 on 91
+suites with 6 significant gains, 85 within noise, and 0 regressions; the decision-category family rose
+7.7 points (Holm p < 1e-30), and its 14-category macro accuracy is 0.826 (0.7.0: 0.748, 0.4.0: 0.559).
 
 Category-adapter results and promotion evidence are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
 

@@ -153,7 +153,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     }
     import yaml  # noqa: PLC0415 (only needed here)
     head = "---\n" + yaml.safe_dump(front, sort_keys=False, allow_unicode=True) + "---\n"
-    gate_line = (f"Against the checkpoint it was trained from, on {sum(g.values())} held-out suites: "
+    gate_line = (f"Against {a.base_desc}, on {sum(g.values())} held-out suites: "
                  f"**{g['gain']} significant gains, {g['noise']} within noise, {g['loss']} regressions** "
                  "(paired exact McNemar tests; gains and regressions are separately significant after "
                  "Holm-Bonferroni over all suites).") if g else ""
@@ -162,22 +162,58 @@ def card(a, meta, ev, base_ev, files, comparison=None):
               "One held-out suite per decision category, built from splits of the training sources that the "
               "mixture never loads; any text that also occurs in the training mixture is dropped. 150 items "
               "per language, macro over languages.\n\n"
-              "| Category | Languages | This model | Base checkpoint |\n|---|---|---|---|\n"
+              f"| Category | Languages | This model | {a.base_label} |\n|---|---|---|---|\n"
               + "\n".join(crows) + "\n") if crows else ""
+    repo = a.upload or "Beko2210/" + a.name
+    media = "".join(
+        f'<img src="https://huggingface.co/{repo}/resolve/main/media/{os.path.basename(m)}" width="100%" alt="{alt}">\n\n'
+        for m, alt in ((a.media, a.media_alt),) if m)
+    noncommercial = a.licence_status == "noncommercial"
+    notice = ("> **Licence.** This version was trained partly on data that is non-commercial, ShareAlike or under "
+              "an unknown licence (the same training mixture as 0.7.0; findings in "
+              f"[DATA_LICENSES.md]({GITHUB}/blob/main/DATA_LICENSES.md#licence-findings-2026-10-03)). The weights "
+              "are offered only under PolyForm Noncommercial 1.0.0. A version trained only on cleared data will "
+              "follow.\n\n") if noncommercial else ""
+    soup = meta.get("soup")
+    if soup:
+        best = ", ".join(str(m.get("best_epoch")) for m in soup["members"])
+        how = (f"A uniform weight average (model soup, Wortsman et al., 2022) of {len(soup['members'])} runs of "
+               f"`train_multitask.py --clean` from checkpoint `{a.trained_from}`, which differ only in seed and "
+               f"batch order (best epochs {best}, each selected on validation data only); the temperatures were "
+               "refitted on the validation items afterwards (`--calibrate-only`).")
+    else:
+        how = (f"Multi-task fine-tuning with `train_multitask.py --clean` from checkpoint `{tm.get('base', '?')}`, best "
+               f"epoch `{tm.get('best_epoch', '?')}` selected on validation data only.")
+    data_line = ("Training data: the 0.7.0 mixture (Banking77, MASSIVE, typed-decisions replay, a tasksource "
+                 "mixture, Nemotron-Safety-Guard, IndicGuard, MINDS-14, SNIPS and further sources), including the "
+                 "sources the 2026-10-03 licence audit found non-commercial, ShareAlike or unlicensed; every "
+                 f"source and finding is listed in [DATA_LICENSES.md]({GITHUB}/blob/main/DATA_LICENSES.md)."
+                 if noncommercial else
+                 "Training data: only sources whose licence permits commercial use and imposes no ShareAlike or "
+                 "copyleft terms (Banking77, MASSIVE, typed-decisions replay, a licence-audited tasksource mixture, "
+                 "Nemotron-Safety-Guard, IndicGuard, MINDS-14, SNIPS), every one listed with its licence in "
+                 "[DATA_LICENSES.md](DATA_LICENSES.md).")
+    licence_md = ("The weights may be used only under PolyForm Noncommercial 1.0.0 (text in "
+                  "[LICENSE-MODEL.md](LICENSE-MODEL.md)); the Small Business, Free Trial and commercial licences do "
+                  "not apply to this version." if noncommercial else
+                  "The weights may be used under any one of: PolyForm Noncommercial 1.0.0, PolyForm Small Business "
+                  "1.0.0 (free commercial use below 100 people and 1 M USD revenue), PolyForm Free Trial 1.0.0 (any "
+                  "company, fewer than 32 days), or a Statim commercial licence "
+                  f"([COMMERCIAL.md]({GITHUB}/blob/main/COMMERCIAL.md)). Texts in [LICENSE-MODEL.md](LICENSE-MODEL.md).")
     # The Space serves the multilingual model; the English card says so instead of implying otherwise.
     try_line = ("this model on a free CPU, no install and no key." if a.info.get("serve_key") == "multilingual"
                 else "the Space runs the multilingual model on a free CPU; this English model is served the same way.")
     return head + textwrap.dedent(f"""
     # {a.info['display']}
 
-    A decision model for [Statim]({GITHUB}), the native C++ engine for typed decisions: ask any text a
+    {notice}A decision model for [Statim]({GITHUB}), the native C++ engine for typed decisions: ask any text a
     **choice**, a **score** or a **yes/no** question and get calibrated answers from one forward pass, on
     CPU or GPU, without Python at runtime. Version **{a.version}**, fine-tuned from
     [`{a.info['base_model']}`](https://huggingface.co/{a.info['base_model']}) ({a.info['encoder']} encoder).
 
     **[▶ Try it live in your browser]({SPACE})**: {try_line}
 
-    <video controls preload="none" width="100%" poster="{SITE}/images/film-16x9.webp" src="{SITE}/video/statim-flagship-60s-16x9.mp4"></video>
+    {media}    <video controls preload="none" width="100%" poster="{SITE}/images/film-16x9.webp" src="{SITE}/video/statim-flagship-60s-16x9.mp4"></video>
 
     One support ticket, three typed answers, one forward pass: [the 60-second film]({SITE}/#film).
 
@@ -217,7 +253,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     Measured by Statim's no-harm gate ([`tools/finetune/gate.py`]({GITHUB}/blob/main/tools/finetune/gate.py))
     on held-out test data the model selection never looked at. {gate_line}
 
-    | Suite | Role | This model | Base checkpoint | Protocol |
+    | Suite | Role | This model | {a.base_label} | Protocol |
     |---|---|---|---|---|
     {chr(10).join(rows)}
 
@@ -239,12 +275,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
 
     ## Training
 
-    Multi-task fine-tuning with `train_multitask.py --clean` from checkpoint `{tm.get('base', '?')}`, best
-    epoch `{tm.get('best_epoch', '?')}` selected on validation data only. Training data: only sources whose
-    licence permits commercial use and imposes no ShareAlike or copyleft terms (Banking77, MASSIVE,
-    typed-decisions replay, a licence-audited tasksource mixture, Nemotron-Safety-Guard, IndicGuard,
-    MINDS-14, SNIPS), every one listed with its licence in
-    [DATA_LICENSES.md](DATA_LICENSES.md). Evaluation test rows were removed from the training data.
+    {how} {data_line} Evaluation test rows were removed from the training data.
 
     ## Intended use and limits
 
@@ -258,10 +289,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
 
     ## Licence
 
-    The weights may be used under any one of: PolyForm Noncommercial 1.0.0, PolyForm Small Business
-    1.0.0 (free commercial use below 100 people and 1 M USD revenue), PolyForm Free Trial 1.0.0 (any
-    company, fewer than 32 days), or a Statim commercial licence
-    ([COMMERCIAL.md]({GITHUB}/blob/main/COMMERCIAL.md)). Texts in [LICENSE-MODEL.md](LICENSE-MODEL.md).
+    {licence_md}
     The Statim engine is Apache-2.0.
 
     Built on [Laya]({'https://huggingface.co/' + a.info['base_model']}) (Apache-2.0) and
@@ -280,6 +308,13 @@ def main():
     ap.add_argument("--base", help="base checkpoint dir with eval.json, for the gate summary")
     ap.add_argument("--out", required=True)
     ap.add_argument("--upload", help="Hugging Face repo id; without it nothing is uploaded")
+    ap.add_argument("--licence-status", choices=("cleared", "noncommercial"), required=True,
+                    help="noncommercial: trained on data the licence audit did not clear; PolyForm Noncommercial only")
+    ap.add_argument("--base-label", default="Base checkpoint", help="column title of the comparison model")
+    ap.add_argument("--base-desc", default="the checkpoint it was trained from", help="the comparison model in prose")
+    ap.add_argument("--trained-from", default="?", help="start checkpoint of a soup's runs (for the card)")
+    ap.add_argument("--media", help="animation (GIF) shown under the live link; copied to media/")
+    ap.add_argument("--media-alt", default="", help="alt text of --media")
     a = ap.parse_args()
     a.info = MODELS[a.name]
     sys.path.insert(0, os.path.join(ROOT, "tools", "finetune"))
@@ -308,6 +343,9 @@ def main():
             (shutil.copytree if os.path.isdir(src) else shutil.copy2)(src, os.path.join(ck, rel))
     files.append(("checkpoint/", sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(ck) for f in fs),
                   "Laya-format checkpoint for fine-tuning and the Python reference"))
+    if a.media:
+        os.makedirs(os.path.join(a.out, "media"), exist_ok=True)
+        shutil.copy2(a.media, os.path.join(a.out, "media", os.path.basename(a.media)))
     os.makedirs(os.path.join(a.out, "evaluation"), exist_ok=True)
     shutil.copy2(os.path.join(a.model_dir, "eval.json"), os.path.join(a.out, "evaluation", "eval.json"))
     # the per-item outcomes make the published evaluation usable as a paired gate reference
