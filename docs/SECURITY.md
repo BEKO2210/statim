@@ -95,7 +95,7 @@ Statim hardens its continuous integration and release pipeline against supply-ch
 - **Software Bill of Materials (SBOM).** Each release archive has a companion SPDX 2.3 JSON SBOM generated from the finished archive by the standard-library-only `tools/release/sbom.py` and published alongside the release assets. It inventories every shipped file with SHA-1 and SHA-256 checksums; the statically linked ggml, cpp-httplib, nlohmann/json and libstdc++ components with versions and licences; and the operating-system libraries reported by the archived binaries' ELF dynamic sections. It also records the compiler and minimum required glibc symbol version reported by `readelf`.
 - **Build provenance.** Release archives are signed with build provenance attestations via `actions/attest-build-provenance`. Provenance can be verified using the GitHub CLI:
   ```bash
-  gh attestation verify statim-0.9.5-linux-x86_64-cpu.tar.gz --owner BEKO2210
+  gh attestation verify statim-0.10.0-linux-x86_64-cpu.tar.gz --owner BEKO2210
   ```
 - **Secret scanning.** GitHub push protection rejects pushes that contain known credential formats. CI job `secrets` also runs gitleaks 8.30.1 (pinned, SHA-256-checked) over the commits each push or pull request adds, and over the whole history daily. `.gitleaks.toml` adds only a narrow allowlist: test keys of the form `<name>-test-key-<hex>` and the description hashes in `docs/api-v1.contract.json`.
 - **Checksums.** Each release attaches `SHA256SUMS` covering all released archives:

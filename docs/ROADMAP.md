@@ -11,17 +11,18 @@ results against supervised baselines (MASSIVE paper, Banking77 literature).
 
 | Field | Statim | Best published, same protocol |
 |---|---|---|
-| typed-decisions test | **0.768** statim-decide-en-large; 0.763 statim-decide-multilingual-base | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
-| Banking77, trained on train split | **0.928** en-large; 0.914 multilingual-base | 94.1 MPNet (supervised) |
-| MASSIVE, trained | 0.867 en-large (English); 0.800 multilingual-base (12 languages) | 85.7 XLM-R base (12 languages, supervised, full data) |
-| AG News, zero-shot (never trained) | 0.939 en-large; 0.9295 multilingual-base | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
-| 14 decision categories, held out | **0.748** multilingual-base (0.7.0) | 0.706 Qwen3-8B, 0.488 mDeBERTa-v3 XNLI (both zero-shot, measured on the same items: docs/BASELINES.md) |
-| DAIR Emotion (this dataset never trained on) | 0.588 en-large; 0.504 multilingual-base (first 2,000 rows); 0.600 consensus of the Laya checkpoints (first 400) | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
+| typed-decisions test | **0.775** statim-decide-multilingual-base; 0.768 statim-decide-en-large | 0.768 meraGPT, 0.766 laya-typed-decisions, 0.727 Jev |
+| Banking77, trained on train split | **0.928** en-large; 0.918 multilingual-base | 94.1 MPNet (supervised) |
+| MASSIVE, trained | 0.867 en-large (English); 0.816 multilingual-base (12 languages) | 85.7 XLM-R base (12 languages, supervised, full data) |
+| AG News, zero-shot (never trained) | 0.939 en-large; 0.921 multilingual-base | 0.950 Laya, 0.926 GPT-3 (CARP), 0.881 Jev |
+| 14 decision categories, held out | **0.826** multilingual-base (0.10.0; 0.748 for 0.7.0) | 0.706 Qwen3-8B, 0.488 mDeBERTa-v3 XNLI (both zero-shot, measured on the same items: docs/BASELINES.md) |
+| DAIR Emotion (this dataset never trained on) | 0.588 en-large; 0.530 multilingual-base (first 2,000 rows); 0.600 consensus of the Laya checkpoints (first 400) | 0.59–0.60 zero-shot field (Jev 0.590 on 2,000) |
 
-Gaps we measure and work on next: a zero-shot Qwen3-8B still leads in five of the 14 categories,
-emotion (0.586 vs 0.726), fact-check (0.313 vs 0.513), sentiment (0.800 vs 0.873), safety (0.727 vs
-0.753) and PII (0.856 vs 0.878) (docs/BASELINES.md), and Belebele reading is near chance. The first
-per-category LoRA adapters ([ADAPTERS.md](ADAPTERS.md)) pass the gate for PII (0.856 to 0.910, above
+Gaps we measure and work on next: a zero-shot Qwen3-8B still leads in two of the 14 categories,
+emotion (0.664 vs 0.726) and fact-check (0.467 vs 0.513) (docs/BASELINES.md); with 0.7.0 it led in
+five. Belebele reading is near chance. The 0.10.0 weights carry the same noncommercial licence as
+0.7.0; a version trained only on cleared data is next. The first per-category LoRA adapters
+([ADAPTERS.md](ADAPTERS.md)), trained on 0.7.0 and bound to it, pass the gate for PII (0.856 to 0.910, above
 Qwen3-8B) and emotion (0.586 to 0.639). In a pre-registered replication on 1,350 fresh items,
 safety passes too (0.708 to 0.806). All three are published on Hugging Face, and the SDKs select
 adapters. Sentiment and fact-check stay within noise. Next:

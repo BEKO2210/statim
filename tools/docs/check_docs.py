@@ -427,10 +427,9 @@ for col, system, lead in ((0, "Statim", ""), (1, "Qwen3-8B", "Qwen3-8B "), (2, "
         ("docs/BASELINES.md", cell("test/ag_news", col)),
         ("README.md", cell("AG News", col), "### Trained Statim versus zero-shot general models")]))
 
-# The five categories where Qwen3-8B leads: ROADMAP repeats BASELINES' category rows.
-for key, name in (("emotion", "emotion"), ("fact_check", "fact-check"), ("sentiment", "sentiment"),
-                  ("safety", "safety"), ("pii", "PII")):
-    FACTS.append(("%s, Statim 0.7.0" % key, [
+# The categories where Qwen3-8B leads: ROADMAP repeats BASELINES' category rows.
+for key, name in (("emotion", "emotion"), ("fact_check", "fact-check")):
+    FACTS.append(("%s, Statim" % key, [
         ("docs/BASELINES.md", cell(key, 0)), ("docs/ROADMAP.md", r"\b%s \((\d?\.\d+) vs" % name)]))
     FACTS.append(("%s, Qwen3-8B" % key, [
         ("docs/BASELINES.md", cell(key, 1)), ("docs/ROADMAP.md", r"\b%s \(\d?\.\d+ vs\s+(\d?\.\d+)\)" % name)]))
@@ -438,13 +437,13 @@ for key, name in (("emotion", "emotion"), ("fact_check", "fact-check"), ("sentim
 FACTS += [
     ("PII adapter, base", [
         ("docs/ADAPTERS.md", r"PII: the mean over the 11 cells rises from (\d?\.\d+)"),
-        ("docs/BASELINES.md", cell("pii", 0)), ("docs/ROADMAP.md", after("pass the gate for PII (", NUM + " to"))]),
+        ("docs/ROADMAP.md", after("pass the gate for PII (", NUM + " to"))]),  # the 0.7.0 base, not BASELINES' model
     ("PII adapter", [
         ("docs/ADAPTERS.md", r"PII: the mean over the 11 cells rises from \d?\.\d+ to (\d?\.\d+)"),
         ("docs/ROADMAP.md", after("pass the gate for PII (", r"\d?\.\d+ to " + NUM))]),
     ("emotion adapter, base", [
         ("docs/ADAPTERS.md", r"Emotion: the mean over its six gate cells rises from (\d?\.\d+)"),
-        ("docs/BASELINES.md", cell("emotion", 0)), ("docs/ROADMAP.md", after("and emotion (", NUM + " to"))]),
+        ("docs/ROADMAP.md", after("and emotion (", NUM + " to"))]),
     ("safety adapter, replication base", [
         ("docs/ADAPTERS.md", r"On the 1,350 fresh items, accuracy rises from (\d?\.\d+)"),
         ("docs/ROADMAP.md", after("safety passes too (", NUM + " to"))]),

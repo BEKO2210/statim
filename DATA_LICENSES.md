@@ -53,6 +53,7 @@ JusteLeo) and Doubao (YiMeng).
 | statim-decide-en-large 0.5.0 | mixture v5 | SDOH-NLI, ledgar |
 | statim-decide-multilingual-base 0.4.0 | mixture v5 | SDOH-NLI, ledgar |
 | statim-decide-multilingual-base 0.7.0 and the pii, emotion and safety adapters built on it | mixture v8 (v6 and v5) | every row of the first table |
+| statim-decide-multilingual-base 0.10.0 (released 2026-10-05) | mixture v8 (v6 and v5), started from 0.4.0 | every row of the first table |
 
 From 2026-10-03 these weights are offered only for noncommercial use under PolyForm Noncommercial
 1.0.0. The Small Business and Free Trial licences and the commercial licence do not apply to them,

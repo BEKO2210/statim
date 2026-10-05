@@ -206,6 +206,13 @@ def main():
     ap.add_argument("--mixture-temperature", type=float, default=2.0,
                     help="with --budget mixture=N and a v6 mixture: split N over the categories in proportion to"
                          " size^(1/T) (T5-style temperature mixing; 1 = proportional, large = uniform)")
+    ap.add_argument("--train-seed", type=int, default=0,
+                    help="seed for initialisation and batch order only (0 = SEED); data splits keep SEED, so seeds stay comparable")
+    ap.add_argument("--calibrate-only", action="store_true",
+                    help="no training: refit the temperatures of an already trained model (e.g. a soup) on the"
+                         " same dev items training uses, and save it")
+    ap.add_argument("--no-grad-ckpt", action="store_true",
+                    help="keep activations instead of recomputing them (faster; needs a large GPU, e.g. 80 GB)")
     ap.add_argument("--clean", action="store_true",
                     help="commercial-clean data only: no tyqiangz sentiment (aggregates research-only corpora),"
                          " distillation texts from the licence-filtered mixture instead of AG News / tweet_eval")
@@ -287,9 +294,13 @@ def main():
     print(f"train {len(train)} {counts} | dev banking {len(bank_dev)}, massive {len(m_dev)}, sentiment {len(s_dev)}, "
           f"typed {len(typed_dev)} | dropped as test duplicates: massive {m_drop}, sentiment {s_drop}", flush=True)
 
+    if a.train_seed:  # data and dev splits above used SEED; only initialisation and batch order change
+        torch.manual_seed(a.train_seed)
+        rng = random.Random(a.train_seed)
     # ---- optimiser
-    model.encoder.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    model.head_checkpointing = True
+    if not a.no_grad_ckpt:
+        model.encoder.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.head_checkpointing = True
     model.train()
     enc_params, head_params = [], []
     for n, p in model.named_parameters():
@@ -383,7 +394,10 @@ def main():
     tmp_best = os.path.join(a.out, "best.safetensors")
     t0 = time.time()
     since_best = 0
-    for epoch in range(a.epochs):
+    if a.calibrate_only:  # the weights are final; only the temperatures below are refitted
+        save_file({k: v.contiguous().cpu() for k, v in model.state_dict().items()}, tmp_best)
+        best, best_epoch = sum(d0.values()) / len(d0), "calibrate-only"
+    for epoch in range(0 if a.calibrate_only else a.epochs):
         sigma = 0.4 + (0.1 - 0.4) * (epoch / max(1, a.epochs - 1))
         ep_idx = epoch_indices()
         bl = [[ep_idx[j] for j in b] for b in batches([train[i] for i in ep_idx], a.max_tokens, 64)]
@@ -467,7 +481,8 @@ def main():
                 "training_multitask": {"base": os.path.basename(base.rstrip("/")), "best_epoch": best_epoch,
                                        "dev_before": d0, "log": log, "counts": counts, "distill": a.distill,
                                        "massive_per_lang": a.massive_per_lang, "massive_langs": a.massive_langs, "sentiment_per_lang": a.sentiment_per_lang,
-                                       "lr": [a.lr_encoder, a.lr_head], "epochs": a.epochs, "seed": SEED,
+                                       "lr": [a.lr_encoder, a.lr_head], "epochs": 0 if a.calibrate_only else a.epochs, "seed": SEED,
+                                       "train_seed": a.train_seed or SEED, "calibrate_only": a.calibrate_only,
                                        "budget": budget, "warmup": a.warmup, "ema": a.ema, "patience": a.patience, "optim": a.optim,
                                        "mixture": a.mixture and os.path.basename(a.mixture), "clean": a.clean}})
     json.dump(cfg, open(os.path.join(a.out, "rl_agent_config.json"), "w"), indent=2)

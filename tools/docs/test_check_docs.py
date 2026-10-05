@@ -111,13 +111,13 @@ class FactChecks(Tree):
         self.assertEqual(self.facts(), [])
 
     def test_stale_copy_on_the_site(self):  # the 0.8.1 site still showed the 0.4.0 model's MASSIVE score
-        self.edit("site/index.html", '<li class="us">Statim Decide Multilingual<span class="num">0.800</span>',
+        self.edit("site/index.html", '<li class="us">Statim Decide Multilingual<span class="num">0.816</span>',
                   '<li class="us">Statim Decide Multilingual<span class="num">0.772</span>')
         self.assertEqual(self.facts(), ["facts: multilingual-base MASSIVE: site/index.html says 0.772, "
-                                        "README.md says 0.800"])
+                                        "README.md says 0.816"])
 
     def test_new_source_value_lists_every_copy(self):
-        self.edit("docs/BASELINES.md", "| **mean of categories** | **0.748** |",
+        self.edit("docs/BASELINES.md", "| **mean of categories** | **0.826** |",
                   "| **mean of categories** | **0.751** |")
         found = self.facts()
         self.assertEqual(len(found), 6)  # BASELINES' summary, README twice, ROADMAP, the site's card and note
