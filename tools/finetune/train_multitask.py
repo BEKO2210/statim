@@ -208,6 +208,9 @@ def main():
                          " size^(1/T) (T5-style temperature mixing; 1 = proportional, large = uniform)")
     ap.add_argument("--train-seed", type=int, default=0,
                     help="seed for initialisation and batch order only (0 = SEED); data splits keep SEED, so seeds stay comparable")
+    ap.add_argument("--calibrate-only", action="store_true",
+                    help="no training: refit the temperatures of an already trained model (e.g. a soup) on the"
+                         " same dev items training uses, and save it")
     ap.add_argument("--no-grad-ckpt", action="store_true",
                     help="keep activations instead of recomputing them (faster; needs a large GPU, e.g. 80 GB)")
     ap.add_argument("--clean", action="store_true",
@@ -391,7 +394,10 @@ def main():
     tmp_best = os.path.join(a.out, "best.safetensors")
     t0 = time.time()
     since_best = 0
-    for epoch in range(a.epochs):
+    if a.calibrate_only:  # the weights are final; only the temperatures below are refitted
+        save_file({k: v.contiguous().cpu() for k, v in model.state_dict().items()}, tmp_best)
+        best, best_epoch = sum(d0.values()) / len(d0), "calibrate-only"
+    for epoch in range(0 if a.calibrate_only else a.epochs):
         sigma = 0.4 + (0.1 - 0.4) * (epoch / max(1, a.epochs - 1))
         ep_idx = epoch_indices()
         bl = [[ep_idx[j] for j in b] for b in batches([train[i] for i in ep_idx], a.max_tokens, 64)]
