@@ -41,7 +41,7 @@ the Jev/Laya `POST /v1/systemone` protocol, so existing clients can switch by ch
 
 ## At a glance
 
-<p align="center"><img src="assets/readme/compare.svg" width="600" alt="Statim against ONNX Runtime and the Laya PyTorch reference on one CPU (speed, start-up, memory) and against Lev and Jev on S1Bench. Statim is fastest on long inputs, starts in 0.45 s and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.651, Lev 0.689 and Jev 0.761."></p>
+<p align="center"><img src="assets/readme/compare.svg" width="600" alt="Statim against ONNX Runtime and the Laya PyTorch reference on one CPU (speed, start-up, memory) and against Lev and Jev on S1Bench. Statim is fastest on long inputs, starts in 0.45 s and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.673, Lev 0.689 and Jev 0.761."></p>
 
 | Measure | **Statim Decide Multilingual 0.10.0**, trained | **Qwen3-8B**, zero-shot |
 |---|---:|---:|
@@ -93,12 +93,12 @@ The comparison does not cover TensorRT or a GPU run. [Full protocol and every ro
 ### On a public suite: S1Bench
 
 On S1Bench (13 public subsets, 3,880 items, the harness Lev's authors used), the multilingual model
-0.7.0 scores **0.638** macro, above its untuned Laya base (0.579) and below Lev, a 4B LLM on a GPU
-(0.689), and the hosted Jev (0.761). It trails on reading comprehension and paraphrase; over the seven
-subsets from sources it never trained on it scores 0.565 (Lev 0.635, Jev 0.766). [Protocol, per-subset results and caveats](docs/reproductions/s1bench-2026-10-03.md).
-The best deployable configuration, the consensus of the English and multilingual models, scores
-0.651, with a lower calibration error than Lev (ECE 0.105 against 0.115; Jev 0.091).
-[Stage 1](docs/reproductions/s1bench-stage1-2026-10-03.md)
+0.10.0 scores **0.657** macro (0.7.0: 0.638), above its untuned Laya base (0.579) and below Lev, a 4B
+LLM on a GPU (0.689), and the hosted Jev (0.761). It trails on reading comprehension; over the seven
+subsets from sources it never trained on it scores 0.584 (Lev 0.635, Jev 0.766). The consensus of the
+English and multilingual models scores **0.673**, 1.7 points below Lev, with ECE 0.116 (Lev 0.115,
+Jev 0.091). [0.10.0 results](docs/reproductions/s1bench-0.10.0-2026-10-07.md);
+[protocol and the 0.7.0 run](docs/reproductions/s1bench-2026-10-03.md).
 
 ## Quick start
 

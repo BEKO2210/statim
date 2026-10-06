@@ -1,0 +1,158 @@
+{
+ "runs": {
+  "a": "s1-statim0100-f32.json.gz",
+  "b": "s1-statim070-f32.json.gz"
+ },
+ "subsets": 13,
+ "items": 3880,
+ "unseen_subsets": [
+  "vitaminc-dev",
+  "boolq",
+  "squad2",
+  "paws",
+  "summeval-relevance",
+  "summeval-consistency",
+  "pubmedqa"
+ ],
+ "board_subsets": [
+  "vitaminc-dev",
+  "massive-en-US",
+  "boolq",
+  "helpsteer2",
+  "aegis2",
+  "paws"
+ ],
+ "macro": {
+  "all": {
+   "a": 0.657259810338917,
+   "a_without_overlap": 0.6561726495952083,
+   "b": 0.6378072616873042,
+   "lev": 0.6893076923076923,
+   "jev": 0.761
+  },
+  "unseen": {
+   "a": 0.5837317952989726,
+   "a_without_overlap": 0.5837317952989726,
+   "b": 0.5654126760346184,
+   "lev": 0.635,
+   "jev": 0.7662857142857142
+  },
+  "board": {
+   "a": 0.6745568881775612,
+   "a_without_overlap": 0.672201373232859,
+   "b": 0.6483833373082121,
+   "lev": 0.719,
+   "jev": 0.7688333333333334
+  }
+ },
+ "mean_ece": {
+  "a": 0.12584246690372944,
+  "b": 0.13757678345153584
+ },
+ "latency": {
+  "CPU (Ryzen 7 5800X, 4 threads)": {
+   "n": 3880,
+   "median_ms": 167.303282,
+   "p95_ms": 567.57769
+  },
+  "GPU (RTX 3070, Vulkan)": {
+   "n": 3880,
+   "median_ms": 22.254423,
+   "p95_ms": 50.405813
+  }
+ },
+ "answers_differing_from_same_as": 0,
+ "per_subset": {
+  "vitaminc-dev": {
+   "a": 0.7562604340567612,
+   "b": 0.7228714524207012,
+   "a_right_b_wrong": 51,
+   "a_wrong_b_right": 31,
+   "holm_p": 0.4162759780883789
+  },
+  "massive-en-US": {
+   "a": 0.8142857142857143,
+   "b": 0.7914285714285715,
+   "a_right_b_wrong": 14,
+   "a_wrong_b_right": 6,
+   "holm_p": 1.0
+  },
+  "massive-de-DE": {
+   "a": 0.7971428571428572,
+   "b": 0.7828571428571428,
+   "a_right_b_wrong": 13,
+   "a_wrong_b_right": 8,
+   "holm_p": 1.0
+  },
+  "boolq": {
+   "a": 0.6833333333333333,
+   "b": 0.6866666666666666,
+   "a_right_b_wrong": 17,
+   "a_wrong_b_right": 18,
+   "holm_p": 1.0
+  },
+  "squad2": {
+   "a": 0.5919732441471572,
+   "b": 0.5551839464882943,
+   "a_right_b_wrong": 17,
+   "a_wrong_b_right": 6,
+   "holm_p": 0.4162759780883789
+  },
+  "paws": {
+   "a": 0.676,
+   "b": 0.656,
+   "a_right_b_wrong": 22,
+   "a_wrong_b_right": 17,
+   "holm_p": 1.0
+  },
+  "multinli": {
+   "a": 0.8093645484949833,
+   "b": 0.7959866220735786,
+   "a_right_b_wrong": 18,
+   "a_wrong_b_right": 14,
+   "holm_p": 1.0
+  },
+  "civil_comments": {
+   "a": 0.92,
+   "b": 0.93,
+   "a_right_b_wrong": 9,
+   "a_wrong_b_right": 12,
+   "holm_p": 1.0
+  },
+  "aegis2": {
+   "a": 0.752,
+   "b": 0.7,
+   "a_right_b_wrong": 41,
+   "a_wrong_b_right": 28,
+   "holm_p": 1.0
+  },
+  "helpsteer2": {
+   "a": 0.3654618473895582,
+   "b": 0.3333333333333333,
+   "a_right_b_wrong": 30,
+   "a_wrong_b_right": 22,
+   "holm_p": 1.0
+  },
+  "summeval-relevance": {
+   "a": 0.2708333333333333,
+   "b": 0.2875,
+   "a_right_b_wrong": 33,
+   "a_wrong_b_right": 37,
+   "holm_p": 1.0
+  },
+  "summeval-consistency": {
+   "a": 0.6597222222222222,
+   "b": 0.5416666666666666,
+   "a_right_b_wrong": 29,
+   "a_wrong_b_right": 12,
+   "holm_p": 0.14960126655932982
+  },
+  "pubmedqa": {
+   "a": 0.448,
+   "b": 0.508,
+   "a_right_b_wrong": 21,
+   "a_wrong_b_right": 36,
+   "holm_p": 0.6273668035582849
+  }
+ }
+}

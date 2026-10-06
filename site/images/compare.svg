@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 1080" width="600" height="1080" role="img" aria-labelledby="t d">
 <title id="t">Statim compared with ONNX Runtime, Laya, Lev and Jev</title>
-<desc id="d">Speed, start-up and memory on one AMD Ryzen 7 5800X CPU against ONNX Runtime and the Laya PyTorch reference, and S1Bench accuracy against Lev and Jev. Statim is fastest on long inputs, starts fastest and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.651 against 0.689 for Lev and 0.761 for Jev.</desc>
+<desc id="d">Speed, start-up and memory on one AMD Ryzen 7 5800X CPU against ONNX Runtime and the Laya PyTorch reference, and S1Bench accuracy against Lev and Jev. Statim is fastest on long inputs, starts fastest and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim scores 0.673 against 0.689 for Lev and 0.761 for Jev.</desc>
 <style>.bg{fill:#0d1014} .card{fill:#12171d;stroke:#232b34} text{font-family:ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;fill:#a7b0bb} .title{font-size:22px;font-weight:600;fill:#e7eaef} .sub{font-size:13px;fill:#8a95a1} .h{font-size:16px;font-weight:600;fill:#e7eaef} .u{font-size:12px;fill:#8a95a1} .l{font-size:13px} .l.statim{fill:#e7eaef;font-weight:600} .v{font-family:ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;font-size:13px;fill:#a7b0bb;opacity:0;animation:fade .5s ease-out forwards} .v.statim{fill:#34d399} .s{font-size:11px;fill:#6f7a87} .t{fill:#1a2129} .b{fill:#6f7a87;transform-box:fill-box;transform-origin:left center;transform:scaleX(0); animation:grow 1.1s cubic-bezier(.16,1,.3,1) forwards} .b.statim{fill:#34d399} .pulse{fill:none;stroke:#34d399;stroke-width:2;stroke-linecap:round;stroke-dasharray:420; stroke-dashoffset:420;animation:draw 1.4s cubic-bezier(.16,1,.3,1) .1s forwards} @keyframes grow{to{transform:scaleX(1)}} @keyframes fade{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}} @keyframes draw{to{stroke-dashoffset:0}} @media (prefers-reduced-motion: reduce){.b,.v,.pulse{animation:none;transform:none;opacity:1;stroke-dashoffset:0}}</style>
 <rect class="bg" width="600" height="1080" rx="16"/>
 <path class="pulse" d="M24 84 H224 l12 -10 l12 20 l12 -10 H576"/>
@@ -78,15 +78,15 @@
 <text x="419.8" y="915" class="v other" style="animation-delay:1.60s">0.689</text>
 <text x="24" y="947" class="l statim">Statim, consensus of two models</text>
 <rect x="252" y="936" width="232" height="16" rx="4" class="t"/>
-<rect x="252" y="936" width="151.0" height="16" rx="4" class="b statim" style="animation-delay:1.13s"/>
-<text x="411.0" y="947" class="v statim" style="animation-delay:1.68s">0.651</text>
-<text x="24" y="979" class="l statim">Statim multilingual 0.7.0</text>
+<rect x="252" y="936" width="156.1" height="16" rx="4" class="b statim" style="animation-delay:1.13s"/>
+<text x="416.1" y="947" class="v statim" style="animation-delay:1.68s">0.673</text>
+<text x="24" y="979" class="l statim">Statim multilingual 0.10.0</text>
 <rect x="252" y="968" width="232" height="16" rx="4" class="t"/>
-<rect x="252" y="968" width="148.0" height="16" rx="4" class="b statim" style="animation-delay:1.21s"/>
-<text x="408.0" y="979" class="v statim" style="animation-delay:1.76s">0.638</text>
+<rect x="252" y="968" width="152.4" height="16" rx="4" class="b statim" style="animation-delay:1.21s"/>
+<text x="412.4" y="979" class="v statim" style="animation-delay:1.76s">0.657</text>
 <text x="24" y="1011" class="l other">Laya (untuned base)</text>
 <rect x="252" y="1000" width="232" height="16" rx="4" class="t"/>
 <rect x="252" y="1000" width="134.3" height="16" rx="4" class="b other" style="animation-delay:1.29s"/>
 <text x="394.3" y="1011" class="v other" style="animation-delay:1.84s">0.579</text>
-<text x="24" y="1038" class="s">Source: docs/reproductions/s1bench-2026-10-03.md, s1bench-stage1-2026-10-03.md</text>
+<text x="24" y="1038" class="s">Source: docs/reproductions/s1bench-0.10.0-2026-10-07.md</text>
 </svg>

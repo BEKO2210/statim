@@ -114,7 +114,69 @@ def category_rows(held, bheld):
     return rows
 
 
-def card(a, meta, ev, base_ev, files, comparison=None):
+def s1bench_svg(s1, version, b_label):
+    """Bar chart of S1Bench macro accuracy over all subsets, from bench/s1bench_compare.py --json."""
+    m = s1["macro"]["all"]
+    bars = [("Jev (hosted API)", m["jev"], False), ("Lev (4B LLM + LoRA, GPU)", m["lev"], False),
+            (f"Statim Decide {version}", m["a"], True), (f"Statim Decide {b_label}", m["b"], False)]
+    w, top, row, lab, track = 640, 64, 34, 210, 340
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{top + row * len(bars) + 30}" '
+           f'viewBox="0 0 {w} {top + row * len(bars) + 30}" font-family="ui-sans-serif, system-ui, sans-serif">',
+           f'<rect width="100%" height="100%" rx="10" fill="#07090c"/>',
+           f'<text x="24" y="30" fill="#e6edf3" font-size="16" font-weight="600">S1Bench: {s1["subsets"]} public decision tasks, '
+           f'{s1["items"]:,} items</text>',
+           '<text x="24" y="48" fill="#8b949e" font-size="12">macro accuracy, higher is better; Lev\'s own harness (levbench)</text>']
+    for i, (name, v, ours) in enumerate(bars):
+        y = top + i * row
+        col = "#34d399" if ours else "#4b5563"
+        out.append(f'<text x="24" y="{y + 15}" fill="{"#e6edf3" if ours else "#c9d1d9"}" font-size="13"'
+                   f'{" font-weight=\"600\"" if ours else ""}>{name}</text>')
+        out.append(f'<rect x="{lab + 24}" y="{y + 3}" width="{track}" height="16" rx="3" fill="#161b22"/>')
+        out.append(f'<rect x="{lab + 24}" y="{y + 3}" width="{track * v:.1f}" height="16" rx="3" fill="{col}"/>')
+        out.append(f'<text x="{lab + 32 + track}" y="{y + 16}" fill="{col if ours else "#c9d1d9"}" '
+                   f'font-size="13" font-family="ui-monospace, monospace">{v:.3f}</text>')
+    out.append(f'<text x="24" y="{top + row * len(bars) + 14}" fill="#8b949e" font-size="11">Lev and Jev as '
+               'reported by Lev\'s authors; Statim measured with the release binary.</text></svg>\n')
+    return "\n".join(out)
+
+
+def s1bench_md(s1, version, b_label, repo, doc):
+    m = s1["macro"]
+    ours, prev = m["all"]["a"], m["all"]["b"]
+    lat = s1.get("latency") or {}
+    same = ("The same file gave the same answer to every item on each device; " if
+            s1.get("answers_differing_from_same_as") == 0 else "")
+    speed = (" " + (same + "median" if same else "Median") + " server time per request: "
+             + ", ".join(f"{v['median_ms']:.0f} ms on {k}" for k, v in lat.items())
+             + " (p95 " + ", ".join(f"{v['p95_ms']:.0f} ms" for v in lat.values()) + ")." if len(lat) > 1 else "")
+    sig = [f"{k} {'up' if v['a'] > v['b'] else 'down'}" for k, v in s1["per_subset"].items() if v["holm_p"] < 0.05]
+    rows = "\n".join(
+        f"| {label} | **{m[g]['a']:.3f}** | {m[g]['b']:.3f} | {m[g]['lev']:.3f} | {m[g]['jev']:.3f} |"
+        for g, label in (("all", f"all {s1['subsets']} subsets"),
+                         ("unseen", f"{len(s1['unseen_subsets'])} subsets from sources Statim never trained on"),
+                         ("board", f"{len(s1['board_subsets'])} subsets of the public board snapshot")))
+    return (f"## On a public benchmark: S1Bench\n\n"
+            f'<img src="https://huggingface.co/{repo}/resolve/main/media/s1bench.svg" width="100%" '
+            f'alt="S1Bench macro accuracy: Jev {m["all"]["jev"]:.3f}, Lev {m["all"]["lev"]:.3f}, Statim Decide '
+            f'{version} {ours:.3f}, Statim Decide {b_label} {prev:.3f}">\n\n'
+            f"[S1Bench]({GITHUB}/blob/main/docs/reproductions/s1bench-protocol.md) is a public suite of "
+            f"{s1['subsets']} typed-decision tasks ({s1['items']:,} items), run here with `levbench`, the harness "
+            f"the authors of Lev used. This version scores **{ours:.3f}** macro accuracy, up from {prev:.3f} for "
+            f"{b_label}. It is still behind Lev, a 4B LLM with LoRA on a GPU "
+            f"({m['all']['lev']:.3f}), and the hosted Jev ({m['all']['jev']:.3f}). Mean calibration error (ECE): "
+            f"{s1['mean_ece']['a']:.3f}, against {s1['mean_ece']['b']:.3f} for {b_label}. "
+            + (f"No single subset changed significantly against {b_label} (paired exact McNemar, Holm); the gain "
+               "is spread over many subsets." if not sig else
+               f"Significant per-subset changes against {b_label} (paired exact McNemar, Holm): {', '.join(sig)}.")
+            + speed + "\n\n"
+            f"| Macro accuracy | This model | {b_label} | Lev | Jev |\n|---|---|---|---|---|\n{rows}\n\n"
+            f"{s1['subsets'] - len(s1['unseen_subsets'])} subsets are in-domain for Statim (it trained on their "
+            "sources' train splits; S1Bench uses their test or dev splits), so the never-trained row is the fair "
+            "comparison. Lev and Jev numbers are quoted from Lev's own report, not re-measured. Protocol, per-subset "
+            f"results and paired tests: [{doc.rsplit('/', 1)[-1]}]({GITHUB}/blob/main/{doc}).\n\n")
+
+
+def card(a, meta, ev, base_ev, files, comparison=None, s1=None):
     held, bheld = ev["heldout"], (base_ev or {}).get("heldout", {})
     rows, index = [], []
     for key, spec in SUITES.items():
@@ -217,7 +279,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
 
     One support ticket, three typed answers, one forward pass: [the 60-second film]({SITE}/#film).
 
-    ## Quick start
+    {{S1MD}}## Quick start
 
     ```sh
     # Statim release binary: {GITHUB}/releases
@@ -297,7 +359,7 @@ def card(a, meta, ev, base_ev, files, comparison=None):
     Training data attribution: Banking77 (Casanueva et al., 2020, PolyAI), MASSIVE (FitzGerald et al.,
     2022, Amazon), and the CC-BY sources in DATA_LICENSES.md. Statim is independent and not affiliated
     with the Laya authors.
-    """).replace("\n    ", "\n")
+    """).replace("\n    ", "\n").replace("{S1MD}", s1bench_md(s1, a.version, a.s1bench_label, repo, a.s1bench_doc) if s1 else "")
 
 
 def main():
@@ -315,6 +377,10 @@ def main():
     ap.add_argument("--trained-from", default="?", help="start checkpoint of a soup's runs (for the card)")
     ap.add_argument("--media", help="animation (GIF) shown under the live link; copied to media/")
     ap.add_argument("--media-alt", default="", help="alt text of --media")
+    ap.add_argument("--s1bench", help="bench/s1bench_compare.py --json output (A: this model) for the S1Bench section")
+    ap.add_argument("--s1bench-label", default="the previous release", help="name of run B in --s1bench")
+    ap.add_argument("--s1bench-doc", default="docs/reproductions/s1bench-protocol.md",
+                    help="repository path of the report the S1Bench section links to")
     a = ap.parse_args()
     a.info = MODELS[a.name]
     sys.path.insert(0, os.path.join(ROOT, "tools", "finetune"))
@@ -354,7 +420,11 @@ def main():
     shutil.copy2(os.path.join(a.model_dir, "eval-items.jsonl.gz"), os.path.join(a.out, "evaluation", "eval-items.jsonl.gz"))
     for f in ("LICENSE-MODEL.md", "DATA_LICENSES.md", "NOTICE"):
         shutil.copy2(os.path.join(ROOT, f), os.path.join(a.out, f))
-    open(os.path.join(a.out, "README.md"), "w").write(card(a, meta, ev, base_ev, files, comparison))
+    s1 = json.load(open(a.s1bench)) if a.s1bench else None
+    if s1:
+        os.makedirs(os.path.join(a.out, "media"), exist_ok=True)
+        open(os.path.join(a.out, "media", "s1bench.svg"), "w").write(s1bench_svg(s1, a.version, a.s1bench_label))
+    open(os.path.join(a.out, "README.md"), "w").write(card(a, meta, ev, base_ev, files, comparison, s1))
     sums = []
     for d, _, fs in os.walk(a.out):
         for f in sorted(fs):

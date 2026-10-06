@@ -11,6 +11,7 @@ Standard library only.
 import argparse
 import gzip
 import json
+import os
 from math import comb
 
 # Abhinavexists/lev docs/FINDINGS.md (levbench, all 13 subsets), as on the Lev model card
@@ -40,6 +41,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("a"); ap.add_argument("b")
     ap.add_argument("--overlap")
+    ap.add_argument("--latency", action="append", default=[], metavar="LABEL=SERVE_LOG",
+                    help="server-side ms per /v1/systemone request from a statim serve log (repeatable)")
+    ap.add_argument("--same-as", help="another run of A (e.g. on a GPU): count the items whose answer differs")
+    ap.add_argument("--json", help="also write the macros and per-subset accuracies here (read by hf_publish.py --s1bench)")
     x = ap.parse_args()
     a, b = load(x.a), load(x.b)
     skip = {s: set(v["items"]) for s, v in json.load(open(x.overlap))["subsets"].items()} if x.overlap else {}
@@ -66,7 +71,29 @@ def main():
     for label, ks in [("all 13 subsets", list(a)), ("7 subsets from sources A never trained on", UNSEEN),
                       ("6 subsets of the board snapshot", BOARD)]:
         print(f"| {label} | {mac(A, ks):.3f} | {mac(clean, ks):.3f} | {mac(B, ks):.3f} | {mac(LEV, ks):.3f} | {mac(JEV, ks):.3f} |")
-    print(f"\nmean ECE: A {sum(r[6] for r in rows) / len(rows):.3f}, B {sum(r[7] for r in rows) / len(rows):.3f}")
+    ece_a, ece_b = sum(r[6] for r in rows) / len(rows), sum(r[7] for r in rows) / len(rows)
+    print(f"\nmean ECE: A {ece_a:.3f}, B {ece_b:.3f}")
+    latency = {}
+    for spec in x.latency:
+        label, path = spec.split("=", 1)
+        ms = sorted(json.loads(line)["ms"] for line in (gzip.open if path.endswith(".gz") else open)(path, "rt") if '"path":"/v1/systemone"' in line)
+        latency[label] = {"n": len(ms), "median_ms": ms[len(ms) // 2], "p95_ms": ms[int(0.95 * len(ms))]}
+        print(f"latency {label}: n={len(ms)} median {latency[label]['median_ms']:.0f} ms, p95 {latency[label]['p95_ms']:.0f} ms")
+    differ = None
+    if x.same_as:
+        o = load(x.same_as)
+        differ = sum(p["pred"] != q["pred"] for k in a for p, q in zip(a[k]["records"], o[k]["records"]))
+        print(f"answers differing from {os.path.basename(x.same_as)}: {differ} of {sum(len(a[k]['records']) for k in a)}")
+    if x.json:
+        groups = {"all": list(a), "unseen": UNSEEN, "board": BOARD}
+        out = {"runs": {"a": os.path.basename(x.a), "b": os.path.basename(x.b)}, "subsets": len(a), "items": sum(len(a[s]["records"]) for s in a),
+               "unseen_subsets": UNSEEN, "board_subsets": BOARD,
+               "macro": {g: {"a": mac(A, ks), "a_without_overlap": mac(clean, ks), "b": mac(B, ks),
+                             "lev": mac(LEV, ks), "jev": mac(JEV, ks)} for g, ks in groups.items()},
+               "mean_ece": {"a": ece_a, "b": ece_b}, "latency": latency, "answers_differing_from_same_as": differ,
+               "per_subset": {r[0]: {"a": r[1], "b": r[2], "a_right_b_wrong": r[3], "a_wrong_b_right": r[4],
+                                     "holm_p": r[8]} for r in rows}}
+        json.dump(out, open(x.json, "w"), indent=1)
 
 
 if __name__ == "__main__":

@@ -6,11 +6,13 @@ This page contains the method, charts, and experiments behind the summary in the
 ### Public benchmark: S1Bench
 
 On S1Bench (13 public subsets, 3,880 items, run with Lev's `levbench` harness under a protocol fixed
-before the run), Statim Decide Multilingual 0.7.0 scores **0.638** macro: above its untuned Laya base
-(0.579) and below Lev (0.689) and Jev (0.761). Six subsets come from sources Statim trained on (their
-train splits: MASSIVE twice, MultiNLI, Aegis 2.0, Civil Comments, HelpSteer2); over the seven others it
-scores 0.565 (Lev 0.635, Jev 0.766). It is behind on reading comprehension and paraphrase. Every number, the per-item records and the reproduction
-commands: [s1bench-2026-10-03.md](reproductions/s1bench-2026-10-03.md).
+before the run), Statim Decide Multilingual 0.10.0 scores **0.657** macro (0.7.0: 0.638): above its
+untuned Laya base (0.579) and below Lev (0.689) and Jev (0.761). Six subsets come from sources Statim
+trained on (their train splits: MASSIVE twice, MultiNLI, Aegis 2.0, Civil Comments, HelpSteer2); over
+the seven others it scores 0.584 (Lev 0.635, Jev 0.766). The consensus with en-large scores 0.673. It
+is behind on reading comprehension. Every number, the per-item records and the reproduction commands:
+[s1bench-0.10.0-2026-10-07.md](reproductions/s1bench-0.10.0-2026-10-07.md) and, for 0.7.0,
+[s1bench-2026-10-03.md](reproductions/s1bench-2026-10-03.md).
 
 ### Published model gates
 
