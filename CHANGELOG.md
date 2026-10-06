@@ -7,6 +7,17 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- `docs/reproductions/s1bench-0.10.0-2026-10-07.md`: statim-decide-multilingual-base 0.10.0 on S1Bench
+  under the unchanged pre-registered protocol: 0.657 macro over 13 subsets (0.7.0: 0.638; Lev 0.689,
+  Jev 0.761), 0.584 over the 7 never-trained sources, and 0.673 for the consensus with en-large
+  (1.7 points below Lev). No subset changes significantly against 0.7.0. On an RTX 3070 (Vulkan) the
+  same file gives the same answer to all 3,880 items, with a median of 22 ms per request against
+  167 ms on 4 CPU threads. README, RESULTS, ROADMAP and the comparison chart use the new numbers.
+- `tools/release/hf_publish.py --s1bench`: the model card gets an S1Bench section with a chart near the
+  top, rendered from `bench/s1bench_compare.py --json` (new, with `--latency` and `--same-as`), so no
+  number is typed by hand.
+
 ### Fixed
 - The README's weights badge said "PolyForm or commercial"; the released weights are PolyForm
   Noncommercial only since the 2026-10-03 licence audit, and the badge now says so.

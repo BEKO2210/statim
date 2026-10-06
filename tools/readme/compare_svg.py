@@ -38,10 +38,10 @@ PANELS = [
               ("Laya (PyTorch)", 2653, "2,653 MiB", OTHER)]},
 ]
 S1BENCH = {"title": "S1Bench: 13 public decision tasks, 3,880 items", "unit": "macro accuracy, higher is better",
-           "source": "docs/reproductions/s1bench-2026-10-03.md, s1bench-stage1-2026-10-03.md",
+           "source": "docs/reproductions/s1bench-0.10.0-2026-10-07.md",
            "rows": [("Jev (hosted API)", 0.761, "0.761", OTHER), ("Lev (4B LLM, GPU)", 0.689, "0.689", OTHER),
-                    ("Statim, consensus of two models", 0.651, "0.651", STATIM),
-                    ("Statim multilingual 0.7.0", 0.638, "0.638", STATIM),
+                    ("Statim, consensus of two models", 0.673, "0.673", STATIM),
+                    ("Statim multilingual 0.10.0", 0.657, "0.657", STATIM),
                     ("Laya (untuned base)", 0.579, "0.579", OTHER)]}
 
 W, PAD = 600, 24
@@ -104,7 +104,7 @@ def build():
             f'<desc id="d">Speed, start-up and memory on one AMD Ryzen 7 5800X CPU against ONNX Runtime and the Laya '
             f'PyTorch reference, and S1Bench accuracy against Lev and Jev. Statim is fastest on long inputs, starts '
             f'fastest and needs the least memory; on short inputs it is level with ONNX Runtime; on S1Bench Statim '
-            f'scores 0.651 against 0.689 for Lev and 0.761 for Jev.</desc>\n<style>{" ".join(css.split())}</style>\n'
+            f'scores 0.673 against 0.689 for Lev and 0.761 for Jev.</desc>\n<style>{" ".join(css.split())}</style>\n'
             f'<rect class="bg" width="{W}" height="{height}" rx="16"/>\n'
             f'<path class="pulse" d="M{PAD} 84 H{PAD + 200} l12 -10 l12 20 l12 -10 H{W - PAD}"/>\n'
             f'<text x="{PAD}" y="40" class="title">Statim, measured against the alternatives</text>\n'
