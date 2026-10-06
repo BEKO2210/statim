@@ -9,7 +9,7 @@
   <a href="https://github.com/BEKO2210/statim/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/BEKO2210/statim/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/BEKO2210/statim/releases/latest"><img alt="Latest release" src="assets/badges/release.svg"></a>
   <a href="LICENSE"><img alt="Code licence: Apache-2.0" src="assets/badges/code-licence.svg"></a>
-  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial, PolyForm Small Business, PolyForm Free Trial, or commercial" src="assets/badges/weights-licence.svg"></a>
+  <a href="LICENSE-MODEL.md"><img alt="Model weights: PolyForm Noncommercial only (the released weights, after the 2026-10-03 licence audit)" src="assets/badges/weights-licence.svg"></a>
 </p>
 
 <p align="center">

@@ -7,6 +7,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- The README's weights badge said "PolyForm or commercial"; the released weights are PolyForm
+  Noncommercial only since the 2026-10-03 licence audit, and the badge now says so.
+
 ## [0.10.0] - 2026-10-05
 
 ### Highlights
