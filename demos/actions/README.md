@@ -50,7 +50,8 @@ python3 -m unittest discover -s demos/actions -p 'test_*.py' -v
 For a comparison, choose one initial `--seed S`, game count `N`, and step cap, and keep all three
 fixed across all four players. Game `i` uses engine seed `S + i`, for `i` from zero through `N - 1`.
 The held-out evaluation protocol uses `--seed 1 --games N`, hence seeds 1 through N, with N below
-100000; generator seeds 0 through 99999 are rejected so these states cannot enter training data.
+100000; the generator rejects seeds 0 through 99999, so no evaluation game is used for training
+(individual positions can still coincide across seeds, as in any game).
 The random baseline also starts its independent action RNG at `S + i`. In 2048 and Snake, every
 spawn event consumes the next seed-derived pair of uniform draws. The first maps to the rank in the
 current row-major empty-cell list; the second selects 2 versus 4 in 2048 and is deliberately consumed

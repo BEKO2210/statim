@@ -363,10 +363,10 @@ document.documentElement.classList.add("js");
       ctx.stroke();
     }
 
-    // Grid cells (Note: row 0 in engine is bottom, row 19 is top)
+    // Grid cells: trace row 0 is the top row (site_traces.py already flips the engine's rows)
     for (let r = 0; r < 20; r++) {
       const row = rawGrid[r] || [];
-      const canvasRow = 19 - r; // Invert so row 0 is bottom
+      const canvasRow = r;
       const y = startY + canvasRow * cellSize;
 
       for (let c = 0; c < 10; c++) {
@@ -683,7 +683,7 @@ document.documentElement.classList.add("js");
         const tab = document.getElementById(`tab-${g}`);
         if (tab) {
           const isSelected = g === state.activeGame;
-          tab.setAttribute("aria-selected", isSelected ? "true" : "false");
+          tab.setAttribute("aria-pressed", isSelected ? "true" : "false");
           tab.classList.toggle("active", isSelected);
         }
       }
@@ -738,7 +738,7 @@ document.documentElement.classList.add("js");
             const t = document.getElementById(`tab-${g}`);
             if (t) {
               const sel = g === game;
-              t.setAttribute("aria-selected", sel ? "true" : "false");
+              t.setAttribute("aria-pressed", sel ? "true" : "false");
               t.classList.toggle("active", sel);
             }
           }
@@ -797,7 +797,10 @@ document.documentElement.classList.add("js");
     // Keyboard navigation
     window.addEventListener("keydown", (e) => {
       // Don't intercept if user is inside a form field
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      // Leave keys to native controls (buttons, links, form fields) and to modified shortcuts
+      const t = e.target;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (t && t.closest && t.closest("button, a, input, textarea, select, [contenteditable], [role=slider]")) return;
 
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();

@@ -269,7 +269,14 @@ class _FakeHandler(BaseHTTPRequestHandler):
 
 
 class StatimPlayerTests(unittest.TestCase):
-    @unittest.skipUnless(os.environ.get("STATIM_LIVE"), "sandbox blocks loopback sockets; set STATIM_LIVE=1")
+    def test_v2_request_exposes_one_sentence_per_option(self):
+        game = Game2048(board=[[2, 2, 0, 0], [0] * 4, [0] * 4, [0] * 4])
+        sentences = {}
+        payload, choices, _ = build_request(game, labels="moves", sentences_out=sentences)
+        self.assertEqual(set(sentences), set(choices))
+        for text in sentences.values():
+            self.assertIn(text, payload["state"])
+
     def test_fake_server_parsing(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), _FakeHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

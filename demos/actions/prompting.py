@@ -118,7 +118,7 @@ def decision_options(game, shuffle=False, rng=None):
     return choices, facts, {"applied": prefiltered, "legal_count": total, "sent_count": len(actions)}
 
 
-def build_request(game, model=None, prompt="v2", labels=None, shuffle=False, rng=None):
+def build_request(game, model=None, prompt="v2", labels=None, shuffle=False, rng=None, sentences_out=None):
     """Build one request; omitted labels retains the original numbered Tetris prompt."""
     if prompt not in ("v1", "v2"):
         raise ValueError(f"unknown prompt version: {prompt}")
@@ -160,6 +160,8 @@ def build_request(game, model=None, prompt="v2", labels=None, shuffle=False, rng
             if len(sentence) > 140:
                 raise AssertionError("move sentence exceeded 140 characters")
             sentences.append(sentence)
+            if sentences_out is not None:  # the v2 criteria are null; traces need the text per option
+                sentences_out[label] = sentence
         state = f"{game.name.title()} game. " + " ".join(sentences)
         if len(state) > 1800:
             raise AssertionError("state exceeded 1,800 characters")

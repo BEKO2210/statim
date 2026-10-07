@@ -48,8 +48,9 @@ def stats_of(game):
     if game.name == "snake":
         return {"score": game.score, "length": len(game.snake)}
     if game.name == "othello":
-        return {"black": game.board.count(1), "white": game.board.count(-1)}
-    return {"lines": game.score}
+        black, white = game.board.count(1), game.board.count(-1)
+        return {"score": black - white, "black": black, "white": white}
+    return {"score": game.score, "lines": game.score}
 
 
 def main():

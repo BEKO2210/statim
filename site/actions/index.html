@@ -184,11 +184,11 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
               <span>Back to 2x2 grid</span>
             </button>
-            <div class="game-tablist" role="tablist" aria-label="Select active game replay">
-              <button type="button" role="tab" id="tab-2048" class="game-tab active" aria-selected="true" data-game="2048">2048</button>
-              <button type="button" role="tab" id="tab-snake" class="game-tab" aria-selected="false" data-game="snake">Snake</button>
-              <button type="button" role="tab" id="tab-othello" class="game-tab" aria-selected="false" data-game="othello">Othello</button>
-              <button type="button" role="tab" id="tab-tetris" class="game-tab" aria-selected="false" data-game="tetris">Tetris</button>
+            <div class="game-tablist" role="group" aria-label="Select active game replay">
+              <button type="button" id="tab-2048" class="game-tab active" aria-pressed="true" data-game="2048">2048</button>
+              <button type="button" id="tab-snake" class="game-tab" aria-pressed="false" data-game="snake">Snake</button>
+              <button type="button" id="tab-othello" class="game-tab" aria-pressed="false" data-game="othello">Othello</button>
+              <button type="button" id="tab-tetris" class="game-tab" aria-pressed="false" data-game="tetris">Tetris</button>
             </div>
           </div>
 

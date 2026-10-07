@@ -24,11 +24,12 @@ class StatimPlayer:
         self.last_prefilter = None
 
     def choose(self, game):
+        sentences = {}
         payload, choices, prefilter = build_request(
-            game, self.model, self.prompt, self.labels, self.shuffle, self.rng)
+            game, self.model, self.prompt, self.labels, self.shuffle, self.rng, sentences_out=sentences)
         if self.adapter is not None:
             payload["adapter"] = self.adapter
-        self.last_options = payload["questions"]["move"]["criteria"]
+        self.last_options = sentences or payload["questions"]["move"]["criteria"]
         self.last_prefilter = prefilter
         request = urllib.request.Request(
             self.base_url + "/v1/systemone",

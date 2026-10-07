@@ -311,7 +311,7 @@
 .game-tab:hover {
   color: var(--fg);
 }
-.game-tab[aria-selected="true"],
+.game-tab[aria-pressed="true"],
 .game-tab.active {
   background: var(--ink-2);
   color: var(--signal);
