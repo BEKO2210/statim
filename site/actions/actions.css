@@ -543,6 +543,111 @@
   align-items: center;
   gap: 14px 20px;
 }
+.live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  font: 600 0.8125rem/1 var(--sans);
+  color: var(--fg);
+  cursor: pointer;
+}
+.live-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--ink-0);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.toggle-track span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--fg-3);
+  transition: transform 0.15s, background-color 0.15s;
+}
+.live-toggle input:checked + .toggle-track {
+  background: var(--signal-soft);
+  border-color: var(--signal);
+}
+.live-toggle input:checked + .toggle-track span {
+  background: var(--signal);
+  transform: translateX(18px);
+}
+.live-toggle input:focus-visible + .toggle-track,
+.live-action-btn:focus-visible,
+.live-settings input:focus-visible,
+.speed-btn:focus-visible,
+.ctrl-btn:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+.live-settings {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--ink-0);
+}
+.live-settings label {
+  display: grid;
+  gap: 6px;
+  color: var(--fg-3);
+  font: 500 0.75rem/1 var(--mono);
+}
+.live-settings input {
+  width: min(100%, 15rem);
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--fg);
+  background: var(--ink-1);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  font: 400 0.8125rem/1.2 var(--mono);
+}
+.live-action-btn {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--fg);
+  background: var(--ink-2);
+  font: 600 0.8125rem/1 var(--sans);
+  cursor: pointer;
+}
+.live-action-btn:disabled { opacity: 0.5; cursor: default; }
+.live-advanced { flex: 1 0 100%; }
+.live-advanced summary {
+  width: fit-content;
+  color: var(--fg-2);
+  font: 600 0.8125rem/1.4 var(--sans);
+  cursor: pointer;
+}
+.live-advanced[open] label { margin-top: 12px; }
+.live-advanced input { width: min(100%, 30rem); }
+.live-status {
+  flex: 1 0 100%;
+  min-height: 1.25em;
+  margin: 0;
+  color: var(--fg-2);
+  font: 400 0.8125rem/1.5 var(--mono);
+}
+.live-status[data-kind="error"] { color: #fca5a5; }
+.live-status[data-kind="success"] { color: var(--signal); }
+.focused-controls.live-active .scrubber-group,
+.focused-controls.live-active .ctrl-buttons-group { display: none; }
 .ctrl-buttons-group {
   display: flex;
   align-items: center;
@@ -652,6 +757,12 @@
 .speed-btn.active {
   background: var(--ink-2);
   color: var(--signal);
+}
+@media (max-width: 520px) {
+  .speed-group { width: 100%; justify-content: space-between; }
+  .speed-btn { padding-inline: 8px; }
+  .live-settings > label { flex: 1 1 9rem; }
+  .live-settings input { width: 100%; }
 }
 
 .keyboard-hint {
