@@ -6,6 +6,8 @@ tools/convert_lora.py turns into a Statim adapter GGUF (`statim serve --adapter`
     .venv-train/bin/pip install peft    # 0.21.0 tested; not part of the training venv's install line
     .venv-train/bin/python tools/finetune/train_lora.py dist/statim-decide-multilingual-base/checkpoint \\
         --mixture data/mixture-v8.jsonl.gz --category emotion             # writes models/lora/emotion
+    .venv-train/bin/python tools/finetune/train_lora.py dist/statim-decide-multilingual-base/checkpoint \\
+        --rows data/actions/train.jsonl.gz --name actions                 # writes models/lora/actions
     .venv/bin/python tools/convert_lora.py models/lora/emotion -o models/lora/emotion.lora.gguf --category emotion \\
         --base dist/statim-decide-multilingual-base/statim-decide-multilingual-base-f32.gguf
 
@@ -33,6 +35,9 @@ whose src the registry does not know (v5 rows, synthetic rows, sources of a newe
 skipped and counted. Sequences are built as in train_multitask.py (max_len of the checkpoint,
 head_max_len 512 like bench/eval_categories.py); items whose marker count does not match their
 options are dropped.
+
+Alternatively, --rows reads every row from one plain or gzipped JSONL file without consulting the
+registry; --name is then required and names the adapter and its default output directory.
 
 Dev: --dev-items items held out per source in proportion to its size, chosen by a hash of the
 normalised state (the same state_key as train_multitask.py), so the split does not depend on row
@@ -187,6 +192,24 @@ def select_rows(path, chosen, enabled, limit=0):
              "unknown_src_rows": sum(unknown.values()), "unknown_src_top": dict(unknown.most_common(10)),
              "limited": bool(limit and len(rows) >= limit)}
     return rows, stats
+
+
+def load_rows(path, limit=0):
+    """Load every mixture-format row from a plain or gzipped JSONL file."""
+    rows, per_source = [], collections.Counter()
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            kept = {k: row.get(k) for k in ("state", "q", "target", "src", "lang")}
+            rows.append(kept)
+            per_source[kept["src"]] += 1
+            if limit and len(rows) >= limit:
+                break
+    return rows, {"rows": len(rows), "per_source": dict(sorted(per_source.items())),
+                  "limited": bool(limit and len(rows) >= limit)}
 
 
 def state_key(state):
@@ -588,10 +611,14 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  epilog="See the module docstring for the recipe and the RTX 3070 sizing.")
     ap.add_argument("base", help="Statim/Laya checkpoint directory (model.safetensors, rl_agent_config.json, encoder/, tokenizer/)")
-    ap.add_argument("--mixture", help="built mixture (jsonl.gz rows {state, q, target, src, lang})")
-    ap.add_argument("--category", required=True, choices=CATEGORIES)
+    data = ap.add_mutually_exclusive_group()
+    data.add_argument("--mixture", help="built mixture (jsonl.gz rows {state, q, target, src, lang})")
+    data.add_argument("--rows", help="plain or gzipped mixture-format rows; every row is used")
+    ap.add_argument("--category", choices=CATEGORIES)
+    ap.add_argument("--name", help="adapter name (required with --rows)")
     ap.add_argument("--registry", default=REGISTRY, help="v6-keep.json that maps a row's src to its category")
-    ap.add_argument("--out", default=None, help="adapter directory (default models/lora/<category>)")
+    ap.add_argument("--out", default=None,
+                    help="adapter directory (default models/lora/<category-or-name>)")
     ap.add_argument("--r", type=int, default=16, help="LoRA rank")
     ap.add_argument("--lora-alpha", type=float, default=32.0, help="LoRA alpha (scale alpha / r)")
     ap.add_argument("--lora-dropout", type=float, default=0.05)
@@ -621,11 +648,21 @@ def parse_args(argv=None):
     ap.add_argument("--profile-batch", default=None, metavar="ROWSxLEN",
                     help="run two training steps on a synthetic batch of this shape, print peak memory, exit")
     a = ap.parse_args(argv)
-    if not a.profile_batch and not a.mixture:
-        ap.error("--mixture is required")
+    if a.rows:
+        if a.category:
+            ap.error("--rows is an alternative to --mixture/--category")
+        if not a.name:
+            ap.error("--name is required with --rows")
+    else:
+        if a.name:
+            ap.error("--name is only valid with --rows")
+        if not a.category:
+            ap.error("--category is required")
+        if not a.profile_batch and not a.mixture:
+            ap.error("--mixture is required")
     if a.accum < 1 or a.max_rows < 1 or a.max_tokens < 1 or a.r < 1 or a.epochs < 1:
         ap.error("--accum, --max-rows, --max-tokens, --r and --epochs must be positive")
-    a.out = a.out or os.path.join("models", "lora", a.category)
+    a.out = a.out or os.path.join("models", "lora", a.name if a.rows else a.category)
     return a
 
 
@@ -634,17 +671,22 @@ def main(argv=None):
     if a.profile_batch:
         return profile(a)
     t0 = time.time()
-    chosen, enabled = category_sources(a.registry, a.category)
-    if not chosen:
-        raise SystemExit("no enabled registry entry of category %s in %s" % (a.category, a.registry))
-    rows, stats = select_rows(a.mixture, chosen, enabled, a.limit_items)
-    print("category %s: %d rows from %d of %d registry sources | rows of other categories %d | unknown src %d %s"
-          % (a.category, stats["rows"], len(stats["per_source"]), len(chosen), stats["other_category_rows"],
-             stats["unknown_src_rows"], stats["unknown_src_top"] or ""), flush=True)
+    if a.rows:
+        rows, stats = load_rows(a.rows, a.limit_items)
+        print("adapter %s: %d rows from %d sources (direct rows file)" %
+              (a.name, stats["rows"], len(stats["per_source"])), flush=True)
+    else:
+        chosen, enabled = category_sources(a.registry, a.category)
+        if not chosen:
+            raise SystemExit("no enabled registry entry of category %s in %s" % (a.category, a.registry))
+        rows, stats = select_rows(a.mixture, chosen, enabled, a.limit_items)
+        print("category %s: %d rows from %d of %d registry sources | rows of other categories %d | unknown src %d %s"
+              % (a.category, stats["rows"], len(stats["per_source"]), len(chosen), stats["other_category_rows"],
+                 stats["unknown_src_rows"], stats["unknown_src_top"] or ""), flush=True)
     for src, n in stats["per_source"].items():
         print("  %6d  %s" % (n, src), flush=True)
     if len(rows) < 2:
-        raise SystemExit("too few rows of category %s in %s" % (a.category, a.mixture))
+        raise SystemExit("too few rows in %s" % (a.rows or a.mixture))
     train_ix, dev_ix = split_dev(rows, a.dev_items)
 
     import torch
@@ -688,10 +730,8 @@ def main(argv=None):
         raise SystemExit("saved adapter_config.json is not a plain LoRA: %s" % saved)
     peak = (round(torch.cuda.max_memory_allocated() / 2 ** 20) if device.type == "cuda" else round(peak_rss_mb()))
     record = {
-        "category": a.category, "base": base, "base_sha256": sha256_file(os.path.join(base, "model.safetensors")),
-        "mixture": os.path.abspath(a.mixture), "mixture_sha256": sha256_file(a.mixture),
-        "registry": os.path.abspath(a.registry),
-        "registry_sha256": sha256_file(a.registry), "sources": per_source,
+        "category": a.category, "base": base,
+        "base_sha256": sha256_file(os.path.join(base, "model.safetensors")), "sources": per_source,
         "selection": {k: v for k, v in stats.items() if k != "per_source"},
         "items": {"train": len(train_items), "dev": len(dev_items), "dropped_marker_mismatch": drop_t + drop_d},
         "max_len": max_len, "head_max_len": a.head_max_len,
@@ -705,6 +745,13 @@ def main(argv=None):
         "versions": {"python": sys.version.split()[0], "torch": torch.__version__, "peft": peft.__version__,
                      "transformers": transformers.__version__, "laya": getattr(laya, "__version__", "?")},
     }
+    if a.rows:
+        record.update({"name": a.name, "rows": os.path.abspath(a.rows),
+                       "rows_sha256": sha256_file(a.rows)})
+    else:
+        record.update({"mixture": os.path.abspath(a.mixture), "mixture_sha256": sha256_file(a.mixture),
+                       "registry": os.path.abspath(a.registry),
+                       "registry_sha256": sha256_file(a.registry)})
     with open(os.path.join(a.out, "train_lora.json"), "w", encoding="utf-8") as f:
         json.dump(record, f, indent=1, ensure_ascii=False)
     best = result["best"]

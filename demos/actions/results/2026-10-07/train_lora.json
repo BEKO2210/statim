@@ -1,0 +1,230 @@
+{
+ "category": null,
+ "base": "dist/statim-decide-multilingual-base-0.10.0/checkpoint",
+ "base_sha256": "d40494468f1007724e3297823778b0411dd10c0f3598b8db335b2c68a062ed68",
+ "sources": {
+  "actions/2048": {
+   "rows": 60000,
+   "train": 58999,
+   "dev": 1001
+  },
+  "actions/othello": {
+   "rows": 11274,
+   "train": 11086,
+   "dev": 188
+  },
+  "actions/snake": {
+   "rows": 17117,
+   "train": 16822,
+   "dev": 295
+  },
+  "actions/tetris": {
+   "rows": 31561,
+   "train": 31035,
+   "dev": 526
+  }
+ },
+ "selection": {
+  "rows": 119952,
+  "limited": false
+ },
+ "items": {
+  "train": 117942,
+  "dev": 2010,
+  "dropped_marker_mismatch": 0
+ },
+ "max_len": 1024,
+ "head_max_len": 512,
+ "lora": {
+  "r": 16,
+  "lora_alpha": 32.0,
+  "lora_dropout": 0.05,
+  "init": "true",
+  "target_modules": [
+   "Wqkv",
+   "Wo",
+   "Wi"
+  ],
+  "wrapped_modules": 88,
+  "trainable_parameters": 3379200
+ },
+ "device": "cuda",
+ "amp": "torch.bfloat16",
+ "base_dtype": "fp16",
+ "gradient_checkpointing": true,
+ "head_checkpointing": true,
+ "head_mode": "eval (frozen, dropout off)",
+ "dev_before": {
+  "dev_acc": 0.308,
+  "dev_by_lang": {
+   "en": 0.308
+  }
+ },
+ "log": [
+  {
+   "epoch": 1,
+   "update": 400,
+   "train_ce": 1.3372,
+   "lr": 0.00019850622603112704,
+   "seconds": 521.4,
+   "dev_acc": 0.6522,
+   "dev_by_lang": {
+    "en": 0.6522
+   }
+  },
+  {
+   "epoch": 1,
+   "update": 800,
+   "train_ce": 0.9191,
+   "lr": 0.0001855021482538129,
+   "seconds": 1047.5,
+   "dev_acc": 0.699,
+   "dev_by_lang": {
+    "en": 0.699
+   }
+  },
+  {
+   "epoch": 1,
+   "update": 1200,
+   "train_ce": 0.8729,
+   "lr": 0.0001608014238625422,
+   "seconds": 1580.3,
+   "dev_acc": 0.6806,
+   "dev_by_lang": {
+    "en": 0.6806
+   }
+  },
+  {
+   "epoch": 1,
+   "update": 1600,
+   "train_ce": 0.844,
+   "lr": 0.00012780297453457345,
+   "seconds": 2108.4,
+   "dev_acc": 0.6507,
+   "dev_by_lang": {
+    "en": 0.6507
+   }
+  },
+  {
+   "epoch": 1,
+   "update": 1791,
+   "train_ce": 0.8399,
+   "lr": 0.00011041433008237919,
+   "seconds": 2360.6,
+   "dev_acc": 0.705,
+   "dev_by_lang": {
+    "en": 0.705
+   }
+  },
+  {
+   "epoch": 2,
+   "update": 2000,
+   "train_ce": 0.8748,
+   "lr": 9.104752316370115e-05,
+   "seconds": 2638.5,
+   "dev_acc": 0.7413,
+   "dev_by_lang": {
+    "en": 0.7413
+   }
+  },
+  {
+   "epoch": 2,
+   "update": 2400,
+   "train_ce": 0.8118,
+   "lr": 5.5592771639268804e-05,
+   "seconds": 3162.2,
+   "dev_acc": 0.709,
+   "dev_by_lang": {
+    "en": 0.709
+   }
+  },
+  {
+   "epoch": 2,
+   "update": 2800,
+   "train_ce": 0.8169,
+   "lr": 2.6317440180542436e-05,
+   "seconds": 3686.6,
+   "dev_acc": 0.7488,
+   "dev_by_lang": {
+    "en": 0.7488
+   }
+  },
+  {
+   "epoch": 2,
+   "update": 3200,
+   "train_ce": 0.8145,
+   "lr": 7.249935287987189e-06,
+   "seconds": 4212.4,
+   "dev_acc": 0.7065,
+   "dev_by_lang": {
+    "en": 0.7065
+   }
+  },
+  {
+   "epoch": 2,
+   "update": 3582,
+   "train_ce": 0.7919,
+   "lr": 1e-06,
+   "seconds": 4714.6,
+   "dev_acc": 0.7055,
+   "dev_by_lang": {
+    "en": 0.7055
+   }
+  }
+ ],
+ "updates": 3582,
+ "updates_planned": 3582,
+ "best": {
+  "dev_acc": 0.7488,
+  "epoch": 2,
+  "update": 2800,
+  "saved_initial": false
+ },
+ "train_seconds": 4725.6,
+ "peak_memory_mb": 1733,
+ "peak_memory_kind": "cuda max_memory_allocated",
+ "seconds": 4787.0,
+ "args": {
+  "base": "../statim/dist/statim-decide-multilingual-base-0.10.0/checkpoint",
+  "mixture": null,
+  "rows": "data/actions/train.jsonl.gz",
+  "category": null,
+  "name": "actions",
+  "registry": "tools/finetune/sources/v6-keep.json",
+  "out": "models/lora/actions",
+  "r": 16,
+  "lora_alpha": 32.0,
+  "lora_dropout": 0.05,
+  "init": "true",
+  "epochs": 2,
+  "lr": 0.0002,
+  "weight_decay": 0.0,
+  "warmup": 0.06,
+  "max_tokens": 8192,
+  "max_rows": 64,
+  "accum": 2,
+  "dev_items": 2000,
+  "eval_every": 400,
+  "max_steps": 0,
+  "limit_items": 0,
+  "max_len": 0,
+  "head_max_len": 512,
+  "device": "auto",
+  "amp": "auto",
+  "base_dtype": "fp16",
+  "grad_checkpointing": true,
+  "head_checkpointing": true,
+  "seed": 20260926,
+  "profile_batch": null
+ },
+ "versions": {
+  "python": "3.12.3",
+  "torch": "2.14.0+cu130",
+  "peft": "0.21.0",
+  "transformers": "5.17.0",
+  "laya": "0.3.20"
+ },
+ "name": "actions",
+ "rows": "data/actions/train.jsonl.gz",
+ "rows_sha256": "03eb485410961293811d21e058838c27e23de70a586f92aa60517cce61067863"
+}

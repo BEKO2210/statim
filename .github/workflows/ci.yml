@@ -16,7 +16,7 @@ jobs:
         with:
           submodules: recursive
       - name: Docs agree with the code (links, paths, flags, API, metrics, published numbers, versions)
-        run: python3 tools/finetune/check_sources.py --allow-todo && python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/release/test_hf_publish_s1bench.py && python3 tools/release/test_check_hardening.py && python3 tools/release/test_sbom.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/ci/test_parity_summary.py && python3 tools/docs/check_docs.py && python3 tools/readme/compare_svg.py --check
+        run: python3 tools/finetune/check_sources.py --allow-todo && python3 tools/docs/test_check_docs.py && python3 tools/release/test_hf_publish_adapter.py && python3 tools/release/test_hf_publish_s1bench.py && python3 -m unittest discover -s demos/actions -p "test_*.py" && python3 tools/release/test_check_hardening.py && python3 tools/release/test_sbom.py && python3 tools/ci/test_fail_on_skip.py && python3 tools/ci/test_parity_summary.py && python3 tools/docs/check_docs.py && python3 tools/readme/compare_svg.py --check
       - name: Toolchain
         run: sudo apt-get update && sudo apt-get install -y ninja-build && pip install --user --require-hashes -r requirements-ci.txt
       - name: API v1 contract compatibility

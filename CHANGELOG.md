@@ -8,6 +8,14 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
+- `demos/actions/` and the site page `actions/`: Statim choosing moves in 2048, Snake, Othello and
+  Tetris. Engines describe every legal move in a sentence; zero-shot the model plays near chance, and
+  a LoRA adapter trained on 120k decisions of the engine heuristic (seeds ≥ 100,000) reaches the
+  teacher in Snake (25.4 food against 22.9) and Othello (44 of 50 games won, teacher 47) on 50 unseen
+  seeds, with 2048 (3,401 against 4,721) and Tetris (79 lines against ≥ 988) below it. Median 19 ms per
+  move on an RTX 3070. Protocol and records: `demos/actions/RESULTS.md`.
+- `tools/finetune/train_lora.py --rows FILE --name NAME`: train an adapter on a plain rows file
+  without the source registry.
 - `docs/reproductions/s1bench-0.10.0-2026-10-07.md`: statim-decide-multilingual-base 0.10.0 on S1Bench
   under the unchanged pre-registered protocol: 0.657 macro over 13 subsets (0.7.0: 0.638; Lev 0.689,
   Jev 0.761), 0.584 over the 7 never-trained sources, and 0.673 for the consensus with en-large
