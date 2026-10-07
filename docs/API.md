@@ -204,7 +204,9 @@ tab's `sessionStorage`, so it is gone when the tab closes.
 
 CORS is disabled by default. `--cors-origin ORIGIN[,ORIGIN...]` enables it for up to eight unique,
 exact `http` or `https` origins (space or comma separated, at most 256 bytes each), using the same
-origin syntax as `--frame-ancestors`. With the flag set every response
+origin syntax as `--frame-ancestors`. Matching is byte-exact, so list each origin as browsers send it
+(lower-case scheme and host, no default port). A request with no `Origin`, `Origin: null` or more than one
+`Origin` header gets no CORS headers. With the flag set every response
 carries `Vary: Origin`, and an allowlisted request also receives `Access-Control-Allow-Origin: <origin>`; `Retry-After` and `X-Request-Id` are named
 in `Access-Control-Expose-Headers` when present. Statim never sends a wildcard origin or
 `Access-Control-Allow-Credentials`.

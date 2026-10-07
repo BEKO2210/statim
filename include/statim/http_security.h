@@ -156,6 +156,8 @@ inline void configure_http_security(httplib::Server& srv, std::vector<ApiKey> ke
         // must not hand a response without CORS headers to an allowed origin (or the reverse).
         if (!cors_origins.empty()) res.set_header("Vary", "Origin");
         if (cors) res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        // Framing checks first: a preflight must not skip the early 413 for a declared huge body.
+        if (reject_framing(req, res)) return httplib::Server::HandlerResponse::Handled;
         if (cors && req.method == "OPTIONS" && cors_route(req.path) &&
             req.get_header_value_count("Access-Control-Request-Method") == 1) {
             const std::string method = req.get_header_value("Access-Control-Request-Method");
@@ -167,7 +169,6 @@ inline void configure_http_security(httplib::Server& srv, std::vector<ApiKey> ke
                 return httplib::Server::HandlerResponse::Handled;
             }
         }
-        if (reject_framing(req, res)) return httplib::Server::HandlerResponse::Handled;
         const bool public_path = req.path == "/health" || req.path == "/ready" || req.path == "/";
         if (!public_path && !keys.empty()) {
             const ApiKey* key = authenticated_key(req, keys);

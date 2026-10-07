@@ -376,6 +376,33 @@ int main(int argc, char** argv) try {
         "Origin: https://other.example\r\nContent-Length: 0\r\n\r\n", 200);
     require(denied.find("Access-Control-") == std::string::npos && denied.find("Vary: Origin\r\n") != std::string::npos,
             "non-allowlisted origin received CORS headers or no Vary: Origin");
+    for (const char* origin_lines : {"Origin: null\r\n",
+                                      "Origin: https://BEKO2210.github.io\r\n",
+                                      "Origin: https://beko2210.github.io\r\nOrigin: https://beko2210.github.io\r\n"}) {
+        const std::string odd = cors_replay(std::string("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n") +
+            origin_lines + "Content-Length: 0\r\n\r\n", 200);
+        require(odd.find("Access-Control-") == std::string::npos, "null, non-exact or repeated Origin got CORS headers");
+    }
+    const std::string huge = cors_replay("OPTIONS /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\nAccess-Control-Request-Method: POST\r\n"
+        "Content-Length: 999999999\r\n\r\n", 413);
+    require(huge.find("Access-Control-Allow-Methods") == std::string::npos, "preflight skipped the body-size check");
+    TestServer cors_auth_server;
+    configure_http_security(cors_auth_server, {test_key}, {"https://beko2210.github.io"});
+    cors_auth_server.Post("/v1/systemone", [](const httplib::Request&, httplib::Response& r) { r.set_content("{}", "application/json"); });
+    auto auth_replay = [&](std::string wire, int status) {
+        MemoryStream stream(std::move(wire));
+        cors_auth_server.process(stream);
+        require(stream.output.find("HTTP/1.1 " + std::to_string(status)) == 0, "unexpected CORS auth HTTP status");
+        return stream.output;
+    };
+    const std::string unauthorized = auth_replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\nContent-Length: 0\r\n\r\n", 401);
+    require(unauthorized.find("Access-Control-Allow-Origin: https://beko2210.github.io\r\n") != std::string::npos &&
+                unauthorized.find("invalid or missing bearer token") != std::string::npos,
+            "401 without CORS headers, or auth skipped");
+    auth_replay("OPTIONS /v1/systemone HTTP/1.1\r\nHost: localhost\r\nOrigin: https://beko2210.github.io\r\n"
+        "Access-Control-Request-Method: POST\r\n\r\n", 204);
     MemoryStream inner("bytes remain");
     DeadlineStream expired(inner, std::chrono::steady_clock::now());
     char c;
