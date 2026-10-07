@@ -16,6 +16,10 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   move on an RTX 3070. Protocol and records: `demos/actions/RESULTS.md`.
 - `tools/finetune/train_lora.py --rows FILE --name NAME`: train an adapter on a plain rows file
   without the source registry.
+
+### Fixed
+- `tools/release/hf_publish.py` did not import on Python 3.11 (a backslash inside an f-string
+  expression, from the S1Bench chart); the mixture-audit tests caught it.
 - `docs/reproductions/s1bench-0.10.0-2026-10-07.md`: statim-decide-multilingual-base 0.10.0 on S1Bench
   under the unchanged pre-registered protocol: 0.657 macro over 13 subsets (0.7.0: 0.638; Lev 0.689,
   Jev 0.761), 0.584 over the 7 never-trained sources, and 0.673 for the consensus with en-large
