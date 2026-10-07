@@ -8,6 +8,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
+- `docs/reproductions/soak-2026-10-02.md`: soak run 2 (72 h, 2 clients, cancellations and adapters,
+  protocol fixed before it started) passed all nine checks: 72,782 requests with no unexpected
+  answer, RSS +2.2 % from the first to the last hour after warm-up (max 3,428 MiB), p95 drift 1.12×,
+  SIGTERM exit in 0.31 s. READINESS #23 and #53 are closed, and with them every server-reliability
+  item that 1.0 requires.
 - `docs/reproductions/s1bench-0.10.0-2026-10-07.md`: statim-decide-multilingual-base 0.10.0 on S1Bench
   under the unchanged pre-registered protocol: 0.657 macro over 13 subsets (0.7.0: 0.638; Lev 0.689,
   Jev 0.761), 0.584 over the 7 never-trained sources, and 0.673 for the consensus with en-large
