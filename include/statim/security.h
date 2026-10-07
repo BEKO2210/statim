@@ -16,6 +16,9 @@ struct ApiKeyConfigError : std::runtime_error {
 struct FrameAncestorsConfigError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
+struct CorsOriginConfigError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 enum class ApiScope : uint8_t {
     inference = 1,
     metrics = 2,
@@ -74,6 +77,7 @@ std::vector<ApiKey> load_key_env(const std::string& value);
 void validate_api_key(const std::string& key, const std::string& source);
 bool is_loopback_host(const std::string& host);
 std::vector<std::string> parse_frame_ancestors(const std::string& value);
+std::vector<std::string> parse_cors_origins(const std::string& value);
 bool valid_request_id(const std::string& value);
 std::string now_iso8601();
 // Content-Security-Policy for the built-in playground page: its one inline <script> and one inline

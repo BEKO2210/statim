@@ -200,6 +200,22 @@ instead lists the configured origins and omits `X-Frame-Options`, which cannot e
 The playground keeps an API key only in the
 tab's `sessionStorage`, so it is gone when the tab closes.
 
+### Cross-origin requests
+
+CORS is disabled by default. `--cors-origin ORIGIN[,ORIGIN...]` enables it for up to eight unique,
+exact `http` or `https` origins (space or comma separated, at most 256 bytes each), using the same
+origin syntax as `--frame-ancestors`. With the flag set every response
+carries `Vary: Origin`, and an allowlisted request also receives `Access-Control-Allow-Origin: <origin>`; `Retry-After` and `X-Request-Id` are named
+in `Access-Control-Expose-Headers` when present. Statim never sends a wildcard origin or
+`Access-Control-Allow-Credentials`.
+
+For every served route, an allowlisted `OPTIONS` request whose `Access-Control-Request-Method` is
+`GET` or `POST` is answered before authentication and admission with status 204 and
+`Access-Control-Allow-Methods: GET, POST, OPTIONS`,
+`Access-Control-Allow-Headers: Content-Type, Authorization`, and `Access-Control-Max-Age: 600`.
+Other origins, and all requests when the flag is unset, retain the existing response without CORS
+headers; in particular, `OPTIONS` follows normal authentication and route handling.
+
 HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
 
 ## Endpoints
@@ -1559,8 +1575,9 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
 | `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
 | `--frame-ancestors` | unset | Space- or comma-separated origins allowed to embed `GET /`; at most 8 unique origins, each at most 256 bytes |
+| `--cors-origin` | unset | Space- or comma-separated origins allowed cross-origin access; at most 8 unique origins, each at most 256 bytes |
 
-All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--frame-ancestors LIST`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Each frame ancestor must be an `http://host[:port]` or `https://host[:port]` origin with a DNS name or IP literal and no path, query, fragment, wildcard, quote, semicolon, comma, whitespace, or CSP keyword; duplicates are removed in input order. Invalid values exit 2 before models load. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--frame-ancestors LIST`, `--cors-origin LIST`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Each configured frame ancestor or CORS origin must be an `http://host[:port]` or `https://host[:port]` origin with a DNS name or IP literal and no path, query, fragment, wildcard, quote, semicolon, comma, whitespace, or CSP keyword; duplicates are removed in input order. Invalid values exit 2 before models load. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
 
 Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 

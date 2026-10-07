@@ -110,6 +110,18 @@ int main(int argc, char** argv) try {
                                     "https://e.example https://f.example https://g.example https://h.example https://i.example");
     });
     startup_rejects([] { (void)parse_frame_ancestors("https://" + std::string(250, 'a') + ".example"); });
+    require(parse_cors_origins("https://beko2210.github.io, http://127.0.0.1:8080 https://beko2210.github.io") ==
+                std::vector<std::string>({"https://beko2210.github.io", "http://127.0.0.1:8080"}),
+            "CORS origins were not parsed and de-duplicated in order");
+    const std::string cors_error = startup_error([] { (void)parse_cors_origins("https://a.example/path"); });
+    require(cors_error.find("invalid --cors-origin origin") != std::string::npos &&
+                cors_error.find("--frame-ancestors") == std::string::npos,
+            "CORS origin error did not name its own flag");
+    startup_rejects([] {
+        (void)parse_cors_origins("https://a.example https://b.example https://c.example https://d.example "
+                                 "https://e.example https://f.example https://g.example https://h.example https://i.example");
+    });
+    startup_rejects([] { (void)parse_cors_origins("https://" + std::string(250, 'a') + ".example"); });
     rejects(413, [&] { parse_request("{\"state\":" + std::string(30000, '[') + "0" + std::string(30000, ']') + ",\"questions\":{}}"); });
     require(parse_request(std::string(64, '[') + "0" + std::string(64, ']')).is_array(), "depth boundary rejected");
     rejects(413, [&] { parse_request(std::string(65, '[') + "0" + std::string(65, ']')); });
@@ -279,6 +291,11 @@ int main(int argc, char** argv) try {
     };
     auto no_auth = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n", 401);
     require(no_auth.empty_reads == 0 && !reached, "unauthorized body read/drained");
+    auto options_without_cors = replay("OPTIONS /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+                                       "Origin: https://beko2210.github.io\r\n"
+                                       "Access-Control-Request-Method: POST\r\n\r\n", 401);
+    require(options_without_cors.output.find("Access-Control-") == std::string::npos,
+            "unset CORS flag changed OPTIONS headers");
     const std::string auth = "Authorization: Bearer " + test_key + "\r\n";
     auto large = replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n" + auth + "Content-Length: 999999999\r\n\r\n", 413);
     require(large.empty_reads == 0 && !reached, "oversized body read/drained");
@@ -312,6 +329,53 @@ int main(int argc, char** argv) try {
     require(failure.output.find("private-file-secret") == std::string::npos && failure.output.find("EXCEPTION_WHAT") == std::string::npos,
             "exception disclosed to client");
     require(failure.output.find("{\"detail\":\"internal server error\"}") != std::string::npos, "exception shape changed");
+    TestServer cors_server;
+    configure_http_security(cors_server, {}, {"https://beko2210.github.io"});
+    cors_server.Post("/v1/systemone", [](const httplib::Request&, httplib::Response& r) {
+        r.set_header("X-Request-Id", "cors-test");
+        r.set_content("{}", "application/json");
+    });
+    cors_server.Post("/v1/systemone/batch", [](const httplib::Request&, httplib::Response& r) {
+        r.status = 503;
+        r.set_header("Retry-After", "1");
+        r.set_header("X-Request-Id", "cors-busy");
+        r.set_content("{\"detail\":\"server busy, try again later\"}", "application/json");
+    });
+    cors_server.Get("/health", [](const httplib::Request&, httplib::Response& r) {
+        r.status = 500;
+        r.set_content("{\"detail\":\"test error\"}", "application/json");
+    });
+    auto cors_replay = [&](std::string wire, int status) {
+        MemoryStream stream(std::move(wire));
+        cors_server.process(stream);
+        require(stream.output.find("HTTP/1.1 " + std::to_string(status)) == 0, "unexpected CORS HTTP status");
+        return stream.output;
+    };
+    const std::string allowed = cors_replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\nContent-Length: 0\r\n\r\n", 200);
+    require(allowed.find("Access-Control-Allow-Origin: https://beko2210.github.io\r\n") != std::string::npos &&
+                allowed.find("Vary: Origin\r\n") != std::string::npos &&
+                allowed.find("Access-Control-Expose-Headers: X-Request-Id\r\n") != std::string::npos,
+            "allowed CORS response headers missing");
+    const std::string preflight = cors_replay("OPTIONS /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\nAccess-Control-Request-Method: POST\r\n\r\n", 204);
+    require(preflight.find("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n") != std::string::npos &&
+                preflight.find("Access-Control-Allow-Headers: Content-Type, Authorization\r\n") != std::string::npos &&
+                preflight.find("Access-Control-Max-Age: 600\r\n") != std::string::npos,
+            "CORS preflight headers missing");
+    const std::string busy = cors_replay("POST /v1/systemone/batch HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\nContent-Length: 0\r\n\r\n", 503);
+    require(busy.find("Access-Control-Expose-Headers: Retry-After, X-Request-Id\r\n") != std::string::npos,
+            "CORS busy response did not expose Retry-After and X-Request-Id");
+    const std::string error = cors_replay("GET /health HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://beko2210.github.io\r\n\r\n", 500);
+    require(error.find("Access-Control-Allow-Origin: https://beko2210.github.io\r\n") != std::string::npos &&
+                error.find("Vary: Origin\r\n") != std::string::npos,
+            "CORS error response headers missing");
+    const std::string denied = cors_replay("POST /v1/systemone HTTP/1.1\r\nHost: localhost\r\n"
+        "Origin: https://other.example\r\nContent-Length: 0\r\n\r\n", 200);
+    require(denied.find("Access-Control-") == std::string::npos && denied.find("Vary: Origin\r\n") != std::string::npos,
+            "non-allowlisted origin received CORS headers or no Vary: Origin");
     MemoryStream inner("bytes remain");
     DeadlineStream expired(inner, std::chrono::steady_clock::now());
     char c;

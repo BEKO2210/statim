@@ -123,16 +123,50 @@ inline bool bearer_authorized(const httplib::Request& req, const std::vector<Api
     const ApiKey* key = authenticated_key(req, keys);
     return key && key_has_scope(*key, scope);
 }
-inline void configure_http_security(httplib::Server& srv, std::vector<ApiKey> keys) {
+inline bool cors_origin_allowed(const httplib::Request& req, const std::vector<std::string>& origins) {
+    if (origins.empty() || req.get_header_value_count("Origin") != 1) return false;
+    const std::string origin = req.get_header_value("Origin");
+    return std::find(origins.begin(), origins.end(), origin) != origins.end();
+}
+inline bool cors_route(const std::string& path) {
+    return path == "/" || path == "/health" || path == "/ready" || path == "/metrics" ||
+           path == "/v1/models" || path == "/v1/systemone" || path == "/v1/systemone/batch";
+}
+inline void configure_http_security(httplib::Server& srv, std::vector<ApiKey> keys,
+                                    std::vector<std::string> cors_origins = {}) {
     srv.set_payload_max_length(max_body_bytes);
     srv.set_exception_handler(sanitize_exception);
     srv.set_error_handler([](const httplib::Request&, httplib::Response& res) {
         if (res.body.empty()) send_error(res, res.status, res.status == 413 ? "request body exceeds limit" : "HTTP request failed");
     });
-    srv.set_pre_routing_handler([keys = std::move(keys)](const httplib::Request& req, httplib::Response& res) {
+    srv.set_post_routing_handler([cors_origins](const httplib::Request& req, httplib::Response& res) {
+        if (!cors_origin_allowed(req, cors_origins)) return;
+        std::string exposed;
+        if (res.has_header("Retry-After")) exposed = "Retry-After";
+        if (res.has_header("X-Request-Id")) exposed += (exposed.empty() ? "" : ", ") + std::string("X-Request-Id");
+        if (!exposed.empty()) res.set_header("Access-Control-Expose-Headers", exposed);
+    });
+    srv.set_pre_routing_handler([keys = std::move(keys), cors_origins = std::move(cors_origins)]
+                                (const httplib::Request& req, httplib::Response& res) {
         // On every response, including errors: no MIME sniffing, no referrer to other sites.
         res.set_header("X-Content-Type-Options", "nosniff");
         res.set_header("Referrer-Policy", "no-referrer");
+        const bool cors = cors_origin_allowed(req, cors_origins);
+        // With an allowlist the response depends on Origin for every request, so a shared cache
+        // must not hand a response without CORS headers to an allowed origin (or the reverse).
+        if (!cors_origins.empty()) res.set_header("Vary", "Origin");
+        if (cors) res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        if (cors && req.method == "OPTIONS" && cors_route(req.path) &&
+            req.get_header_value_count("Access-Control-Request-Method") == 1) {
+            const std::string method = req.get_header_value("Access-Control-Request-Method");
+            if (method == "GET" || method == "POST") {
+                res.status = 204;
+                res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+                res.set_header("Access-Control-Max-Age", "600");
+                return httplib::Server::HandlerResponse::Handled;
+            }
+        }
         if (reject_framing(req, res)) return httplib::Server::HandlerResponse::Handled;
         const bool public_path = req.path == "/health" || req.path == "/ready" || req.path == "/";
         if (!public_path && !keys.empty()) {
