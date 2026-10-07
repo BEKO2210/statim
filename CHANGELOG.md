@@ -17,9 +17,6 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - `tools/finetune/train_lora.py --rows FILE --name NAME`: train an adapter on a plain rows file
   without the source registry.
 
-### Fixed
-- `tools/release/hf_publish.py` did not import on Python 3.11 (a backslash inside an f-string
-  expression, from the S1Bench chart); the mixture-audit tests caught it.
 - `docs/reproductions/soak-2026-10-02.md`: soak run 2 (72 h, 2 clients, cancellations and adapters,
   protocol fixed before it started) passed all nine checks: 72,782 requests with no unexpected
   answer, RSS +2.2 % from the first to the last hour after warm-up (max 3,428 MiB), p95 drift 1.12×,
@@ -38,6 +35,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ### Fixed
 - The README's weights badge said "PolyForm or commercial"; the released weights are PolyForm
   Noncommercial only since the 2026-10-03 licence audit, and the badge now says so.
+- `tools/release/hf_publish.py` did not import on Python 3.11 (a backslash inside an f-string
+  expression, from the S1Bench chart); the mixture-audit tests caught it.
 
 ## [0.10.0] - 2026-10-05
 
