@@ -129,8 +129,9 @@ def s1bench_svg(s1, version, b_label):
     for i, (name, v, ours) in enumerate(bars):
         y = top + i * row
         col = "#34d399" if ours else "#4b5563"
+        weight = ' font-weight="600"' if ours else ""
         out.append(f'<text x="24" y="{y + 15}" fill="{"#e6edf3" if ours else "#c9d1d9"}" font-size="13"'
-                   f'{" font-weight=\"600\"" if ours else ""}>{name}</text>')
+                   f'{weight}>{name}</text>')
         out.append(f'<rect x="{lab + 24}" y="{y + 3}" width="{track}" height="16" rx="3" fill="#161b22"/>')
         out.append(f'<rect x="{lab + 24}" y="{y + 3}" width="{track * v:.1f}" height="16" rx="3" fill="{col}"/>')
         out.append(f'<text x="{lab + 32 + track}" y="{y + 16}" fill="{col if ours else "#c9d1d9"}" '

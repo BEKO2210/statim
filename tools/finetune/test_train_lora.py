@@ -100,6 +100,25 @@ def test_select_rows_streams_one_category(tmp_path):
     assert len(rows) == 1 and stats["limited"]
 
 
+def test_load_direct_rows_and_validate_arguments(tmp_path):
+    path = tmp_path / "actions.jsonl.gz"
+    expected = [_row("actions/2048", "state 0"), _row("actions/snake", "state 1", gold=1)]
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        f.write("\n")
+        for row in expected:
+            f.write(json.dumps(row) + "\n")
+    rows, stats = train_lora.load_rows(path)
+    assert rows == expected
+    assert stats["per_source"] == {"actions/2048": 1, "actions/snake": 1}
+    args = train_lora.parse_args(["base", "--rows", str(path), "--name", "actions"])
+    assert args.rows == str(path) and args.category is None and args.out == "models/lora/actions"
+    with pytest.raises(SystemExit):
+        train_lora.parse_args(["base", "--rows", str(path)])
+    with pytest.raises(SystemExit):
+        train_lora.parse_args(["base", "--rows", str(path), "--name", "actions",
+                               "--category", "emotion"])
+
+
 def test_dev_split_is_deterministic_and_disjoint_by_state():
     rows = [_row("v6/a/default", "state %d" % (i % 60)) for i in range(120)]  # every state twice
     rows += [_row("v6/b/default", "other %d" % i) for i in range(40)]

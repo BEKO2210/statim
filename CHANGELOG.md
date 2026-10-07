@@ -8,6 +8,15 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
+- `demos/actions/` and the site page `actions/`: Statim choosing moves in 2048, Snake, Othello and
+  Tetris. Engines describe every legal move in a sentence; zero-shot the model plays near chance, and
+  a LoRA adapter trained on 120k decisions of the engine heuristic (seeds ≥ 100,000) reaches the
+  teacher in Snake (25.4 food against 22.9) and Othello (44 of 50 games won, teacher 47) on 50 unseen
+  seeds, with 2048 (3,401 against 4,721) and Tetris (79 lines against ≥ 988) below it. Median 19 ms per
+  move on an RTX 3070. Protocol and records: `demos/actions/RESULTS.md`.
+- `tools/finetune/train_lora.py --rows FILE --name NAME`: train an adapter on a plain rows file
+  without the source registry.
+
 - `docs/reproductions/soak-2026-10-02.md`: soak run 2 (72 h, 2 clients, cancellations and adapters,
   protocol fixed before it started) passed all nine checks: 72,782 requests with no unexpected
   answer, RSS +2.2 % from the first to the last hour after warm-up (max 3,428 MiB), p95 drift 1.12×,
@@ -26,6 +35,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ### Fixed
 - The README's weights badge said "PolyForm or commercial"; the released weights are PolyForm
   Noncommercial only since the 2026-10-03 licence audit, and the badge now says so.
+- `tools/release/hf_publish.py` did not import on Python 3.11 (a backslash inside an f-string
+  expression, from the S1Bench chart); the mixture-audit tests caught it.
 
 ## [0.10.0] - 2026-10-05
 
