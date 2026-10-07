@@ -19,9 +19,9 @@ The items come from a read-only audit of 0.9.2 in eight areas:
 **Priorities.** P0 blocks 1.0. P1 should be in 1.0. Items are closed only with the proof in the
 last column.
 
-**Status (2026-10-01).** All nine P0 items are closed. The server-reliability items P1 #23 to #27
-(soak, overload, leaks at exit, SIGTERM, dropped clients) are now also release criteria: 1.0 waits
-for them like a P0.
+**Status (2026-10-07).** All nine P0 items are closed. The server-reliability items P1 #23 to #27
+(soak, overload, leaks at exit, SIGTERM, dropped clients) are release criteria like a P0, and all of
+them are closed: the 72 h soak passed ([soak-2026-10-02.md](reproductions/soak-2026-10-02.md)).
 
 **Effort.** S is up to a day, M a few days, L a week or more.
 
@@ -68,7 +68,7 @@ for them like a P0.
 
 | # | Item | Effort | Status |
 |---|---|---|---|
-| 23 | A 24 h soak with an RSS ceiling and a `/ready` poll. **Required for 1.0** | M | open: run 1 **failed** two pre-registered checks (RSS +7.7 % first against last hour, all of it in the first 2 h; 30 × 422 from a load above capacity), see [soak-2026-10-01.md](reproductions/soak-2026-10-01.md). Run 2 (72 h, protocol fixed there) closes #23 and #53 together if it passes |
+| 23 | A 24 h soak with an RSS ceiling and a `/ready` poll. **Required for 1.0** | M | **closed**: run 2 (72 h, protocol fixed before it started) passed all nine checks, RSS +2.2 %, 0 unexpected answers, see [soak-2026-10-02.md](reproductions/soak-2026-10-02.md); run 1 failed two, see [soak-2026-10-01.md](reproductions/soak-2026-10-01.md) |
 | 24 | A load test beyond `--max-concurrent` that expects 503 with `Retry-After`, then a clean 200. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, overload case |
 | 25 | LeakSanitizer on the HTTP suite and a few hundred inferences. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, every exit checked for sanitizer reports, under ASan in the `sanitize` job |
 | 26 | SIGTERM drains or cancels within a bound; `TimeoutStopSec` matches; a test sends the signal. **Required for 1.0** | M | **closed** (#69): `server_lifecycle`, 5x SIGTERM and SIGINT with requests in flight; `TimeoutStopSec=150` |
@@ -132,7 +132,7 @@ no aligned vector loads, the scratch buffers are per thread).
 | 50 | Claim hygiene: the Hugging Face cards' q8_0 lines ("faster on CPU", "4x smaller") match the measurements (q8_0 is slower than f32 on AVX2, about 2.6x smaller); every speed claim names its hardware and protocol | Documentation | S | **closed** (#72): the cards compute the q8_0 size ratio from the files and state where q8_0 is slower (AVX2) and faster (ARM dotprod, CUDA); README corrected |
 | 51 | The paired evaluation files (`eval.json`, `eval-items.jsonl.gz`) and regenerated cards on Hugging Face, so third parties can run the paired comparison | Evaluation | S | open; at the 1.0 release |
 | 52 | GPU: parity on a self-hosted runner (the RTX 3070 on pop-os) for `main` and release tags only, never for fork pull requests; Vulkan on the belkis-home Intel iGPU; GPU cells in the perf gate; ONNX Runtime CUDA and TensorRT in the comparison | Platform | L | partly (#89): `gpu` workflow on the self-hosted RTX 3070 runner, CUDA and Vulkan parity gates on `main`, tags and manual runs; fork pull-request workflows need approval. Open: iGPU Vulkan, GPU perf-gate cells, ORT CUDA and TensorRT |
-| 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | open: run 2 of [soak-2026-10-01.md](reproductions/soak-2026-10-01.md) covers it |
+| 53 | A 72 h soak with cancellations and adapter switches before the 1.0 tag, after the 24 h run of #23 passes | Reliability | M | **closed**: run 2 of [soak-2026-10-01.md](reproductions/soak-2026-10-01.md), 72 h with 7,421 cancellations and adapter requests, passed ([soak-2026-10-02.md](reproductions/soak-2026-10-02.md)) |
 | 54 | A request whose client disconnects is still computed to the end and holds its worker (found by `server_lifecycle`). Cancel the inference when the connection closes, as the deadline already does | Reliability | M | **closed** (#77): a 5 ms connection watcher cancels the request's inference; a shared micro-batch continues for its live items; `server_lifecycle` measures both |
 | 55 | Release binaries run on the glibc of current enterprise distributions (RHEL 9: 2.34, Debian 12: 2.36, Ubuntu 22.04: 2.35); 0.9.3 needs 2.38 (`__isoc23_strtol` from the Ubuntu 24.04 build). Build on an older base and check the highest required `GLIBC_` version in CI | Platform | M | **closed** (#121): release binaries are built in manylinux_2_28 with GCC 13 and need glibc 2.28 (highest symbol GLIBC_2.27); the release job fails above 2.28 (`check_hardening.py --max-glibc 2.28`); an in-tree `erf` keeps the GeGLU loop vectorized, and the perf gate measured no slowdown against 0.9.5 |
 
