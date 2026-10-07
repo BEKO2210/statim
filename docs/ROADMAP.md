@@ -60,8 +60,8 @@ by question family; the first specialist experiment is in docs/ADAPTERS.md)
 
 **1.0 — release**
 - Every P0 item in [READINESS.md](READINESS.md) closed with its proof (all nine closed as of 0.9.3).
-  The server-reliability items P1 #23 to #27 are release criteria too; #23 waits for the 72 h soak
-  that started on 2026-10-02 ([its protocol](reproductions/soak-2026-10-01.md)).
+  The server-reliability items P1 #23 to #27 are release criteria too, and all are closed: the 72 h
+  soak passed ([soak-2026-10-02.md](reproductions/soak-2026-10-02.md)).
 - API v1 frozen (0.9.0): contract tests against the real server and a breaking-change check in CI;
   benchmark report against the published state of the art with reproducible scripts,
   presentation material.
