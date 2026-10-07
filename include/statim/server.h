@@ -44,6 +44,7 @@ struct ServerConfig {
     bool access_log = true;
     bool playground = true;   // serve the web playground at "/"
     std::vector<std::string> frame_ancestors;  // origins allowed to embed the playground; empty denies framing
+    std::vector<std::string> cors_origins;  // origins allowed cross-origin API access; empty disables CORS
     bool allow_unauthenticated = false;  // explicit opt-in for unauthenticated non-loopback listeners
 };
 

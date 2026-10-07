@@ -8,6 +8,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 ## [Unreleased]
 
 ### Added
+- `statim serve --cors-origin ORIGIN[,ORIGIN...]`: opt in to exact-origin CORS response headers and
+  unauthenticated, admission-free `OPTIONS` preflights for browser clients.
 - `demos/actions/` and the site page `actions/`: Statim choosing moves in 2048, Snake, Othello and
   Tetris. Engines describe every legal move in a sentence; zero-shot the model plays near chance, and
   a LoRA adapter trained on 120k decisions of the engine heuristic (seeds ≥ 100,000) reaches the

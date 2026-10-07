@@ -21,6 +21,13 @@ x-server-configuration:
       routes and models, while metrics covers /metrics. Keys are 32-4096 byte printable ASCII strings without whitespace. With no source configured,
       only loopback listeners start unless --allow-unauthenticated is passed; that explicit opt-in logs
       auth_off_on_network and records auth=false and auth_status=off.
+  cors:
+    flag: --cors-origin LIST (space- or comma-separated origins; at most 8 unique, each at most 256 bytes)
+    behavior: Disabled when unset. Every response to an exact allowlisted Origin includes
+      Access-Control-Allow-Origin and Vary Origin. OPTIONS preflights for GET or POST on served routes
+      return 204 before authentication and admission, allow Content-Type and Authorization, and have
+      a 600 second max age. Retry-After and X-Request-Id are exposed when present. Wildcard origins
+      and credentials are never allowed.
   environment:
     STATIM_DEVICE: Default compute device.
     STATIM_GPU_FAST: Set to 1 for --gpu-fast.
@@ -56,6 +63,7 @@ x-server-configuration:
   - --no-access-log
   - --no-playground
   - --frame-ancestors LIST (space- or comma-separated origins; at most 8, each at most 256 bytes)
+  - --cors-origin LIST (space- or comma-separated origins; at most 8, each at most 256 bytes)
   - --allow-unauthenticated
   - --adapter [model:]name=adapter.gguf (repeatable; see docs/API.md, LoRA adapters)
   - --adapter-mode merge|runtime

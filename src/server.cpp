@@ -584,7 +584,7 @@ int run_server(const ServerConfig& cfg) {
         if (!key) return 401;
         return key_has_scope(*key, scope) ? 0 : 403;
     };
-    configure_http_security(srv, api_keys);
+    configure_http_security(srv, api_keys, cfg.cors_origins);
     auto by_name = [&](const std::string& n) -> LoadedModel* {
         for (auto& m : models)
             if (m.name == n) return &m;
