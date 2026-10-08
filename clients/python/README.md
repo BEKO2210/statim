@@ -2,7 +2,7 @@
 
 Official Python client for the [Statim](../../README.md) HTTP API. The package
 is named `statim`, uses only the standard library, and targets the API
-documented in [`docs/API.md`](../../docs/API.md) (server 0.10.0).
+documented in [`docs/API.md`](../../docs/API.md) (server 0.11.0).
 
 ```sh
 pip install ./clients/python

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG STATIM_SOURCE=release
-ARG STATIM_VERSION=0.10.0
+ARG STATIM_VERSION=0.11.0
 ARG MODEL_SOURCE=hub
 ARG MODEL_REPO=Beko2210/statim-decide-multilingual-base
 ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
@@ -9,6 +9,12 @@ ARG MODEL_FILE=statim-decide-multilingual-base-q8_0.gguf
 # the Space keep a cached older model after the repository moved on (0.9.3 served a pre-0.7.0 file).
 ARG MODEL_REVISION=bfb190cda3ed71e278beeb295d279e7fd6900138
 ARG MODEL_SHA256=97a275d7033382cb0dc443598b1507f1d9ecdaf75dcfa1237b489d489bf70dd6
+# The actions LoRA adapter (games on the site's live mode), pinned and checked the same way.
+ARG ADAPTER_SOURCE=hub
+ARG ADAPTER_REPO=Beko2210/statim-decide-multilingual-base-actions
+ARG ADAPTER_FILE=statim-decide-multilingual-base-actions.lora.gguf
+ARG ADAPTER_REVISION=91eb69665d725fa356df81e0efb8b8ef8fca3497
+ARG ADAPTER_SHA256=ed7b2a639fbf4876a171bfed62c8d5e8184d92024acda34b1ca7f8d8dab2a3b3
 
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS statim-release
 ARG STATIM_VERSION
@@ -57,6 +63,29 @@ COPY model.gguf /out/model.gguf
 
 FROM model-${MODEL_SOURCE} AS model
 
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS adapter-hub
+ARG ADAPTER_REPO
+ARG ADAPTER_FILE
+ARG ADAPTER_REVISION
+ARG ADAPTER_SHA256
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    case "$ADAPTER_REPO" in (*[!0-9A-Za-z._/-]*|'') echo "invalid ADAPTER_REPO" >&2; exit 2;; esac; \
+    case "$ADAPTER_FILE" in (*[!0-9A-Za-z._-]*|'') echo "invalid ADAPTER_FILE" >&2; exit 2;; esac; \
+    case "$ADAPTER_REVISION" in (*[!0-9a-f]*|'') echo "invalid ADAPTER_REVISION" >&2; exit 2;; esac; \
+    case "$ADAPTER_SHA256" in (*[!0-9a-f]*|'') echo "invalid ADAPTER_SHA256" >&2; exit 2;; esac; \
+    mkdir -p /out; \
+    curl -fL --retry 3 -o /out/actions.lora.gguf \
+      "https://huggingface.co/${ADAPTER_REPO}/resolve/${ADAPTER_REVISION}/${ADAPTER_FILE}"; \
+    echo "${ADAPTER_SHA256}  /out/actions.lora.gguf" | sha256sum -c -
+
+FROM scratch AS adapter-local
+COPY actions.lora.gguf /out/actions.lora.gguf
+
+FROM adapter-${ADAPTER_SOURCE} AS adapter
+
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends busybox libgomp1 libstdc++6 \
@@ -66,6 +95,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=statim --chmod=0755 /out/statim /usr/local/bin/statim
 COPY --from=model --chown=1000:1000 /out/model.gguf /models/model.gguf
+COPY --from=adapter --chown=1000:1000 /out/actions.lora.gguf /models/actions.lora.gguf
 
 EXPOSE 7860
 USER 1000:1000
@@ -74,4 +104,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/statim"]
 # The public demo is intentionally unauthenticated; production images fail closed instead.
-CMD ["serve", "-m", "multilingual=/models/model.gguf", "--host", "0.0.0.0", "--port", "7860", "--allow-unauthenticated", "--frame-ancestors", "https://huggingface.co", "--threads", "2", "--workers", "1", "--max-concurrent", "2", "--http-queue", "8", "--max-request-work", "128", "--max-request-tokens", "131072", "--max-attention-mib", "1024", "--max-response-bytes", "1048576", "--request-timeout", "15", "--inference-timeout", "120"]
+# --cors-origin lets the site's live game mode (beko2210.github.io) call this server from the browser.
+CMD ["serve", "-m", "multilingual=/models/model.gguf", "--adapter", "multilingual:actions=/models/actions.lora.gguf", "--host", "0.0.0.0", "--port", "7860", "--allow-unauthenticated", "--frame-ancestors", "https://huggingface.co", "--cors-origin", "https://beko2210.github.io", "--threads", "2", "--workers", "1", "--max-concurrent", "2", "--http-queue", "8", "--max-request-work", "128", "--max-request-tokens", "131072", "--max-attention-mib", "1024", "--max-response-bytes", "1048576", "--request-timeout", "15", "--inference-timeout", "120"]
