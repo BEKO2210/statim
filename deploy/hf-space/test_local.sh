@@ -4,13 +4,16 @@ set -euo pipefail
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd "$script_dir/../.." && pwd)
 binary="$repo_root/build/statim"
-model="$repo_root/models/laya-multilingual-big1-f32.gguf"
+model="${STATIM_SPACE_MODEL:-$repo_root/models/laya-multilingual-big1-f32.gguf}"
+# The image loads the actions adapter; it is bound to its base model, so test with that pair.
+adapter="${STATIM_SPACE_ADAPTER:-$repo_root/models/lora/actions.lora.gguf}"
 
 for command in docker curl python3; do
   command -v "$command" >/dev/null || { echo "error: $command is required" >&2; exit 1; }
 done
 [[ -x "$binary" ]] || { echo "error: missing executable $binary" >&2; exit 1; }
 [[ -f "$model" ]] || { echo "error: missing model $model" >&2; exit 1; }
+[[ -f "$adapter" ]] || { echo "error: missing adapter $adapter (set STATIM_SPACE_ADAPTER)" >&2; exit 1; }
 
 context=$(mktemp -d)
 export BUILDX_CONFIG="$context/buildx"
@@ -29,12 +32,14 @@ trap cleanup EXIT INT TERM
 cp "$script_dir/Dockerfile" "$context/Dockerfile"
 cp --reflink=auto "$binary" "$context/statim"
 cp --reflink=auto "$model" "$context/model.gguf"
+cp --reflink=auto "$adapter" "$context/actions.lora.gguf"
 
 echo "Building local-source Space image..."
 docker build \
   --progress=plain \
   --build-arg STATIM_SOURCE=local \
   --build-arg MODEL_SOURCE=local \
+  --build-arg ADAPTER_SOURCE=local \
   --tag "$image_name" \
   "$context"
 
@@ -151,6 +156,19 @@ grep -Fq '<title>Statim Playground</title>' <<<"$playground" || {
   exit 1
 }
 
+# The site's live mode: a CORS preflight from its origin and one game move through the actions adapter.
+preflight=$(curl --fail --silent --show-error --max-time 10 -o /dev/null -D - -X OPTIONS \
+  -H "Origin: https://beko2210.github.io" -H "Access-Control-Request-Method: POST" \
+  "http://127.0.0.1:${port}/v1/systemone")
+grep -qi '^access-control-allow-origin: https://beko2210.github.io' <<<"$preflight" || {
+  echo "error: no CORS preflight answer for https://beko2210.github.io" >&2
+  exit 1
+}
+move=$(curl --fail --silent --show-error --max-time 60 -H "Origin: https://beko2210.github.io" \
+  "http://127.0.0.1:${port}/v1/systemone" -d '{"adapter":"actions","state":"Snake game. Move up hits the wall and the snake dies. Move left is safe and brings the head closer to the food (2 steps away).","questions":{"move":{"type":"choice","instructions":"Reach food safely while preserving enough open space to avoid trapping the snake. Which move is best?","criteria":{"up":null,"left":null}}}}')
+adapter_choice=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["routing"]["adapter"] == "actions", d["routing"]; print(d["answers"]["move"]["choice"])' "$move")
+[[ "$adapter_choice" == "left" ]] || { echo "error: actions adapter chose $adapter_choice" >&2; exit 1; }
+
 image_bytes=$(docker image inspect --format '{{.Size}}' "$image_name")
 image_size=$(python3 - "$image_bytes" <<'PY'
 import sys
@@ -166,4 +184,5 @@ echo "  ready: OK"
 echo "  decision choice: $choice"
 echo "  decision response time: ${response_time}s"
 echo "  playground: OK"
+echo "  CORS preflight + actions adapter move: $adapter_choice"
 echo "  image size: $image_size"
