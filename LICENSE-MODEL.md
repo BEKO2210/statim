@@ -14,7 +14,7 @@ You may use the weights under **any one** of the following licences, whichever f
 | Statim commercial licence | Every other commercial use. See [COMMERCIAL.md](COMMERCIAL.md). |
 
 > **Notice (2026-10-03).** statim-decide-en-large 0.5.0, statim-decide-multilingual-base 0.4.0,
-> 0.7.0 and 0.10.0, and the adapters built on 0.7.0 are offered only under PolyForm Noncommercial 1.0.0, because
+> 0.7.0 and 0.10.0, and the adapters built on 0.7.0 and 0.10.0 (including the actions adapter) are offered only under PolyForm Noncommercial 1.0.0, because
 > part of their training data is non-commercial, ShareAlike or under an unknown licence (see
 > [DATA_LICENSES.md](https://github.com/BEKO2210/statim/blob/main/DATA_LICENSES.md#licence-findings-2026-10-03)).
 

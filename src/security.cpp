@@ -499,6 +499,18 @@ std::vector<std::string> parse_frame_ancestors(const std::string& value) {
     if (origins.empty()) throw FrameAncestorsConfigError("--frame-ancestors requires at least one origin");
     return origins;
 }
+std::vector<std::string> parse_cors_origins(const std::string& value) {
+    try {
+        return parse_frame_ancestors(value);
+    } catch (const FrameAncestorsConfigError& e) {
+        std::string message = e.what();
+        const std::string from = "--frame-ancestors";
+        const std::string to = "--cors-origin";
+        for (size_t pos = 0; (pos = message.find(from, pos)) != std::string::npos; pos += to.size())
+            message.replace(pos, from.size(), to);
+        throw CorsOriginConfigError(message);
+    }
+}
 bool valid_request_id(const std::string& v) {
     return !v.empty() && v.size() <= 128 && std::all_of(v.begin(), v.end(), [](unsigned char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';

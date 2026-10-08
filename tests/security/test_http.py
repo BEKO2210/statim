@@ -98,6 +98,23 @@ def main():
             checks += 1
 
         test_invalid_frame_ancestors_fails_before_model_load()
+        def test_invalid_cors_origins_fail_before_model_load():
+            nonlocal checks
+            missing_model = str(Path(tmp) / 'cors-origin-must-not-load.gguf')
+            cases = [
+                ('https://a.example/path', 'invalid --cors-origin origin'),
+                (' '.join('https://%d.example' % i for i in range(9)),
+                 '--cors-origin accepts at most 8 origins'),
+            ]
+            for value, message in cases:
+                p = subprocess.run([args.binary, 'serve', '-m', missing_model, '--cors-origin', value],
+                                   env=env, capture_output=True, text=True, timeout=5)
+                assert p.returncode == 2, (p.returncode, p.stderr)
+                assert message in p.stderr and '--frame-ancestors' not in p.stderr, p.stderr
+                assert 'model_loaded' not in p.stderr and missing_model not in p.stderr, p.stderr
+                checks += 1
+
+        test_invalid_cors_origins_fail_before_model_load()
         fail_start(['--api-key-file', str(Path(tmp) / 'missing')])
         for contents in ('', '# comments only\n  # comment\r\n'):
             keyfile = Path(tmp) / 'keys'
@@ -175,6 +192,70 @@ def main():
                         proc.wait()
 
         test_allowed_frame_ancestor()
+
+        def test_cors():
+            nonlocal checks
+            allowed_origin = 'https://beko2210.github.io'
+            server_port = reserve_port()
+            logfile = Path(tmp) / 'cors-server.log'
+            command = base + ['--port', str(server_port), '--cors-origin',
+                              allowed_origin + ', ' + allowed_origin]
+
+            def call(method, path, origin, body=None, auth=True, extra=None):
+                conn = http.client.HTTPConnection('127.0.0.1', server_port, timeout=30)
+                headers = {'Origin': origin}
+                if auth:
+                    headers['Authorization'] = 'Bearer ' + KEY
+                if body is not None:
+                    headers['Content-Type'] = 'application/json'
+                if extra:
+                    headers.update(extra)
+                conn.request(method, path, body=body, headers=headers)
+                response = conn.getresponse()
+                result = response.status, response.read(), dict(response.getheaders())
+                conn.close()
+                return result
+
+            with logfile.open('w+') as log:
+                proc = subprocess.Popen(command, env=dict(env, STATIM_API_KEY=KEY), stdout=log, stderr=log)
+                try:
+                    wait_for_health(proc, logfile, '127.0.0.1', server_port)
+                    payload = json.dumps({'state': 'hello', 'questions': {}})
+                    status, _, allowed = call('POST', '/v1/systemone', allowed_origin, payload)
+                    assert status == 200, status
+                    assert allowed['Access-Control-Allow-Origin'] == allowed_origin
+                    assert allowed['Vary'] == 'Origin'
+                    assert allowed['Access-Control-Expose-Headers'] == 'X-Request-Id'
+                    assert 'Access-Control-Allow-Credentials' not in allowed
+
+                    status, body, error = call('POST', '/v1/systemone', allowed_origin, '{')
+                    assert status == 400 and set(json.loads(body)) == {'detail'}, (status, body)
+                    assert error['Access-Control-Allow-Origin'] == allowed_origin
+                    assert error['Access-Control-Expose-Headers'] == 'X-Request-Id'
+
+                    status, body, preflight = call(
+                        'OPTIONS', '/v1/systemone', allowed_origin, auth=False,
+                        extra={'Access-Control-Request-Method': 'POST'})
+                    assert status == 204 and body == b'', (status, body)
+                    assert preflight['Access-Control-Allow-Origin'] == allowed_origin
+                    assert preflight['Vary'] == 'Origin'
+                    assert preflight['Access-Control-Allow-Methods'] == 'GET, POST, OPTIONS'
+                    assert preflight['Access-Control-Allow-Headers'] == 'Content-Type, Authorization'
+                    assert preflight['Access-Control-Max-Age'] == '600'
+                    assert 'Access-Control-Allow-Credentials' not in preflight
+
+                    status, _, other = call('POST', '/v1/systemone', 'https://other.example', payload)
+                    assert status == 200 and not any(k.lower().startswith('access-control-') for k in other), other
+                    assert other.get('Vary') == 'Origin'  # the allowlist makes every response depend on Origin
+                    print('CORS allowed POST: ' + repr({k: allowed[k] for k in allowed if k.startswith('Access-Control-') or k == 'Vary'}), flush=True)
+                    print('CORS allowed preflight: ' + repr({k: preflight[k] for k in preflight if k.startswith('Access-Control-') or k == 'Vary'}), flush=True)
+                    print('CORS other origin: {}', flush=True)
+                    checks += 4
+                finally:
+                    proc.terminate()
+                    proc.wait(timeout=15)
+
+        test_cors()
 
         def run_startup_server(name, host, connect_host, keys=None, allow=False, family=socket.AF_INET):
             nonlocal checks
@@ -340,6 +421,22 @@ def main():
                     raise AssertionError('server did not become healthy')
                 status, body, hdr = request('/health', auth=False)
                 assert status == 200 and set(json.loads(body)) == {'status', 'version'}
+                conn = http.client.HTTPConnection('127.0.0.1', port, timeout=3)
+                conn.request('OPTIONS', '/v1/systemone', headers={
+                    'Origin': 'https://beko2210.github.io',
+                    'Access-Control-Request-Method': 'POST',
+                })
+                unset_options = conn.getresponse()
+                unset_body = unset_options.read()
+                unset_headers = dict(unset_options.getheaders())
+                conn.close()
+                assert unset_options.status == 401 and json.loads(unset_body) == {
+                    'detail': 'invalid or missing bearer token'
+                }, (unset_options.status, unset_body)
+                assert not any(k.lower().startswith('access-control-') for k in unset_headers), unset_headers
+                assert 'Vary' not in unset_headers
+                print('CORS flag unset OPTIONS: {}', flush=True)
+                checks += 1
                 # security headers on every response, also on errors (READINESS P1 #14)
                 assert hdr.get('X-Content-Type-Options') == 'nosniff' and hdr.get('Referrer-Policy') == 'no-referrer', hdr
                 _, _, hdr = request('/metrics', auth=False)

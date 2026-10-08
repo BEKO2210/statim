@@ -4,7 +4,7 @@ Statim serves typed decisions over HTTP. A request carries a state, which is tex
 
 The server listens on `127.0.0.1:8080` unless `--host` or `--port` is set. Paths outside the list below, and the wrong method on a known path, return 404 `{"detail":"HTTP request failed"}`. When authentication is configured, a nonpublic unknown path is rejected with 401 before route lookup unless it has a valid bearer key.
 
-`GET /health` reports the version compiled into the binary. In this tree that version is `0.10.0` (`tools/release/check_versions.py` keeps this document, the SDKs and the site in step with `CMakeLists.txt`).
+`GET /health` reports the version compiled into the binary. In this tree that version is `0.11.0` (`tools/release/check_versions.py` keeps this document, the SDKs and the site in step with `CMakeLists.txt`).
 
 Successful JSON bodies are compact. The field order shown here is the order the server writes. Read fields by name.
 
@@ -199,6 +199,24 @@ default (`frame-ancestors 'none'`, plus `X-Frame-Options: DENY`). With `--frame-
 instead lists the configured origins and omits `X-Frame-Options`, which cannot express an allow-list.
 The playground keeps an API key only in the
 tab's `sessionStorage`, so it is gone when the tab closes.
+
+### Cross-origin requests
+
+CORS is disabled by default. `--cors-origin ORIGIN[,ORIGIN...]` enables it for up to eight unique,
+exact `http` or `https` origins (space or comma separated, at most 256 bytes each), using the same
+origin syntax as `--frame-ancestors`. Matching is byte-exact, so list each origin as browsers send it
+(lower-case scheme and host, no default port). A request with no `Origin`, `Origin: null` or more than one
+`Origin` header gets no CORS headers. With the flag set every response
+carries `Vary: Origin`, and an allowlisted request also receives `Access-Control-Allow-Origin: <origin>`; `Retry-After` and `X-Request-Id` are named
+in `Access-Control-Expose-Headers` when present. Statim never sends a wildcard origin or
+`Access-Control-Allow-Credentials`.
+
+For every served route, an allowlisted `OPTIONS` request whose `Access-Control-Request-Method` is
+`GET` or `POST` is answered before authentication and admission with status 204 and
+`Access-Control-Allow-Methods: GET, POST, OPTIONS`,
+`Access-Control-Allow-Headers: Content-Type, Authorization`, and `Access-Control-Max-Age: 600`.
+Other origins, and all requests when the flag is unset, retain the existing response without CORS
+headers; in particular, `OPTIONS` follows normal authentication and route handling.
 
 HTTP framing and declared body size, bearer authentication, and route lookup happen before the decision handler. Responses produced there have no `X-Request-Id`.
 
@@ -1559,8 +1577,9 @@ Limits count UTF-8 bytes unless the table says Unicode code points. Unknown requ
 | Keep-alive / write timeout | 2 seconds idle, 100 requests / 30 seconds | Fixed server settings |
 | `--inference-timeout` | 120 seconds | From admission through body read, queue wait, and cooperative inference |
 | `--frame-ancestors` | unset | Space- or comma-separated origins allowed to embed `GET /`; at most 8 unique origins, each at most 256 bytes |
+| `--cors-origin` | unset | Space- or comma-separated origins allowed cross-origin access; at most 8 unique origins, each at most 256 bytes |
 
-All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--frame-ancestors LIST`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Each frame ancestor must be an `http://host[:port]` or `https://host[:port]` origin with a DNS name or IP literal and no path, query, fragment, wildcard, quote, semicolon, comma, whitespace, or CSP keyword; duplicates are removed in input order. Invalid values exit 2 before models load. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
+All numeric CLI arguments use strict non-negative decimal integer parsing and reject values above 2,147,483,647. Limit/deadline/queue flags must be positive. Other serve controls are `--host`, `--port`, `--device`, `--gpu-fast`, `--threads`, `--calibrate`, `--consensus`, `--allow-unauthenticated`, `--no-access-log`, `--no-playground`, `--frame-ancestors LIST`, `--cors-origin LIST`, `--max-len N` and `--head-max-len N` (server-wide default token budgets; a request's `max_len` and `head_max_len` override them), and repeatable `-m [name=]model.gguf` / `--api-key-file FILE`. Each configured frame ancestor or CORS origin must be an `http://host[:port]` or `https://host[:port]` origin with a DNS name or IP literal and no path, query, fragment, wildcard, quote, semicolon, comma, whitespace, or CSP keyword; duplicates are removed in input order. Invalid values exit 2 before models load. Environment controls are `STATIM_API_KEY`, `STATIM_DEVICE`, `STATIM_GPU_FAST=1`, and `STATIM_LOG=debug`.
 
 Aggregate budgets deliberately use upper bounds, so short text can be rejected when the requested sequence budget is large. Effective sequence length is `max(max_len, head_max_len + 128)` and must fit each selected model's positional capacity. The attention estimate is `2 × min(32 × length, 8192) × length × max(encoder_heads, head_heads) × 4` bytes. The response estimate reserves 1,024 bytes per state plus 4,096 bytes per question and eight times each serialized question and ID size.
 
@@ -1573,7 +1592,7 @@ curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/health
 ```
 
 ```text
-{"status":"ok","version":"0.10.0"}
+{"status":"ok","version":"0.11.0"}
 200
 ```
 
@@ -1683,7 +1702,7 @@ statim_workers{model="english"} N
 # TYPE statim_workers_busy gauge
 statim_workers_busy{model="english"} N
 # TYPE statim_model_info gauge
-statim_model_info{model="english",weights="f32",version="0.10.0",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
+statim_model_info{model="english",weights="f32",version="0.11.0",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1
 ```
 
 Label values are escaped as the text format requires (backslash, double quote and newline), so any `-m` name is safe. With LoRA adapters loaded, `statim_engines`, `statim_adapter_info`, `statim_adapter_bytes` and `statim_adapter_requests_total` follow; see [LoRA adapters](#lora-adapters).
@@ -1739,8 +1758,8 @@ required = [
     'statim_workers_busy{model="english"}',
     'statim_workers_busy{model="multilingual"}',
     "# TYPE statim_model_info gauge",
-    'statim_model_info{model="english",weights="f32",version="0.10.0",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1',
-    'statim_model_info{model="multilingual",weights="f32",version="0.10.0",fingerprint="8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794",checkpoint_sha256=""} 1',
+    'statim_model_info{model="english",weights="f32",version="0.11.0",fingerprint="0d36b1e5c40f239d733b1c48ce7732d38b45fe5712d2b29085a599a4c3feba65",checkpoint_sha256=""} 1',
+    'statim_model_info{model="multilingual",weights="f32",version="0.11.0",fingerprint="8e2841cbdbdedcbd0cc35c79f765b80cb5a5093b553eaf417e9a0168bd1af794",checkpoint_sha256=""} 1',
 ]
 missing = [line for line in required if line not in text]
 if response.status_code != 200 or response.headers["Content-Type"] != "text/plain; version=0.0.4":

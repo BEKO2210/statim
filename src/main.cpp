@@ -32,6 +32,7 @@ void usage() {
                  "                 [--min-confidence P]\n"
                  "                 [--api-key-file FILE] [--allow-unauthenticated] [--no-access-log] [--no-playground]\n"
                  "                 [--frame-ancestors ORIGIN[,ORIGIN...]]\n"
+                 "                 [--cors-origin ORIGIN[,ORIGIN...]]\n"
                  "                 [--consensus] [--calibrate] [--max-len N] [--head-max-len N]\n"
                  "                 [--max-json-depth 64] [--max-json-nodes 100000] [--max-object-members 1024]\n"
                  "                 [--max-request-work 4096] [--max-request-tokens 1048576]\n"
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
             else if (a == "--no-access-log") cfg.access_log = false;
             else if (a == "--no-playground") cfg.playground = false;
             else if (a == "--frame-ancestors") cfg.frame_ancestors = statim::parse_frame_ancestors(next());
+            else if (a == "--cors-origin") cfg.cors_origins = statim::parse_cors_origins(next());
             else if (a == "--allow-unauthenticated") cfg.allow_unauthenticated = true;
             else if (a == "--calibrate") cfg.calibrate = dopts.calibrate = true;
             else if (a == "--consensus") cfg.consensus = true;
@@ -283,6 +285,9 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "error: %s\n", e.what());
         return 2;
     } catch (const statim::FrameAncestorsConfigError& e) {
+        std::fprintf(stderr, "error: %s\n", e.what());
+        return 2;
+    } catch (const statim::CorsOriginConfigError& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
         return 2;
     } catch (const statim::QuestionError& e) {

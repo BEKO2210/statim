@@ -7,7 +7,18 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-08
+
+### Highlights
+- Statim plays: `demos/actions/` and the site page `actions/`, where the multilingual model picks moves in
+  2048, Snake, Othello and Tetris through a 13 MB LoRA adapter trained on engine-teacher decisions; the
+  adapter is published as `Beko2210/statim-decide-multilingual-base-actions` and loaded by the demo Space.
+- `serve --cors-origin`: opt-in CORS for an exact allowlist of origins, so a static page (the site's
+  live mode) can call a Statim server from the browser.
+
 ### Added
+- `statim serve --cors-origin ORIGIN[,ORIGIN...]`: opt in to exact-origin CORS response headers and
+  unauthenticated, admission-free `OPTIONS` preflights for browser clients.
 - `demos/actions/` and the site page `actions/`: Statim choosing moves in 2048, Snake, Othello and
   Tetris. Engines describe every legal move in a sentence; zero-shot the model plays near chance, and
   a LoRA adapter trained on 120k decisions of the engine heuristic (seeds ≥ 100,000) reaches the
@@ -16,7 +27,8 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
   move on an RTX 3070. Protocol and records: `demos/actions/RESULTS.md`.
 - `tools/finetune/train_lora.py --rows FILE --name NAME`: train an adapter on a plain rows file
   without the source registry.
-
+- `demos/actions/publish_adapter.py`: packages the actions adapter for Hugging Face with a card whose
+  numbers are computed from the evaluation records.
 - `docs/reproductions/soak-2026-10-02.md`: soak run 2 (72 h, 2 clients, cancellations and adapters,
   protocol fixed before it started) passed all nine checks: 72,782 requests with no unexpected
   answer, RSS +2.2 % from the first to the last hour after warm-up (max 3,428 MiB), p95 drift 1.12×,
@@ -31,6 +43,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 - `tools/release/hf_publish.py --s1bench`: the model card gets an S1Bench section with a chart near the
   top, rendered from `bench/s1bench_compare.py --json` (new, with `--latency` and `--same-as`), so no
   number is typed by hand.
+
+### Changed
+- The demo Space (`deploy/hf-space/Dockerfile`) loads the actions adapter (pinned Hub revision, SHA-256
+  checked) and allows CORS from `https://beko2210.github.io`; `deploy/hf-space/test_local.sh` checks a
+  preflight and one adapter move.
 
 ### Fixed
 - The README's weights badge said "PolyForm or commercial"; the released weights are PolyForm
