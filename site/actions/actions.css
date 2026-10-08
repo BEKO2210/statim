@@ -962,3 +962,46 @@
 .results-section .note { margin-top: 24px; color: #9aa4b2; font-size: 14px; }
 .results-section .note a { color: #34d399; }
 .results-table thead th:first-child { text-align: left; }
+
+/* Stable layout: the controls below the board must not move while a game plays.
+   The option list changes length every move (3 to 12 options, sentences of different length) and the
+   live status line changes length, so both get a fixed height; the list scrolls inside itself. */
+.full-probs-list {
+  height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+.live-status {
+  min-height: 4.5em;
+}
+.tile-probs {
+  height: 9.5rem;
+  overflow: hidden;
+}
+.focused-controls {
+  overflow-anchor: none;
+}
+@media (max-width: 899px) {
+  .full-probs-list { height: 340px; }
+}
+
+/* Phones: controls directly under the board (not below the option list), the four game buttons in
+   one row and the four counters in one row, so nothing wraps differently from move to move. */
+@media (max-width: 899px) {
+  .focused-view:not([hidden]) { display: flex; flex-direction: column; }
+  .focused-stage { display: contents; }
+  .focused-nav { order: 1; }
+  .focused-board-col { order: 2; }
+  .focused-controls { order: 3; margin-top: 4px; }
+  .focused-panel-col { order: 4; margin-top: 24px; }
+  .game-tablist { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+  .game-tab { padding-left: 0; padding-right: 0; text-align: center; }
+  .board-hud { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 6px; }
+  .hud-item { padding: 8px 4px; min-width: 0; }
+  .hud-item .hud-label { font-size: 0.625rem; letter-spacing: 0.04em; }
+  .hud-item .hud-val { font-size: 1rem; }
+  .focused-canvas-wrap { max-width: 360px; margin: 0 auto; width: 100%; }
+}

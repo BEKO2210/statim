@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Fixed
+- `actions/` page on phones: the buttons below a playing game no longer jump from move to move (the
+  option list and the live status line have a fixed height), and the playback controls sit directly
+  under the board with the game buttons and counters in one row.
+
 ### Added
 - Live mode on the site's `actions/` page: the browser runs the game (`site/actions/engines.js`, bit-exact
   with the Python engines, checked by `demos/actions/test_js_parity.py`) and the demo Space picks every
