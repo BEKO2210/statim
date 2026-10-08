@@ -7,6 +7,11 @@ only additive changes are allowed, enforced by CI; a breaking change requires a 
 
 ## [Unreleased]
 
+### Added
+- Live mode on the site's `actions/` page: the browser runs the game (`site/actions/engines.js`, bit-exact
+  with the Python engines, checked by `demos/actions/test_js_parity.py`) and the demo Space picks every
+  move through the actions adapter; replays gain a real-time speed.
+
 ## [0.11.0] - 2026-10-08
 
 ### Highlights

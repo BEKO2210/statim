@@ -362,6 +362,7 @@
             <li><strong>With it, Snake and Othello reach the teacher&rsquo;s level:</strong> in Snake it eats 2.5 more food per game than its teacher on average (95% interval +0.2 to +4.9), which is not significant per game (sign test p = 0.11).</li>
             <li><strong>2048 and Tetris stay below the teacher;</strong> a second training run with more 2048 and Tetris games is in progress.</li>
             <li><strong>One forward pass per move,</strong> median 19 ms on an RTX 3070 (p95 31 ms).</li>
+            <li><strong>Live mode runs on the free demo server</strong> (2 CPU threads, q8_0 weights), where the same adapter scores Snake 23.9, Othello 40 of 50 won, 2048 3,840 and Tetris 72 on the same 50 seeds; expect a few hundred milliseconds per move.</li>
           </ul>
         </div>
         <div class="honest-card does-not">
