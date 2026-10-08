@@ -1,5 +1,68 @@
 // Statim Plays: Replay Player & Interactive Showcase
 
+import {createGame, buildRequest, sentences} from "./engines.js";
+
+export const DEFAULT_SERVER = "https://beko2210-statim.hf.space";
+
+export function median(values) {
+  if (!values.length) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+export function replayDelay(record, speed) {
+  if (speed === "real-time") return Math.max(0, Number(record && record.ms) || 0);
+  return Math.round(1200 / Number(speed || 1));
+}
+
+export function normalizeServer(value) {
+  return String(value || DEFAULT_SERVER).trim().replace(/\/+$/, "");
+}
+
+export function boardOf(game) {
+  if (game.name === "2048") return game.board.map(row => row.slice());
+  if (game.name === "snake") return {size: 8, snake: game.snake.map(cell => cell.slice()), food: game.food ? game.food.slice() : null};
+  if (game.name === "othello") {
+    const symbols = {0: ".", 1: "b", "-1": "w"};
+    return Array.from({length: 8}, (_, row) => game.board.slice(row * 8, row * 8 + 8).map(cell => symbols[cell]));
+  }
+  return {grid: game.board.slice().reverse().map(row => row.slice()), piece: game.current};
+}
+
+export function statsOf(game) {
+  if (game.name === "2048") return {score: game.score, largest: Math.max(...game.board.flat())};
+  if (game.name === "snake") return {score: game.score, length: game.snake.length};
+  if (game.name === "othello") {
+    const black = game.board.filter(cell => cell === 1).length;
+    const white = game.board.filter(cell => cell === -1).length;
+    return {score: black - white, black, white};
+  }
+  return {score: game.score, lines: game.lines};
+}
+
+export function liveRecord(game, step, request, sentenceMap, answer, elapsedMs) {
+  const choice = answer.choice;
+  if (!Object.prototype.hasOwnProperty.call(request.choices, choice)) throw new Error("The server returned an unknown move.");
+  const probabilities = answer.probabilities || {};
+  const options = Object.keys(request.choices).map(label => ({
+    label: String(request.choices[label]),
+    text: sentenceMap[label] || "",
+    p: Number(probabilities[label]) || 0
+  })).sort((a, b) => b.p - a.p);
+  return {
+    game: game.name,
+    step,
+    board: boardOf(game),
+    options,
+    chosen: String(request.choices[choice]),
+    stats: statsOf(game),
+    ms: Math.round(elapsedMs),
+    piece: game.name === "tetris" ? game.current : undefined
+  };
+}
+
+if (typeof document !== "undefined") {
 document.documentElement.classList.add("js");
 
 (function () {
@@ -13,7 +76,15 @@ document.documentElement.classList.add("js");
   };
 
   const GAMES = ["2048", "snake", "othello", "tetris"];
-  const BASE_INTERVAL = 1200; // ms per step at 1x
+  const SERVER_STORAGE_KEY = "statim-actions-server";
+  // Name the server that answered: the demo Space by default, otherwise its host.
+  function serverLabel() {
+    const field = document.getElementById("live-server");
+    const value = (field && field.value) || "";
+    if (/beko2210-statim\.hf\.space/.test(value)) return "the demo server";
+    try { return new URL(value).host; } catch (_) { return "the server"; }
+  }
+  const REQUEST_TIMEOUT = 20000;
 
   // Check prefers-reduced-motion
   const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -24,11 +95,21 @@ document.documentElement.classList.add("js");
     viewMode: "overview", // "overview" | "focused"
     activeGame: "2048",
     isPlaying: !prefersReducedMotion,
-    speed: 1.0,
+    speed: 1,
     traces: {}, // { "2048": [...], "snake": [...], ... }
     steps: { "2048": 0, "snake": 0, "othello": 0, "tetris": 0 },
     prevSteps: { "2048": -1, "snake": -1, "othello": -1, "tetris": -1 },
-    timerId: null
+    timerId: null,
+    live: {
+      enabled: false,
+      running: false,
+      game: null,
+      records: [],
+      seed: 0,
+      timings: [],
+      controller: null,
+      runId: 0
+    }
   };
 
   // Helper: HiDPI Canvas setup
@@ -496,9 +577,12 @@ document.documentElement.classList.add("js");
   // Update Focused View
   function updateFocusedView() {
     const game = state.activeGame;
-    const records = state.traces[game];
-    if (!records || records.length === 0) return;
-    const step = state.steps[game] % records.length;
+    const records = state.live.enabled ? state.live.records : state.traces[game];
+    if (!records || records.length === 0) {
+      if (state.live.enabled && state.live.game) renderGameState(state.live.game);
+      return;
+    }
+    const step = state.live.enabled ? records.length - 1 : state.steps[game] % records.length;
     const record = records[step];
 
     // Update strategy text
@@ -582,7 +666,48 @@ document.documentElement.classList.add("js");
       scrubber.value = String(step);
     }
     if (stepDisplay) {
-      stepDisplay.textContent = `Step ${step + 1} / ${records.length}`;
+      stepDisplay.textContent = state.live.enabled ? `Live step ${record.step + 1}` : `Step ${step + 1} / ${records.length}`;
+    }
+
+    const panelMeta = document.querySelector(".panel-meta");
+    if (panelMeta) {
+      if (state.live.enabled) {
+        panelMeta.textContent = `${Math.round(record.ms)} ms on ${serverLabel()} · ${Math.round(median(state.live.timings))} ms running median`;
+      } else {
+        panelMeta.textContent = "Statim + actions adapter · 1 forward pass · RTX 3070";
+      }
+    }
+  }
+
+  function renderGameState(game, clearOptions = true) {
+    const record = {board: boardOf(game), stats: statsOf(game), piece: game.current, chosen: "--", options: [], step: game.steps || 0};
+    const canvas = document.getElementById("focused-canvas");
+    if (game.name === "2048") render2048(canvas, record);
+    else if (game.name === "snake") renderSnake(canvas, record);
+    else if (game.name === "othello") renderOthello(canvas, record);
+    else renderTetris(canvas, record);
+    const list = document.getElementById("full-probs-list");
+    if (list && clearOptions) list.innerHTML = "";
+    const hudStep = document.getElementById("hud-step");
+    const hudScore = document.getElementById("hud-score");
+    if (hudStep) hudStep.textContent = String(game.steps || 0);
+    if (hudScore) hudScore.textContent = String(record.stats.score);
+    const lbl1 = document.getElementById("hud-extra-lbl-1");
+    const val1 = document.getElementById("hud-extra-val-1");
+    const lbl2 = document.getElementById("hud-extra-lbl-2");
+    const val2 = document.getElementById("hud-extra-val-2");
+    if (game.name === "2048") {
+      lbl1.textContent = "Largest"; val1.textContent = String(record.stats.largest);
+      lbl2.textContent = "Action"; val2.textContent = "--";
+    } else if (game.name === "snake") {
+      lbl1.textContent = "Length"; val1.textContent = String(record.stats.length);
+      lbl2.textContent = "Action"; val2.textContent = "--";
+    } else if (game.name === "othello") {
+      lbl1.textContent = "Black / White"; val1.textContent = `${record.stats.black} : ${record.stats.white}`;
+      lbl2.textContent = "Action"; val2.textContent = "--";
+    } else {
+      lbl1.textContent = "Lines"; val1.textContent = String(record.stats.lines);
+      lbl2.textContent = "Piece"; val2.textContent = record.piece || "--";
     }
   }
 
@@ -606,7 +731,7 @@ document.documentElement.classList.add("js");
   }
 
   function tick() {
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || state.live.enabled) return;
 
     if (state.viewMode === "overview") {
       for (const game of GAMES) {
@@ -617,18 +742,27 @@ document.documentElement.classList.add("js");
       advanceStep(state.activeGame, 1);
       updateFocusedView();
     }
+    startTimer();
   }
 
   function startTimer() {
-    if (state.timerId) clearInterval(state.timerId);
-    if (!state.isPlaying) return;
-    const interval = Math.round(BASE_INTERVAL / state.speed);
-    state.timerId = setInterval(tick, interval);
+    if (state.timerId) clearTimeout(state.timerId);
+    if (!state.isPlaying || state.live.enabled) return;
+    let record = null;
+    if (state.viewMode === "focused") {
+      const records = state.traces[state.activeGame] || [];
+      record = records[state.steps[state.activeGame] % (records.length || 1)];
+    } else if (state.speed === "real-time") {
+      const records = state.traces[GAMES[0]] || [];
+      record = records[state.steps[GAMES[0]] % (records.length || 1)];
+    }
+    const delay = replayDelay(record, state.speed);
+    state.timerId = setTimeout(tick, delay);
   }
 
   function pausePlayback() {
     state.isPlaying = false;
-    if (state.timerId) clearInterval(state.timerId);
+    if (state.timerId) clearTimeout(state.timerId);
     updatePlayPauseButton();
   }
 
@@ -656,6 +790,171 @@ document.documentElement.classList.add("js");
       if (iconPause) iconPause.setAttribute("hidden", "");
       if (iconPlay) iconPlay.removeAttribute("hidden");
       playBtn.setAttribute("aria-label", "Play replay");
+    }
+  }
+
+  // ---------- LIVE PLAY ----------
+  function randomSeed() {
+    const values = new Uint32Array(1);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(values);
+    else values[0] = Math.floor(Math.random() * 0x100000000);
+    return values[0];
+  }
+
+  function setLiveStatus(message, kind = "") {
+    const status = document.getElementById("live-status");
+    if (!status) return;
+    status.textContent = message;
+    if (kind) status.dataset.kind = kind;
+    else delete status.dataset.kind;
+  }
+
+  function abortLiveRequest() {
+    state.live.runId++;
+    if (state.live.controller) state.live.controller.abort();
+    state.live.controller = null;
+  }
+
+  function stopLive(message = "Live play stopped. Restart, or turn off Play live to use the replays.") {
+    state.live.running = false;
+    abortLiveRequest();
+    setLiveStatus(message);
+    const stop = document.getElementById("live-stop");
+    if (stop) stop.disabled = true;
+  }
+
+  function liveErrorMessage(error) {
+    if (error && error.kind === "http") {
+      if (/adapter/i.test(error.detail || "")) return "This server does not have the actions adapter loaded.";
+      return error.detail || `The server returned HTTP ${error.status}.`;
+    }
+    if (error && error.kind === "timeout") return "The server took longer than 20 seconds. Try again, or use the replays.";
+    if (error instanceof TypeError) return "The demo server is not reachable from this page (it may be waking up; free Spaces sleep). Try again in a minute, or use the replays.";
+    return error && error.message ? error.message : "Live play stopped because the response was not valid. Try again, or use the replays.";
+  }
+
+  async function requestLiveMove(request, runId) {
+    const controller = new AbortController();
+    state.live.controller = controller;
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, REQUEST_TIMEOUT);
+    const started = performance.now();
+    try {
+      const server = normalizeServer(document.getElementById("live-server").value);
+      const response = await fetch(`${server}/v1/systemone`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({...request.payload, adapter: "actions"}),
+        signal: controller.signal
+      });
+      const body = await response.json().catch(() => ({}));
+      const elapsed = performance.now() - started;
+      if (!response.ok) throw {kind: "http", status: response.status, detail: body.detail};
+      if (!body.answers || !body.answers.move) throw new Error("The server response did not contain a move.");
+      return {answer: body.answers.move, elapsed};
+    } catch (error) {
+      if (timedOut) throw {kind: "timeout"};
+      if (error && error.name === "AbortError" && runId !== state.live.runId) return null;
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      if (state.live.controller === controller) state.live.controller = null;
+    }
+  }
+
+  function waitForNextMove(ms, runId) {
+    if (ms <= 0) return Promise.resolve();
+    return new Promise(resolve => {
+      const check = () => {
+        if (runId !== state.live.runId || !state.live.running) resolve();
+        else setTimeout(resolve, ms);
+      };
+      check();
+    });
+  }
+
+  function finalSummary(game) {
+    const stats = statsOf(game);
+    if (game.name === "2048") return `score ${stats.score}, largest tile ${stats.largest}`;
+    if (game.name === "snake") return `score ${stats.score}, length ${stats.length}`;
+    if (game.name === "othello") return `black ${stats.black}, white ${stats.white}`;
+    return `${stats.lines} lines cleared`;
+  }
+
+  async function runLive(runId) {
+    let lastRendered = performance.now();
+    while (state.live.enabled && state.live.running && runId === state.live.runId && !state.live.game.done) {
+      const game = state.live.game;
+      const request = buildRequest(game);
+      const sentenceMap = sentences(game);
+      setLiveStatus(`Requesting move ${state.live.records.length + 1} for seed ${state.live.seed}…`);
+      try {
+        const result = await requestLiveMove(request, runId);
+        if (!result || runId !== state.live.runId || !state.live.running) return;
+        const remaining = state.speed === "real-time" ? 0 : Math.max(0, 120 - (performance.now() - lastRendered));
+        await waitForNextMove(remaining, runId);
+        if (runId !== state.live.runId || !state.live.running) return;
+        const record = liveRecord(game, state.live.records.length, request, sentenceMap, result.answer, result.elapsed);
+        state.live.records.push(record);
+        state.live.timings.push(result.elapsed);
+        updateFocusedView();
+        lastRendered = performance.now();
+        game.apply(record.chosen);
+        setLiveStatus(`${Math.round(result.elapsed)} ms on ${serverLabel()} · ${Math.round(median(state.live.timings))} ms running median · seed ${state.live.seed}`);
+        if (game.done) {
+          record.final = statsOf(game);
+          state.live.running = false;
+          renderGameState(game, false);
+          setLiveStatus(`Game over — ${finalSummary(game)} · seed ${state.live.seed}`, "success");
+          const stop = document.getElementById("live-stop");
+          if (stop) stop.disabled = true;
+          return;
+        }
+      } catch (error) {
+        if (runId !== state.live.runId) return;
+        state.live.running = false;
+        setLiveStatus(liveErrorMessage(error), "error");
+        const stop = document.getElementById("live-stop");
+        if (stop) stop.disabled = true;
+        return;
+      }
+    }
+  }
+
+  function startLiveGame(useNewSeed = false) {
+    abortLiveRequest();
+    if (useNewSeed) document.getElementById("live-seed").value = String(randomSeed());
+    const input = document.getElementById("live-seed");
+    const seed = Number(input.value);
+    if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) {
+      setLiveStatus("Enter a whole-number seed from 0 to 4294967295, then restart.", "error");
+      return;
+    }
+    state.live.seed = seed;
+    state.live.game = createGame(state.activeGame, seed);
+    state.live.records = [];
+    state.live.timings = [];
+    state.live.running = true;
+    renderGameState(state.live.game);
+    const stop = document.getElementById("live-stop");
+    if (stop) stop.disabled = false;
+    const runId = state.live.runId;
+    runLive(runId);
+  }
+
+  function setLiveMode(enabled) {
+    state.live.enabled = enabled;
+    const settings = document.getElementById("live-settings");
+    const controls = document.querySelector(".focused-controls");
+    if (settings) settings.toggleAttribute("hidden", !enabled);
+    if (controls) controls.classList.toggle("live-active", enabled);
+    if (enabled) {
+      pausePlayback();
+      startLiveGame(true);
+    } else {
+      stopLive("");
+      setLiveStatus("");
+      updateFocusedView();
     }
   }
 
@@ -688,7 +987,13 @@ document.documentElement.classList.add("js");
         }
       }
       updateFocusedView();
+      if (state.isPlaying && !state.live.enabled) startTimer();
     } else {
+      if (state.live.enabled) {
+        const toggle = document.getElementById("live-mode-toggle");
+        if (toggle) toggle.checked = false;
+        setLiveMode(false);
+      }
       if (focusedEl) focusedEl.setAttribute("hidden", "");
       if (overviewEl) overviewEl.removeAttribute("hidden");
 
@@ -742,7 +1047,11 @@ document.documentElement.classList.add("js");
               t.classList.toggle("active", sel);
             }
           }
-          updateFocusedView();
+          if (state.live.enabled) startLiveGame(true);
+          else {
+            updateFocusedView();
+            if (state.isPlaying) startTimer();
+          }
         });
       }
     }
@@ -787,11 +1096,31 @@ document.documentElement.classList.add("js");
     const speedBtns = document.querySelectorAll(".speed-btn");
     speedBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
-        const spd = parseFloat(btn.dataset.speed);
+        const spd = btn.dataset.speed === "real-time" ? "real-time" : parseFloat(btn.dataset.speed);
         state.speed = spd;
-        speedBtns.forEach((b) => b.classList.toggle("active", b === btn));
-        if (state.isPlaying) startTimer();
+        speedBtns.forEach((b) => {
+          b.classList.toggle("active", b === btn);
+          b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+        });
+        if (state.isPlaying && !state.live.enabled) startTimer();
       });
+    });
+
+    const liveToggle = document.getElementById("live-mode-toggle");
+    if (liveToggle) liveToggle.addEventListener("change", () => setLiveMode(liveToggle.checked));
+    const restart = document.getElementById("live-restart");
+    if (restart) restart.addEventListener("click", () => startLiveGame(false));
+    const stop = document.getElementById("live-stop");
+    if (stop) stop.addEventListener("click", () => stopLive());
+    const seed = document.getElementById("live-seed");
+    if (seed) seed.addEventListener("keydown", event => {
+      if (event.key === "Enter") startLiveGame(false);
+    });
+    const server = document.getElementById("live-server");
+    if (server) server.addEventListener("change", () => {
+      server.value = normalizeServer(server.value);
+      try { localStorage.setItem(SERVER_STORAGE_KEY, server.value); } catch (_) { /* storage can be disabled */ }
+      if (state.live.enabled) startLiveGame(false);
     });
 
     // Keyboard navigation
@@ -801,6 +1130,7 @@ document.documentElement.classList.add("js");
       const t = e.target;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (t && t.closest && t.closest("button, a, input, textarea, select, [contenteditable], [role=slider]")) return;
+      if (state.live.enabled) return;
 
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
@@ -849,6 +1179,8 @@ document.documentElement.classList.add("js");
       }
     });
 
+    window.addEventListener("pagehide", abortLiveRequest);
+
     // Mobile menu helper matching site.js
     const menu = document.querySelector(".menu");
     if (menu) {
@@ -860,6 +1192,16 @@ document.documentElement.classList.add("js");
 
   // ---------- INITIALIZATION ----------
   async function init() {
+    const server = document.getElementById("live-server");
+    if (server) {
+      try { server.value = normalizeServer(localStorage.getItem(SERVER_STORAGE_KEY) || DEFAULT_SERVER); }
+      catch (_) { server.value = DEFAULT_SERVER; }
+    }
+    const seed = document.getElementById("live-seed");
+    if (seed) seed.value = String(randomSeed());
+    const stop = document.getElementById("live-stop");
+    if (stop) stop.disabled = true;
+
     await loadTraces();
 
     // Render initial tiles
@@ -881,3 +1223,4 @@ document.documentElement.classList.add("js");
     init();
   }
 })();
+}

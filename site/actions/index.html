@@ -25,7 +25,7 @@
 <link rel="preload" href="../assets/fonts/Sora-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="actions.css">
-<script src="actions.js" defer></script>
+<script type="module" src="actions.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -238,6 +238,12 @@
 
           <!-- Controls Bar -->
           <div class="focused-controls">
+            <label class="live-toggle" for="live-mode-toggle">
+              <input type="checkbox" id="live-mode-toggle">
+              <span class="toggle-track" aria-hidden="true"><span></span></span>
+              <span>Play live</span>
+            </label>
+
             <div class="ctrl-buttons-group">
               <button type="button" id="ctrl-prev" class="ctrl-btn" aria-label="Step backward">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
@@ -257,10 +263,27 @@
             </div>
 
             <div class="speed-group" role="group" aria-label="Playback speed">
-              <button type="button" class="speed-btn" data-speed="0.5" aria-label="Speed 0.5x">0.5x</button>
-              <button type="button" class="speed-btn active" data-speed="1" aria-label="Speed 1x">1x</button>
-              <button type="button" class="speed-btn" data-speed="4" aria-label="Speed 4x">4x</button>
+              <button type="button" class="speed-btn" data-speed="0.5" aria-label="Speed 0.5x" aria-pressed="false">0.5x</button>
+              <button type="button" class="speed-btn active" data-speed="1" aria-label="Speed 1x" aria-pressed="true">1x</button>
+              <button type="button" class="speed-btn" data-speed="4" aria-label="Speed 4x" aria-pressed="false">4x</button>
+              <button type="button" class="speed-btn" data-speed="real-time" aria-label="Use server response time" aria-pressed="false">real time</button>
             </div>
+
+            <div id="live-settings" class="live-settings" hidden>
+              <label for="live-seed">Seed
+                <input type="number" id="live-seed" min="0" max="4294967295" step="1" inputmode="numeric">
+              </label>
+              <button type="button" id="live-restart" class="live-action-btn">Restart</button>
+              <button type="button" id="live-stop" class="live-action-btn">Stop</button>
+              <details class="live-advanced">
+                <summary>Advanced</summary>
+                <label for="live-server">Server
+                  <input type="url" id="live-server" value="https://beko2210-statim.hf.space" spellcheck="false" autocomplete="url">
+                </label>
+              </details>
+            </div>
+
+            <p id="live-status" class="live-status" aria-live="polite" aria-atomic="true"></p>
 
             <div class="keyboard-hint" aria-hidden="true">
               <span>Keys:</span>
@@ -339,6 +362,7 @@
             <li><strong>With it, Snake and Othello reach the teacher&rsquo;s level:</strong> in Snake it eats 2.5 more food per game than its teacher on average (95% interval +0.2 to +4.9), which is not significant per game (sign test p = 0.11).</li>
             <li><strong>2048 and Tetris stay below the teacher;</strong> a second training run with more 2048 and Tetris games is in progress.</li>
             <li><strong>One forward pass per move,</strong> median 19 ms on an RTX 3070 (p95 31 ms).</li>
+            <li><strong>Live mode runs on the free demo server</strong> (2 CPU threads, q8_0 weights), where the same adapter scores Snake 23.9, Othello 40 of 50 won, 2048 3,840 and Tetris 72 on the same 50 seeds; expect a few hundred milliseconds per move.</li>
           </ul>
         </div>
         <div class="honest-card does-not">
