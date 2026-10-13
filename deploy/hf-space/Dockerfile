@@ -16,7 +16,7 @@ ARG ADAPTER_FILE=statim-decide-multilingual-base-actions.lora.gguf
 ARG ADAPTER_REVISION=91eb69665d725fa356df81e0efb8b8ef8fca3497
 ARG ADAPTER_SHA256=ed7b2a639fbf4876a171bfed62c8d5e8184d92024acda34b1ca7f8d8dab2a3b3
 
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS statim-release
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS statim-release
 ARG STATIM_VERSION
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -40,7 +40,7 @@ COPY statim /out/statim
 
 FROM statim-${STATIM_SOURCE} AS statim
 
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS model-hub
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS model-hub
 ARG MODEL_REPO
 ARG MODEL_FILE
 ARG MODEL_REVISION
@@ -63,7 +63,7 @@ COPY model.gguf /out/model.gguf
 
 FROM model-${MODEL_SOURCE} AS model
 
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS adapter-hub
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS adapter-hub
 ARG ADAPTER_REPO
 ARG ADAPTER_FILE
 ARG ADAPTER_REVISION
@@ -86,7 +86,7 @@ COPY actions.lora.gguf /out/actions.lora.gguf
 
 FROM adapter-${ADAPTER_SOURCE} AS adapter
 
-FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends busybox libgomp1 libstdc++6 \
     && groupadd --gid 1000 statim \
